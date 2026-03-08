@@ -426,8 +426,9 @@ export default function UsersPage() {
             {filtered.map(u => {
               const rc = ROLE_CONFIG[u.role];
               const isSelf = u.id === currentUser?.id;
-              const instId = getInstanceForUser(u.id);
-              const assignedInst = MOCK_WHATSAPP_INSTANCES.find(i => i.id === instId);
+              const instName = getInstanceForUser(u.id);
+              const assignedInst = instances.find(i => i.name === instName);
+              const isInstOpen = assignedInst?.connectionStatus === 'open';
               return (
                 <tr key={u.id} className={cn(u.status === 'inactive' && 'opacity-60')}>
                   <td>
@@ -450,8 +451,10 @@ export default function UsersPage() {
                   <td className="hidden xl:table-cell text-center">
                     {assignedInst ? (
                       <div className="flex items-center justify-center gap-1.5">
-                        <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', assignedInst.status === 'connected' ? 'bg-success' : 'bg-muted-foreground')} />
-                        <span className="text-[10px] text-muted-foreground font-mono">{assignedInst.phone || assignedInst.name}</span>
+                        <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', isInstOpen ? 'bg-success' : 'bg-muted-foreground')} />
+                        <span className="text-[10px] text-muted-foreground font-mono">
+                          {assignedInst.ownerJid?.replace('@s.whatsapp.net', '') || assignedInst.name}
+                        </span>
                       </div>
                     ) : (
                       <span className="text-[10px] text-muted-foreground/40">—</span>
