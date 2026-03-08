@@ -303,9 +303,12 @@ export default function WhatsAppPage() {
             mergedEntry.remoteJid = jid;
             mergedEntry.id = jid;
             mergedEntry.remoteJidAlt = existing.remoteJid; // save the old @s.whatsapp.net as alt
+            // existing.phone already has the real phone number (from @s.whatsapp.net)
+            mergedEntry.phone = existing.phone;
           } else if (!isLid && existingIsLid) {
-            // Existing is @lid (preferred) — store new phone JID as alt
+            // Existing is @lid (preferred) — store new phone JID as alt, update phone to real number
             mergedEntry.remoteJidAlt = jid;
+            mergedEntry.phone = phone; // phone here is extracted from @s.whatsapp.net = real number
           }
           phoneMap.set(phone, mergedEntry);
         }
