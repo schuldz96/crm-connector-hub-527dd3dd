@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Video, MessageSquare, Users,
   BarChart3, Zap, ChevronLeft, ChevronRight, TrendingUp,
   LogOut, ChevronDown, Building2, Shield, Plug2,
-  GraduationCap, SlidersHorizontal, User, Target
+  GraduationCap, SlidersHorizontal, User, Target, Activity
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -23,6 +23,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/dashboard',    label: 'Dashboard',     icon: LayoutDashboard },
   { path: '/meetings',     label: 'Reuniões',       icon: Video,           badge: 3 },
   { path: '/whatsapp',     label: 'WhatsApp',       icon: MessageSquare,   badge: 6 },
+  { path: '/performance',  label: 'Desempenho',     icon: Activity },
   { path: '/training',     label: 'Treinamentos',   icon: GraduationCap },
   { path: '/teams',        label: 'Times',          icon: Target,          roles: ['admin', 'director', 'supervisor'] },
   { path: '/users',        label: 'Usuários',       icon: Users,           roles: ['admin', 'director'] },
