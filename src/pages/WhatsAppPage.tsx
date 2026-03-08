@@ -194,11 +194,38 @@ export default function WhatsAppPage() {
   const [showCreateInst, setShowCreateInst] = useState(false);
   const [qrInstanceName, setQrInstanceName] = useState<string | null>(null);
 
+  // ── Instance filters ────────────────────────────────────────────────────────
+  type InstStatusFilter = 'all' | 'connected' | 'disconnected';
+  type InstSortKey = 'recent' | 'alpha';
+  type SortDir = 'asc' | 'desc';
+  const [instStatusFilter, setInstStatusFilter] = useState<InstStatusFilter>('all');
+  const [instSortKey, setInstSortKey] = useState<InstSortKey>('recent');
+  const [instSortDir, setInstSortDir] = useState<SortDir>('desc');
+
   // Filter instances for non-admins
-  const visibleInstances = evoInstances.filter(i => {
+  const baseInstances = evoInstances.filter(i => {
     if (!isAdmin) return getInstanceForUser(user?.id || '') === i.name;
     return true;
   });
+
+  const visibleInstances = (() => {
+    let list = baseInstances.filter(i => {
+      if (instStatusFilter === 'connected') return i.connectionStatus === 'open';
+      if (instStatusFilter === 'disconnected') return i.connectionStatus !== 'open';
+      return true;
+    });
+    list = [...list].sort((a, b) => {
+      let cmp = 0;
+      if (instSortKey === 'alpha') {
+        cmp = (a.profileName || a.name).localeCompare(b.profileName || b.name, 'pt-BR');
+      } else {
+        // recent: sort by connected first, then by message count as proxy
+        cmp = (b._count?.Message || 0) - (a._count?.Message || 0);
+      }
+      return instSortDir === 'asc' ? -cmp : cmp;
+    });
+    return list;
+  })();
 
   // ── Column 1: selected instance ────────────────────────────────────────────
   const [activeInstance, setActiveInstance] = useState<EvolutionInstance | null>(null);
@@ -211,10 +238,14 @@ export default function WhatsAppPage() {
   }, [visibleInstances.length]);
 
   // ── Column 2: chats for selected instance ──────────────────────────────────
+  type ChatFilter = 'all' | 'pending' | 'unreplied' | 'replied';
+  type ChatSortKey = 'recent' | 'oldest' | 'alpha_asc' | 'alpha_desc';
   const [chats, setChats] = useState<Chat[]>([]);
   const [loadingChats, setLoadingChats] = useState(false);
   const [chatSearch, setChatSearch] = useState('');
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
+  const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
+  const [chatSortKey, setChatSortKey] = useState<ChatSortKey>('recent');
 
   // resolvePhone: for @lid JIDs, use the @lid number itself as the unique identifier.
   const parseBody = (m: any): string => {
