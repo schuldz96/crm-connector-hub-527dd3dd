@@ -2,13 +2,12 @@ import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppConfig } from '@/contexts/AppConfigContext';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
-  LayoutDashboard, Video, MessageSquare, Users, Settings,
+  LayoutDashboard, Video, MessageSquare, Users,
   BarChart3, Zap, ChevronLeft, ChevronRight, TrendingUp,
-  Bell, LogOut, ChevronDown, Building2, Shield, Plug2,
-  FileText, HelpCircle, Star, Target, GraduationCap, SlidersHorizontal
+  LogOut, ChevronDown, Building2, Shield, Plug2,
+  GraduationCap, SlidersHorizontal, User, Target
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -18,42 +17,35 @@ interface NavItem {
   icon: React.ElementType;
   badge?: number;
   roles?: string[];
-  children?: NavItem[];
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/meetings', label: 'Reuniões', icon: Video, badge: 3 },
-  { path: '/whatsapp', label: 'WhatsApp', icon: MessageSquare, badge: 6 },
-  { path: '/training', label: 'Treinamentos', icon: GraduationCap },
-  { path: '/teams', label: 'Times', icon: Target, roles: ['admin', 'director', 'supervisor'] },
-  { path: '/users', label: 'Usuários', icon: Users, roles: ['admin', 'director'] },
-  { path: '/reports', label: 'Relatórios', icon: BarChart3 },
-  { path: '/integrations', label: 'Integrações', icon: Plug2, roles: ['admin'] },
-  { path: '/automations', label: 'Automações', icon: Zap, roles: ['admin'] },
-  { path: '/ai-config', label: 'Config. IA', icon: SlidersHorizontal, roles: ['admin'] },
-  { path: '/admin', label: 'Admin', icon: Shield, roles: ['admin'] },
-];
-
-const BOTTOM_ITEMS: NavItem[] = [
-  { path: '/help', label: 'Ajuda', icon: HelpCircle },
-  { path: '/settings', label: 'Configurações', icon: Settings },
+  { path: '/dashboard',    label: 'Dashboard',     icon: LayoutDashboard },
+  { path: '/meetings',     label: 'Reuniões',       icon: Video,           badge: 3 },
+  { path: '/whatsapp',     label: 'WhatsApp',       icon: MessageSquare,   badge: 6 },
+  { path: '/training',     label: 'Treinamentos',   icon: GraduationCap },
+  { path: '/teams',        label: 'Times',          icon: Target,          roles: ['admin', 'director', 'supervisor'] },
+  { path: '/users',        label: 'Usuários',       icon: Users,           roles: ['admin', 'director'] },
+  { path: '/reports',      label: 'Relatórios',     icon: BarChart3 },
+  { path: '/integrations', label: 'Integrações',    icon: Plug2,           roles: ['admin'] },
+  { path: '/automations',  label: 'Automações',     icon: Zap,             roles: ['admin'] },
+  { path: '/ai-config',    label: 'Config. IA',     icon: SlidersHorizontal, roles: ['admin'] },
+  { path: '/admin',        label: 'Admin',          icon: Shield,          roles: ['admin'] },
 ];
 
 export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const { user, logout, hasRole } = useAuth();
-  const { isModuleEnabled } = useAppConfig();
+  const { isModuleEnabled, isModuleEnabledForUser } = useAppConfig();
   const location = useLocation();
   const navigate = useNavigate();
   const [profileOpen, setProfileOpen] = useState(false);
 
   const isActive = (path: string) => location.pathname === path;
 
-  // Strip leading slash to get module id
   const visibleItems = NAV_ITEMS.filter(item => {
     const moduleId = item.path.replace('/', '') as any;
     const roleOk = !item.roles || hasRole(item.roles as any[]);
-    const moduleOk = isModuleEnabled(moduleId);
+    const moduleOk = isModuleEnabledForUser(moduleId, user?.id ?? '', user?.teamId);
     return roleOk && moduleOk;
   });
 
@@ -120,23 +112,6 @@ export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean
             )}
           </div>
         ))}
-
-        {!collapsed && (
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-2 mt-4 mb-2">
-            Sistema
-          </p>
-        )}
-        {BOTTOM_ITEMS.map((item) => (
-          <div
-            key={item.path}
-            className={cn('nav-item', isActive(item.path) && 'active')}
-            onClick={() => navigate(item.path)}
-            title={collapsed ? item.label : undefined}
-          >
-            <item.icon className="w-4 h-4 flex-shrink-0" />
-            {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
-          </div>
-        ))}
       </nav>
 
       {/* Profile */}
@@ -146,7 +121,7 @@ export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean
             'flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors hover:bg-sidebar-accent',
             collapsed && 'justify-center'
           )}
-          onClick={() => !collapsed && setProfileOpen(!profileOpen)}
+          onClick={() => setProfileOpen(o => !o)}
         >
           <img
             src={user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name}`}
@@ -159,18 +134,44 @@ export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean
                 <p className="text-xs font-semibold text-foreground truncate">{user?.name}</p>
                 <p className="text-[10px] text-muted-foreground">{roleLabels[user?.role || 'member']}</p>
               </div>
-              <ChevronDown className="w-3 h-3 text-muted-foreground" />
+              <ChevronDown className={cn('w-3 h-3 text-muted-foreground transition-transform', profileOpen && 'rotate-180')} />
             </>
           )}
         </div>
-        {profileOpen && !collapsed && (
-          <div className="mt-1 space-y-0.5">
+
+        {profileOpen && (
+          <div className="mt-1 space-y-0.5 pb-1">
+            {!collapsed && (
+              <>
+                <div className="px-2 py-1.5">
+                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wide font-semibold">
+                    {user?.email}
+                  </p>
+                </div>
+                <button
+                  onClick={() => { setProfileOpen(false); }}
+                  className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
+                >
+                  <User className="w-3 h-3" />
+                  Meu Perfil
+                </button>
+                <button
+                  onClick={() => { setProfileOpen(false); }}
+                  className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
+                >
+                  <Building2 className="w-3 h-3" />
+                  {roleLabels[user?.role || 'member']}
+                </button>
+                <div className="h-px bg-sidebar-border mx-2 my-1" />
+              </>
+            )}
             <button
               onClick={logout}
               className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              title={collapsed ? 'Sair da conta' : undefined}
             >
               <LogOut className="w-3 h-3" />
-              Sair da conta
+              {!collapsed && 'Sair da conta'}
             </button>
           </div>
         )}
