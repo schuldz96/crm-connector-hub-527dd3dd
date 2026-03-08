@@ -223,19 +223,19 @@ export default function WhatsAppPage() {
   };
 
   // getRealPhone: returns the real phone number to display.
-  // Priority: API fields > extract from @s.whatsapp.net JID > fallback to LID number.
+  // For @lid chats, the real phone is in lastMessage.key.remoteJidAlt (e.g. "554298224190@s.whatsapp.net")
   const getRealPhone = (c: any): string => {
-    // Some Evolution API responses include the real phone directly
+    const jid: string = c.remoteJid || '';
+    // @s.whatsapp.net — the number itself IS the phone
+    if (!jid.includes('@lid')) return jid.replace(/@.*/, '');
+    // @lid — look for real phone in lastMessage.key.remoteJidAlt
+    const alt: string = c.lastMessage?.key?.remoteJidAlt || '';
+    if (alt) return alt.replace(/@.*/, '');
+    // fallback: direct fields
     if (c.phone) return String(c.phone).replace(/\D/g, '');
     if (c.number) return String(c.number).replace(/\D/g, '');
-    if (c.contact?.phone) return String(c.contact.phone).replace(/\D/g, '');
-    const jid: string = c.remoteJid || '';
-    if (!jid.includes('@lid')) {
-      // @s.whatsapp.net — the number IS the phone
-      return jid.replace(/@.*/, '');
-    }
-    // @lid — we don't have the real phone yet, return empty (will be updated on merge)
-    return '';
+    // last resort: return the LID number (ugly but better than nothing)
+    return jid.replace(/@.*/, '');
   };
 
 
