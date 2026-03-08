@@ -423,6 +423,16 @@ export default function UsersPage() {
                       <Mail className="w-3.5 h-3.5" /> {u.email}
                     </div>
                   </td>
+                  <td className="hidden xl:table-cell text-center">
+                    {assignedInst ? (
+                      <div className="flex items-center justify-center gap-1.5">
+                        <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', assignedInst.status === 'connected' ? 'bg-success' : 'bg-muted-foreground')} />
+                        <span className="text-[10px] text-muted-foreground font-mono">{assignedInst.phone || assignedInst.name}</span>
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground/40">—</span>
+                    )}
+                  </td>
                   <td className="text-center">
                     <span className={cn('text-xs px-2.5 py-0.5 rounded-full border font-medium', rc.class)}>{rc.label}</span>
                   </td>
