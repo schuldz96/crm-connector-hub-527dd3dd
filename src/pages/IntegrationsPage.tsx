@@ -155,7 +155,7 @@ function EvolutionPanel() {
   const handleSelectInstance = (inst: EvolutionInstance) => {
     setSelectedInstance(inst);
     setQrCode(null);
-    fetchMessages(inst.instance.instanceName);
+    fetchMessages(inst.name);
   };
 
   const handleGetQr = async (instanceName: string) => {
