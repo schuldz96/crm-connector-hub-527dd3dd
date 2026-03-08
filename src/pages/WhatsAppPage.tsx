@@ -16,7 +16,7 @@ import {
   getInstanceForUser,
   type EvolutionInstance,
 } from '@/hooks/useEvolutionInstances';
-import { MOCK_USERS } from '@/data/mockData';
+import { MOCK_USERS, MOCK_TEAMS } from '@/data/mockData';
 
 const EVOLUTION_API_URL = 'https://evolutionapic.contato-lojavirtual.com';
 const EVOLUTION_API_TOKEN = '3ce7a42f9bd96ea526b2b0bc39a4faec';
