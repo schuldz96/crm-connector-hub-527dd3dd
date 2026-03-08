@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { MOCK_USERS, MOCK_WHATSAPP_INSTANCES } from '@/data/mockData';
+import { MOCK_USERS } from '@/data/mockData';
 import type { User, UserRole } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Plus, Search, Mail, MoreHorizontal, Trash2, UserX, UserCheck,
   UserPlus, Eye, EyeOff, Shield, SlidersHorizontal, AlertTriangle,
-  Smartphone
+  Smartphone, Wifi, WifiOff, Loader2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -19,14 +19,7 @@ import { useAppConfig, DEFAULT_MODULES, type ModuleId } from '@/contexts/AppConf
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
-
-// In-memory store for userId → instanceId mapping (shared with IntegrationsPage via localStorage key)
-const getInstanceForUser = (userId: string) =>
-  localStorage.getItem(`wa_instance_${userId}`) || '';
-const setInstanceForUser = (userId: string, instanceId: string) => {
-  if (instanceId) localStorage.setItem(`wa_instance_${userId}`, instanceId);
-  else localStorage.removeItem(`wa_instance_${userId}`);
-};
+import { useEvolutionInstances, getInstanceForUser, setInstanceForUser } from '@/hooks/useEvolutionInstances';
 
 const ROLE_CONFIG: Record<UserRole, { label: string; class: string }> = {
   admin:      { label: 'Admin',      class: 'bg-destructive/10 text-destructive border-destructive/20' },
@@ -193,7 +186,9 @@ function ConfirmModal({
 function UserProfileModal({ user, onClose }: { user: User; onClose: () => void }) {
   const { getUserDisabledModules, setUserModuleOverride, modules } = useAppConfig();
   const { toast } = useToast();
+  const { instances, loading: loadingInst } = useEvolutionInstances();
   const [disabled, setDisabled] = useState<ModuleId[]>(getUserDisabledModules(user.id));
+  // stored as instance.name (the Evolution instance name)
   const [selectedInstance, setSelectedInstance] = useState(() => getInstanceForUser(user.id));
 
   const toggle = (id: ModuleId) => {
@@ -202,7 +197,7 @@ function UserProfileModal({ user, onClose }: { user: User; onClose: () => void }
 
   const globallyDisabled = new Set(modules.filter(m => !m.enabled).map(m => m.id));
 
-  const assignedInst = MOCK_WHATSAPP_INSTANCES.find(i => i.id === selectedInstance);
+  const assignedInst = instances.find(i => i.name === selectedInstance);
 
   const save = () => {
     setUserModuleOverride(user.id, disabled);
@@ -233,32 +228,60 @@ function UserProfileModal({ user, onClose }: { user: User; onClose: () => void }
 
           {/* WhatsApp instance assignment */}
           <div className="p-3 rounded-xl border border-border space-y-2">
-            <div className="flex items-center gap-2">
-              <Smartphone className="w-4 h-4 text-accent" />
-              <label className="text-xs font-semibold">Instância WhatsApp</label>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Smartphone className="w-4 h-4 text-accent" />
+                <label className="text-xs font-semibold">Instância WhatsApp (Evolution)</label>
+              </div>
+              {loadingInst && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
             </div>
+
             <Select value={selectedInstance} onValueChange={setSelectedInstance}>
-              <SelectTrigger className="h-9 text-xs bg-secondary border-border"><SelectValue placeholder="Selecionar instância..." /></SelectTrigger>
-              <SelectContent className="bg-card border-border">
+              <SelectTrigger className="h-9 text-xs bg-secondary border-border">
+                <SelectValue placeholder={loadingInst ? 'Carregando instâncias...' : 'Selecionar instância...'} />
+              </SelectTrigger>
+              <SelectContent className="bg-card border-border max-h-60">
                 <SelectItem value="" className="text-xs text-muted-foreground">— Sem instância —</SelectItem>
-                {MOCK_WHATSAPP_INSTANCES.map(inst => (
-                  <SelectItem key={inst.id} value={inst.id} className="text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className={cn('w-1.5 h-1.5 rounded-full', inst.status === 'connected' ? 'bg-success' : 'bg-muted-foreground')} />
-                      {inst.name}
-                      {inst.phone && <span className="text-muted-foreground font-mono ml-1">{inst.phone}</span>}
-                    </div>
-                  </SelectItem>
-                ))}
+                {instances.map(inst => {
+                  const isOpen = inst.connectionStatus === 'open';
+                  const phone = inst.ownerJid?.replace('@s.whatsapp.net', '');
+                  return (
+                    <SelectItem key={inst.id} value={inst.name} className="text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0',
+                          isOpen ? 'bg-success' : 'bg-muted-foreground')} />
+                        <span className="truncate max-w-[140px]">{inst.profileName || inst.name}</span>
+                        {phone && <span className="text-muted-foreground font-mono text-[10px]">{phone}</span>}
+                      </div>
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
+
             {assignedInst && (
-              <div className={cn('flex items-center gap-2 text-[10px] px-2 py-1 rounded-lg border',
-                assignedInst.status === 'connected' ? 'bg-success/5 border-success/20 text-success' : 'bg-muted/30 border-border text-muted-foreground')}>
-                <Smartphone className="w-3 h-3" />
-                {assignedInst.phone || assignedInst.name}
-                <span className={cn('ml-auto font-medium', assignedInst.status === 'connected' ? 'text-success' : 'text-muted-foreground')}>
-                  {assignedInst.status === 'connected' ? '● Conectado' : '○ Desconectado'}
+              <div className={cn(
+                'flex items-center gap-2 text-[10px] px-3 py-2 rounded-lg border',
+                assignedInst.connectionStatus === 'open'
+                  ? 'bg-success/5 border-success/20 text-success'
+                  : 'bg-muted/30 border-border text-muted-foreground'
+              )}>
+                {assignedInst.profilePicUrl
+                  ? <img src={assignedInst.profilePicUrl} className="w-5 h-5 rounded-full border border-border" alt="" />
+                  : <Smartphone className="w-3.5 h-3.5" />
+                }
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold truncate">{assignedInst.profileName || assignedInst.name}</p>
+                  <p className="text-[9px] font-mono opacity-70">
+                    {assignedInst.ownerJid?.replace('@s.whatsapp.net', '') || assignedInst.name}
+                  </p>
+                </div>
+                {assignedInst.connectionStatus === 'open'
+                  ? <Wifi className="w-3 h-3 ml-auto" />
+                  : <WifiOff className="w-3 h-3 ml-auto opacity-50" />
+                }
+                <span className="font-medium">
+                  {assignedInst.connectionStatus === 'open' ? 'Conectado' : 'Desconectado'}
                 </span>
               </div>
             )}
@@ -309,6 +332,7 @@ function UserProfileModal({ user, onClose }: { user: User; onClose: () => void }
 export default function UsersPage() {
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
+  const { instances } = useEvolutionInstances();
   const [users, setUsers] = useState(MOCK_USERS);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
@@ -402,8 +426,9 @@ export default function UsersPage() {
             {filtered.map(u => {
               const rc = ROLE_CONFIG[u.role];
               const isSelf = u.id === currentUser?.id;
-              const instId = getInstanceForUser(u.id);
-              const assignedInst = MOCK_WHATSAPP_INSTANCES.find(i => i.id === instId);
+              const instName = getInstanceForUser(u.id);
+              const assignedInst = instances.find(i => i.name === instName);
+              const isInstOpen = assignedInst?.connectionStatus === 'open';
               return (
                 <tr key={u.id} className={cn(u.status === 'inactive' && 'opacity-60')}>
                   <td>
@@ -426,8 +451,10 @@ export default function UsersPage() {
                   <td className="hidden xl:table-cell text-center">
                     {assignedInst ? (
                       <div className="flex items-center justify-center gap-1.5">
-                        <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', assignedInst.status === 'connected' ? 'bg-success' : 'bg-muted-foreground')} />
-                        <span className="text-[10px] text-muted-foreground font-mono">{assignedInst.phone || assignedInst.name}</span>
+                        <span className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', isInstOpen ? 'bg-success' : 'bg-muted-foreground')} />
+                        <span className="text-[10px] text-muted-foreground font-mono">
+                          {assignedInst.ownerJid?.replace('@s.whatsapp.net', '') || assignedInst.name}
+                        </span>
                       </div>
                     ) : (
                       <span className="text-[10px] text-muted-foreground/40">—</span>
