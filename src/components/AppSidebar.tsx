@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Video, MessageSquare, Users, Settings,
   BarChart3, Zap, ChevronLeft, ChevronRight, TrendingUp,
   Bell, LogOut, ChevronDown, Building2, Shield, Plug2,
-  FileText, HelpCircle, Star, Target
+  FileText, HelpCircle, Star, Target, GraduationCap, SlidersHorizontal
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -24,11 +24,13 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/meetings', label: 'Reuniões', icon: Video, badge: 3 },
   { path: '/whatsapp', label: 'WhatsApp', icon: MessageSquare, badge: 6 },
+  { path: '/training', label: 'Treinamentos', icon: GraduationCap },
   { path: '/teams', label: 'Times', icon: Target, roles: ['admin', 'director', 'supervisor'] },
   { path: '/users', label: 'Usuários', icon: Users, roles: ['admin', 'director'] },
   { path: '/reports', label: 'Relatórios', icon: BarChart3 },
   { path: '/integrations', label: 'Integrações', icon: Plug2, roles: ['admin'] },
   { path: '/automations', label: 'Automações', icon: Zap, roles: ['admin'] },
+  { path: '/ai-config', label: 'Config. IA', icon: SlidersHorizontal, roles: ['admin'] },
   { path: '/admin', label: 'Admin', icon: Shield, roles: ['admin'] },
 ];
 
