@@ -1,12 +1,11 @@
 import { useState } from 'react';
-import { MOCK_USERS, MOCK_TEAMS } from '@/data/mockData';
+import { MOCK_USERS } from '@/data/mockData';
 import type { User, UserRole } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Plus, Search, Mail, MoreHorizontal, Trash2, UserX, UserCheck,
-  UserPlus, X, Eye, EyeOff, Shield, SlidersHorizontal,
-  CheckCircle2, AlertCircle
+  UserPlus, Eye, EyeOff, Shield, SlidersHorizontal, AlertTriangle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -16,7 +15,9 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAppConfig, DEFAULT_MODULES, type ModuleId } from '@/contexts/AppConfigContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { CheckCircle2, AlertCircle } from 'lucide-react';
 
 const ROLE_CONFIG: Record<UserRole, { label: string; class: string }> = {
   admin:      { label: 'Admin',      class: 'bg-destructive/10 text-destructive border-destructive/20' },
@@ -81,20 +82,18 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ─── Delete confirm modal ─────────────────────────────────────────────────────
-function DeleteConfirmModal({ user, onClose }: { user: User; onClose: () => void }) {
+// ─── Change role modal ────────────────────────────────────────────────────────
+function ChangeRoleModal({ user, onClose, onSave }: { user: User; onClose: () => void; onSave: (role: UserRole) => void }) {
+  const [role, setRole] = useState<UserRole>(user.role);
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="bg-card border-border max-w-sm">
         <DialogHeader>
-          <DialogTitle className="text-sm font-semibold flex items-center gap-2 text-destructive">
-            <Trash2 className="w-4 h-4" /> Excluir Usuário
+          <DialogTitle className="text-sm font-semibold flex items-center gap-2">
+            <Shield className="w-4 h-4 text-primary" /> Alterar Perfil de Acesso
           </DialogTitle>
         </DialogHeader>
         <div className="py-2 space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Tem certeza que deseja excluir <span className="text-foreground font-semibold">{user.name}</span>? Esta ação é irreversível.
-          </p>
           <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border">
             <img src={user.avatar} alt={user.name} className="w-9 h-9 rounded-full border border-border" />
             <div>
@@ -102,8 +101,22 @@ function DeleteConfirmModal({ user, onClose }: { user: User; onClose: () => void
               <p className="text-[11px] text-muted-foreground">{user.email}</p>
             </div>
           </div>
+          <div>
+            <label className="text-xs font-medium block mb-1.5">Novo perfil</label>
+            <Select value={role} onValueChange={v => setRole(v as UserRole)}>
+              <SelectTrigger className="h-9 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger>
+              <SelectContent className="bg-card border-border">
+                <SelectItem value="member"     className="text-xs">Vendedor — acesso básico</SelectItem>
+                <SelectItem value="supervisor" className="text-xs">Supervisor — vê seu time</SelectItem>
+                <SelectItem value="director"   className="text-xs">Diretor — vê todos os times</SelectItem>
+                <SelectItem value="admin"      className="text-xs">Admin — acesso total</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="flex gap-2">
-            <Button size="sm" variant="destructive" className="flex-1 text-xs h-9"><Trash2 className="w-3.5 h-3.5 mr-1.5" /> Confirmar Exclusão</Button>
+            <Button size="sm" className="flex-1 bg-gradient-primary text-xs h-9" onClick={() => { onSave(role); onClose(); }}>
+              <Shield className="w-3.5 h-3.5 mr-1.5" /> Confirmar
+            </Button>
             <Button size="sm" variant="outline" className="text-xs border-border h-9" onClick={onClose}>Cancelar</Button>
           </div>
         </div>
@@ -112,38 +125,88 @@ function DeleteConfirmModal({ user, onClose }: { user: User; onClose: () => void
   );
 }
 
-// ─── User profile modal with module permissions ───────────────────────────────
+// ─── Confirm action modal (deactivate / delete) ───────────────────────────────
+function ConfirmModal({
+  user, action, onClose, onConfirm,
+}: {
+  user: User;
+  action: 'deactivate' | 'activate' | 'delete';
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const isDelete = action === 'delete';
+  const isDeactivate = action === 'deactivate';
+  const title = isDelete ? 'Excluir Usuário' : isDeactivate ? 'Desativar Usuário' : 'Ativar Usuário';
+  const desc = isDelete
+    ? `Tem certeza que deseja excluir <strong>${user.name}</strong>? Esta ação é irreversível e removerá todos os dados do usuário.`
+    : isDeactivate
+    ? `Tem certeza que deseja desativar <strong>${user.name}</strong>? O usuário perderá acesso à plataforma imediatamente.`
+    : `Tem certeza que deseja reativar <strong>${user.name}</strong>?`;
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="bg-card border-border max-w-sm">
+        <DialogHeader>
+          <DialogTitle className={cn('text-sm font-semibold flex items-center gap-2', isDelete || isDeactivate ? 'text-destructive' : 'text-success')}>
+            <AlertTriangle className="w-4 h-4" /> {title}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="py-2 space-y-4">
+          <p className="text-sm text-muted-foreground" dangerouslySetInnerHTML={{ __html: desc }} />
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border">
+            <img src={user.avatar} alt={user.name} className="w-9 h-9 rounded-full border border-border" />
+            <div>
+              <p className="text-xs font-semibold">{user.name}</p>
+              <p className="text-[11px] text-muted-foreground">{user.email}</p>
+            </div>
+            <span className={cn('ml-auto text-[10px] px-2 py-0.5 rounded-full border',
+              user.status === 'active' ? 'bg-success/10 text-success border-success/20' : 'bg-muted text-muted-foreground border-border')}>
+              {user.status === 'active' ? 'Ativo' : 'Inativo'}
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              className={cn('flex-1 text-xs h-9', isDelete || isDeactivate ? 'bg-destructive hover:bg-destructive/90 text-white' : 'bg-success hover:bg-success/90 text-white')}
+              onClick={() => { onConfirm(); onClose(); }}
+            >
+              {isDelete ? <><Trash2 className="w-3.5 h-3.5 mr-1.5" /> Excluir</> : isDeactivate ? <><UserX className="w-3.5 h-3.5 mr-1.5" /> Desativar</> : <><UserCheck className="w-3.5 h-3.5 mr-1.5" /> Ativar</>}
+            </Button>
+            <Button size="sm" variant="outline" className="text-xs border-border h-9" onClick={onClose}>Cancelar</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── User profile + module permissions modal ──────────────────────────────────
 function UserProfileModal({ user, onClose }: { user: User; onClose: () => void }) {
   const { getUserDisabledModules, setUserModuleOverride, modules } = useAppConfig();
   const { toast } = useToast();
   const [disabled, setDisabled] = useState<ModuleId[]>(getUserDisabledModules(user.id));
-  const [role, setRole] = useState(user.role);
 
   const toggle = (id: ModuleId) => {
-    setDisabled(prev =>
-      prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]
-    );
+    setDisabled(prev => prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]);
   };
+
+  const globallyDisabled = new Set(modules.filter(m => !m.enabled).map(m => m.id));
 
   const save = () => {
     setUserModuleOverride(user.id, disabled);
-    toast({ title: 'Perfil salvo', description: `Permissões de ${user.name} atualizadas.` });
+    toast({ title: 'Permissões salvas', description: `Módulos de ${user.name} atualizados.` });
     onClose();
   };
-
-  // Modules that are globally disabled can't be toggled here
-  const globallyDisabled = new Set(modules.filter(m => !m.enabled).map(m => m.id));
 
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="bg-card border-border max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-sm font-semibold flex items-center gap-2">
-            <SlidersHorizontal className="w-4 h-4 text-primary" /> Perfil & Permissões
+            <SlidersHorizontal className="w-4 h-4 text-primary" /> Módulos Visíveis — {user.name}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-1">
-          {/* User info */}
           <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/40 border border-border">
             <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full border border-border" />
             <div className="flex-1">
@@ -154,22 +217,6 @@ function UserProfileModal({ user, onClose }: { user: User; onClose: () => void }
               {ROLE_CONFIG[user.role].label}
             </span>
           </div>
-
-          {/* Role change */}
-          <div>
-            <label className="text-xs font-medium block mb-1.5">Perfil de acesso</label>
-            <Select value={role} onValueChange={v => setRole(v as UserRole)}>
-              <SelectTrigger className="h-9 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-card border-border">
-                <SelectItem value="member"     className="text-xs">Vendedor</SelectItem>
-                <SelectItem value="supervisor" className="text-xs">Supervisor</SelectItem>
-                <SelectItem value="director"   className="text-xs">Diretor</SelectItem>
-                <SelectItem value="admin"      className="text-xs">Admin</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Module overrides */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-semibold">Módulos visíveis para este usuário</label>
@@ -181,46 +228,27 @@ function UserProfileModal({ user, onClose }: { user: User; onClose: () => void }
                 const isDisabledForUser = disabled.includes(mod.id);
                 const isOn = !isGloballyOff && !isDisabledForUser;
                 return (
-                  <div
-                    key={mod.id}
-                    className={cn(
-                      'flex items-center justify-between px-3 py-2 rounded-lg border transition-colors',
-                      isOn ? 'bg-muted/30 border-border/50' : 'bg-muted/10 border-border/20 opacity-60'
-                    )}
-                  >
+                  <div key={mod.id} className={cn('flex items-center justify-between px-3 py-2 rounded-lg border transition-colors',
+                    isOn ? 'bg-muted/30 border-border/50' : 'bg-muted/10 border-border/20 opacity-60')}>
                     <div className="flex items-center gap-2">
-                      {isOn
-                        ? <CheckCircle2 className="w-3.5 h-3.5 text-success" />
-                        : <AlertCircle  className="w-3.5 h-3.5 text-muted-foreground" />
-                      }
+                      {isOn ? <CheckCircle2 className="w-3.5 h-3.5 text-success" /> : <AlertCircle className="w-3.5 h-3.5 text-muted-foreground" />}
                       <span className="text-xs font-medium">{mod.label}</span>
-                      {isGloballyOff && (
-                        <span className="text-[9px] text-muted-foreground">(desativado globalmente)</span>
-                      )}
+                      {isGloballyOff && <span className="text-[9px] text-muted-foreground">(global)</span>}
                     </div>
-                    <button
-                      disabled={isGloballyOff}
-                      onClick={() => toggle(mod.id)}
-                      className={cn(
-                        'w-8 h-4 rounded-full border transition-all relative',
+                    <button disabled={isGloballyOff} onClick={() => toggle(mod.id)}
+                      className={cn('w-8 h-4 rounded-full border transition-all relative',
                         isOn ? 'bg-primary border-primary/50' : 'bg-muted border-border',
-                        isGloballyOff && 'opacity-30 cursor-not-allowed'
-                      )}
-                    >
-                      <span className={cn(
-                        'absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all',
-                        isOn ? 'left-4' : 'left-0.5'
-                      )} />
+                        isGloballyOff && 'opacity-30 cursor-not-allowed')}>
+                      <span className={cn('absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all', isOn ? 'left-4' : 'left-0.5')} />
                     </button>
                   </div>
                 );
               })}
             </div>
           </div>
-
           <div className="flex gap-2 pt-1">
             <Button size="sm" className="flex-1 bg-gradient-primary text-xs h-9" onClick={save}>
-              <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Salvar Permissões
+              <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Salvar
             </Button>
             <Button size="sm" variant="outline" className="text-xs border-border h-9" onClick={onClose}>Cancelar</Button>
           </div>
@@ -232,25 +260,54 @@ function UserProfileModal({ user, onClose }: { user: User; onClose: () => void }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function UsersPage() {
+  const { user: currentUser } = useAuth();
+  const { toast } = useToast();
   const [users, setUsers] = useState(MOCK_USERS);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [showCreate, setShowCreate] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
+  const [confirmTarget, setConfirmTarget] = useState<{ user: User; action: 'deactivate' | 'activate' | 'delete' } | null>(null);
+  const [roleTarget, setRoleTarget] = useState<User | null>(null);
   const [profileTarget, setProfileTarget] = useState<User | null>(null);
 
   const filtered = users.filter(u => {
-    const matchSearch =
-      u.name.toLowerCase().includes(search.toLowerCase()) ||
-      u.email.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase());
     const matchRole = roleFilter === 'all' || u.role === roleFilter;
     return matchSearch && matchRole;
   });
 
-  const toggleStatus = (id: string) => {
-    setUsers(prev =>
-      prev.map(u => u.id === id ? { ...u, status: u.status === 'active' ? 'inactive' : 'active' } : u)
-    );
+  const handleToggleStatus = (u: User) => {
+    if (u.id === currentUser?.id) {
+      toast({ variant: 'destructive', title: 'Ação bloqueada', description: 'Você não pode desativar sua própria conta.' });
+      return;
+    }
+    setConfirmTarget({ user: u, action: u.status === 'active' ? 'deactivate' : 'activate' });
+  };
+
+  const handleDelete = (u: User) => {
+    if (u.id === currentUser?.id) {
+      toast({ variant: 'destructive', title: 'Ação bloqueada', description: 'Você não pode excluir sua própria conta.' });
+      return;
+    }
+    setConfirmTarget({ user: u, action: 'delete' });
+  };
+
+  const confirmAction = () => {
+    if (!confirmTarget) return;
+    const { user: u, action } = confirmTarget;
+    if (action === 'delete') {
+      setUsers(prev => prev.filter(x => x.id !== u.id));
+      toast({ title: 'Usuário excluído', variant: 'destructive' });
+    } else {
+      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, status: action === 'deactivate' ? 'inactive' : 'active' } : x));
+      toast({ title: action === 'deactivate' ? 'Usuário desativado' : 'Usuário ativado' });
+    }
+  };
+
+  const handleRoleSave = (role: UserRole) => {
+    if (!roleTarget) return;
+    setUsers(prev => prev.map(u => u.id === roleTarget.id ? { ...u, role } : u));
+    toast({ title: 'Perfil atualizado', description: `${roleTarget.name} agora é ${ROLE_CONFIG[role].label}.` });
   };
 
   return (
@@ -296,13 +353,17 @@ export default function UsersPage() {
           <tbody>
             {filtered.map(u => {
               const rc = ROLE_CONFIG[u.role];
+              const isSelf = u.id === currentUser?.id;
               return (
                 <tr key={u.id} className={cn(u.status === 'inactive' && 'opacity-60')}>
                   <td>
                     <div className="flex items-center gap-3">
                       <img src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full border border-border" />
                       <div>
-                        <p className="text-sm font-medium">{u.name}</p>
+                        <p className="text-sm font-medium flex items-center gap-1.5">
+                          {u.name}
+                          {isSelf && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">Você</span>}
+                        </p>
                         <p className="text-xs text-muted-foreground md:hidden">{u.email}</p>
                       </div>
                     </div>
@@ -333,20 +394,23 @@ export default function UsersPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="bg-card border-border w-48 text-xs">
                         <DropdownMenuItem className="gap-2 cursor-pointer text-xs" onClick={() => setProfileTarget(u)}>
-                          <SlidersHorizontal className="w-3.5 h-3.5 text-primary" /> Perfil & Permissões
+                          <SlidersHorizontal className="w-3.5 h-3.5 text-primary" /> Módulos visíveis
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="gap-2 cursor-pointer text-xs">
+                        <DropdownMenuItem className="gap-2 cursor-pointer text-xs" onClick={() => setRoleTarget(u)}>
                           <Shield className="w-3.5 h-3.5 text-accent" /> Alterar perfil
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="gap-2 cursor-pointer text-xs" onClick={() => toggleStatus(u.id)}>
+                        <DropdownMenuItem
+                          className={cn('gap-2 cursor-pointer text-xs', isSelf && 'opacity-40 cursor-not-allowed')}
+                          onClick={() => handleToggleStatus(u)}
+                        >
                           {u.status === 'active'
                             ? <><UserX className="w-3.5 h-3.5 text-warning" /> Desativar usuário</>
                             : <><UserCheck className="w-3.5 h-3.5 text-success" /> Ativar usuário</>}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator className="bg-border" />
                         <DropdownMenuItem
-                          className="gap-2 cursor-pointer text-xs text-destructive focus:text-destructive focus:bg-destructive/10"
-                          onClick={() => setDeleteTarget(u)}
+                          className={cn('gap-2 cursor-pointer text-xs text-destructive focus:text-destructive focus:bg-destructive/10', isSelf && 'opacity-40 cursor-not-allowed')}
+                          onClick={() => handleDelete(u)}
                         >
                           <Trash2 className="w-3.5 h-3.5" /> Excluir usuário
                         </DropdownMenuItem>
@@ -360,9 +424,17 @@ export default function UsersPage() {
         </table>
       </div>
 
-      {showCreate    && <CreateUserModal   onClose={() => setShowCreate(false)} />}
-      {deleteTarget  && <DeleteConfirmModal user={deleteTarget}  onClose={() => setDeleteTarget(null)} />}
-      {profileTarget && <UserProfileModal  user={profileTarget} onClose={() => setProfileTarget(null)} />}
+      {showCreate    && <CreateUserModal onClose={() => setShowCreate(false)} />}
+      {roleTarget    && <ChangeRoleModal user={roleTarget} onClose={() => setRoleTarget(null)} onSave={handleRoleSave} />}
+      {profileTarget && <UserProfileModal user={profileTarget} onClose={() => setProfileTarget(null)} />}
+      {confirmTarget && (
+        <ConfirmModal
+          user={confirmTarget.user}
+          action={confirmTarget.action}
+          onClose={() => setConfirmTarget(null)}
+          onConfirm={confirmAction}
+        />
+      )}
     </div>
   );
 }
