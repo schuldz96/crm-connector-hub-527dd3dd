@@ -493,7 +493,7 @@ export default function WhatsAppPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                 {metaConns.map(conn => (
                   <div key={conn.id} className="glass-card p-4 border border-border rounded-xl flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center flex-shrink-0 text-lg">🔵</div>
+                    <div className="w-10 h-10 rounded-full bg-info/10 flex items-center justify-center flex-shrink-0 text-lg">🔵</div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold truncate">{conn.label || 'Meta'}</p>
                       <p className="text-[10px] text-muted-foreground font-mono">{conn.phoneNumberId}</p>
@@ -547,7 +547,7 @@ export default function WhatsAppPage() {
                 >
                   {acc.avatarUrl
                     ? <img src={acc.avatarUrl} className="w-8 h-8 rounded-full border border-border flex-shrink-0 object-cover" alt="" />
-                    : <div className={cn('w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm', acc.type === 'meta' ? 'bg-blue-500/10' : 'bg-muted')}>
+                    : <div className={cn('w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm', acc.type === 'meta' ? 'bg-info/10' : 'bg-muted')}>
                         {acc.type === 'meta' ? '🔵' : <Smartphone className="w-3.5 h-3.5 text-muted-foreground" />}
                       </div>
                   }
