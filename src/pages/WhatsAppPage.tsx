@@ -1126,11 +1126,19 @@ export default function WhatsAppPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
+                    size="sm" variant="ghost"
+                    className={cn('h-7 px-2 gap-1 text-[10px]', showAiPanel ? 'bg-accent/10 text-accent' : 'text-muted-foreground')}
+                    onClick={() => setShowAiPanel(v => !v)}
+                    title="Análise IA">
+                    <Brain className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">IA</span>
+                  </Button>
+                  <Button
                     size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground"
                     onClick={() => loadMessages(activeInstance!.name, activeChat, true)}>
                     {loadingMsgs ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { setActiveChat(null); setMessages([]); }}>
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { setActiveChat(null); setMessages([]); setShowAiPanel(false); }}>
                     <X className="w-3.5 h-3.5" />
                   </Button>
                 </div>
