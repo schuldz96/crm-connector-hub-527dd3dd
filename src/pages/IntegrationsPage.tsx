@@ -28,17 +28,17 @@ const INTEGRATION_META: Record<string, { icon: string; color: string; desc: stri
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+// The Evolution API returns a flat structure directly
 interface EvolutionInstance {
-  instance: {
-    instanceName: string;
-    instanceId: string;
-    status: string;
-    owner?: string;
-    profileName?: string;
-    profilePictureUrl?: string;
-    number?: string;
-  };
-  connectionStatus?: string;
+  id: string;
+  name: string;
+  connectionStatus: string; // "open" | "close" | "connecting" | "qrcode"
+  ownerJid?: string;
+  profileName?: string;
+  profilePicUrl?: string;
+  number?: string;
+  token?: string;
+  _count?: { Message: number; Contact: number; Chat: number };
 }
 
 interface EvolutionMessage {
