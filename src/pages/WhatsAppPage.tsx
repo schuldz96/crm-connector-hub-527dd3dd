@@ -6,6 +6,7 @@ import {
   MessageSquare, Search, WifiOff, QrCode,
   RefreshCcw, AlertCircle, X, Loader2,
   Smartphone, RefreshCw, Plus, CheckCheck, Send,
+  ArrowUpDown, ArrowDownAZ, ArrowUpAZ, SortAsc, SortDesc,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -193,11 +194,38 @@ export default function WhatsAppPage() {
   const [showCreateInst, setShowCreateInst] = useState(false);
   const [qrInstanceName, setQrInstanceName] = useState<string | null>(null);
 
+  // ── Instance filters ────────────────────────────────────────────────────────
+  type InstStatusFilter = 'all' | 'connected' | 'disconnected';
+  type InstSortKey = 'recent' | 'alpha';
+  type SortDir = 'asc' | 'desc';
+  const [instStatusFilter, setInstStatusFilter] = useState<InstStatusFilter>('all');
+  const [instSortKey, setInstSortKey] = useState<InstSortKey>('recent');
+  const [instSortDir, setInstSortDir] = useState<SortDir>('desc');
+
   // Filter instances for non-admins
-  const visibleInstances = evoInstances.filter(i => {
+  const baseInstances = evoInstances.filter(i => {
     if (!isAdmin) return getInstanceForUser(user?.id || '') === i.name;
     return true;
   });
+
+  const visibleInstances = (() => {
+    let list = baseInstances.filter(i => {
+      if (instStatusFilter === 'connected') return i.connectionStatus === 'open';
+      if (instStatusFilter === 'disconnected') return i.connectionStatus !== 'open';
+      return true;
+    });
+    list = [...list].sort((a, b) => {
+      let cmp = 0;
+      if (instSortKey === 'alpha') {
+        cmp = (a.profileName || a.name).localeCompare(b.profileName || b.name, 'pt-BR');
+      } else {
+        // recent: sort by connected first, then by message count as proxy
+        cmp = (b._count?.Message || 0) - (a._count?.Message || 0);
+      }
+      return instSortDir === 'asc' ? -cmp : cmp;
+    });
+    return list;
+  })();
 
   // ── Column 1: selected instance ────────────────────────────────────────────
   const [activeInstance, setActiveInstance] = useState<EvolutionInstance | null>(null);
@@ -210,10 +238,14 @@ export default function WhatsAppPage() {
   }, [visibleInstances.length]);
 
   // ── Column 2: chats for selected instance ──────────────────────────────────
+  type ChatFilter = 'all' | 'pending' | 'unreplied' | 'replied';
+  type ChatSortKey = 'recent' | 'oldest' | 'alpha_asc' | 'alpha_desc';
   const [chats, setChats] = useState<Chat[]>([]);
   const [loadingChats, setLoadingChats] = useState(false);
   const [chatSearch, setChatSearch] = useState('');
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
+  const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
+  const [chatSortKey, setChatSortKey] = useState<ChatSortKey>('recent');
 
   // resolvePhone: for @lid JIDs, use the @lid number itself as the unique identifier.
   const parseBody = (m: any): string => {
@@ -371,11 +403,34 @@ export default function WhatsAppPage() {
 
 
 
-  const filteredChats = chats.filter(c =>
-    c.name.toLowerCase().includes(chatSearch.toLowerCase()) ||
-    c.phone.includes(chatSearch) ||
-    c.lastMessage.toLowerCase().includes(chatSearch.toLowerCase())
-  );
+  const filteredChats = (() => {
+    let list = chats.filter(c =>
+      c.name.toLowerCase().includes(chatSearch.toLowerCase()) ||
+      c.phone.includes(chatSearch) ||
+      c.lastMessage.toLowerCase().includes(chatSearch.toLowerCase())
+    );
+
+    // Status filter
+    if (chatFilter === 'pending') {
+      list = list.filter(c => c.unread > 0);
+    } else if (chatFilter === 'unreplied') {
+      // Last message is from the lead (not from me) AND unread === 0 (already seen)
+      list = list.filter(c => !c.lastMessageFromMe && c.unread === 0);
+    } else if (chatFilter === 'replied') {
+      list = list.filter(c => c.lastMessageFromMe);
+    }
+
+    // Sort
+    list = [...list].sort((a, b) => {
+      if (chatSortKey === 'oldest') return a.lastMessageTs - b.lastMessageTs;
+      if (chatSortKey === 'alpha_asc') return (a.name || a.phone).localeCompare(b.name || b.phone, 'pt-BR');
+      if (chatSortKey === 'alpha_desc') return (b.name || b.phone).localeCompare(a.name || a.phone, 'pt-BR');
+      return b.lastMessageTs - a.lastMessageTs; // 'recent' default
+    });
+
+    return list;
+  })();
+
 
   const displayName = (c: Chat) => (c.name && c.name !== c.phone ? c.name : c.phone);
 
@@ -507,11 +562,51 @@ export default function WhatsAppPage() {
 
         {/* ════ COLUMN 1 — INSTANCES ════════════════════════════════════════ */}
         <div className="w-[220px] flex-shrink-0 bg-card border-r border-border flex flex-col">
+          {/* Header */}
           <div className="px-3 py-2.5 border-b border-border flex-shrink-0">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
               <Smartphone className="w-3.5 h-3.5" /> Instâncias
             </p>
           </div>
+          {/* Instance status filter */}
+          <div className="px-2 py-1.5 border-b border-border flex-shrink-0 flex gap-1">
+            {(['all', 'connected', 'disconnected'] as const).map(f => {
+              const labels = { all: 'Todas', connected: 'Online', disconnected: 'Offline' };
+              const count = f === 'all' ? baseInstances.length
+                : f === 'connected' ? baseInstances.filter(i => i.connectionStatus === 'open').length
+                : baseInstances.filter(i => i.connectionStatus !== 'open').length;
+              return (
+                <button
+                  key={f}
+                  onClick={() => setInstStatusFilter(f)}
+                  className={cn(
+                    'flex-1 text-[10px] rounded-md px-1 py-1 font-medium transition-colors',
+                    instStatusFilter === f
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-secondary text-muted-foreground hover:text-foreground'
+                  )}>
+                  {labels[f]} <span className="opacity-70">({count})</span>
+                </button>
+              );
+            })}
+          </div>
+          {/* Instance sort */}
+          <div className="px-2 py-1.5 border-b border-border flex-shrink-0 flex items-center gap-1">
+            <button
+              onClick={() => setInstSortKey(k => k === 'recent' ? 'alpha' : 'recent')}
+              className="flex-1 flex items-center justify-center gap-1 text-[10px] bg-secondary rounded-md py-1 text-muted-foreground hover:text-foreground transition-colors">
+              {instSortKey === 'alpha' ? <ArrowDownAZ className="w-3 h-3" /> : <ArrowUpDown className="w-3 h-3" />}
+              {instSortKey === 'alpha' ? 'A–Z' : 'Recente'}
+            </button>
+            <button
+              onClick={() => setInstSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+              className="flex items-center justify-center gap-1 text-[10px] bg-secondary rounded-md py-1 px-2 text-muted-foreground hover:text-foreground transition-colors">
+              {instSortDir === 'asc' ? <SortAsc className="w-3 h-3" /> : <SortDesc className="w-3 h-3" />}
+              {instSortDir === 'asc' ? 'ASC' : 'DESC'}
+            </button>
+          </div>
+
+          {/* Instances List */}
           <div className="flex-1 overflow-y-auto">
             {evoLoading && (
               <div className="flex items-center justify-center gap-2 p-4 text-muted-foreground">
@@ -571,13 +666,11 @@ export default function WhatsAppPage() {
         </div>
 
         {/* ════ COLUMN 2 — CONVERSATIONS ════════════════════════════════════ */}
-        <div className="w-[260px] flex-shrink-0 bg-card border-r border-border flex flex-col">
+        <div className="w-[280px] flex-shrink-0 bg-card border-r border-border flex flex-col">
           {/* Header */}
           <div className="px-3 py-2.5 border-b border-border flex-shrink-0 flex items-center justify-between gap-2">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground truncate">
-              {activeInstance
-                ? (activeInstance.profileName || activeInstance.name)
-                : 'Conversas'}
+              {activeInstance ? (activeInstance.profileName || activeInstance.name) : 'Conversas'}
             </p>
             {activeInstance && isConnected && (
               <button
@@ -589,7 +682,7 @@ export default function WhatsAppPage() {
           </div>
 
           {/* Search */}
-          <div className="px-3 py-2 border-b border-border flex-shrink-0">
+          <div className="px-2 py-1.5 border-b border-border flex-shrink-0">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <Input
@@ -601,7 +694,58 @@ export default function WhatsAppPage() {
             </div>
           </div>
 
-          {/* List */}
+          {/* Chat status filters */}
+          <div className="px-2 py-1.5 border-b border-border flex-shrink-0 flex gap-1">
+            {([
+              { key: 'all',       label: 'Todas' },
+              { key: 'pending',   label: 'Pendentes' },
+              { key: 'unreplied', label: 'N. Resp.' },
+              { key: 'replied',   label: 'Respond.' },
+            ] as const).map(f => {
+              const count = f.key === 'all' ? chats.length
+                : f.key === 'pending' ? chats.filter(c => c.unread > 0).length
+                : f.key === 'unreplied' ? chats.filter(c => !c.lastMessageFromMe && c.unread === 0).length
+                : chats.filter(c => c.lastMessageFromMe).length;
+              return (
+                <button
+                  key={f.key}
+                  onClick={() => setChatFilter(f.key)}
+                  className={cn(
+                    'flex-1 text-[10px] rounded-md px-1 py-1 font-medium transition-colors leading-tight',
+                    chatFilter === f.key
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-secondary text-muted-foreground hover:text-foreground'
+                  )}>
+                  {f.label}
+                  {count > 0 && <span className="opacity-70"> ({count})</span>}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Chat sort */}
+          <div className="px-2 py-1.5 border-b border-border flex-shrink-0 flex gap-1">
+            {([
+              { key: 'recent',     label: 'Recente ↓' },
+              { key: 'oldest',     label: 'Antigo ↑' },
+              { key: 'alpha_asc',  label: 'A–Z' },
+              { key: 'alpha_desc', label: 'Z–A' },
+            ] as const).map(s => (
+              <button
+                key={s.key}
+                onClick={() => setChatSortKey(s.key)}
+                className={cn(
+                  'flex-1 text-[10px] rounded-md px-1 py-1 font-medium transition-colors',
+                  chatSortKey === s.key
+                    ? 'bg-secondary text-foreground border border-border'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Conversations List */}
           <div className="flex-1 overflow-y-auto">
             {!activeInstance && (
               <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
@@ -637,7 +781,6 @@ export default function WhatsAppPage() {
                 key={chat.id}
                 onClick={() => {
                   setActiveChat(chat);
-                  // Zero unread badge visually when opening the chat
                   setChats(prev => prev.map(c => c.id === chat.id ? { ...c, unread: 0 } : c));
                 }}
                 className={cn(
@@ -663,7 +806,10 @@ export default function WhatsAppPage() {
                         : ''}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between gap-1">
+                  <div className="flex items-center gap-1">
+                    {!chat.lastMessageFromMe && chat.unread === 0 && (
+                      <span className="flex-shrink-0 w-1.5 h-1.5 rounded-full bg-warning" title="Não respondida" />
+                    )}
                     <p className={cn('text-[11px] truncate', hasUnread ? 'text-foreground font-medium' : 'text-muted-foreground')}>
                       {chat.lastMessage || chat.phone}
                     </p>
@@ -677,6 +823,7 @@ export default function WhatsAppPage() {
             })}
           </div>
         </div>
+
 
         {/* ════ COLUMN 3 — MESSAGES ═════════════════════════════════════════ */}
         <div className="flex-1 min-w-0 flex flex-col bg-muted/5">
