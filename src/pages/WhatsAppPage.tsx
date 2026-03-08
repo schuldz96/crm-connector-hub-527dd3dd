@@ -267,6 +267,8 @@ export default function WhatsAppPage() {
           c.lastMessage?.messageTimestamp ||
           (c.updatedAt ? Math.floor(new Date(c.updatedAt).getTime() / 1000) : 0);
 
+        const fromMe: boolean = c.lastMessage?.key?.fromMe === true;
+
         // Real phone: for @lid use remoteJidAlt number, for @s.whatsapp.net use jid number
         const realPhone = isLid
           ? (c.lastMessage?.key?.remoteJidAlt || '').replace(/@.*/, '') || key
@@ -288,6 +290,7 @@ export default function WhatsAppPage() {
             name: name || realPhone || key,
             lastMessage: lastMsg,
             lastMessageTs: ts,
+            lastMessageFromMe: fromMe,
             unread: c.unreadCount || 0,
           });
         } else {
@@ -295,23 +298,26 @@ export default function WhatsAppPage() {
           const existingIsLid = existing.remoteJid.includes('@lid');
           const betterName = name || existing.name;
           const betterTs = Math.max(ts, existing.lastMessageTs);
-          const betterMsg = ts >= existing.lastMessageTs ? (lastMsg || existing.lastMessage) : existing.lastMessage;
+          const newerIsThis = ts >= existing.lastMessageTs;
+          const betterMsg = newerIsThis ? (lastMsg || existing.lastMessage) : existing.lastMessage;
+          const betterFromMe = newerIsThis ? fromMe : existing.lastMessageFromMe;
 
           const merged: Chat = {
             ...existing,
             name: betterName || existing.phone,
             lastMessage: betterMsg,
             lastMessageTs: betterTs,
+            lastMessageFromMe: betterFromMe,
             unread: Math.max(c.unreadCount || 0, existing.unread),
             phone: realPhone || existing.phone,
           };
 
           if (isLid && !existingIsLid) {
             merged.id = jid;
-            merged.remoteJid = jid;               // @lid = primary
-            merged.remoteJidAlt = existing.remoteJid; // @s.whatsapp.net = alt (sent msgs)
+            merged.remoteJid = jid;
+            merged.remoteJidAlt = existing.remoteJid;
           } else if (!isLid && existingIsLid) {
-            merged.remoteJidAlt = jid;             // @s.whatsapp.net = alt (sent msgs)
+            merged.remoteJidAlt = jid;
           }
 
           phoneMap.set(key, merged);
@@ -321,11 +327,19 @@ export default function WhatsAppPage() {
       const sorted = Array.from(phoneMap.values()).sort((a, b) => b.lastMessageTs - a.lastMessageTs);
 
       if (silent) {
+        // On silent poll: detect new incoming messages by comparing timestamps
         setChats(prev => {
           const prevMap = new Map(prev.map(c => [c.id, c]));
           return sorted.map(newChat => {
             const isOpen = activeChatRef.current?.id === newChat.id;
-            return { ...newChat, unread: isOpen ? 0 : newChat.unread };
+            if (isOpen) return { ...newChat, unread: 0 };
+            const old = prevMap.get(newChat.id);
+            // New message arrived and it's from the contact (not from me) → increment unread
+            if (old && newChat.lastMessageTs > old.lastMessageTs && !newChat.lastMessageFromMe) {
+              return { ...newChat, unread: old.unread + 1 };
+            }
+            // Keep existing unread count (don't reset it based on API null)
+            return { ...newChat, unread: old ? old.unread : newChat.unread };
           });
         });
       } else {
