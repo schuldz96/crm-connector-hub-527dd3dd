@@ -116,10 +116,20 @@ function EvolutionPanel() {
   const [selectedInstance, setSelectedInstance] = useState<EvolutionInstance | null>(null);
   const [messages, setMessages] = useState<EvolutionMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  // per-instance QR tracking (name → base64|null)
+  const [qrInstanceName, setQrInstanceName] = useState<string | null>(null);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [loadingQr, setLoadingQr] = useState(false);
-  // instance → userId mapping (in-memory)
-  const [instanceUserMap, setInstanceUserMap] = useState<Record<string, string>>({});
+  // instance → userId: read from shared localStorage (same key as UsersPage)
+  const [instanceUserMap, setInstanceUserMap] = useState<Record<string, string>>(() => {
+    // build map from localStorage on init
+    const map: Record<string, string> = {};
+    MOCK_USERS.forEach(u => {
+      const inst = getInstanceForUser(u.id);
+      if (inst) map[inst] = u.id;
+    });
+    return map;
+  });
 
   const fetchInstances = useCallback(async () => {
     setLoading(true);
@@ -159,13 +169,16 @@ function EvolutionPanel() {
     fetchMessages(inst.name);
   };
 
+  // Per-instance QR — never affects other instances
   const handleGetQr = async (instanceName: string) => {
+    setQrInstanceName(instanceName);
     setLoadingQr(true);
     setQrCode(null);
     try {
       const data = await evolutionFetch(`/instance/connect/${instanceName}`);
       const base64 = data?.base64 || data?.qrcode?.base64 || null;
       setQrCode(base64);
+      if (!base64) toast({ title: 'Instância já conectada' });
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Erro ao obter QR Code', description: e.message });
     } finally {
@@ -173,20 +186,24 @@ function EvolutionPanel() {
     }
   };
 
-  const handleDisconnect = async (instanceName: string) => {
-    try {
-      await evolutionFetch(`/instance/logout/${instanceName}`, { method: 'DELETE' });
-      toast({ title: 'Instância desconectada' });
-      fetchInstances();
-      setSelectedInstance(null);
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Erro', description: e.message });
-    }
+  // Assign user to instance — syncs with UsersPage via shared localStorage key
+  const handleAssignUser = (instanceName: string, userId: string) => {
+    // Clear old assignment for this instance
+    MOCK_USERS.forEach(u => {
+      if (getInstanceForUser(u.id) === instanceName) setInstanceForUser(u.id, '');
+    });
+    // Set new assignment
+    if (userId) setInstanceForUser(userId, instanceName);
+    setInstanceUserMap(m => {
+      const next = { ...m };
+      // remove other users mapped to this instance
+      Object.keys(next).forEach(k => { if (next[k] === instanceName) delete next[k]; });
+      if (userId) next[instanceName] = userId;
+      return next;
+    });
   };
 
-  const myInstance = instances.find(i =>
-    instanceUserMap[i.name] === currentUser?.id
-  );
+  const myInstance = instances.find(i => getInstanceForUser(currentUser?.id || '') === i.name);
 
   return (
     <div className="space-y-4">
