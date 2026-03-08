@@ -456,7 +456,7 @@ export default function WhatsAppPage() {
         body: JSON.stringify({ number: activeChat.phone || activeChat.remoteJid, text }),
       });
       setInputText('');
-      await loadMessages(activeInstance.name, activeChat.remoteJid, false);
+      await loadMessages(activeInstance.name, activeChat, false);
       inputRef.current?.focus();
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Erro ao enviar', description: e.message });
