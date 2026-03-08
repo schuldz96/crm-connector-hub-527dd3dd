@@ -392,23 +392,51 @@ export default function WhatsAppPage() {
   const loadEvoMessages = async (instanceName: string, remoteJid: string, scroll = false) => {
     if (scroll) setLoadingMsgs(true);
     try {
+      // Evolution API: use chatId (remoteJid of the chat) to fetch all messages in a thread,
+      // including received ones. The "where.key.remoteJid" only matches the top-level key field,
+      // but received messages use @lid JIDs. Use "where.chatId" instead which covers both sides.
+      const body: any = { limit: 50 };
+
+      // Try both strategies to capture all messages (sent + received)
       const data = await evoFetch(`/chat/findMessages/${instanceName}`, {
         method: 'POST',
-        body: JSON.stringify({ where: { key: { remoteJid } }, limit: 50 }),
+        body: JSON.stringify({ ...body, where: { chatId: remoteJid } }),
       });
-      const raw: any[] = Array.isArray(data?.messages?.records) ? data.messages.records : Array.isArray(data) ? data : [];
+
+      const raw: any[] = Array.isArray(data?.messages?.records)
+        ? data.messages.records
+        : Array.isArray(data)
+        ? data
+        : [];
+
+      const parseBody = (m: any): string => {
+        const msg = m.message || {};
+        return (
+          msg.conversation ||
+          msg.extendedTextMessage?.text ||
+          msg.imageMessage?.caption ||
+          msg.videoMessage?.caption ||
+          msg.documentMessage?.title ||
+          (msg.audioMessage ? '🎵 Áudio' : '') ||
+          (msg.stickerMessage ? '🪄 Sticker' : '') ||
+          (msg.locationMessage ? '📍 Localização' : '') ||
+          '[mídia]'
+        );
+      };
+
       const parsed: Message[] = raw
+        .filter((m: any) => m.messageType !== 'protocolMessage' && m.messageType !== 'reactionMessage')
         .map((m: any) => ({
-          id: m.key?.id || `${m.messageTimestamp}_${Math.random()}`,
+          id: m.id || m.key?.id || `${m.messageTimestamp}_${Math.random()}`,
           fromMe: !!m.key?.fromMe,
-          body: m.message?.conversation || m.message?.extendedTextMessage?.text || m.message?.imageMessage?.caption || '[mídia]',
+          body: parseBody(m),
           timestamp: m.messageTimestamp || 0,
         }))
         .sort((a, b) => a.timestamp - b.timestamp);
 
       setMessages(prev => {
-        // only update if count changed (real-time detection)
-        if (!scroll && prev.length === parsed.length) return prev;
+        // Always update on scroll (initial load); on poll, only update if something changed
+        if (!scroll && prev.length === parsed.length && prev[prev.length - 1]?.id === parsed[parsed.length - 1]?.id) return prev;
         return parsed;
       });
       lastMsgCountRef.current = parsed.length;
