@@ -419,7 +419,16 @@ export default function WhatsAppPage() {
       };
 
       const parsed: Message[] = raw
-        .filter((m: any) => m.messageType !== 'protocolMessage' && m.messageType !== 'reactionMessage')
+        .filter((m: any) => {
+          if (m.messageType === 'protocolMessage' || m.messageType === 'reactionMessage') return false;
+          // Safety filter: only messages that belong to THIS chat
+          // Sent: key.remoteJid === remoteJid
+          // Received 1:1: key.remoteJid === remoteJid (same)
+          // Received in LID chats: key.remoteJidAlt === remoteJid OR key.remoteJid === remoteJid
+          const kr = m.key?.remoteJid || '';
+          const krAlt = m.key?.remoteJidAlt || '';
+          return kr === remoteJid || krAlt === remoteJid;
+        })
         .map((m: any) => ({
           id: m.id || m.key?.id || `${m.messageTimestamp}_${Math.random()}`,
           fromMe: !!m.key?.fromMe,
