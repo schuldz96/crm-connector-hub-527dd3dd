@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAppConfig } from '@/contexts/AppConfigContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -41,15 +42,20 @@ const BOTTOM_ITEMS: NavItem[] = [
 
 export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const { user, logout, hasRole } = useAuth();
+  const { isModuleEnabled } = useAppConfig();
   const location = useLocation();
   const navigate = useNavigate();
   const [profileOpen, setProfileOpen] = useState(false);
 
   const isActive = (path: string) => location.pathname === path;
 
-  const visibleItems = NAV_ITEMS.filter(item =>
-    !item.roles || hasRole(item.roles as any[])
-  );
+  // Strip leading slash to get module id
+  const visibleItems = NAV_ITEMS.filter(item => {
+    const moduleId = item.path.replace('/', '') as any;
+    const roleOk = !item.roles || hasRole(item.roles as any[]);
+    const moduleOk = isModuleEnabled(moduleId);
+    return roleOk && moduleOk;
+  });
 
   const roleLabels: Record<string, string> = {
     admin: 'Administrador',

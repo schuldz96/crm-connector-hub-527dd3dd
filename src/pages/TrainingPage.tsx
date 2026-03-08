@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAppConfig } from '@/contexts/AppConfigContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -836,12 +837,14 @@ const DIFF_CONFIG = {
 
 export default function TrainingPage() {
   const { user, hasRole } = useAuth();
+  const { tokens } = useAppConfig();
   const isAdmin = hasRole(['admin', 'director', 'supervisor']);
   const [tab, setTab] = useState<'scenarios' | 'history'>('scenarios');
   const [activeSession, setActiveSession] = useState<TrainingScenario | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [showAPIKey, setShowAPIKey] = useState(false);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('openai_training_key') || '');
+
+  // Always use the training token from AppConfig context
+  const apiKey = tokens.training;
 
   const myHistory = MOCK_SESSIONS.filter(s => s.userId === user?.id || isAdmin);
   const avgScore = myHistory.length ? Math.round(myHistory.reduce((a, s) => a + s.score, 0) / myHistory.length) : 0;
@@ -866,13 +869,15 @@ export default function TrainingPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowAPIKey(true)}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg px-2.5 py-1.5 hover:bg-muted transition-colors"
-            >
+            <span className={cn(
+              'flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border',
+              apiKey.startsWith('sk-')
+                ? 'border-success/30 bg-success/10 text-success'
+                : 'border-destructive/30 bg-destructive/10 text-destructive'
+            )}>
               <Key className="w-3 h-3" />
-              {apiKey ? 'API Key ✓' : 'Configurar API Key'}
-            </button>
+              {apiKey.startsWith('sk-') ? 'Token OK' : 'Sem token — configure em Admin → Tokens OpenAI'}
+            </span>
             <span className={cn('text-xs px-2.5 py-1 rounded-full border font-medium', DIFF_CONFIG[activeSession.difficulty].class)}>
               {DIFF_CONFIG[activeSession.difficulty].label}
             </span>
@@ -884,16 +889,9 @@ export default function TrainingPage() {
             scenario={activeSession}
             apiKey={apiKey}
             onFinish={(_score, _feedback) => setActiveSession(null)}
-            onNeedKey={() => setShowAPIKey(true)}
+            onNeedKey={() => setActiveSession(null)}
           />
         </div>
-
-        {showAPIKey && (
-          <APIKeyModal
-            onClose={() => setShowAPIKey(false)}
-            onSave={key => setApiKey(key)}
-          />
-        )}
       </div>
     );
   }
@@ -907,18 +905,17 @@ export default function TrainingPage() {
           <p className="text-sm text-muted-foreground">Simulações de vendas por voz com IA em tempo real</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowAPIKey(true)}
+          <span
             className={cn(
-              'flex items-center gap-1.5 text-xs border rounded-lg px-3 py-1.5 transition-colors',
-              apiKey
-                ? 'border-success/30 text-success bg-success/5 hover:bg-success/10'
-                : 'border-warning/30 text-warning bg-warning/5 hover:bg-warning/10'
+              'flex items-center gap-1.5 text-xs border rounded-lg px-3 py-1.5',
+              apiKey.startsWith('sk-')
+                ? 'border-success/30 text-success bg-success/5'
+                : 'border-warning/30 text-warning bg-warning/5'
             )}
           >
             <Key className="w-3 h-3" />
-            {apiKey ? 'OpenAI conectado ✓' : 'Configurar OpenAI'}
-          </button>
+            {apiKey.startsWith('sk-') ? 'Token de treinamento ✓' : 'Configure em Admin → Tokens OpenAI'}
+          </span>
           {isAdmin && (
             <Button size="sm" className="bg-gradient-primary text-xs h-8" onClick={() => setShowCreate(true)}>
               <Plus className="w-3.5 h-3.5 mr-1.5" /> Criar Cenário
@@ -1001,7 +998,7 @@ export default function TrainingPage() {
                     <span className="text-xs text-muted-foreground">Não realizado</span>
                   )}
                   <Button size="sm" className="bg-gradient-primary text-xs h-7" onClick={() => {
-                    if (!apiKey) { setShowAPIKey(true); return; }
+                    if (!apiKey.startsWith('sk-')) { return; }
                     setActiveSession(scenario);
                   }}>
                     <Mic className="w-3 h-3 mr-1" /> Iniciar
@@ -1069,7 +1066,7 @@ export default function TrainingPage() {
       )}
 
       {showCreate && <CreateScenarioModal onClose={() => setShowCreate(false)} />}
-      {showAPIKey && <APIKeyModal onClose={() => setShowAPIKey(false)} onSave={key => setApiKey(key)} />}
+      
     </div>
   );
 }
