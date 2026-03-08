@@ -6,6 +6,7 @@ import {
   MessageSquare, Search, WifiOff, QrCode,
   RefreshCcw, AlertCircle, X, Loader2,
   Smartphone, RefreshCw, Plus, CheckCheck, Send,
+  ArrowUpDown, ArrowDownAZ, ArrowUpAZ, SortAsc, SortDesc,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
