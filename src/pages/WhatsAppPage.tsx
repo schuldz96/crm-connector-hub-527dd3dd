@@ -317,10 +317,10 @@ export default function WhatsAppPage() {
 
       const parsed: Message[] = raw
         .filter((m: any) => {
+          // Ignore protocol/reaction system messages
           if (m.messageType === 'protocolMessage' || m.messageType === 'reactionMessage') return false;
-          const kr: string = m.key?.remoteJid || '';
-          const krAlt: string = m.key?.remoteJidAlt || '';
-          return kr === remoteJid || krAlt === remoteJid;
+          // Accept all messages returned by the query — both fromMe and received
+          return true;
         })
         .map((m: any) => ({
           id: m.id || m.key?.id || `${m.messageTimestamp}_${Math.random()}`,
@@ -330,10 +330,8 @@ export default function WhatsAppPage() {
         }))
         .sort((a, b) => a.timestamp - b.timestamp);
 
-      setMessages(prev => {
-        if (!scroll && prev.length === parsed.length && prev[prev.length - 1]?.id === parsed[parsed.length - 1]?.id) return prev;
-        return parsed;
-      });
+      // Always update — force re-render on manual refresh too
+      setMessages(parsed);
     } catch { /* silent */ }
     finally { if (scroll) setLoadingMsgs(false); }
   }, []);
