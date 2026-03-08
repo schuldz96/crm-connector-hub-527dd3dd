@@ -6,7 +6,8 @@ import {
   MessageSquare, Search, WifiOff, QrCode,
   RefreshCcw, AlertCircle, X, Loader2,
   Smartphone, RefreshCw, Plus, CheckCheck, Send,
-  ArrowUpDown, ArrowDownAZ, ArrowUpAZ, SortAsc, SortDesc,
+  ArrowUpDown, ArrowDownAZ, SortAsc, SortDesc,
+  Brain, Sparkles, AlertTriangle, ChevronRight, Star,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -17,6 +18,8 @@ import {
   type EvolutionInstance,
 } from '@/hooks/useEvolutionInstances';
 import { MOCK_USERS, MOCK_TEAMS } from '@/data/mockData';
+import { useAppConfig } from '@/contexts/AppConfigContext';
+import { AI_CONFIG_STORAGE, DEFAULT_WHATSAPP_CRITERIA } from '@/pages/AIConfigPage';
 
 const EVOLUTION_API_URL = 'https://evolutionapic.contato-lojavirtual.com';
 const EVOLUTION_API_TOKEN = '3ce7a42f9bd96ea526b2b0bc39a4faec';
@@ -184,15 +187,266 @@ const AvatarInitials = ({ name, size = 'md', src }: { name: string; size?: 'sm' 
   );
 };
 
+// ─── AI Analysis Panel ────────────────────────────────────────────────────────
+interface CriteriaScore { id: string; label: string; weight: number; score: number; feedback: string; }
+interface AIAnalysisResult {
+  totalScore: number;
+  summary: string;
+  insights: string;
+  criticalAlerts: string[];
+  criteriaScores: CriteriaScore[];
+  analyzedAt: string;
+}
+
+function AIAnalysisPanel({
+  chat,
+  messages,
+  apiToken,
+}: {
+  chat: { id: string; name: string; phone: string };
+  messages: { fromMe: boolean; body: string; timestamp: number }[];
+  apiToken: string;
+}) {
+  const { toast } = useToast();
+  const [result, setResult] = useState<AIAnalysisResult | null>(() => {
+    try {
+      const stored = localStorage.getItem(`appmax_ai_analysis_${chat.id}`);
+      return stored ? JSON.parse(stored) : null;
+    } catch { return null; }
+  });
+  const [loading, setLoading] = useState(false);
+
+  // Load cached result when chat changes
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(`appmax_ai_analysis_${chat.id}`);
+      setResult(stored ? JSON.parse(stored) : null);
+    } catch { setResult(null); }
+  }, [chat.id]);
+
+  const loadCriteria = () => {
+    try {
+      const stored = localStorage.getItem(AI_CONFIG_STORAGE.WHATSAPP_CRITERIA);
+      return stored ? JSON.parse(stored) : DEFAULT_WHATSAPP_CRITERIA;
+    } catch { return DEFAULT_WHATSAPP_CRITERIA; }
+  };
+  const loadPrompt = () => {
+    try {
+      const stored = localStorage.getItem(AI_CONFIG_STORAGE.WHATSAPP_PROMPT);
+      return stored ? JSON.parse(stored) : 'Você é um especialista em vendas digitais e atendimento via WhatsApp. Avalie as conversas com foco em efetividade comercial, qualificação de leads e conversão.';
+    } catch { return 'Você é um especialista em vendas digitais e atendimento via WhatsApp.'; }
+  };
+
+  const analyze = async () => {
+    if (!apiToken) {
+      toast({ variant: 'destructive', title: 'Token OpenAI não configurado', description: 'Configure o token em Config. IA → Integrações.' });
+      return;
+    }
+    if (messages.length === 0) {
+      toast({ variant: 'destructive', title: 'Sem mensagens', description: 'Não há mensagens para analisar.' });
+      return;
+    }
+    setLoading(true);
+    try {
+      const criteria = loadCriteria();
+      const systemPrompt = loadPrompt();
+      const transcript = messages.map(m =>
+        `[${m.fromMe ? 'VENDEDOR' : 'LEAD'}] ${m.body}`
+      ).join('\n');
+
+      const criteriaText = criteria.map((c: any) =>
+        `- ${c.label} (peso ${c.weight}%): ${c.description}. Sinais positivos: ${c.positiveSignals?.join(', ') || 'N/A'}. Sinais negativos: ${c.negativeSignals?.join(', ') || 'N/A'}.`
+      ).join('\n');
+
+      const userPrompt = `Analise a seguinte conversa de WhatsApp entre um vendedor e um lead.
+
+CRITÉRIOS DE AVALIAÇÃO:
+${criteriaText}
+
+CONVERSA:
+${transcript}
+
+Responda APENAS com JSON válido no seguinte formato (sem markdown, sem explicações):
+{
+  "totalScore": <número 0-100>,
+  "summary": "<resumo conciso da conversa em 2-3 frases>",
+  "insights": "<insights principais sobre a qualidade do atendimento em 2-3 frases>",
+  "criticalAlerts": ["<alerta 1 se houver>", "<alerta 2 se houver>"],
+  "criteriaScores": [
+    { "id": "<id do critério>", "label": "<nome>", "weight": <peso>, "score": <0-100>, "feedback": "<feedback específico>" }
+  ]
+}`;
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          temperature: 0.3,
+          max_tokens: 1500,
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err?.error?.message || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      const raw = data.choices?.[0]?.message?.content || '';
+      // Strip possible markdown fences
+      const jsonStr = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const parsed: AIAnalysisResult = { ...JSON.parse(jsonStr), analyzedAt: new Date().toISOString() };
+      setResult(parsed);
+      localStorage.setItem(`appmax_ai_analysis_${chat.id}`, JSON.stringify(parsed));
+      toast({ title: '✓ Análise concluída!', description: `Score: ${parsed.totalScore}/100` });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro na análise', description: e.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const scoreColor = (s: number) =>
+    s >= 85 ? 'text-success' : s >= 70 ? 'text-primary' : s >= 50 ? 'text-warning' : 'text-destructive';
+  const scoreBg = (s: number) =>
+    s >= 85 ? 'bg-success/10 border-success/20' : s >= 70 ? 'bg-primary/10 border-primary/20' : s >= 50 ? 'bg-warning/10 border-warning/20' : 'bg-destructive/10 border-destructive/20';
+
+  return (
+    <div className="w-[280px] flex-shrink-0 bg-card border-l border-border flex flex-col">
+      {/* Header */}
+      <div className="px-3 py-2.5 border-b border-border flex-shrink-0 flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <Brain className="w-3.5 h-3.5 text-accent" />
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Análise IA</p>
+        </div>
+        <Button
+          size="sm"
+          className="h-7 text-[10px] bg-gradient-primary px-2 gap-1"
+          onClick={analyze}
+          disabled={loading}>
+          {loading
+            ? <><Loader2 className="w-3 h-3 animate-spin" /> Analisando...</>
+            : <><Sparkles className="w-3 h-3" /> {result ? 'Re-analisar' : 'Analisar'}</>}
+        </Button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {!result && !loading && (
+          <div className="flex flex-col items-center justify-center py-12 px-4 text-center text-muted-foreground gap-3">
+            <Brain className="w-10 h-10 opacity-15" />
+            <p className="text-xs font-medium">Nenhuma análise ainda</p>
+            <p className="text-[10px] text-muted-foreground/70">
+              Clique em "Analisar" para avaliar esta conversa com base nos critérios definidos na Config. IA
+            </p>
+          </div>
+        )}
+
+        {loading && (
+          <div className="flex flex-col items-center justify-center py-12 px-4 text-center gap-3">
+            <div className="relative">
+              <Brain className="w-10 h-10 text-accent/30" />
+              <Loader2 className="w-5 h-5 text-accent animate-spin absolute -bottom-1 -right-1" />
+            </div>
+            <p className="text-xs text-muted-foreground">Analisando conversa com IA...</p>
+          </div>
+        )}
+
+        {result && !loading && (
+          <div className="p-3 space-y-3">
+            {/* Score total */}
+            <div className={cn('rounded-xl p-3 border text-center', scoreBg(result.totalScore))}>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Score Total</p>
+              <p className={cn('text-3xl font-bold font-mono', scoreColor(result.totalScore))}>
+                {result.totalScore}
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">/ 100</p>
+            </div>
+
+            {/* Alertas críticos */}
+            {result.criticalAlerts && result.criticalAlerts.length > 0 && (
+              <div className="rounded-xl p-3 border bg-destructive/5 border-destructive/20">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
+                  <p className="text-[10px] font-semibold text-destructive uppercase tracking-wide">Alertas Críticos</p>
+                </div>
+                <div className="space-y-1.5">
+                  {result.criticalAlerts.map((a, i) => (
+                    <div key={i} className="flex items-start gap-1.5">
+                      <ChevronRight className="w-3 h-3 text-destructive flex-shrink-0 mt-0.5" />
+                      <p className="text-[10px] text-muted-foreground leading-snug">{a}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Resumo */}
+            <div className="rounded-xl p-3 border border-border bg-secondary/50">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Resumo</p>
+              <p className="text-[11px] text-foreground/80 leading-snug">{result.summary}</p>
+            </div>
+
+            {/* Insights */}
+            <div className="rounded-xl p-3 border border-accent/20 bg-accent/5">
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Star className="w-3 h-3 text-accent" />
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-accent">Insights</p>
+              </div>
+              <p className="text-[11px] text-foreground/80 leading-snug">{result.insights}</p>
+            </div>
+
+            {/* Critérios */}
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">Critérios</p>
+              <div className="space-y-2">
+                {result.criteriaScores?.map(c => (
+                  <div key={c.id} className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-medium">{c.label}</span>
+                      <span className={cn('text-[11px] font-bold font-mono', scoreColor(c.score))}>{c.score}</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={cn('h-full rounded-full transition-all', c.score >= 85 ? 'bg-success' : c.score >= 70 ? 'bg-primary' : c.score >= 50 ? 'bg-warning' : 'bg-destructive')}
+                        style={{ width: `${c.score}%` }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground leading-snug">{c.feedback}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <p className="text-[9px] text-muted-foreground/50 text-center pt-1">
+              Analisado em {new Date(result.analyzedAt).toLocaleString('pt-BR')}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function WhatsAppPage() {
   const { user, hasRole } = useAuth();
   const { toast } = useToast();
   const isAdmin = hasRole(['admin', 'director', 'supervisor']);
   const { instances: evoInstances, loading: evoLoading, refetch: refetchEvo } = useEvolutionInstances();
+  const { tokens } = useAppConfig();
 
   const [showCreateInst, setShowCreateInst] = useState(false);
   const [qrInstanceName, setQrInstanceName] = useState<string | null>(null);
+  const [showAiPanel, setShowAiPanel] = useState(false);
 
   // ── Instance filters ────────────────────────────────────────────────────────
   type InstStatusFilter = 'all' | 'connected' | 'disconnected';
@@ -872,11 +1126,19 @@ export default function WhatsAppPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
+                    size="sm" variant="ghost"
+                    className={cn('h-7 px-2 gap-1 text-[10px]', showAiPanel ? 'bg-accent/10 text-accent' : 'text-muted-foreground')}
+                    onClick={() => setShowAiPanel(v => !v)}
+                    title="Análise IA">
+                    <Brain className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">IA</span>
+                  </Button>
+                  <Button
                     size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground"
                     onClick={() => loadMessages(activeInstance!.name, activeChat, true)}>
                     {loadingMsgs ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { setActiveChat(null); setMessages([]); }}>
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { setActiveChat(null); setMessages([]); setShowAiPanel(false); }}>
                     <X className="w-3.5 h-3.5" />
                   </Button>
                 </div>
@@ -948,6 +1210,15 @@ export default function WhatsAppPage() {
             </>
           )}
         </div>
+
+        {/* ════ COLUMN 4 — AI ANALYSIS ══════════════════════════════════════ */}
+        {activeChat && showAiPanel && (
+          <AIAnalysisPanel
+            chat={activeChat}
+            messages={messages}
+            apiToken={tokens.whatsapp}
+          />
+        )}
 
       </div>
 
