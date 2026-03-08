@@ -45,24 +45,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Check for stored session
-    const stored = localStorage.getItem('dealintel_user');
+    const stored = localStorage.getItem('appmax_user');
     if (stored) {
       try {
         setUser(JSON.parse(stored));
       } catch {
-        localStorage.removeItem('dealintel_user');
+        localStorage.removeItem('appmax_user');
       }
     }
     setIsLoading(false);
   }, []);
 
-  const login = async (email: string, _password: string) => {
+  const login = async (email: string, password: string) => {
     setIsLoading(true);
-    // Simulate API call
-    await new Promise(r => setTimeout(r, 800));
-    const mockUser = { ...MOCK_USER, email };
+    await new Promise(r => setTimeout(r, 600));
+    // Check exact credentials OR allow any email (demo mode)
+    const isValidCredentials =
+      (email === DEMO_CREDENTIALS.email && password === DEMO_CREDENTIALS.password) ||
+      (email.length > 0 && password.length > 0);
+    if (!isValidCredentials) {
+      setIsLoading(false);
+      throw new Error('Credenciais inválidas');
+    }
+    const mockUser = email === DEMO_CREDENTIALS.email
+      ? { ...MOCK_USER }
+      : { ...MOCK_USER, email };
     setUser(mockUser);
-    localStorage.setItem('dealintel_user', JSON.stringify(mockUser));
+    localStorage.setItem('appmax_user', JSON.stringify(mockUser));
     setIsLoading(false);
   };
 
