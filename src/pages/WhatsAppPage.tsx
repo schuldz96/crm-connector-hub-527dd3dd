@@ -817,8 +817,7 @@ export default function WhatsAppPage() {
                     )}
                   </div>
                 </div>
-                  className={cn('flex items-start gap-3 p-3 border-b border-border/50 cursor-pointer hover:bg-muted/30 transition-colors',
-                    activeChat?.id === chat.id && 'bg-primary/5 border-l-2 border-l-primary')}>
+              ))}
                   <div className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-sm font-bold flex-shrink-0 border border-border">
                     {(chat.name || '?')[0].toUpperCase()}
                   </div>
