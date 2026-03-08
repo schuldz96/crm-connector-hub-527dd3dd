@@ -368,9 +368,11 @@ export default function WhatsAppPage() {
     finally { if (scroll) setLoadingMsgs(false); }
   }, []);
 
-  // Helper: build phone JID from chat for @lid conversations
+
+  // Helper: get the phone JID for @lid conversations — prefer remoteJidAlt, fallback to phone
   const getPhoneJid = (chat: Chat) =>
-    chat.phone ? `${chat.phone}@s.whatsapp.net` : undefined;
+    chat.remoteJidAlt || (chat.phone ? `${chat.phone}@s.whatsapp.net` : undefined);
+
 
   useEffect(() => {
     if (!activeChat || !activeInstance) return;
