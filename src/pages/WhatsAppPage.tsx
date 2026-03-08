@@ -551,7 +551,7 @@ export default function WhatsAppPage() {
               <Plus className="w-3.5 h-3.5" /> Nova Instância
             </Button>
           )}
-          <Button size="sm" variant="outline" className="text-xs h-8 border-border" onClick={refetchEvo} disabled={evoLoading}>
+          <Button size="sm" variant="outline" className="text-xs h-8 border-border" onClick={() => { refetchEvo(); if (activeInstance?.connectionStatus === 'open') loadChats(activeInstance.name, true); }} disabled={evoLoading}>
             {evoLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
           </Button>
         </div>
