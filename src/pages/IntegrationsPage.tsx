@@ -28,17 +28,17 @@ const INTEGRATION_META: Record<string, { icon: string; color: string; desc: stri
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+// The Evolution API returns a flat structure directly
 interface EvolutionInstance {
-  instance: {
-    instanceName: string;
-    instanceId: string;
-    status: string;
-    owner?: string;
-    profileName?: string;
-    profilePictureUrl?: string;
-    number?: string;
-  };
-  connectionStatus?: string;
+  id: string;
+  name: string;
+  connectionStatus: string; // "open" | "close" | "connecting" | "qrcode"
+  ownerJid?: string;
+  profileName?: string;
+  profilePicUrl?: string;
+  number?: string;
+  token?: string;
+  _count?: { Message: number; Contact: number; Chat: number };
 }
 
 interface EvolutionMessage {
@@ -155,7 +155,7 @@ function EvolutionPanel() {
   const handleSelectInstance = (inst: EvolutionInstance) => {
     setSelectedInstance(inst);
     setQrCode(null);
-    fetchMessages(inst.instance.instanceName);
+    fetchMessages(inst.name);
   };
 
   const handleGetQr = async (instanceName: string) => {
@@ -184,7 +184,7 @@ function EvolutionPanel() {
   };
 
   const myInstance = instances.find(i =>
-    instanceUserMap[i.instance.instanceName] === currentUser?.id
+    instanceUserMap[i.name] === currentUser?.id
   );
 
   return (
@@ -210,16 +210,18 @@ function EvolutionPanel() {
       {!isAdmin && myInstance && (
         <div className={cn(
           'p-3 rounded-xl border flex items-center gap-3',
-          myInstance.instance.status === 'open' ? 'bg-success/5 border-success/20' : 'bg-warning/5 border-warning/20'
+          myInstance.connectionStatus === 'open' ? 'bg-success/5 border-success/20' : 'bg-warning/5 border-warning/20'
         )}>
           <Phone className="w-4 h-4 text-muted-foreground flex-shrink-0" />
           <div className="flex-1">
-            <p className="text-xs font-semibold">{myInstance.instance.profileName || myInstance.instance.instanceName}</p>
-            <p className="text-xs text-muted-foreground">{myInstance.instance.number || myInstance.instance.owner || '—'}</p>
+            <p className="text-xs font-semibold">{myInstance.profileName || myInstance.name}</p>
+            <p className="text-xs text-muted-foreground">
+              {myInstance.ownerJid?.replace('@s.whatsapp.net', '') || '—'}
+            </p>
           </div>
-          <StatusBadge status={myInstance.instance.status} />
-          {myInstance.instance.status !== 'open' && (
-            <Button size="sm" className="text-xs h-7 bg-gradient-primary" onClick={() => handleGetQr(myInstance.instance.instanceName)}>
+          <StatusBadge status={myInstance.connectionStatus} />
+          {myInstance.connectionStatus !== 'open' && (
+            <Button size="sm" className="text-xs h-7 bg-gradient-primary" onClick={() => handleGetQr(myInstance.name)}>
               <QrCode className="w-3 h-3 mr-1" /> Reconectar
             </Button>
           )}
@@ -251,16 +253,17 @@ function EvolutionPanel() {
       {!loading && instances.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {instances.map(inst => {
-            const name = inst.instance.instanceName;
-            const status = inst.instance.status;
+            const name = inst.name;
+            const status = inst.connectionStatus;
             const isOpen = status === 'open';
+            const phoneNumber = inst.ownerJid?.replace('@s.whatsapp.net', '');
             const assignedUserId = instanceUserMap[name];
             const assignedUser = MOCK_USERS.find(u => u.id === assignedUserId);
-            const isSelected = selectedInstance?.instance.instanceName === name;
+            const isSelected = selectedInstance?.name === name;
 
             return (
               <div
-                key={name}
+                key={inst.id}
                 className={cn(
                   'glass-card p-4 flex flex-col gap-3 cursor-pointer transition-all border',
                   isSelected ? 'border-primary/40 bg-primary/5' : 'border-border hover:border-primary/20'
@@ -269,22 +272,30 @@ function EvolutionPanel() {
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-2.5">
-                    {inst.instance.profilePictureUrl ? (
-                      <img src={inst.instance.profilePictureUrl} alt={name} className="w-9 h-9 rounded-full border border-border object-cover" />
+                    {inst.profilePicUrl ? (
+                      <img src={inst.profilePicUrl} alt={name} className="w-9 h-9 rounded-full border border-border object-cover" />
                     ) : (
                       <div className="w-9 h-9 rounded-full bg-accent/10 flex items-center justify-center">
                         <Smartphone className="w-4 h-4 text-accent" />
                       </div>
                     )}
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold truncate">{inst.instance.profileName || name}</p>
+                      <p className="text-xs font-semibold truncate">{inst.profileName || name}</p>
                       <p className="text-[10px] text-muted-foreground font-mono truncate">
-                        {inst.instance.number || inst.instance.owner || name}
+                        {phoneNumber || name}
                       </p>
                     </div>
                   </div>
                   <StatusBadge status={status} />
                 </div>
+
+                {/* Stats row */}
+                {inst._count && (
+                  <div className="flex gap-3 text-[10px] text-muted-foreground">
+                    <span>💬 {inst._count.Message.toLocaleString('pt-BR')} msgs</span>
+                    <span>👥 {inst._count.Contact.toLocaleString('pt-BR')} contatos</span>
+                  </div>
+                )}
 
                 {assignedUser && (
                   <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
@@ -361,10 +372,10 @@ function EvolutionPanel() {
             <div className="flex items-center gap-2">
               <MessageSquare className="w-4 h-4 text-accent" />
               <p className="text-xs font-semibold">
-                Mensagens — {selectedInstance.instance.profileName || selectedInstance.instance.instanceName}
+                Mensagens — {selectedInstance.profileName || selectedInstance.name}
               </p>
             </div>
-            <Button size="sm" variant="outline" className="text-xs h-6 border-border" onClick={() => fetchMessages(selectedInstance.instance.instanceName)}>
+            <Button size="sm" variant="outline" className="text-xs h-6 border-border" onClick={() => fetchMessages(selectedInstance.name)}>
               <RefreshCw className="w-3 h-3" />
             </Button>
           </div>
