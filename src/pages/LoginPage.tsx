@@ -60,7 +60,7 @@ export default function LoginPage() {
             <div className="w-10 h-10 rounded-xl bg-gradient-primary flex items-center justify-center">
               <TrendingUp className="w-5 h-5 text-primary-foreground" />
             </div>
-            <span className="text-xl font-display font-bold">Deal Intel</span>
+            <span className="text-xl font-display font-bold">Appmax</span>
           </div>
           <div className="mb-10">
             <h1 className="text-4xl font-display font-bold mb-4 leading-tight">
@@ -82,7 +82,7 @@ export default function LoginPage() {
           </div>
         </div>
         <div className="relative z-10 flex items-center gap-6 text-xs text-muted-foreground">
-          <span>© 2024 Deal Intel</span>
+          <span>© 2026 Appmax</span>
           <span>·</span>
           <span>Privacidade</span>
           <span>·</span>
@@ -98,7 +98,7 @@ export default function LoginPage() {
             <div className="w-10 h-10 rounded-xl bg-gradient-primary flex items-center justify-center">
               <TrendingUp className="w-5 h-5 text-primary-foreground" />
             </div>
-            <span className="text-xl font-display font-bold">Deal Intel</span>
+            <span className="text-xl font-display font-bold">Appmax</span>
           </div>
 
           <div className="mb-8">
