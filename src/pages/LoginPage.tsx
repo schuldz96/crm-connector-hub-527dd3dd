@@ -192,13 +192,32 @@ export default function LoginPage() {
             </button>
           </p>
 
-          <div className="mt-8 p-3 rounded-lg bg-muted/50 border border-border">
-            <p className="text-xs text-muted-foreground text-center mb-1">
-              <span className="font-medium text-foreground">Acesso demo</span>
+          <div className="mt-8 p-4 rounded-lg bg-primary/5 border border-primary/20">
+            <p className="text-xs font-semibold text-foreground mb-2">
+              🔑 Credenciais de acesso
             </p>
-            <p className="text-xs text-muted-foreground text-center">
-              Use qualquer email/senha ou clique em Google para entrar
-            </p>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground w-14">Email:</span>
+                <code className="text-xs text-primary font-mono">marcos.schuldz@appmax.com.br</code>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground w-14">Senha:</span>
+                <code className="text-xs text-primary font-mono">Appmax102030@</code>
+              </div>
+            </div>
+            <button
+              type="button"
+              className="mt-3 w-full text-xs text-center text-primary/70 hover:text-primary underline underline-offset-2"
+              onClick={() => {
+                const emailEl = document.getElementById('email') as HTMLInputElement;
+                const passEl = document.getElementById('password') as HTMLInputElement;
+                if (emailEl) emailEl.value = 'marcos.schuldz@appmax.com.br';
+                if (passEl) passEl.value = 'Appmax102030@';
+              }}
+            >
+              Preencher automaticamente
+            </button>
           </div>
         </div>
       </div>
