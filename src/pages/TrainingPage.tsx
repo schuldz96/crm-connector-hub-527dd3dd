@@ -616,7 +616,14 @@ Responda em JSON com:
     setTranscript([]);
     setElapsedSeconds(0);
 
-    const greeting = `Olá! ${scenario.persona.split('.')[0]}. Pode falar.`;
+    // Generate a natural greeting based on the scenario context
+    const greetings: Record<string, string> = {
+      sc_001: 'Alô? Oi, pode falar.',
+      sc_002: 'Oi, tudo bem? Com quem eu tô falando?',
+      sc_003: 'Oi! Tô aqui, pode falar.',
+      sc_004: 'Oi, sim, tô te esperando. O que você tem pra me dizer?',
+    };
+    const greeting = greetings[scenario.id] ?? 'Alô? Pode falar.';
     const greetingMsg = { role: 'assistant' as const, content: greeting, timestamp: new Date().toISOString() };
 
     historyRef.current.push({ role: 'assistant', content: greeting });
