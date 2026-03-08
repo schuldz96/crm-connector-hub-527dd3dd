@@ -268,13 +268,15 @@ export default function WhatsAppPage() {
         const existing = phoneMap.get(phone);
 
         if (!existing) {
+          // displayPhone: for @lid use phoneJid number (real phone), for @s.whatsapp.net use phone directly
+          const displayPhone = isLid ? (phoneJid?.replace(/@.*/, '') || phone) : phone;
           phoneMap.set(phone, {
             id: jid,
             remoteJid: jid,
             // For @lid chats, remoteJidAlt = phone JID; for phone JID chats, remoteJidAlt = undefined (not needed)
             remoteJidAlt: isLid ? phoneJid : undefined,
-            phone,
-            name: c.name || c.pushName || c.lastMessage?.pushName || phone || 'Desconhecido',
+            phone: displayPhone,
+            name: c.name || c.pushName || c.lastMessage?.pushName || displayPhone || 'Desconhecido',
             lastMessage:
               c.lastMessage?.message?.conversation ||
               c.lastMessage?.message?.extendedTextMessage?.text ||
