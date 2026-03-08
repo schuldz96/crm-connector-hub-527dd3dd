@@ -238,9 +238,11 @@ export default function WhatsAppPage() {
     );
   };
 
-  const loadChats = useCallback(async (instanceName: string) => {
-    setLoadingChats(true);
-    setChats([]);
+  const loadChats = useCallback(async (instanceName: string, silent = false) => {
+    if (!silent) {
+      setLoadingChats(true);
+      setChats([]);
+    }
     try {
       const data = await evoFetch(`/chat/findChats/${instanceName}`, {
         method: 'POST',
