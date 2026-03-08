@@ -5,7 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   SlidersHorizontal, Brain, Plus, X, Save, Sparkles,
   Video, MessageSquare, Trash2, GripVertical,
-  CheckCircle2, Star, Target, AlertTriangle
+  CheckCircle2, Star, Target, AlertTriangle, Loader2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
