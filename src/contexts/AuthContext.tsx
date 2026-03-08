@@ -79,13 +79,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     await new Promise(r => setTimeout(r, 600));
     setUser(MOCK_USER);
-    localStorage.setItem('dealintel_user', JSON.stringify(MOCK_USER));
+    localStorage.setItem('appmax_user', JSON.stringify(MOCK_USER));
     setIsLoading(false);
   };
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('dealintel_user');
+    localStorage.removeItem('appmax_user');
   };
 
   const hasRole = (roles: UserRole[]) => {
