@@ -390,7 +390,47 @@ export default function AIConfigPage() {
     });
   };
 
-  return (
+  const [testLoading, setTestLoading] = useState(false);
+  const [testResult, setTestResult] = useState<{ score: number; summary: string; breakdown: { label: string; score: number; feedback: string }[] } | null>(null);
+
+  const handleTest = async () => {
+    const { tokens } = (() => {
+      try { return JSON.parse(localStorage.getItem('appmax_openai_tokens') || '{}'); } catch { return {}; }
+    })();
+    const token = activeType === 'meetings' ? tokens?.meetings : tokens?.whatsapp;
+    if (!token) {
+      toast({ variant: 'destructive', title: 'Token não configurado', description: 'Adicione o token OpenAI em Config. IA antes de testar.' });
+      return;
+    }
+    setTestLoading(true);
+    setTestResult(null);
+    const sampleTranscript = activeType === 'meetings'
+      ? '[VENDEDOR] Olá Pedro, tudo bem? Obrigado por reservar esse tempo.\n[LEAD] Olá! Sim, vi sua proposta e quero entender melhor.\n[VENDEDOR] Ótimo! Me conta, qual é o principal desafio da sua equipe de vendas hoje?\n[LEAD] Temos dificuldade com follow-up. Os vendedores não sabem o momento certo de abordar.\n[VENDEDOR] Entendo. Nossa plataforma resolve exatamente isso com IA. Posso mostrar?\n[LEAD] Sim, pode mostrar.\n[VENDEDOR] [Apresentação de 10 min] ...e o ROI médio dos clientes é de 35%.\n[LEAD] Interessante. Qual o preço?\n[VENDEDOR] Depende do tamanho da equipe. Para vocês, seria R$1.200/mês.\n[LEAD] Preciso consultar o financeiro.\n[VENDEDOR] Claro! Posso marcar uma call com o financeiro na semana que vem?'
+      : '[VENDEDOR] Olá Ana! Vi que você acessou nosso site. Posso ajudar?\n[LEAD] Oi! Sim, tenho interesse em automatizar o WhatsApp da minha equipe.\n[VENDEDOR] Perfeito! Quantos vendedores você tem?\n[LEAD] São 5 pessoas.\n[VENDEDOR] Ótimo perfil! Você é a decisora ou tem outras pessoas envolvidas?\n[LEAD] Sou eu mesma.\n[VENDEDOR] Qual é o principal problema que você quer resolver? Tempo de resposta, organização...?\n[LEAD] Os dois! Demora muito e fica tudo desorganizado.\n[VENDEDOR] Entendo. Nossa plataforma resolve isso. Posso te enviar um vídeo de 3 min demonstrando?\n[LEAD] Pode sim!\n[VENDEDOR] Ótimo, vou enviar agora. Posso marcar 15 min amanhã para tirar dúvidas?';
+    const criteriaText = criteria.map(c =>
+      `- ${c.label} (peso ${c.weight}%): ${c.description}`
+    ).join('\n');
+    try {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Analise esta conversa de exemplo usando os critérios abaixo e retorne APENAS JSON:\n\nCritérios:\n${criteriaText}\n\nConversa:\n${sampleTranscript}\n\nJSON esperado:\n{"totalScore":<0-100>,"summary":"<2 frases>","breakdown":[{"label":"<critério>","score":<0-100>,"feedback":"<1 frase>"}]}` },
+          ],
+          temperature: 0.3, max_tokens: 800,
+        }),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error?.message || `HTTP ${res.status}`); }
+      const data = await res.json();
+      const raw = (data.choices?.[0]?.message?.content || '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      setTestResult(JSON.parse(raw));
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro no teste', description: e.message });
+    } finally { setTestLoading(false); }
+  };
     <div className="page-container animate-fade-in">
       <div className="flex items-center justify-between mb-6">
         <div>
