@@ -4,9 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
-  Shield, Users, Plug2, Bell, Building2, Key,
+  Shield, Users, Building2, Key,
   ChevronRight, CheckCircle2, AlertCircle, Save, Eye, EyeOff,
-  TrendingUp, Lock, ToggleLeft, ToggleRight, SlidersHorizontal
+  Lock, ToggleLeft, ToggleRight, SlidersHorizontal
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppConfig, DEFAULT_MODULES, type ModuleId } from '@/contexts/AppConfigContext';
