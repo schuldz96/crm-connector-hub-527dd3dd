@@ -395,6 +395,7 @@ export default function WhatsAppPage() {
           phoneMap.set(phone, {
             id: c.id || c.remoteJid,
             remoteJid: c.remoteJid || c.id || '',
+            phone,
             name: c.name || c.pushName || c.lastMessage?.key?.pushName || phone || 'Desconhecido',
             lastMessage:
               c.lastMessage?.message?.conversation ||
