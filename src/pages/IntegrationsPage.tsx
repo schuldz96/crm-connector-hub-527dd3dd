@@ -1,16 +1,22 @@
-import { useState } from 'react';
-import { MOCK_INTEGRATIONS } from '@/data/mockData';
+import { useState, useEffect, useCallback } from 'react';
+import { MOCK_INTEGRATIONS, MOCK_USERS } from '@/data/mockData';
 import type { Integration } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Plug2, CheckCircle2, XCircle, AlertCircle, Settings2, RefreshCcw,
   Eye, EyeOff, Save, Zap, Brain, Workflow, Activity, ArrowDown,
-  ArrowUp, Clock, CheckCheck, AlertTriangle, X, Loader2, Search,
-  Filter
+  ArrowUp, Clock, CheckCheck, AlertTriangle, X, Loader2,
+  Smartphone, QrCode, Link2, MessageSquare, Phone, Wifi, WifiOff,
+  ExternalLink, RefreshCw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+
+// ─── Evolution API config (hardcoded from user) ───────────────────────────────
+const EVOLUTION_API_URL = 'https://evolutionapic.contato-lojavirtual.com';
+const EVOLUTION_API_TOKEN = '3ce7a42f9bd96ea526b2b0bc39a4faec';
 
 const INTEGRATION_META: Record<string, { icon: string; color: string; desc: string }> = {
   google_calendar: { icon: '📅', color: 'hsl(var(--info))', desc: 'Sincroniza reuniões automaticamente do Google Calendar' },
@@ -21,7 +27,28 @@ const INTEGRATION_META: Record<string, { icon: string; color: string; desc: stri
   n8n: { icon: '⚡', color: 'hsl(270 80% 65%)', desc: 'Orquestração de automações e fluxos' },
 };
 
-// Mock webhook log data
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface EvolutionInstance {
+  instance: {
+    instanceName: string;
+    instanceId: string;
+    status: string;
+    owner?: string;
+    profileName?: string;
+    profilePictureUrl?: string;
+    number?: string;
+  };
+  connectionStatus?: string;
+}
+
+interface EvolutionMessage {
+  key: { id: string; remoteJid: string; fromMe: boolean };
+  message?: { conversation?: string; extendedTextMessage?: { text: string }; imageMessage?: { caption?: string } };
+  pushName?: string;
+  messageTimestamp?: number;
+  messageType?: string;
+}
+
 interface WebhookLog {
   id: string;
   direction: 'inbound' | 'outbound';
@@ -45,6 +72,465 @@ const MOCK_WEBHOOK_LOGS: WebhookLog[] = [
   { id: 'wh_007', direction: 'inbound', source: 'Evolution API', event: 'messages.upsert', status: 'success', statusCode: 200, payload: '{"event":"messages.upsert","instance":"SDR Team Beta","data":{...}}', response: '{"status":"ok"}', timestamp: '2026-03-08T08:00:00Z', duration: 55 },
 ];
 
+// ─── Evolution API helpers ────────────────────────────────────────────────────
+async function evolutionFetch(path: string, options: RequestInit = {}) {
+  const res = await fetch(`${EVOLUTION_API_URL}${path}`, {
+    ...options,
+    headers: {
+      'apikey': EVOLUTION_API_TOKEN,
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+// ─── Instance Status Badge ────────────────────────────────────────────────────
+function StatusBadge({ status }: { status: string }) {
+  const isOpen = status === 'open' || status === 'connected';
+  const isConnecting = status === 'connecting' || status === 'qrcode';
+  return (
+    <span className={cn(
+      'inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-medium',
+      isOpen ? 'bg-success/10 text-success border-success/20' :
+      isConnecting ? 'bg-warning/10 text-warning border-warning/20' :
+      'bg-muted text-muted-foreground border-border'
+    )}>
+      {isOpen ? <Wifi className="w-2.5 h-2.5" /> : isConnecting ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <WifiOff className="w-2.5 h-2.5" />}
+      {isOpen ? 'Conectado' : isConnecting ? 'Conectando...' : 'Desconectado'}
+    </span>
+  );
+}
+
+// ─── Evolution Instances Panel ────────────────────────────────────────────────
+function EvolutionPanel() {
+  const { toast } = useToast();
+  const { user: currentUser, hasRole } = useAuth();
+  const isAdmin = hasRole(['admin', 'director', 'supervisor']);
+
+  const [instances, setInstances] = useState<EvolutionInstance[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedInstance, setSelectedInstance] = useState<EvolutionInstance | null>(null);
+  const [messages, setMessages] = useState<EvolutionMessage[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [qrCode, setQrCode] = useState<string | null>(null);
+  const [loadingQr, setLoadingQr] = useState(false);
+  // instance → userId mapping (in-memory)
+  const [instanceUserMap, setInstanceUserMap] = useState<Record<string, string>>({});
+
+  const fetchInstances = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await evolutionFetch('/instance/fetchInstances');
+      const list: EvolutionInstance[] = Array.isArray(data) ? data : [];
+      setInstances(list);
+    } catch (e: any) {
+      setError(`Erro ao carregar instâncias: ${e.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchInstances(); }, [fetchInstances]);
+
+  const fetchMessages = async (instanceName: string) => {
+    setLoadingMessages(true);
+    try {
+      const data = await evolutionFetch(`/chat/findMessages/${instanceName}`, {
+        method: 'POST',
+        body: JSON.stringify({ where: {}, limit: 20 }),
+      });
+      const msgs: EvolutionMessage[] = Array.isArray(data?.messages?.records) ? data.messages.records : [];
+      setMessages(msgs);
+    } catch {
+      setMessages([]);
+    } finally {
+      setLoadingMessages(false);
+    }
+  };
+
+  const handleSelectInstance = (inst: EvolutionInstance) => {
+    setSelectedInstance(inst);
+    setQrCode(null);
+    fetchMessages(inst.instance.instanceName);
+  };
+
+  const handleGetQr = async (instanceName: string) => {
+    setLoadingQr(true);
+    setQrCode(null);
+    try {
+      const data = await evolutionFetch(`/instance/connect/${instanceName}`);
+      const base64 = data?.base64 || data?.qrcode?.base64 || null;
+      setQrCode(base64);
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro ao obter QR Code', description: e.message });
+    } finally {
+      setLoadingQr(false);
+    }
+  };
+
+  const handleDisconnect = async (instanceName: string) => {
+    try {
+      await evolutionFetch(`/instance/logout/${instanceName}`, { method: 'DELETE' });
+      toast({ title: 'Instância desconectada' });
+      fetchInstances();
+      setSelectedInstance(null);
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: e.message });
+    }
+  };
+
+  const myInstance = instances.find(i =>
+    instanceUserMap[i.instance.instanceName] === currentUser?.id
+  );
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-accent/10 flex items-center justify-center">
+            <MessageSquare className="w-5 h-5 text-accent" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold">Evolution API — WhatsApp</p>
+            <p className="text-xs text-muted-foreground">{EVOLUTION_API_URL}</p>
+          </div>
+        </div>
+        <Button size="sm" variant="outline" className="text-xs h-7 border-border gap-1.5" onClick={fetchInstances} disabled={loading}>
+          {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+          Atualizar
+        </Button>
+      </div>
+
+      {/* My instance banner (non-admin) */}
+      {!isAdmin && myInstance && (
+        <div className={cn(
+          'p-3 rounded-xl border flex items-center gap-3',
+          myInstance.instance.status === 'open' ? 'bg-success/5 border-success/20' : 'bg-warning/5 border-warning/20'
+        )}>
+          <Phone className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-xs font-semibold">{myInstance.instance.profileName || myInstance.instance.instanceName}</p>
+            <p className="text-xs text-muted-foreground">{myInstance.instance.number || myInstance.instance.owner || '—'}</p>
+          </div>
+          <StatusBadge status={myInstance.instance.status} />
+          {myInstance.instance.status !== 'open' && (
+            <Button size="sm" className="text-xs h-7 bg-gradient-primary" onClick={() => handleGetQr(myInstance.instance.instanceName)}>
+              <QrCode className="w-3 h-3 mr-1" /> Reconectar
+            </Button>
+          )}
+        </div>
+      )}
+
+      {error && (
+        <div className="p-3 rounded-lg bg-destructive/5 border border-destructive/20 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-destructive flex-shrink-0" />
+          <p className="text-xs text-muted-foreground">{error}</p>
+        </div>
+      )}
+
+      {loading && (
+        <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span className="text-xs">Carregando instâncias...</span>
+        </div>
+      )}
+
+      {!loading && instances.length === 0 && !error && (
+        <div className="text-center py-8">
+          <MessageSquare className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+          <p className="text-xs text-muted-foreground">Nenhuma instância encontrada</p>
+        </div>
+      )}
+
+      {/* Instances grid */}
+      {!loading && instances.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {instances.map(inst => {
+            const name = inst.instance.instanceName;
+            const status = inst.instance.status;
+            const isOpen = status === 'open';
+            const assignedUserId = instanceUserMap[name];
+            const assignedUser = MOCK_USERS.find(u => u.id === assignedUserId);
+            const isSelected = selectedInstance?.instance.instanceName === name;
+
+            return (
+              <div
+                key={name}
+                className={cn(
+                  'glass-card p-4 flex flex-col gap-3 cursor-pointer transition-all border',
+                  isSelected ? 'border-primary/40 bg-primary/5' : 'border-border hover:border-primary/20'
+                )}
+                onClick={() => handleSelectInstance(inst)}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-2.5">
+                    {inst.instance.profilePictureUrl ? (
+                      <img src={inst.instance.profilePictureUrl} alt={name} className="w-9 h-9 rounded-full border border-border object-cover" />
+                    ) : (
+                      <div className="w-9 h-9 rounded-full bg-accent/10 flex items-center justify-center">
+                        <Smartphone className="w-4 h-4 text-accent" />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold truncate">{inst.instance.profileName || name}</p>
+                      <p className="text-[10px] text-muted-foreground font-mono truncate">
+                        {inst.instance.number || inst.instance.owner || name}
+                      </p>
+                    </div>
+                  </div>
+                  <StatusBadge status={status} />
+                </div>
+
+                {assignedUser && (
+                  <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                    <img src={assignedUser.avatar} alt={assignedUser.name} className="w-4 h-4 rounded-full border border-border" />
+                    {assignedUser.name}
+                  </div>
+                )}
+
+                {isAdmin && (
+                  <div onClick={e => e.stopPropagation()}>
+                    <label className="text-[10px] text-muted-foreground block mb-1">Atribuir a usuário</label>
+                    <select
+                      value={assignedUserId || ''}
+                      onChange={e => setInstanceUserMap(m => ({ ...m, [name]: e.target.value }))}
+                      className="w-full h-7 text-[10px] bg-secondary border border-border rounded-lg px-2 text-foreground"
+                    >
+                      <option value="">— Sem atribuição —</option>
+                      {MOCK_USERS.filter(u => u.status === 'active').map(u => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div className="flex gap-1.5">
+                  {!isOpen ? (
+                    <Button
+                      size="sm"
+                      className="flex-1 text-[10px] h-6 bg-gradient-primary"
+                      onClick={e => { e.stopPropagation(); handleGetQr(name); }}
+                      disabled={loadingQr}
+                    >
+                      <QrCode className="w-3 h-3 mr-1" /> {loadingQr ? 'Aguarde...' : 'Conectar / QR'}
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 text-[10px] h-6 border-destructive/30 text-destructive hover:bg-destructive/10"
+                      onClick={e => { e.stopPropagation(); handleDisconnect(name); }}
+                    >
+                      <WifiOff className="w-3 h-3 mr-1" /> Desconectar
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* QR Code modal */}
+      {qrCode && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setQrCode(null)}>
+          <div className="glass-card p-6 max-w-sm w-full text-center space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Escanear QR Code</h3>
+              <button onClick={() => setQrCode(null)} className="w-6 h-6 rounded hover:bg-muted flex items-center justify-center">
+                <X className="w-3.5 h-3.5 text-muted-foreground" />
+              </button>
+            </div>
+            <p className="text-xs text-muted-foreground">Abra o WhatsApp → Dispositivos vinculados → Vincular dispositivo</p>
+            <img src={qrCode} alt="QR Code" className="w-56 h-56 mx-auto rounded-xl border border-border" />
+            <p className="text-[10px] text-muted-foreground">O QR Code expira em 60 segundos</p>
+            <Button size="sm" variant="outline" className="w-full text-xs border-border" onClick={() => setQrCode(null)}>Fechar</Button>
+          </div>
+        </div>
+      )}
+
+      {/* Messages panel */}
+      {selectedInstance && (
+        <div className="glass-card p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-accent" />
+              <p className="text-xs font-semibold">
+                Mensagens — {selectedInstance.instance.profileName || selectedInstance.instance.instanceName}
+              </p>
+            </div>
+            <Button size="sm" variant="outline" className="text-xs h-6 border-border" onClick={() => fetchMessages(selectedInstance.instance.instanceName)}>
+              <RefreshCw className="w-3 h-3" />
+            </Button>
+          </div>
+
+          {loadingMessages && (
+            <div className="flex items-center justify-center py-4 gap-2 text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span className="text-xs">Carregando mensagens...</span>
+            </div>
+          )}
+
+          {!loadingMessages && messages.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-4">Nenhuma mensagem encontrada</p>
+          )}
+
+          {!loadingMessages && messages.length > 0 && (
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {messages.slice(0, 20).map((msg, i) => {
+                const text = msg.message?.conversation
+                  || msg.message?.extendedTextMessage?.text
+                  || msg.message?.imageMessage?.caption
+                  || '[mídia]';
+                const isOut = msg.key.fromMe;
+                const ts = msg.messageTimestamp ? new Date(msg.messageTimestamp * 1000) : null;
+                const jid = msg.key.remoteJid?.replace('@s.whatsapp.net', '').replace('@g.us', ' (grupo)');
+                return (
+                  <div key={i} className={cn('flex gap-2', isOut ? 'flex-row-reverse' : 'flex-row')}>
+                    <div className={cn(
+                      'max-w-[75%] px-3 py-2 rounded-xl text-xs',
+                      isOut ? 'bg-primary/10 text-primary rounded-tr-sm' : 'bg-secondary text-muted-foreground rounded-tl-sm border border-border'
+                    )}>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="font-semibold text-[10px]">
+                          {isOut ? 'Você' : (msg.pushName || jid)}
+                        </span>
+                        <span className="text-[9px] opacity-60">{ts?.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span className={cn('text-[8px] px-1 rounded', isOut ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground')}>
+                          {isOut ? '↑ saída' : '↓ entrada'}
+                        </span>
+                      </div>
+                      <p>{text}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Meta WhatsApp Config ─────────────────────────────────────────────────────
+function MetaWhatsAppPanel() {
+  const { toast } = useToast();
+  const [showToken, setShowToken] = useState(false);
+  const [form, setForm] = useState({
+    token: localStorage.getItem('meta_wa_token') || '',
+    phoneNumberId: localStorage.getItem('meta_wa_phone_id') || '',
+    businessId: localStorage.getItem('meta_wa_business_id') || '',
+  });
+  const [testing, setTesting] = useState(false);
+
+  const handleSave = () => {
+    localStorage.setItem('meta_wa_token', form.token);
+    localStorage.setItem('meta_wa_phone_id', form.phoneNumberId);
+    localStorage.setItem('meta_wa_business_id', form.businessId);
+    toast({ title: 'Credenciais Meta salvas', description: 'Configuração da API do WhatsApp (Meta) atualizada.' });
+  };
+
+  const handleTest = async () => {
+    if (!form.token || !form.phoneNumberId) {
+      toast({ variant: 'destructive', title: 'Preencha Token e Phone Number ID antes de testar.' });
+      return;
+    }
+    setTesting(true);
+    try {
+      const res = await fetch(`https://graph.facebook.com/v19.0/${form.phoneNumberId}`, {
+        headers: { Authorization: `Bearer ${form.token}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast({ title: 'Conexão OK!', description: `Número: ${data.display_phone_number || form.phoneNumberId}` });
+      } else {
+        toast({ variant: 'destructive', title: 'Falha na conexão', description: data.error?.message || 'Verifique o token.' });
+      }
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: e.message });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <div className="glass-card p-5 space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xl" style={{ background: 'hsl(215 100% 56% / 0.1)' }}>
+          🔵
+        </div>
+        <div>
+          <p className="text-sm font-semibold">WhatsApp Business API — Meta</p>
+          <p className="text-xs text-muted-foreground">Conecte via token de acesso da Meta (Cloud API)</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="md:col-span-2">
+          <label className="text-xs font-medium block mb-1.5">Access Token</label>
+          <div className="relative">
+            <Input
+              type={showToken ? 'text' : 'password'}
+              value={form.token}
+              onChange={e => setForm(f => ({ ...f, token: e.target.value }))}
+              placeholder="EAAxxxxx..."
+              className="h-9 text-xs bg-secondary border-border pr-9 font-mono"
+            />
+            <button onClick={() => setShowToken(s => !s)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground">
+              {showToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+        </div>
+        <div>
+          <label className="text-xs font-medium block mb-1.5">Phone Number ID</label>
+          <Input
+            value={form.phoneNumberId}
+            onChange={e => setForm(f => ({ ...f, phoneNumberId: e.target.value }))}
+            placeholder="1234567890"
+            className="h-9 text-xs bg-secondary border-border font-mono"
+          />
+        </div>
+        <div>
+          <label className="text-xs font-medium block mb-1.5">Business ID</label>
+          <Input
+            value={form.businessId}
+            onChange={e => setForm(f => ({ ...f, businessId: e.target.value }))}
+            placeholder="9876543210"
+            className="h-9 text-xs bg-secondary border-border font-mono"
+          />
+        </div>
+      </div>
+
+      <div className="p-3 rounded-lg bg-info/5 border border-info/20">
+        <p className="text-[10px] text-muted-foreground leading-relaxed">
+          Obtenha as credenciais em{' '}
+          <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener noreferrer" className="text-primary underline inline-flex items-center gap-0.5">
+            developers.facebook.com <ExternalLink className="w-2.5 h-2.5" />
+          </a>
+          {' '}→ Seu App → WhatsApp → Configuração da API.
+        </p>
+      </div>
+
+      <div className="flex gap-2">
+        <Button size="sm" className="flex-1 text-xs h-8 bg-gradient-primary" onClick={handleSave}>
+          <Save className="w-3 h-3 mr-1.5" /> Salvar
+        </Button>
+        <Button size="sm" variant="outline" className="text-xs h-8 border-border" onClick={handleTest} disabled={testing}>
+          {testing ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Link2 className="w-3 h-3 mr-1" />}
+          Testar Conexão
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Other integration card ────────────────────────────────────────────────────
 function IntegrationCard({ integration, onConfig }: { integration: Integration; onConfig: (i: Integration) => void }) {
   const meta = INTEGRATION_META[integration.type];
   const statusConfig = {
@@ -137,6 +623,7 @@ function ConfigPanel({ integration, onClose }: { integration: Integration; onClo
   );
 }
 
+// ─── Webhook Logs ─────────────────────────────────────────────────────────────
 function WebhookLogs() {
   const [selected, setSelected] = useState<WebhookLog | null>(null);
   const [dirFilter, setDirFilter] = useState<'all' | 'inbound' | 'outbound'>('all');
@@ -156,7 +643,6 @@ function WebhookLogs() {
 
   return (
     <div className="space-y-4">
-      {/* Summary stats */}
       <div className="grid grid-cols-4 gap-3">
         {[
           { label: 'Total hoje', value: MOCK_WEBHOOK_LOGS.length, color: 'text-foreground' },
@@ -171,18 +657,12 @@ function WebhookLogs() {
         ))}
       </div>
 
-      {/* Filters */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex gap-1 p-1 bg-secondary rounded-lg border border-border">
           {(['all', 'inbound', 'outbound'] as const).map(d => (
-            <button
-              key={d}
-              onClick={() => setDirFilter(d)}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors',
-                dirFilter === d ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
+            <button key={d} onClick={() => setDirFilter(d)}
+              className={cn('flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-colors',
+                dirFilter === d ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
               {d === 'inbound' ? <ArrowDown className="w-3 h-3" /> : d === 'outbound' ? <ArrowUp className="w-3 h-3" /> : <Activity className="w-3 h-3" />}
               {{ all: 'Todos', inbound: 'Recebidos', outbound: 'Enviados' }[d]}
             </button>
@@ -190,21 +670,15 @@ function WebhookLogs() {
         </div>
         <div className="flex gap-1.5">
           {(['all', 'success', 'error', 'pending'] as const).map(s => (
-            <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              className={cn(
-                'text-xs px-2.5 py-1.5 rounded-lg border transition-all',
-                statusFilter === s ? 'bg-primary/15 border-primary/30 text-primary' : 'border-border text-muted-foreground hover:bg-muted'
-              )}
-            >
+            <button key={s} onClick={() => setStatusFilter(s)}
+              className={cn('text-xs px-2.5 py-1.5 rounded-lg border transition-all',
+                statusFilter === s ? 'bg-primary/15 border-primary/30 text-primary' : 'border-border text-muted-foreground hover:bg-muted')}>
               {{ all: 'Todos', success: '✓ Sucesso', error: '✕ Erro', pending: '◷ Pendente' }[s]}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Log table + detail */}
       <div className="flex gap-4">
         <div className={cn('glass-card overflow-hidden flex-1', selected && 'lg:w-1/2')}>
           <table className="w-full data-table">
@@ -222,11 +696,8 @@ function WebhookLogs() {
               {filtered.map(log => {
                 const sc = statusConfig[log.status];
                 return (
-                  <tr
-                    key={log.id}
-                    className={cn('cursor-pointer', selected?.id === log.id && 'bg-primary/5')}
-                    onClick={() => setSelected(selected?.id === log.id ? null : log)}
-                  >
+                  <tr key={log.id} className={cn('cursor-pointer', selected?.id === log.id && 'bg-primary/5')}
+                    onClick={() => setSelected(selected?.id === log.id ? null : log)}>
                     <td>
                       <div>
                         <p className="text-xs font-medium">{log.source}</p>
@@ -234,12 +705,8 @@ function WebhookLogs() {
                       </div>
                     </td>
                     <td className="text-center">
-                      <span className={cn(
-                        'inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border',
-                        log.direction === 'inbound'
-                          ? 'bg-info/10 text-info border-info/20'
-                          : 'bg-accent/10 text-accent border-accent/20'
-                      )}>
+                      <span className={cn('inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border',
+                        log.direction === 'inbound' ? 'bg-info/10 text-info border-info/20' : 'bg-accent/10 text-accent border-accent/20')}>
                         {log.direction === 'inbound'
                           ? <><ArrowDown className="w-2.5 h-2.5" /> Recebido</>
                           : <><ArrowUp className="w-2.5 h-2.5" /> Enviado</>}
@@ -251,10 +718,8 @@ function WebhookLogs() {
                       </span>
                     </td>
                     <td className="text-center hidden lg:table-cell">
-                      <span className={cn(
-                        'text-xs font-mono font-semibold',
-                        log.statusCode && log.statusCode >= 400 ? 'text-destructive' : log.statusCode ? 'text-success' : 'text-muted-foreground'
-                      )}>
+                      <span className={cn('text-xs font-mono font-semibold',
+                        log.statusCode && log.statusCode >= 400 ? 'text-destructive' : log.statusCode ? 'text-success' : 'text-muted-foreground')}>
                         {log.statusCode || '—'}
                       </span>
                     </td>
@@ -275,7 +740,6 @@ function WebhookLogs() {
           </table>
         </div>
 
-        {/* Log detail */}
         {selected && (
           <div className="w-full lg:w-[360px] flex-shrink-0 glass-card p-4 space-y-3 animate-slide-in">
             <div className="flex items-center justify-between">
@@ -312,9 +776,12 @@ function WebhookLogs() {
   );
 }
 
+// ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function IntegrationsPage() {
   const [configuring, setConfiguring] = useState<Integration | null>(null);
-  const [tab, setTab] = useState<'integrations' | 'webhooks'>('integrations');
+  const [tab, setTab] = useState<'integrations' | 'evolution' | 'meta' | 'webhooks'>('integrations');
+
+  const otherIntegrations = MOCK_INTEGRATIONS.filter(i => i.type !== 'evolution_api');
 
   return (
     <div className="page-container animate-fade-in">
@@ -326,19 +793,16 @@ export default function IntegrationsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-secondary rounded-lg border border-border mb-6 w-fit">
+      <div className="flex gap-1 p-1 bg-secondary rounded-lg border border-border mb-6 w-fit flex-wrap">
         {[
           { key: 'integrations', label: 'Conexões', icon: Plug2 },
-          { key: 'webhooks', label: 'Logs de Webhooks', icon: Activity },
+          { key: 'evolution', label: 'Evolution API', icon: MessageSquare },
+          { key: 'meta', label: 'Meta WhatsApp', icon: Phone },
+          { key: 'webhooks', label: 'Logs', icon: Activity },
         ].map(t => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key as any)}
-            className={cn(
-              'flex items-center gap-1.5 px-4 py-2 rounded-md text-xs font-medium transition-colors',
-              tab === t.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
+          <button key={t.key} onClick={() => setTab(t.key as any)}
+            className={cn('flex items-center gap-1.5 px-4 py-2 rounded-md text-xs font-medium transition-colors',
+              tab === t.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
             <t.icon className="w-3.5 h-3.5" />
             {t.label}
           </button>
@@ -347,7 +811,6 @@ export default function IntegrationsPage() {
 
       {tab === 'integrations' && (
         <>
-          {/* N8N Banner */}
           <div className="glass-card p-5 mb-6 border-primary/20" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)/0.08), hsl(var(--accent)/0.05))' }}>
             <div className="flex items-center justify-between flex-wrap gap-4">
               <div className="flex items-center gap-3">
@@ -366,15 +829,16 @@ export default function IntegrationsPage() {
               </div>
             </div>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {MOCK_INTEGRATIONS.map(i => (
+            {otherIntegrations.map(i => (
               <IntegrationCard key={i.id} integration={i} onConfig={setConfiguring} />
             ))}
           </div>
         </>
       )}
 
+      {tab === 'evolution' && <EvolutionPanel />}
+      {tab === 'meta' && <MetaWhatsAppPanel />}
       {tab === 'webhooks' && <WebhookLogs />}
 
       {configuring && (
