@@ -815,7 +815,6 @@ export default function WhatsAppPage() {
                   </div>
                 </div>
               ))}
-                <div key={chat.id} onClick={() => setActiveChat(chat)}
                   className={cn('flex items-start gap-3 p-3 border-b border-border/50 cursor-pointer hover:bg-muted/30 transition-colors',
                     activeChat?.id === chat.id && 'bg-muted/50')}>
                   {/* Avatar */}
