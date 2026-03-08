@@ -214,12 +214,14 @@ export default function WhatsAppPage() {
   const [chatSearch, setChatSearch] = useState('');
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
 
+  // resolvePhone: for @lid JIDs, use the @lid number itself as the unique identifier.
+  // DO NOT use remoteJidAlt — that field contains the INSTANCE OWNER's JID, not the contact's.
   const resolvePhone = (c: any): string => {
     const jid: string = c.remoteJid || '';
-    if (!jid.includes('@lid')) return jid.replace(/@.*/, '');
-    const alt = c.lastMessage?.key?.remoteJidAlt || c.lastMessage?.key?.participantAlt || '';
-    return alt ? alt.replace(/@.*/, '') : jid.replace(/@.*/, '');
+    // Strip the @domain suffix to get the numeric identifier
+    return jid.replace(/@.*/, '');
   };
+
 
   const parseBody = (m: any): string => {
     const msg = m.message || {};
@@ -349,40 +351,23 @@ export default function WhatsAppPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // loadMessages: single query without fromMe filter — the API ignores it anyway.
-  // For @lid chats, also query by the phone JID to get all messages from both sides.
+  // loadMessages: for @lid chats, query the @lid directly (Evolution stores both directions under @lid).
+  // Do NOT add phoneJid = remoteJidAlt, because remoteJidAlt is the instance owner's JID, not the contact's.
   const loadMessages = useCallback(async (
     instanceName: string,
     remoteJid: string,
     scroll = false,
-    phoneJid?: string,
   ) => {
     if (scroll) setLoadingMsgs(true);
     try {
-      const isLid = remoteJid.includes('@lid');
+      const data = await evoFetch(`/chat/findMessages/${instanceName}`, {
+        method: 'POST',
+        body: JSON.stringify({ where: { key: { remoteJid } }, limit: 60 }),
+      });
 
-      // Build queries — NO fromMe filter (Evolution API ignores it and can return wrong results)
-      const jidsToQuery = new Set<string>([remoteJid]);
-      if (isLid && phoneJid) jidsToQuery.add(phoneJid);
-
-      const results = await Promise.allSettled(
-        Array.from(jidsToQuery).map(jid =>
-          evoFetch(`/chat/findMessages/${instanceName}`, {
-            method: 'POST',
-            body: JSON.stringify({ where: { key: { remoteJid: jid } }, limit: 60 }),
-          })
-        )
-      );
-
-      const extractRecords = (result: PromiseSettledResult<any>): any[] => {
-        if (result.status === 'rejected') return [];
-        const data = result.value;
-        return Array.isArray(data?.messages?.records)
-          ? data.messages.records
-          : Array.isArray(data) ? data : [];
-      };
-
-      const raw = results.flatMap(extractRecords);
+      const raw: any[] = Array.isArray(data?.messages?.records)
+        ? data.messages.records
+        : Array.isArray(data) ? data : [];
 
       // Deduplicate by message key id
       const seen = new Set<string>();
@@ -407,26 +392,21 @@ export default function WhatsAppPage() {
     finally { if (scroll) setLoadingMsgs(false); }
   }, []);
 
-
-  // Helper: get the phone JID for @lid conversations — prefer remoteJidAlt, fallback to phone
-  const getPhoneJid = (chat: Chat) =>
-    chat.remoteJidAlt || (chat.phone ? `${chat.phone}@s.whatsapp.net` : undefined);
-
-
   useEffect(() => {
     if (!activeChat || !activeInstance) return;
-    loadMessages(activeInstance.name, activeChat.remoteJid, true, getPhoneJid(activeChat));
+    loadMessages(activeInstance.name, activeChat.remoteJid, true);
   }, [activeChat?.id, activeInstance?.name]);
 
   // Real-time poll every 3s
   useEffect(() => {
     if (!activeChat || !activeInstance || activeInstance.connectionStatus !== 'open') return;
     const t = setInterval(
-      () => loadMessages(activeInstance.name, activeChat.remoteJid, false, getPhoneJid(activeChat)),
+      () => loadMessages(activeInstance.name, activeChat.remoteJid, false),
       3000,
     );
     return () => clearInterval(t);
   }, [activeChat?.id, activeInstance?.name]);
+
 
   // Auto-scroll
   useEffect(() => {
@@ -443,7 +423,7 @@ export default function WhatsAppPage() {
         body: JSON.stringify({ number: activeChat.phone || activeChat.remoteJid, text }),
       });
       setInputText('');
-      await loadMessages(activeInstance.name, activeChat.remoteJid, false, getPhoneJid(activeChat));
+      await loadMessages(activeInstance.name, activeChat.remoteJid, false);
       inputRef.current?.focus();
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Erro ao enviar', description: e.message });
@@ -619,7 +599,7 @@ export default function WhatsAppPage() {
                 <div className="relative flex-shrink-0 mt-0.5">
                   <AvatarInitials name={displayName(chat)} size="sm" />
                   {hasUnread && (
-                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-destructive border-2 border-background flex items-center justify-center text-[9px] text-white font-bold px-0.5">
+                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-success border-2 border-background flex items-center justify-center text-[9px] text-white font-bold px-0.5">
                       {chat.unread > 99 ? '99+' : chat.unread}
                     </span>
                   )}
@@ -629,7 +609,7 @@ export default function WhatsAppPage() {
                     <p className={cn('text-xs font-semibold truncate', hasUnread ? 'text-foreground' : 'text-foreground/80')}>
                       {displayName(chat)}
                     </p>
-                    <span className={cn('text-[10px] flex-shrink-0', hasUnread ? 'text-destructive font-semibold' : 'text-muted-foreground')}>
+                    <span className={cn('text-[10px] flex-shrink-0', hasUnread ? 'text-success font-semibold' : 'text-muted-foreground')}>
                       {chat.lastMessageTs
                         ? new Date(chat.lastMessageTs * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
                         : ''}
@@ -672,7 +652,7 @@ export default function WhatsAppPage() {
                 <div className="flex items-center gap-2">
                   <Button
                     size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground"
-                    onClick={() => loadMessages(activeInstance!.name, activeChat.remoteJid, true, getPhoneJid(activeChat))}>
+                    onClick={() => loadMessages(activeInstance!.name, activeChat.remoteJid, true)}>
                     {loadingMsgs ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                   </Button>
                   <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { setActiveChat(null); setMessages([]); }}>
