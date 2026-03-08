@@ -4,10 +4,11 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
   SlidersHorizontal, Brain, Plus, X, Save, Sparkles,
-  Video, MessageSquare, ChevronRight, Trash2, GripVertical,
+  Video, MessageSquare, Trash2, GripVertical,
   CheckCircle2, Star, Target, AlertTriangle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 interface EvalCriteria {
   id: string;
@@ -175,16 +176,39 @@ function CriteriaCard({
   );
 }
 
-function EditCriteriaModal({ criteria, onClose, onSave }: { criteria: EvalCriteria; onClose: () => void; onSave: (c: EvalCriteria) => void }) {
-  const [form, setForm] = useState({ ...criteria });
+// ─── Add / Edit Criteria Modal ────────────────────────────────────────────────
+function CriteriaModal({
+  criteria,
+  maxWeight,
+  onClose,
+  onSave,
+}: {
+  criteria?: EvalCriteria;
+  maxWeight: number; // remaining weight available
+  onClose: () => void;
+  onSave: (c: EvalCriteria) => void;
+}) {
+  const isEdit = !!criteria;
+  const [form, setForm] = useState<EvalCriteria>(criteria ?? {
+    id: `crit_${Date.now()}`,
+    label: '',
+    description: '',
+    weight: Math.min(10, maxWeight),
+    examples: [],
+    positiveSignals: [],
+    negativeSignals: [],
+  });
   const [newPositive, setNewPositive] = useState('');
   const [newNegative, setNewNegative] = useState('');
+  const [newExample, setNewExample] = useState('');
+
+  const weightError = form.weight < 1 || form.weight > maxWeight;
 
   return (
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="w-full max-w-lg glass-card p-5 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold text-sm">Editar Critério: {criteria.label}</h3>
+          <h3 className="font-semibold text-sm">{isEdit ? `Editar: ${criteria.label}` : 'Adicionar Critério'}</h3>
           <button onClick={onClose} className="w-6 h-6 rounded flex items-center justify-center hover:bg-muted">
             <X className="w-3.5 h-3.5 text-muted-foreground" />
           </button>
@@ -193,22 +217,25 @@ function EditCriteriaModal({ criteria, onClose, onSave }: { criteria: EvalCriter
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium block mb-1.5">Nome</label>
-              <Input value={form.label} onChange={e => setForm(f => ({ ...f, label: e.target.value }))} className="h-8 text-xs bg-secondary border-border" />
+              <label className="text-xs font-medium block mb-1.5">Nome do critério</label>
+              <Input value={form.label} onChange={e => setForm(f => ({ ...f, label: e.target.value }))} placeholder="Ex: Rapport" className="h-8 text-xs bg-secondary border-border" />
             </div>
             <div>
-              <label className="text-xs font-medium block mb-1.5">Peso (%)</label>
+              <label className="text-xs font-medium block mb-1.5">
+                Peso (%) <span className="text-muted-foreground">— máx. {maxWeight}%</span>
+              </label>
               <Input
-                type="number" min={1} max={100}
+                type="number" min={1} max={maxWeight}
                 value={form.weight}
-                onChange={e => setForm(f => ({ ...f, weight: Number(e.target.value) }))}
-                className="h-8 text-xs bg-secondary border-border"
+                onChange={e => setForm(f => ({ ...f, weight: Math.min(maxWeight, Math.max(1, Number(e.target.value))) }))}
+                className={cn('h-8 text-xs bg-secondary border-border', weightError && 'border-destructive/50')}
               />
+              {weightError && <p className="text-[10px] text-destructive mt-0.5">Máximo disponível: {maxWeight}%</p>}
             </div>
           </div>
           <div>
             <label className="text-xs font-medium block mb-1.5">Descrição</label>
-            <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} className="text-xs bg-secondary border-border min-h-[60px] resize-none" />
+            <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Descreva o que este critério avalia..." className="text-xs bg-secondary border-border min-h-[60px] resize-none" />
           </div>
 
           {/* Positive signals */}
@@ -226,7 +253,9 @@ function EditCriteriaModal({ criteria, onClose, onSave }: { criteria: EvalCriter
               ))}
             </div>
             <div className="flex gap-2">
-              <Input value={newPositive} onChange={e => setNewPositive(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && newPositive.trim()) { setForm(f => ({ ...f, positiveSignals: [...f.positiveSignals, newPositive.trim()] })); setNewPositive(''); } }} placeholder="Adicionar sinal positivo..." className="h-8 text-xs bg-secondary border-border" />
+              <Input value={newPositive} onChange={e => setNewPositive(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && newPositive.trim()) { setForm(f => ({ ...f, positiveSignals: [...f.positiveSignals, newPositive.trim()] })); setNewPositive(''); } }}
+                placeholder="Adicionar sinal positivo..." className="h-8 text-xs bg-secondary border-border" />
               <Button size="sm" variant="outline" className="h-8 text-xs border-border" onClick={() => { if (newPositive.trim()) { setForm(f => ({ ...f, positiveSignals: [...f.positiveSignals, newPositive.trim()] })); setNewPositive(''); } }}>+</Button>
             </div>
           </div>
@@ -246,14 +275,40 @@ function EditCriteriaModal({ criteria, onClose, onSave }: { criteria: EvalCriter
               ))}
             </div>
             <div className="flex gap-2">
-              <Input value={newNegative} onChange={e => setNewNegative(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && newNegative.trim()) { setForm(f => ({ ...f, negativeSignals: [...f.negativeSignals, newNegative.trim()] })); setNewNegative(''); } }} placeholder="Adicionar sinal negativo..." className="h-8 text-xs bg-secondary border-border" />
+              <Input value={newNegative} onChange={e => setNewNegative(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && newNegative.trim()) { setForm(f => ({ ...f, negativeSignals: [...f.negativeSignals, newNegative.trim()] })); setNewNegative(''); } }}
+                placeholder="Adicionar sinal negativo..." className="h-8 text-xs bg-secondary border-border" />
               <Button size="sm" variant="outline" className="h-8 text-xs border-border" onClick={() => { if (newNegative.trim()) { setForm(f => ({ ...f, negativeSignals: [...f.negativeSignals, newNegative.trim()] })); setNewNegative(''); } }}>+</Button>
             </div>
           </div>
 
+          {/* Examples */}
+          <div>
+            <label className="text-xs font-medium block mb-1.5 text-muted-foreground">Exemplos</label>
+            <div className="flex flex-wrap gap-1 mb-2">
+              {form.examples.map((e, i) => (
+                <span key={i} className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded bg-secondary border border-border text-muted-foreground">
+                  {e}
+                  <button onClick={() => setForm(f => ({ ...f, examples: f.examples.filter((_, j) => j !== i) }))}><X className="w-2.5 h-2.5" /></button>
+                </span>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Input value={newExample} onChange={e => setNewExample(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && newExample.trim()) { setForm(f => ({ ...f, examples: [...f.examples, newExample.trim()] })); setNewExample(''); } }}
+                placeholder="Adicionar exemplo..." className="h-8 text-xs bg-secondary border-border" />
+              <Button size="sm" variant="outline" className="h-8 text-xs border-border" onClick={() => { if (newExample.trim()) { setForm(f => ({ ...f, examples: [...f.examples, newExample.trim()] })); setNewExample(''); } }}>+</Button>
+            </div>
+          </div>
+
           <div className="flex gap-2 pt-1">
-            <Button size="sm" className="flex-1 bg-gradient-primary text-xs h-9" onClick={() => { onSave(form); onClose(); }}>
-              <Save className="w-3.5 h-3.5 mr-1.5" /> Salvar Critério
+            <Button
+              size="sm"
+              className="flex-1 bg-gradient-primary text-xs h-9"
+              disabled={!form.label.trim() || weightError}
+              onClick={() => { onSave(form); onClose(); }}
+            >
+              <Save className="w-3.5 h-3.5 mr-1.5" /> {isEdit ? 'Salvar' : 'Adicionar Critério'}
             </Button>
             <Button size="sm" variant="outline" className="text-xs border-border h-9" onClick={onClose}>Cancelar</Button>
           </div>
@@ -264,26 +319,50 @@ function EditCriteriaModal({ criteria, onClose, onSave }: { criteria: EvalCriter
 }
 
 export default function AIConfigPage() {
+  const { toast } = useToast();
   const [activeType, setActiveType] = useState<'meetings' | 'whatsapp'>('meetings');
   const [meetingCriteria, setMeetingCriteria] = useState(DEFAULT_MEETING_CRITERIA);
   const [whatsappCriteria, setWhatsappCriteria] = useState(DEFAULT_WHATSAPP_CRITERIA);
   const [editingCriteria, setEditingCriteria] = useState<EvalCriteria | null>(null);
-  const [systemPrompt, setSystemPrompt] = useState(
-    activeType === 'meetings'
-      ? 'Você é um avaliador especialista em vendas consultivas. Analise a transcrição da reunião e avalie cada critério com base nos sinais identificados. Seja específico e construtivo nos feedbacks.'
-      : 'Você é um especialista em vendas digitais e atendimento via WhatsApp. Avalie as conversas com foco em efetividade comercial, qualificação de leads e conversão.'
+  const [addingCriteria, setAddingCriteria] = useState(false);
+  const [meetingPrompt, setMeetingPrompt] = useState(
+    'Você é um avaliador especialista em vendas consultivas. Analise a transcrição da reunião e avalie cada critério com base nos sinais identificados. Seja específico e construtivo nos feedbacks.'
+  );
+  const [whatsappPrompt, setWhatsappPrompt] = useState(
+    'Você é um especialista em vendas digitais e atendimento via WhatsApp. Avalie as conversas com foco em efetividade comercial, qualificação de leads e conversão.'
   );
 
   const criteria = activeType === 'meetings' ? meetingCriteria : whatsappCriteria;
   const setCriteria = activeType === 'meetings' ? setMeetingCriteria : setWhatsappCriteria;
+  const systemPrompt = activeType === 'meetings' ? meetingPrompt : whatsappPrompt;
+  const setSystemPrompt = activeType === 'meetings' ? setMeetingPrompt : setWhatsappPrompt;
   const totalWeight = criteria.reduce((a, c) => a + c.weight, 0);
+  const remainingWeight = 100 - totalWeight;
 
   const handleSaveCriteria = (updated: EvalCriteria) => {
-    setCriteria(prev => prev.map(c => c.id === updated.id ? updated : c));
+    setCriteria(prev => {
+      const exists = prev.some(c => c.id === updated.id);
+      return exists ? prev.map(c => c.id === updated.id ? updated : c) : [...prev, updated];
+    });
   };
 
   const handleDelete = (id: string) => {
     setCriteria(prev => prev.filter(c => c.id !== id));
+  };
+
+  const handleSaveConfig = () => {
+    if (totalWeight !== 100) {
+      toast({
+        variant: 'destructive',
+        title: 'Pesos inválidos',
+        description: `Os pesos devem somar 100%. Atualmente somam ${totalWeight}%.`,
+      });
+      return;
+    }
+    toast({
+      title: 'Configuração salva!',
+      description: `Critérios de ${activeType === 'meetings' ? 'reuniões' : 'WhatsApp'} salvos com sucesso.`,
+    });
   };
 
   return (
@@ -293,7 +372,7 @@ export default function AIConfigPage() {
           <h1 className="text-2xl font-display font-bold">Configuração de IA</h1>
           <p className="text-sm text-muted-foreground">Defina como a IA avalia reuniões e conversas de WhatsApp</p>
         </div>
-        <Button size="sm" className="bg-gradient-primary text-xs h-8">
+        <Button size="sm" className="bg-gradient-primary text-xs h-8" onClick={handleSaveConfig}>
           <Save className="w-3.5 h-3.5 mr-1.5" />
           Salvar Configurações
         </Button>
@@ -329,12 +408,20 @@ export default function AIConfigPage() {
                 'text-[10px] px-2 py-0.5 rounded-full border font-semibold',
                 totalWeight === 100
                   ? 'bg-success/10 text-success border-success/20'
+                  : totalWeight > 100
+                  ? 'bg-destructive/10 text-destructive border-destructive/20'
                   : 'bg-warning/10 text-warning border-warning/20'
               )}>
                 Total: {totalWeight}% {totalWeight !== 100 && '⚠️'}
               </span>
             </div>
-            <Button size="sm" variant="outline" className="text-xs border-border h-7">
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs border-border h-7"
+              disabled={remainingWeight <= 0}
+              onClick={() => setAddingCriteria(true)}
+            >
               <Plus className="w-3 h-3 mr-1" /> Adicionar
             </Button>
           </div>
@@ -349,12 +436,24 @@ export default function AIConfigPage() {
           ))}
 
           {totalWeight !== 100 && (
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-warning/5 border border-warning/20">
-              <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0" />
+            <div className={cn(
+              'flex items-center gap-2 p-3 rounded-lg border',
+              totalWeight > 100
+                ? 'bg-destructive/5 border-destructive/20'
+                : 'bg-warning/5 border-warning/20'
+            )}>
+              <AlertTriangle className={cn('w-4 h-4 flex-shrink-0', totalWeight > 100 ? 'text-destructive' : 'text-warning')} />
               <p className="text-xs text-muted-foreground">
-                Os pesos devem somar exatamente 100%. Atualmente somam <span className="text-warning font-semibold">{totalWeight}%</span>.
+                {totalWeight > 100
+                  ? <>Os pesos ultrapassam 100%. Reduza <span className="text-destructive font-semibold">{totalWeight - 100}%</span> antes de salvar.</>
+                  : <>Os pesos devem somar exatamente 100%. Faltam <span className="text-warning font-semibold">{remainingWeight}%</span> para distribuir.</>
+                }
               </p>
             </div>
+          )}
+
+          {remainingWeight <= 0 && totalWeight < 100 && (
+            <p className="text-[10px] text-muted-foreground text-center">Todos os 100% foram distribuídos.</p>
           )}
         </div>
 
@@ -384,7 +483,7 @@ export default function AIConfigPage() {
               {[
                 { label: 'Score mínimo para aprovação', value: '70' },
                 { label: 'Score de excelência', value: '85' },
-                { label: 'Modelo de IA', value: activeType === 'meetings' ? 'GPT-5 / Gemini Pro' : 'GPT-5 Mini' },
+                { label: 'Modelo de IA', value: activeType === 'meetings' ? 'GPT-4o / Gemini Pro' : 'GPT-4o Mini' },
               ].map(p => (
                 <div key={p.label} className="flex items-center justify-between">
                   <span className="text-xs text-muted-foreground">{p.label}</span>
@@ -406,13 +505,47 @@ export default function AIConfigPage() {
               <Brain className="w-3.5 h-3.5 mr-1.5" /> Testar com Exemplo
             </Button>
           </div>
+
+          {/* Weight overview */}
+          <div className="glass-card p-4 rounded-xl">
+            <div className="flex items-center gap-2 mb-3">
+              <Star className="w-4 h-4 text-primary" />
+              <h3 className="text-xs font-semibold">Distribuição de Pesos</h3>
+            </div>
+            <div className="space-y-2">
+              {criteria.map(c => (
+                <div key={c.id} className="space-y-1">
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-muted-foreground">{c.label}</span>
+                    <span className="font-medium text-foreground">{c.weight}%</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${c.weight}%` }} />
+                  </div>
+                </div>
+              ))}
+              <div className={cn('flex justify-between text-[10px] pt-1 border-t border-border mt-1', totalWeight === 100 ? 'text-success' : 'text-warning')}>
+                <span className="font-semibold">Total</span>
+                <span className="font-bold">{totalWeight}%</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
       {editingCriteria && (
-        <EditCriteriaModal
+        <CriteriaModal
           criteria={editingCriteria}
+          maxWeight={remainingWeight + editingCriteria.weight} // allow up to current + available
           onClose={() => setEditingCriteria(null)}
+          onSave={handleSaveCriteria}
+        />
+      )}
+
+      {addingCriteria && (
+        <CriteriaModal
+          maxWeight={remainingWeight}
+          onClose={() => setAddingCriteria(false)}
           onSave={handleSaveCriteria}
         />
       )}
