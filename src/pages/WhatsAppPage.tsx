@@ -246,23 +246,29 @@ export default function WhatsAppPage() {
       });
       const raw: any[] = Array.isArray(data) ? data : (data?.chats || []);
 
-      // Deduplicate by phone — keep latest
+      // Deduplicate by phone — prefer @lid JID as primary (it has both sent+received)
+      // Key insight: Evolution stores received msgs under @lid and sent under @s.whatsapp.net
+      // We must query BOTH. Always keep @lid as remoteJid and phone JID as remoteJidAlt.
       const phoneMap = new Map<string, Chat>();
       for (const c of raw) {
         const phone = resolvePhone(c);
+        if (!phone) continue;
         const ts =
           c.lastMessage?.messageTimestamp ||
           (c.updatedAt ? Math.floor(new Date(c.updatedAt).getTime() / 1000) : 0);
+
+        const jid: string = c.remoteJid || c.id || '';
+        const isLid = jid.includes('@lid');
+        const phoneJid = phone ? `${phone}@s.whatsapp.net` : undefined;
+
         const existing = phoneMap.get(phone);
-        // Extract the real phone JID (remoteJidAlt) for @lid conversations
-        const remoteJidAlt =
-          c.lastMessage?.key?.remoteJidAlt ||
-          (phone ? `${phone}@s.whatsapp.net` : undefined);
-        if (!existing || ts > existing.lastMessageTs) {
+
+        if (!existing) {
           phoneMap.set(phone, {
-            id: c.id || c.remoteJid,
-            remoteJid: c.remoteJid || c.id || '',
-            remoteJidAlt,
+            id: jid,
+            remoteJid: jid,
+            // For @lid chats, remoteJidAlt = phone JID; for phone JID chats, remoteJidAlt = undefined (not needed)
+            remoteJidAlt: isLid ? phoneJid : undefined,
             phone,
             name: c.name || c.pushName || c.lastMessage?.pushName || phone || 'Desconhecido',
             lastMessage:
@@ -272,6 +278,30 @@ export default function WhatsAppPage() {
             lastMessageTs: ts,
             unread: c.unreadCount || 0,
           });
+        } else {
+          // Merge: always prefer @lid as the primary remoteJid
+          const existingIsLid = existing.remoteJid.includes('@lid');
+          const mergedEntry: Chat = {
+            ...existing,
+            // Update name/message/ts if newer
+            name: (c.name || c.pushName || c.lastMessage?.pushName || existing.name),
+            lastMessage: ts > existing.lastMessageTs
+              ? (c.lastMessage?.message?.conversation || c.lastMessage?.message?.extendedTextMessage?.text || existing.lastMessage)
+              : existing.lastMessage,
+            lastMessageTs: Math.max(ts, existing.lastMessageTs),
+            unread: Math.max(c.unreadCount || 0, existing.unread),
+          };
+
+          if (isLid && !existingIsLid) {
+            // New entry is @lid — upgrade primary JID to @lid, keep phone JID as alt
+            mergedEntry.remoteJid = jid;
+            mergedEntry.id = jid;
+            mergedEntry.remoteJidAlt = existing.remoteJid; // save the old @s.whatsapp.net as alt
+          } else if (!isLid && existingIsLid) {
+            // Existing is @lid (preferred) — store new phone JID as alt
+            mergedEntry.remoteJidAlt = jid;
+          }
+          phoneMap.set(phone, mergedEntry);
         }
       }
       // Sort by latest message
