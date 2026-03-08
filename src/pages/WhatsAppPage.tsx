@@ -16,7 +16,7 @@ import {
   getInstanceForUser,
   type EvolutionInstance,
 } from '@/hooks/useEvolutionInstances';
-import { MOCK_USERS } from '@/data/mockData';
+import { MOCK_USERS, MOCK_TEAMS } from '@/data/mockData';
 
 const EVOLUTION_API_URL = 'https://evolutionapic.contato-lojavirtual.com';
 const EVOLUTION_API_TOKEN = '3ce7a42f9bd96ea526b2b0bc39a4faec';
@@ -201,6 +201,7 @@ export default function WhatsAppPage() {
   const [instStatusFilter, setInstStatusFilter] = useState<InstStatusFilter>('all');
   const [instSortKey, setInstSortKey] = useState<InstSortKey>('recent');
   const [instSortDir, setInstSortDir] = useState<SortDir>('desc');
+  const [instTeamFilter, setInstTeamFilter] = useState<string>('all');
 
   // Filter instances for non-admins
   const baseInstances = evoInstances.filter(i => {
@@ -208,18 +209,27 @@ export default function WhatsAppPage() {
     return true;
   });
 
+  // Helper: find team for an instance by looking up the assigned user's teamId
+  const getInstTeamId = (instName: string): string | null => {
+    const assignedUser = MOCK_USERS.find(u => getInstanceForUser(u.id) === instName);
+    return assignedUser?.teamId ?? null;
+  };
+
   const visibleInstances = (() => {
     let list = baseInstances.filter(i => {
       if (instStatusFilter === 'connected') return i.connectionStatus === 'open';
       if (instStatusFilter === 'disconnected') return i.connectionStatus !== 'open';
       return true;
+    }).filter(i => {
+      if (instTeamFilter === 'all') return true;
+      if (instTeamFilter === 'unassigned') return !getInstTeamId(i.name);
+      return getInstTeamId(i.name) === instTeamFilter;
     });
     list = [...list].sort((a, b) => {
       let cmp = 0;
       if (instSortKey === 'alpha') {
         cmp = (a.profileName || a.name).localeCompare(b.profileName || b.name, 'pt-BR');
       } else {
-        // recent: sort by connected first, then by message count as proxy
         cmp = (b._count?.Message || 0) - (a._count?.Message || 0);
       }
       return instSortDir === 'asc' ? -cmp : cmp;
@@ -605,6 +615,22 @@ export default function WhatsAppPage() {
               {instSortDir === 'asc' ? 'ASC' : 'DESC'}
             </button>
           </div>
+
+          {/* Team filter — admins only */}
+          {isAdmin && (
+            <div className="px-2 py-1.5 border-b border-border flex-shrink-0">
+              <select
+                value={instTeamFilter}
+                onChange={e => setInstTeamFilter(e.target.value)}
+                className="w-full text-[10px] bg-secondary text-muted-foreground rounded-md px-2 py-1.5 border border-border focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer">
+                <option value="all">🏷 Todos os times</option>
+                {MOCK_TEAMS.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+                <option value="unassigned">Sem time</option>
+              </select>
+            </div>
+          )}
 
           {/* Instances List */}
           <div className="flex-1 overflow-y-auto">
