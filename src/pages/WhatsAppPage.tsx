@@ -636,7 +636,7 @@ export default function WhatsAppPage() {
                 <div className="flex items-center gap-2">
                   <Button
                     size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground"
-                    onClick={() => loadMessages(activeInstance!.name, activeChat.remoteJid, true)}>
+                    onClick={() => loadMessages(activeInstance!.name, activeChat.remoteJid, true, getPhoneJid(activeChat))}>
                     {loadingMsgs ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                   </Button>
                   <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { setActiveChat(null); setMessages([]); }}>
