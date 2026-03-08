@@ -434,7 +434,7 @@ export default function WhatsAppPage() {
   useEffect(() => {
     if (!activeChat || !activeInstance || activeInstance.connectionStatus !== 'open') return;
     const t = setInterval(
-      () => loadMessages(activeInstance.name, activeChat.remoteJid, false),
+      () => loadMessages(activeInstance.name, activeChat, false),
       3000,
     );
     return () => clearInterval(t);
