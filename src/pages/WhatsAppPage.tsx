@@ -43,6 +43,7 @@ interface Chat {
   id: string;
   remoteJid: string;
   name: string;
+  phone: string; // always the resolved phone number (no @lid)
   lastMessage: string;
   lastMessageTs: number;
   unread: number;
@@ -369,14 +370,44 @@ export default function WhatsAppPage() {
     try {
       const data = await evoFetch(`/chat/findChats/${instanceName}`, { method: 'POST', body: JSON.stringify({}) });
       const raw: any[] = Array.isArray(data) ? data : (data?.chats || []);
-      setChats(raw.slice(0, 80).map((c: any) => ({
-        id: c.id || c.remoteJid,
-        remoteJid: c.remoteJid || c.id || '',
-        name: c.name || c.pushName || c.remoteJid?.replace(/@.*/, '') || 'Desconhecido',
-        lastMessage: c.lastMessage?.message?.conversation || c.lastMessage?.message?.extendedTextMessage?.text || '',
-        lastMessageTs: c.lastMessage?.messageTimestamp || (c.updatedAt ? Math.floor(new Date(c.updatedAt).getTime() / 1000) : 0),
-        unread: c.unreadCount || 0,
-      })));
+
+      // Helper: resolve the real phone number from a JID
+      // @lid JIDs are internal Evolution IDs — the real phone comes from remoteJidAlt in lastMessage
+      const resolvePhone = (c: any): string => {
+        const jid: string = c.remoteJid || '';
+        if (!jid.includes('@lid')) return jid.replace(/@.*/, '');
+        // Try to extract real phone from lastMessage keys
+        const alt: string =
+          c.lastMessage?.key?.remoteJidAlt ||
+          c.lastMessage?.key?.participantAlt ||
+          '';
+        return alt ? alt.replace(/@.*/, '') : jid.replace(/@.*/, '');
+      };
+
+      // Build chats and deduplicate: if two entries resolve to the same phone, keep latest
+      const phoneMap = new Map<string, Chat>();
+      for (const c of raw) {
+        const phone = resolvePhone(c);
+        const ts = c.lastMessage?.messageTimestamp ||
+          (c.updatedAt ? Math.floor(new Date(c.updatedAt).getTime() / 1000) : 0);
+        const existing = phoneMap.get(phone);
+        if (!existing || ts > existing.lastMessageTs) {
+          phoneMap.set(phone, {
+            id: c.id || c.remoteJid,
+            remoteJid: c.remoteJid || c.id || '',
+            phone,
+            name: c.name || c.pushName || c.lastMessage?.key?.pushName || phone || 'Desconhecido',
+            lastMessage:
+              c.lastMessage?.message?.conversation ||
+              c.lastMessage?.message?.extendedTextMessage?.text ||
+              '',
+            lastMessageTs: ts,
+            unread: c.unreadCount || 0,
+          });
+        }
+      }
+
+      setChats(Array.from(phoneMap.values()).slice(0, 80));
     } catch { setChats([]); }
     finally { setLoadingChats(false); }
   };
@@ -484,7 +515,8 @@ export default function WhatsAppPage() {
 
   // Start new conversation
   const handleNewConversation = (remoteJid: string, name: string) => {
-    const newChat: Chat = { id: remoteJid, remoteJid, name, lastMessage: '', lastMessageTs: 0, unread: 0 };
+    const phone = remoteJid.replace(/@.*/, '');
+    const newChat: Chat = { id: remoteJid, remoteJid, phone, name, lastMessage: '', lastMessageTs: 0, unread: 0 };
     setChats(prev => [newChat, ...prev.filter(c => c.remoteJid !== remoteJid)]);
     setActiveChat(newChat);
   };
@@ -751,25 +783,75 @@ export default function WhatsAppPage() {
               {filteredChats.map(chat => (
                 <div key={chat.id} onClick={() => setActiveChat(chat)}
                   className={cn('flex items-start gap-3 p-3 border-b border-border/50 cursor-pointer hover:bg-muted/30 transition-colors',
-                    activeChat?.id === chat.id && 'bg-primary/5 border-l-2 border-l-primary')}>
-                  <div className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-sm font-bold flex-shrink-0 border border-border">
-                    {(chat.name || '?')[0].toUpperCase()}
+                    activeChat?.id === chat.id && 'bg-muted/50')}>
+                  <div className="relative flex-shrink-0">
+                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold">
+                      {(chat.name || chat.phone || '?')[0].toUpperCase()}
+                    </div>
+                    {chat.unread > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-success border-2 border-background" />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <p className="text-xs font-semibold truncate">{chat.name}</p>
-                      {chat.lastMessageTs > 0 && (
-                        <span className="text-[10px] text-muted-foreground flex-shrink-0 ml-1">
-                          {new Date(chat.lastMessageTs * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    <div className="flex items-center justify-between gap-1">
+                      <p className={cn('text-xs font-semibold truncate', chat.unread > 0 && 'text-foreground')}>
+                        {chat.name && chat.name !== chat.phone ? chat.name : chat.phone}
+                      </p>
+                      <span className="text-[10px] text-muted-foreground flex-shrink-0">
+                        {chat.lastMessageTs ? new Date(chat.lastMessageTs * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-1">
+                      <p className="text-[11px] text-muted-foreground truncate">{chat.lastMessage || ''}</p>
+                      {chat.unread > 0 && (
+                        <span className="flex-shrink-0 min-w-[18px] h-[18px] rounded-full bg-success text-white text-[10px] flex items-center justify-center font-bold px-1">
+                          {chat.unread > 99 ? '99+' : chat.unread}
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] text-muted-foreground truncate">{chat.lastMessage || '...'}</p>
-                    {chat.unread > 0 && (
-                      <span className="mt-1 inline-flex w-4 h-4 rounded-full bg-primary text-primary-foreground text-[10px] items-center justify-center font-bold">{chat.unread}</span>
+                    {chat.name && chat.name !== chat.phone && (
+                      <p className="text-[10px] text-muted-foreground/60 font-mono">{chat.phone}</p>
                     )}
                   </div>
                 </div>
+              ))}
+                <div key={chat.id} onClick={() => setActiveChat(chat)}
+                  className={cn('flex items-start gap-3 p-3 border-b border-border/50 cursor-pointer hover:bg-muted/30 transition-colors',
+                    activeChat?.id === chat.id && 'bg-muted/50')}>
+                  {/* Avatar */}
+                  <div className="relative flex-shrink-0">
+                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold">
+                      {(chat.name || '?')[0].toUpperCase()}
+                    </div>
+                    {chat.unread > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-success border-2 border-background" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1">
+                      {/* Show name if it's different from phone, otherwise show phone */}
+                      <p className={cn('text-xs font-semibold truncate', chat.unread > 0 && 'text-foreground')}>
+                        {chat.name && chat.name !== chat.phone ? chat.name : chat.phone}
+                      </p>
+                      <span className="text-[10px] text-muted-foreground flex-shrink-0">
+                        {chat.lastMessageTs ? new Date(chat.lastMessageTs * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-1">
+                      <p className="text-[11px] text-muted-foreground truncate">{chat.lastMessage || <span className="italic opacity-50">Sem mensagens</span>}</p>
+                      {chat.unread > 0 && (
+                        <span className="flex-shrink-0 min-w-[18px] h-[18px] rounded-full bg-success text-white text-[10px] flex items-center justify-center font-bold px-1">
+                          {chat.unread > 99 ? '99+' : chat.unread}
+                        </span>
+                      )}
+                    </div>
+                    {/* Always show phone as subtitle if name is different */}
+                    {chat.name && chat.name !== chat.phone && (
+                      <p className="text-[10px] text-muted-foreground/60 font-mono mt-0.5">{chat.phone}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
               ))}
             </div>
           </div>
