@@ -13,6 +13,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { getInstanceForUser, setInstanceForUser } from '@/hooks/useEvolutionInstances';
 
 // ─── Evolution API config (hardcoded from user) ───────────────────────────────
 const EVOLUTION_API_URL = 'https://evolutionapic.contato-lojavirtual.com';
