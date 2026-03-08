@@ -324,6 +324,15 @@ export default function WhatsAppPage() {
     setMessages([]);
   }, [activeInstance?.name]);
 
+  // Poll chat list every 10s to update unread counts and new conversations
+  useEffect(() => {
+    if (!activeInstance || activeInstance.connectionStatus !== 'open') return;
+    const t = setInterval(() => loadChats(activeInstance.name), 10000);
+    return () => clearInterval(t);
+  }, [activeInstance?.name, activeInstance?.connectionStatus]);
+
+
+
   const filteredChats = chats.filter(c =>
     c.name.toLowerCase().includes(chatSearch.toLowerCase()) ||
     c.phone.includes(chatSearch) ||
