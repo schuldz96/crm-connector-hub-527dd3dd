@@ -783,6 +783,41 @@ export default function WhatsAppPage() {
               {filteredChats.map(chat => (
                 <div key={chat.id} onClick={() => setActiveChat(chat)}
                   className={cn('flex items-start gap-3 p-3 border-b border-border/50 cursor-pointer hover:bg-muted/30 transition-colors',
+                    activeChat?.id === chat.id && 'bg-muted/50')}>
+                  {/* Avatar */}
+                  <div className="relative flex-shrink-0">
+                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold">
+                      {(chat.name || '?')[0].toUpperCase()}
+                    </div>
+                    {chat.unread > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-success border-2 border-background" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1">
+                      {/* Show name if it's different from phone, otherwise show phone */}
+                      <p className={cn('text-xs font-semibold truncate', chat.unread > 0 && 'text-foreground')}>
+                        {chat.name && chat.name !== chat.phone ? chat.name : chat.phone}
+                      </p>
+                      <span className="text-[10px] text-muted-foreground flex-shrink-0">
+                        {chat.lastMessageTs ? new Date(chat.lastMessageTs * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-1">
+                      <p className="text-[11px] text-muted-foreground truncate">{chat.lastMessage || <span className="italic opacity-50">Sem mensagens</span>}</p>
+                      {chat.unread > 0 && (
+                        <span className="flex-shrink-0 min-w-[18px] h-[18px] rounded-full bg-success text-white text-[10px] flex items-center justify-center font-bold px-1">
+                          {chat.unread > 99 ? '99+' : chat.unread}
+                        </span>
+                      )}
+                    </div>
+                    {/* Always show phone as subtitle if name is different */}
+                    {chat.name && chat.name !== chat.phone && (
+                      <p className="text-[10px] text-muted-foreground/60 font-mono mt-0.5">{chat.phone}</p>
+                    )}
+                  </div>
+                </div>
+                  className={cn('flex items-start gap-3 p-3 border-b border-border/50 cursor-pointer hover:bg-muted/30 transition-colors',
                     activeChat?.id === chat.id && 'bg-primary/5 border-l-2 border-l-primary')}>
                   <div className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-sm font-bold flex-shrink-0 border border-border">
                     {(chat.name || '?')[0].toUpperCase()}
