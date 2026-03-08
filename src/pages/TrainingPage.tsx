@@ -837,12 +837,14 @@ const DIFF_CONFIG = {
 
 export default function TrainingPage() {
   const { user, hasRole } = useAuth();
+  const { tokens } = useAppConfig();
   const isAdmin = hasRole(['admin', 'director', 'supervisor']);
   const [tab, setTab] = useState<'scenarios' | 'history'>('scenarios');
   const [activeSession, setActiveSession] = useState<TrainingScenario | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [showAPIKey, setShowAPIKey] = useState(false);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('openai_training_key') || '');
+
+  // Always use the training token from AppConfig context
+  const apiKey = tokens.training;
 
   const myHistory = MOCK_SESSIONS.filter(s => s.userId === user?.id || isAdmin);
   const avgScore = myHistory.length ? Math.round(myHistory.reduce((a, s) => a + s.score, 0) / myHistory.length) : 0;
@@ -867,13 +869,15 @@ export default function TrainingPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowAPIKey(true)}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg px-2.5 py-1.5 hover:bg-muted transition-colors"
-            >
+            <span className={cn(
+              'flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border',
+              apiKey.startsWith('sk-')
+                ? 'border-success/30 bg-success/10 text-success'
+                : 'border-destructive/30 bg-destructive/10 text-destructive'
+            )}>
               <Key className="w-3 h-3" />
-              {apiKey ? 'API Key ✓' : 'Configurar API Key'}
-            </button>
+              {apiKey.startsWith('sk-') ? 'Token OK' : 'Sem token — configure em Admin → Tokens OpenAI'}
+            </span>
             <span className={cn('text-xs px-2.5 py-1 rounded-full border font-medium', DIFF_CONFIG[activeSession.difficulty].class)}>
               {DIFF_CONFIG[activeSession.difficulty].label}
             </span>
@@ -885,16 +889,9 @@ export default function TrainingPage() {
             scenario={activeSession}
             apiKey={apiKey}
             onFinish={(_score, _feedback) => setActiveSession(null)}
-            onNeedKey={() => setShowAPIKey(true)}
+            onNeedKey={() => setActiveSession(null)}
           />
         </div>
-
-        {showAPIKey && (
-          <APIKeyModal
-            onClose={() => setShowAPIKey(false)}
-            onSave={key => setApiKey(key)}
-          />
-        )}
       </div>
     );
   }
