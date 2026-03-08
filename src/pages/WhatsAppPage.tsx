@@ -427,7 +427,7 @@ export default function WhatsAppPage() {
 
   useEffect(() => {
     if (!activeChat || !activeInstance) return;
-    loadMessages(activeInstance.name, activeChat.remoteJid, true);
+    loadMessages(activeInstance.name, activeChat, true);
   }, [activeChat?.id, activeInstance?.name]);
 
   // Real-time poll every 3s
