@@ -24,6 +24,7 @@ const EVOLUTION_API_TOKEN = '3ce7a42f9bd96ea526b2b0bc39a4faec';
 interface Chat {
   id: string;
   remoteJid: string;
+  remoteJidAlt?: string; // phone JID when remoteJid is @lid
   name: string;
   phone: string;
   lastMessage: string;
