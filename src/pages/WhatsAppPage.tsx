@@ -379,15 +379,22 @@ export default function WhatsAppPage() {
     finally { if (scroll) setLoadingMsgs(false); }
   }, []);
 
+  // Helper: build phone JID from chat for @lid conversations
+  const getPhoneJid = (chat: Chat) =>
+    chat.phone ? `${chat.phone}@s.whatsapp.net` : undefined;
+
   useEffect(() => {
     if (!activeChat || !activeInstance) return;
-    loadMessages(activeInstance.name, activeChat.remoteJid, true);
+    loadMessages(activeInstance.name, activeChat.remoteJid, true, getPhoneJid(activeChat));
   }, [activeChat?.id, activeInstance?.name]);
 
   // Real-time poll every 3s
   useEffect(() => {
     if (!activeChat || !activeInstance || activeInstance.connectionStatus !== 'open') return;
-    const t = setInterval(() => loadMessages(activeInstance.name, activeChat.remoteJid, false), 3000);
+    const t = setInterval(
+      () => loadMessages(activeInstance.name, activeChat.remoteJid, false, getPhoneJid(activeChat)),
+      3000,
+    );
     return () => clearInterval(t);
   }, [activeChat?.id, activeInstance?.name]);
 
@@ -403,10 +410,10 @@ export default function WhatsAppPage() {
     try {
       await evoFetch(`/message/sendText/${activeInstance.name}`, {
         method: 'POST',
-        body: JSON.stringify({ number: activeChat.remoteJid, text }),
+        body: JSON.stringify({ number: activeChat.phone || activeChat.remoteJid, text }),
       });
       setInputText('');
-      await loadMessages(activeInstance.name, activeChat.remoteJid, false);
+      await loadMessages(activeInstance.name, activeChat.remoteJid, false, getPhoneJid(activeChat));
       inputRef.current?.focus();
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Erro ao enviar', description: e.message });
