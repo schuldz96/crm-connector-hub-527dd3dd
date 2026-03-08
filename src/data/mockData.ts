@@ -6,18 +6,18 @@ import type {
 } from '@/types';
 
 export const MOCK_USERS: User[] = [
-  { id: 'usr_001', name: 'Carlos Mendes', email: 'carlos@dealintel.com', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Carlos', role: 'admin', teamId: 'team_001', company: 'Deal Intel', status: 'active', createdAt: '2024-01-01' },
-  { id: 'usr_002', name: 'Ana Souza', email: 'ana@dealintel.com', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ana', role: 'director', teamId: 'team_001', company: 'Deal Intel', status: 'active', createdAt: '2024-01-15' },
-  { id: 'usr_003', name: 'Rafael Torres', email: 'rafael@dealintel.com', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Rafael', role: 'supervisor', teamId: 'team_001', company: 'Deal Intel', status: 'active', createdAt: '2024-02-01' },
-  { id: 'usr_004', name: 'Julia Lima', email: 'julia@dealintel.com', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Julia', role: 'member', teamId: 'team_001', company: 'Deal Intel', status: 'active', createdAt: '2024-02-10' },
-  { id: 'usr_005', name: 'Diego Alves', email: 'diego@dealintel.com', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Diego', role: 'member', teamId: 'team_002', company: 'Deal Intel', status: 'active', createdAt: '2024-02-15' },
-  { id: 'usr_006', name: 'Mariana Costa', email: 'mariana@dealintel.com', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Mariana', role: 'member', teamId: 'team_002', company: 'Deal Intel', status: 'active', createdAt: '2024-03-01' },
-  { id: 'usr_007', name: 'Felipe Rocha', email: 'felipe@dealintel.com', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felipe', role: 'member', teamId: 'team_001', company: 'Deal Intel', status: 'inactive', createdAt: '2024-03-05' },
+  { id: 'usr_001', name: 'Marcos Schuldz', email: 'marcos.schuldz@appmax.com.br', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Marcos', role: 'admin', teamId: 'team_001', company: 'Appmax', status: 'active', createdAt: '2026-01-01' },
+  { id: 'usr_002', name: 'Ana Souza', email: 'ana@appmax.com.br', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ana', role: 'director', teamId: 'team_001', company: 'Appmax', status: 'active', createdAt: '2026-01-15' },
+  { id: 'usr_003', name: 'Rafael Torres', email: 'rafael@appmax.com.br', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Rafael', role: 'supervisor', teamId: 'team_001', company: 'Appmax', status: 'active', createdAt: '2026-02-01' },
+  { id: 'usr_004', name: 'Julia Lima', email: 'julia@appmax.com.br', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Julia', role: 'member', teamId: 'team_001', company: 'Appmax', status: 'active', createdAt: '2026-02-10' },
+  { id: 'usr_005', name: 'Diego Alves', email: 'diego@appmax.com.br', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Diego', role: 'member', teamId: 'team_002', company: 'Appmax', status: 'active', createdAt: '2026-02-15' },
+  { id: 'usr_006', name: 'Mariana Costa', email: 'mariana@appmax.com.br', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Mariana', role: 'member', teamId: 'team_002', company: 'Appmax', status: 'active', createdAt: '2026-03-01' },
+  { id: 'usr_007', name: 'Felipe Rocha', email: 'felipe@appmax.com.br', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felipe', role: 'member', teamId: 'team_001', company: 'Appmax', status: 'inactive', createdAt: '2026-03-05' },
 ];
 
 export const MOCK_TEAMS: Team[] = [
-  { id: 'team_001', name: 'Equipe Alpha', supervisorId: 'usr_003', memberIds: ['usr_004', 'usr_007'], companyId: 'comp_001', goal: 50, createdAt: '2024-01-01' },
-  { id: 'team_002', name: 'Equipe Beta', supervisorId: 'usr_002', memberIds: ['usr_005', 'usr_006'], companyId: 'comp_001', goal: 40, createdAt: '2024-01-15' },
+  { id: 'team_001', name: 'Equipe Alpha', supervisorId: 'usr_003', memberIds: ['usr_004', 'usr_007'], companyId: 'comp_001', goal: 50, createdAt: '2026-01-01' },
+  { id: 'team_002', name: 'Equipe Beta', supervisorId: 'usr_002', memberIds: ['usr_005', 'usr_006'], companyId: 'comp_001', goal: 40, createdAt: '2026-01-15' },
 ];
 
 export const MOCK_MEETINGS: Meeting[] = [

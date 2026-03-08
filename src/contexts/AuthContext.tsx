@@ -17,13 +17,19 @@ const AuthContext = createContext<AuthContextType | null>(null);
 // Mock user for demo
 const MOCK_USER: User = {
   id: 'usr_admin_001',
-  name: 'Carlos Mendes',
-  email: 'admin@dealintel.com.br',
-  avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Carlos',
+  name: 'Marcos Schuldz',
+  email: 'marcos.schuldz@appmax.com.br',
+  avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Marcos',
   role: 'admin',
-  company: 'Deal Intel',
+  company: 'Appmax',
   status: 'active',
-  createdAt: '2024-01-01',
+  createdAt: '2026-01-01',
+};
+
+// Valid demo credentials
+const DEMO_CREDENTIALS = {
+  email: 'marcos.schuldz@appmax.com.br',
+  password: 'Appmax102030@',
 };
 
 const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
