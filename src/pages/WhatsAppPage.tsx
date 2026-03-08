@@ -317,10 +317,10 @@ export default function WhatsAppPage() {
 
       const parsed: Message[] = raw
         .filter((m: any) => {
+          // Ignore protocol/reaction system messages
           if (m.messageType === 'protocolMessage' || m.messageType === 'reactionMessage') return false;
-          const kr: string = m.key?.remoteJid || '';
-          const krAlt: string = m.key?.remoteJidAlt || '';
-          return kr === remoteJid || krAlt === remoteJid;
+          // Accept all messages returned by the query — both fromMe and received
+          return true;
         })
         .map((m: any) => ({
           id: m.id || m.key?.id || `${m.messageTimestamp}_${Math.random()}`,
@@ -330,10 +330,8 @@ export default function WhatsAppPage() {
         }))
         .sort((a, b) => a.timestamp - b.timestamp);
 
-      setMessages(prev => {
-        if (!scroll && prev.length === parsed.length && prev[prev.length - 1]?.id === parsed[parsed.length - 1]?.id) return prev;
-        return parsed;
-      });
+      // Always update — force re-render on manual refresh too
+      setMessages(parsed);
     } catch { /* silent */ }
     finally { if (scroll) setLoadingMsgs(false); }
   }, []);
@@ -588,8 +586,8 @@ export default function WhatsAppPage() {
                 <div className="flex items-center gap-2">
                   <Button
                     size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground"
-                    onClick={() => loadMessages(activeInstance!.name, activeChat.remoteJid, false)}>
-                    <RefreshCw className="w-3.5 h-3.5" />
+                    onClick={() => loadMessages(activeInstance!.name, activeChat.remoteJid, true)}>
+                    {loadingMsgs ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                   </Button>
                   <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { setActiveChat(null); setMessages([]); }}>
                     <X className="w-3.5 h-3.5" />
