@@ -276,11 +276,11 @@ function NewConversationModal({ onClose, onStart }: { onClose: () => void; onSta
 }
 
 // ─── Status dot ──────────────────────────────────────────────────────────────────
-function StatusDot({ status }: { status: string }) {
+const StatusDot = ({ status }: { status: string }) => {
   const isOpen = status === 'open' || status === 'connected';
   const isWaiting = status === 'connecting' || status === 'qrcode';
-  return <span className={cn('w-2 h-2 rounded-full flex-shrink-0', isOpen ? 'bg-success' : isWaiting ? 'bg-warning animate-pulse' : 'bg-muted-foreground/40')} />;
-}
+  return <span className={cn('w-2 h-2 rounded-full flex-shrink-0 inline-block', isOpen ? 'bg-success' : isWaiting ? 'bg-warning animate-pulse' : 'bg-muted-foreground/40')} />;
+};
 
 // ─── Main ────────────────────────────────────────────────────────────────────────
 export default function WhatsAppPage() {
