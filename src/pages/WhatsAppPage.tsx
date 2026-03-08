@@ -6,7 +6,8 @@ import {
   MessageSquare, Search, WifiOff, QrCode,
   RefreshCcw, AlertCircle, X, Loader2,
   Smartphone, RefreshCw, Plus, CheckCheck, Send,
-  ArrowUpDown, ArrowDownAZ, ArrowUpAZ, SortAsc, SortDesc,
+  ArrowUpDown, ArrowDownAZ, SortAsc, SortDesc,
+  Brain, Sparkles, AlertTriangle, ChevronRight, Star,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -17,6 +18,8 @@ import {
   type EvolutionInstance,
 } from '@/hooks/useEvolutionInstances';
 import { MOCK_USERS, MOCK_TEAMS } from '@/data/mockData';
+import { useAppConfig } from '@/contexts/AppConfigContext';
+import { AI_CONFIG_STORAGE, DEFAULT_WHATSAPP_CRITERIA } from '@/pages/AIConfigPage';
 
 const EVOLUTION_API_URL = 'https://evolutionapic.contato-lojavirtual.com';
 const EVOLUTION_API_TOKEN = '3ce7a42f9bd96ea526b2b0bc39a4faec';
