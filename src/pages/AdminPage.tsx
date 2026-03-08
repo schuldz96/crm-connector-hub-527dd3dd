@@ -354,22 +354,8 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* ── Pendentes ── */}
-          {(section === 'notifications' || section === 'billing') && (
-            <div className="glass-card p-6 text-center py-16">
-              <div className="w-12 h-12 rounded-xl bg-muted mx-auto mb-4 flex items-center justify-center">
-                {section === 'notifications'
-                  ? <Bell className="w-6 h-6 text-muted-foreground" />
-                  : <TrendingUp className="w-6 h-6 text-muted-foreground" />
-                }
-              </div>
-              <h3 className="font-display font-semibold mb-2">
-                {section === 'notifications' ? 'Notificações' : 'Plano & Faturamento'}
-              </h3>
-              <p className="text-sm text-muted-foreground">Esta seção está em desenvolvimento.</p>
-              <Button size="sm" className="mt-4 bg-gradient-primary text-xs">Em Breve</Button>
-            </div>
-          )}
+
+
         </div>
       </div>
     </div>
