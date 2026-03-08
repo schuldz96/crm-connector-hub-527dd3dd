@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   MessageSquare, Search, WifiOff, QrCode,
-  RefreshCcw, Shield, AlertCircle, X, Loader2,
+  RefreshCcw, AlertCircle, X, Loader2,
   Smartphone, RefreshCw, Plus, CheckCheck, Send,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -15,32 +15,12 @@ import {
   getInstanceForUser,
   type EvolutionInstance,
 } from '@/hooks/useEvolutionInstances';
-import { MOCK_USERS, MOCK_TEAMS } from '@/data/mockData';
+import { MOCK_USERS } from '@/data/mockData';
 
 const EVOLUTION_API_URL = 'https://evolutionapic.contato-lojavirtual.com';
 const EVOLUTION_API_TOKEN = '3ce7a42f9bd96ea526b2b0bc39a4faec';
-const META_CONNECTIONS_KEY = 'meta_wa_connections';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-interface MetaConnection {
-  id: string;
-  label: string;
-  token: string;
-  phoneNumberId: string;
-  businessId: string;
-  status: 'connected' | 'error' | 'unknown';
-}
-
-interface UnifiedAccount {
-  type: 'evolution' | 'meta';
-  id: string;
-  name: string;
-  phone: string;
-  status: string;
-  avatarUrl?: string;
-  raw: EvolutionInstance | MetaConnection;
-}
-
 interface Chat {
   id: string;
   remoteJid: string;
@@ -70,13 +50,6 @@ async function evoFetch(path: string, options: RequestInit = {}) {
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
-}
-
-function getMetaConnections(): MetaConnection[] {
-  try { return JSON.parse(localStorage.getItem(META_CONNECTIONS_KEY) || '[]'); } catch { return []; }
-}
-function saveMetaConnections(c: MetaConnection[]) {
-  localStorage.setItem(META_CONNECTIONS_KEY, JSON.stringify(c));
 }
 
 // ─── QR Code Modal ────────────────────────────────────────────────────────────
@@ -120,7 +93,7 @@ function QRCodeModal({ instanceName, onClose }: { instanceName: string; onClose:
                 : <QrCode className="w-12 h-12 text-muted-foreground/30" />}
           </div>
           <p className="text-[10px] text-muted-foreground">QR Code expira em 60 segundos</p>
-          <Button size="sm" className="w-full bg-gradient-primary h-9 text-xs" onClick={generate} disabled={loading}>
+          <Button size="sm" className="w-full h-9 text-xs" onClick={generate} disabled={loading}>
             {loading
               ? <><Loader2 className="w-3 h-3 mr-1.5 animate-spin" />Gerando...</>
               : <><RefreshCcw className="w-3 h-3 mr-1.5" />{qrBase64 ? 'Regenerar' : 'Gerar QR Code'}</>}
@@ -173,7 +146,7 @@ function CreateInstanceModal({ onClose, onCreated }: { onClose: () => void; onCr
             />
           </div>
           <div className="flex gap-2 pt-1">
-            <Button size="sm" className="flex-1 bg-gradient-primary text-xs h-9" onClick={handleCreate} disabled={loading || !name.trim()}>
+            <Button size="sm" className="flex-1 text-xs h-9" onClick={handleCreate} disabled={loading || !name.trim()}>
               {loading ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Criando...</> : <><Plus className="w-3.5 h-3.5 mr-1.5" />Criar</>}
             </Button>
             <Button size="sm" variant="outline" className="text-xs border-border h-9" onClick={onClose}>Cancelar</Button>
@@ -184,73 +157,27 @@ function CreateInstanceModal({ onClose, onCreated }: { onClose: () => void; onCr
   );
 }
 
-// ─── Add Meta Modal ───────────────────────────────────────────────────────────
-function AddMetaModal({ onClose, onSave }: { onClose: () => void; onSave: (c: MetaConnection) => void }) {
-  const { toast } = useToast();
-  const [form, setForm] = useState({ label: '', token: '', phoneNumberId: '', businessId: '' });
-  const [testing, setTesting] = useState(false);
-
-  const handleSave = async () => {
-    if (!form.token || !form.phoneNumberId)
-      return toast({ variant: 'destructive', title: 'Preencha Token e Phone Number ID.' });
-    setTesting(true);
-    try {
-      const r = await fetch(`https://graph.facebook.com/v19.0/${form.phoneNumberId}`, {
-        headers: { Authorization: `Bearer ${form.token}` },
-      });
-      const conn: MetaConnection = { id: `meta_${Date.now()}`, ...form, status: r.ok ? 'connected' : 'error' };
-      if (r.ok) { toast({ title: 'Conectado!' }); onSave(conn); onClose(); }
-      else toast({ variant: 'destructive', title: 'Falha na conexão', description: 'Verifique o token.' });
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Erro', description: e.message });
-    } finally { setTesting(false); }
-  };
-
-  return (
-    <Dialog open onOpenChange={onClose}>
-      <DialogContent className="bg-card border-border max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-sm font-semibold">🔵 Adicionar número Meta WhatsApp</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-3 py-1">
-          {[
-            { key: 'label', label: 'Nome / Label', placeholder: 'Ex: Suporte BR', type: 'text' },
-            { key: 'token', label: 'Access Token', placeholder: 'EAAxxxxx...', type: 'password' },
-            { key: 'phoneNumberId', label: 'Phone Number ID', placeholder: '1234567890', type: 'text' },
-            { key: 'businessId', label: 'Business Account ID', placeholder: 'Business ID', type: 'text' },
-          ].map(f => (
-            <div key={f.key}>
-              <label className="text-xs font-medium block mb-1.5">{f.label}</label>
-              <Input
-                value={(form as any)[f.key]}
-                onChange={e => setForm(x => ({ ...x, [f.key]: e.target.value }))}
-                placeholder={f.placeholder}
-                type={f.type}
-                className="h-9 text-xs bg-secondary border-border"
-              />
-            </div>
-          ))}
-          <div className="flex gap-2 pt-1">
-            <Button size="sm" className="flex-1 bg-gradient-primary text-xs h-9" onClick={handleSave} disabled={testing}>
-              {testing ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Verificando...</> : '🔵 Conectar & Salvar'}
-            </Button>
-            <Button size="sm" variant="outline" className="text-xs border-border h-9" onClick={onClose}>Cancelar</Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 // ─── Status Dot ───────────────────────────────────────────────────────────────
-const StatusDot = ({ status }: { status: string }) => {
+const StatusDot = ({ status, className }: { status: string; className?: string }) => {
   const isOpen = status === 'open' || status === 'connected';
   const isWaiting = status === 'connecting' || status === 'qrcode';
   return (
     <span className={cn(
-      'w-2 h-2 rounded-full flex-shrink-0 inline-block',
-      isOpen ? 'bg-success' : isWaiting ? 'bg-warning animate-pulse' : 'bg-muted-foreground/40'
+      'w-2.5 h-2.5 rounded-full flex-shrink-0 inline-block border-2 border-background',
+      isOpen ? 'bg-success' : isWaiting ? 'bg-warning animate-pulse' : 'bg-muted-foreground/40',
+      className
     )} />
+  );
+};
+
+// ─── Avatar Initials ──────────────────────────────────────────────────────────
+const AvatarInitials = ({ name, size = 'md', src }: { name: string; size?: 'sm' | 'md' | 'lg'; src?: string }) => {
+  const sizeClass = size === 'sm' ? 'w-8 h-8 text-xs' : size === 'lg' ? 'w-12 h-12 text-base' : 'w-10 h-10 text-sm';
+  if (src) return <img src={src} className={cn(sizeClass, 'rounded-full object-cover border border-border flex-shrink-0')} alt="" />;
+  return (
+    <div className={cn(sizeClass, 'rounded-full bg-primary/15 text-primary font-bold flex items-center justify-center flex-shrink-0')}>
+      {(name || '?')[0].toUpperCase()}
+    </div>
   );
 };
 
@@ -261,140 +188,37 @@ export default function WhatsAppPage() {
   const isAdmin = hasRole(['admin', 'director', 'supervisor']);
   const { instances: evoInstances, loading: evoLoading, refetch: refetchEvo } = useEvolutionInstances();
 
-  const [metaConns, setMetaConns] = useState<MetaConnection[]>(getMetaConnections);
-  const [showAddMeta, setShowAddMeta] = useState(false);
   const [showCreateInst, setShowCreateInst] = useState(false);
   const [qrInstanceName, setQrInstanceName] = useState<string | null>(null);
-  const [teamFilter, setTeamFilter] = useState<string>('all');
-  const [adminTab, setAdminTab] = useState<'chat' | 'instances'>('chat');
 
-  // Build unified account list
-  const allAccounts: UnifiedAccount[] = [
-    ...evoInstances
-      .filter(i => {
-        if (!isAdmin) return getInstanceForUser(user?.id || '') === i.name;
-        if (teamFilter === 'all') return true;
-        const assignedUser = MOCK_USERS.find(u => getInstanceForUser(u.id) === i.name);
-        return assignedUser?.teamId === teamFilter;
-      })
-      .map(i => ({
-        type: 'evolution' as const,
-        id: `evo_${i.name}`,
-        name: i.profileName || i.name,
-        phone: i.ownerJid?.replace('@s.whatsapp.net', '') || i.name,
-        status: i.connectionStatus,
-        avatarUrl: i.profilePicUrl,
-        raw: i,
-      })),
-    ...metaConns.map(m => ({
-      type: 'meta' as const,
-      id: `meta_${m.id}`,
-      name: m.label || `Meta ${m.phoneNumberId}`,
-      phone: m.phoneNumberId,
-      status: m.status,
-      avatarUrl: undefined,
-      raw: m,
-    })),
-  ];
+  // Filter instances for non-admins
+  const visibleInstances = evoInstances.filter(i => {
+    if (!isAdmin) return getInstanceForUser(user?.id || '') === i.name;
+    return true;
+  });
 
-  const [activeAccountId, setActiveAccountId] = useState<string>('');
+  // ── Column 1: selected instance ────────────────────────────────────────────
+  const [activeInstance, setActiveInstance] = useState<EvolutionInstance | null>(null);
+
+  // Auto-select first instance
+  useEffect(() => {
+    if (visibleInstances.length > 0 && !activeInstance) {
+      setActiveInstance(visibleInstances[0]);
+    }
+  }, [visibleInstances.length]);
+
+  // ── Column 2: chats for selected instance ──────────────────────────────────
   const [chats, setChats] = useState<Chat[]>([]);
   const [loadingChats, setLoadingChats] = useState(false);
+  const [chatSearch, setChatSearch] = useState('');
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loadingMsgs, setLoadingMsgs] = useState(false);
-  const [search, setSearch] = useState('');
-  const [inputText, setInputText] = useState('');
-  const [sending, setSending] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-select first account
-  useEffect(() => {
-    if (allAccounts.length > 0 && !activeAccountId) setActiveAccountId(allAccounts[0].id);
-  }, [allAccounts.length]);
-
-  const activeAccount = allAccounts.find(a => a.id === activeAccountId) ?? null;
-  const isConnected = activeAccount?.status === 'open' || activeAccount?.status === 'connected';
-
-  // Load chats when account switches
-  useEffect(() => {
-    if (!activeAccount) return;
-    if (activeAccount.type === 'evolution') {
-      const inst = activeAccount.raw as EvolutionInstance;
-      if (inst.connectionStatus === 'open') loadEvoChats(inst.name);
-      else setChats([]);
-    } else {
-      setChats([]);
-    }
-    setActiveChat(null);
-    setMessages([]);
-  }, [activeAccountId]);
-
-  // Resolve real phone from @lid JID
   const resolvePhone = (c: any): string => {
     const jid: string = c.remoteJid || '';
     if (!jid.includes('@lid')) return jid.replace(/@.*/, '');
-    const alt: string =
-      c.lastMessage?.key?.remoteJidAlt ||
-      c.lastMessage?.key?.participantAlt ||
-      '';
+    const alt = c.lastMessage?.key?.remoteJidAlt || c.lastMessage?.key?.participantAlt || '';
     return alt ? alt.replace(/@.*/, '') : jid.replace(/@.*/, '');
   };
-
-  const loadEvoChats = async (instanceName: string) => {
-    setLoadingChats(true);
-    setChats([]);
-    try {
-      const data = await evoFetch(`/chat/findChats/${instanceName}`, {
-        method: 'POST',
-        body: JSON.stringify({}),
-      });
-      const raw: any[] = Array.isArray(data) ? data : (data?.chats || []);
-
-      // Deduplicate: @lid and phone-based JIDs for same contact → keep latest by timestamp
-      const phoneMap = new Map<string, Chat>();
-      for (const c of raw) {
-        const phone = resolvePhone(c);
-        const ts =
-          c.lastMessage?.messageTimestamp ||
-          (c.updatedAt ? Math.floor(new Date(c.updatedAt).getTime() / 1000) : 0);
-        const existing = phoneMap.get(phone);
-        if (!existing || ts > existing.lastMessageTs) {
-          phoneMap.set(phone, {
-            id: c.id || c.remoteJid,
-            remoteJid: c.remoteJid || c.id || '',
-            phone,
-            name:
-              c.name ||
-              c.pushName ||
-              c.lastMessage?.pushName ||
-              phone ||
-              'Desconhecido',
-            lastMessage:
-              c.lastMessage?.message?.conversation ||
-              c.lastMessage?.message?.extendedTextMessage?.text ||
-              '',
-            lastMessageTs: ts,
-            unread: c.unreadCount || 0,
-          });
-        }
-      }
-      setChats(Array.from(phoneMap.values()).slice(0, 100));
-    } catch {
-      setChats([]);
-    } finally {
-      setLoadingChats(false);
-    }
-  };
-
-  // Load messages when chat changes
-  useEffect(() => {
-    if (!activeChat || !activeAccount) return;
-    if (activeAccount.type === 'evolution') {
-      loadEvoMessages((activeAccount.raw as EvolutionInstance).name, activeChat.remoteJid, true);
-    }
-  }, [activeChat?.id]);
 
   const parseBody = (m: any): string => {
     const msg = m.message || {};
@@ -411,19 +235,85 @@ export default function WhatsAppPage() {
     );
   };
 
-  const loadEvoMessages = async (instanceName: string, remoteJid: string, scroll = false) => {
+  const loadChats = useCallback(async (instanceName: string) => {
+    setLoadingChats(true);
+    setChats([]);
+    try {
+      const data = await evoFetch(`/chat/findChats/${instanceName}`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      const raw: any[] = Array.isArray(data) ? data : (data?.chats || []);
+
+      // Deduplicate by phone — keep latest
+      const phoneMap = new Map<string, Chat>();
+      for (const c of raw) {
+        const phone = resolvePhone(c);
+        const ts =
+          c.lastMessage?.messageTimestamp ||
+          (c.updatedAt ? Math.floor(new Date(c.updatedAt).getTime() / 1000) : 0);
+        const existing = phoneMap.get(phone);
+        if (!existing || ts > existing.lastMessageTs) {
+          phoneMap.set(phone, {
+            id: c.id || c.remoteJid,
+            remoteJid: c.remoteJid || c.id || '',
+            phone,
+            name: c.name || c.pushName || c.lastMessage?.pushName || phone || 'Desconhecido',
+            lastMessage:
+              c.lastMessage?.message?.conversation ||
+              c.lastMessage?.message?.extendedTextMessage?.text ||
+              '',
+            lastMessageTs: ts,
+            unread: c.unreadCount || 0,
+          });
+        }
+      }
+      // Sort by latest message
+      const sorted = Array.from(phoneMap.values()).sort((a, b) => b.lastMessageTs - a.lastMessageTs);
+      setChats(sorted.slice(0, 200));
+    } catch {
+      setChats([]);
+    } finally {
+      setLoadingChats(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeInstance?.connectionStatus === 'open') {
+      loadChats(activeInstance.name);
+    } else {
+      setChats([]);
+    }
+    setActiveChat(null);
+    setMessages([]);
+  }, [activeInstance?.name]);
+
+  const filteredChats = chats.filter(c =>
+    c.name.toLowerCase().includes(chatSearch.toLowerCase()) ||
+    c.phone.includes(chatSearch) ||
+    c.lastMessage.toLowerCase().includes(chatSearch.toLowerCase())
+  );
+
+  const displayName = (c: Chat) => (c.name && c.name !== c.phone ? c.name : c.phone);
+
+  // ── Column 3: messages ─────────────────────────────────────────────────────
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loadingMsgs, setLoadingMsgs] = useState(false);
+  const [inputText, setInputText] = useState('');
+  const [sending, setSending] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const loadMessages = useCallback(async (instanceName: string, remoteJid: string, scroll = false) => {
     if (scroll) setLoadingMsgs(true);
     try {
       const data = await evoFetch(`/chat/findMessages/${instanceName}`, {
         method: 'POST',
-        body: JSON.stringify({ where: { key: { remoteJid } }, limit: 50 }),
+        body: JSON.stringify({ where: { key: { remoteJid } }, limit: 60 }),
       });
-
       const raw: any[] = Array.isArray(data?.messages?.records)
         ? data.messages.records
-        : Array.isArray(data)
-        ? data
-        : [];
+        : Array.isArray(data) ? data : [];
 
       const parsed: Message[] = raw
         .filter((m: any) => {
@@ -441,113 +331,63 @@ export default function WhatsAppPage() {
         .sort((a, b) => a.timestamp - b.timestamp);
 
       setMessages(prev => {
-        if (
-          !scroll &&
-          prev.length === parsed.length &&
-          prev[prev.length - 1]?.id === parsed[parsed.length - 1]?.id
-        ) return prev;
+        if (!scroll && prev.length === parsed.length && prev[prev.length - 1]?.id === parsed[parsed.length - 1]?.id) return prev;
         return parsed;
       });
     } catch { /* silent */ }
     finally { if (scroll) setLoadingMsgs(false); }
-  };
+  }, []);
 
-  // Real-time poll every 3 seconds
   useEffect(() => {
-    if (!activeChat || !activeAccount || activeAccount.type !== 'evolution') return;
-    const inst = activeAccount.raw as EvolutionInstance;
-    if (inst.connectionStatus !== 'open') return;
-    const timer = setInterval(
-      () => loadEvoMessages(inst.name, activeChat.remoteJid, false),
-      3000
-    );
-    return () => clearInterval(timer);
-  }, [activeChat?.id, activeAccountId]);
+    if (!activeChat || !activeInstance) return;
+    loadMessages(activeInstance.name, activeChat.remoteJid, true);
+  }, [activeChat?.id, activeInstance?.name]);
 
-  // Auto-scroll on new messages
+  // Real-time poll every 3s
+  useEffect(() => {
+    if (!activeChat || !activeInstance || activeInstance.connectionStatus !== 'open') return;
+    const t = setInterval(() => loadMessages(activeInstance.name, activeChat.remoteJid, false), 3000);
+    return () => clearInterval(t);
+  }, [activeChat?.id, activeInstance?.name]);
+
+  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // ─── Send message ───────────────────────────────────────────────────────────
   const handleSend = async () => {
     const text = inputText.trim();
-    if (!text || !activeChat || !activeAccount || activeAccount.type !== 'evolution') return;
-    const inst = activeAccount.raw as EvolutionInstance;
+    if (!text || !activeChat || !activeInstance) return;
     setSending(true);
     try {
-      await evoFetch(`/message/sendText/${inst.name}`, {
+      await evoFetch(`/message/sendText/${activeInstance.name}`, {
         method: 'POST',
-        body: JSON.stringify({
-          number: activeChat.remoteJid,
-          text,
-        }),
+        body: JSON.stringify({ number: activeChat.remoteJid, text }),
       });
       setInputText('');
-      // Reload messages immediately after sending
-      await loadEvoMessages(inst.name, activeChat.remoteJid, false);
+      await loadMessages(activeInstance.name, activeChat.remoteJid, false);
       inputRef.current?.focus();
     } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Erro ao enviar mensagem', description: e.message });
-    } finally {
-      setSending(false);
-    }
+      toast({ variant: 'destructive', title: 'Erro ao enviar', description: e.message });
+    } finally { setSending(false); }
   };
 
-  const handleAddMeta = (conn: MetaConnection) => {
-    const updated = [...metaConns, conn];
-    setMetaConns(updated);
-    saveMetaConnections(updated);
-  };
-
-  const filteredChats = chats.filter(c =>
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.phone.includes(search) ||
-    c.lastMessage.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const displayName = (c: Chat) =>
-    c.name && c.name !== c.phone ? c.name : c.phone;
-
-  const onlineCount = allAccounts.filter(a => a.status === 'open' || a.status === 'connected').length;
+  const isConnected = activeInstance?.connectionStatus === 'open';
+  const onlineCount = visibleInstances.filter(i => i.connectionStatus === 'open').length;
 
   return (
     <div className="page-container animate-fade-in h-[calc(100vh-56px)] flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4 flex-shrink-0">
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between mb-3 flex-shrink-0">
         <div>
           <h1 className="text-2xl font-display font-bold">WhatsApp</h1>
-          <p className="text-sm text-muted-foreground">
-            {onlineCount} online · {allAccounts.length} total
-          </p>
+          <p className="text-sm text-muted-foreground">{onlineCount} online · {visibleInstances.length} total</p>
         </div>
         <div className="flex items-center gap-2">
           {isAdmin && (
-            <div className="flex items-center gap-1 p-1 bg-secondary rounded-lg border border-border">
-              <button
-                onClick={() => setAdminTab('chat')}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
-                  adminTab === 'chat' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-                )}>
-                <MessageSquare className="w-3.5 h-3.5" /> Conversas
-              </button>
-              <button
-                onClick={() => setAdminTab('instances')}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
-                  adminTab === 'instances' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-                )}>
-                <Shield className="w-3.5 h-3.5" /> Instâncias
-              </button>
-            </div>
-          )}
-          <Button size="sm" variant="outline" className="text-xs h-8 border-border gap-1" onClick={() => setShowAddMeta(true)}>
-            🔵 Meta
-          </Button>
-          {isAdmin && (
             <Button size="sm" variant="outline" className="text-xs h-8 border-border gap-1" onClick={() => setShowCreateInst(true)}>
-              <Plus className="w-3.5 h-3.5" /> Instância
+              <Plus className="w-3.5 h-3.5" /> Nova Instância
             </Button>
           )}
           <Button size="sm" variant="outline" className="text-xs h-8 border-border" onClick={refetchEvo} disabled={evoLoading}>
@@ -556,341 +396,278 @@ export default function WhatsAppPage() {
         </div>
       </div>
 
-      {/* ── Instances Tab ──────────────────────────────────────────────────────── */}
-      {isAdmin && adminTab === 'instances' && (
-        <div className="flex-1 overflow-y-auto space-y-5">
-          <div className="flex gap-1.5 flex-wrap">
-            {[{ id: 'all', name: 'Todos os Times' }, ...MOCK_TEAMS].map(t => (
-              <button
-                key={t.id}
-                onClick={() => setTeamFilter(t.id)}
-                className={cn(
-                  'text-xs px-3 py-1.5 rounded-lg border transition-all',
-                  teamFilter === t.id
-                    ? 'bg-primary/15 border-primary/30 text-primary'
-                    : 'border-border text-muted-foreground hover:bg-muted'
-                )}>
-                {t.name}
-              </button>
-            ))}
-          </div>
+      {/* ── 3-column layout ────────────────────────────────────────────────── */}
+      <div className="flex-1 flex min-h-0 gap-0 rounded-xl overflow-hidden border border-border">
 
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                <Smartphone className="w-3.5 h-3.5" /> Evolution API — {evoInstances.length} instâncias
-              </p>
-              <Button size="sm" variant="outline" className="text-[10px] h-6 border-border" onClick={() => setShowCreateInst(true)}>
-                <Plus className="w-3 h-3 mr-1" /> Criar
-              </Button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-              {evoInstances.map(inst => {
-                const isOpen = inst.connectionStatus === 'open';
-                const phone = inst.ownerJid?.replace('@s.whatsapp.net', '');
-                const assignedUser = MOCK_USERS.find(u => getInstanceForUser(u.id) === inst.name);
-                return (
-                  <div key={inst.id} className="glass-card p-4 border border-border rounded-xl flex items-start gap-3">
-                    {inst.profilePicUrl
-                      ? <img src={inst.profilePicUrl} className="w-10 h-10 rounded-full border border-border object-cover flex-shrink-0" alt="" />
-                      : <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center flex-shrink-0"><Smartphone className="w-4 h-4 text-muted-foreground" /></div>}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <p className="text-xs font-semibold truncate">{inst.profileName || inst.name}</p>
-                        <span className={cn(
-                          'text-[10px] px-1.5 py-0.5 rounded-full font-medium',
-                          isOpen ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
-                        )}>
-                          {isOpen ? 'Online' : 'Offline'}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground font-mono">{phone || inst.name}</p>
-                      {assignedUser && (
-                        <div className="flex items-center gap-1 mt-1">
-                          <img src={assignedUser.avatar} className="w-3.5 h-3.5 rounded-full" alt="" />
-                          <span className="text-[10px] text-muted-foreground">{assignedUser.name}</span>
-                        </div>
-                      )}
-                      <div className="flex gap-2 mt-2">
-                        {!isOpen && (
-                          <Button
-                            size="sm" variant="outline" className="text-[10px] h-6 border-border px-2 gap-1"
-                            onClick={() => setQrInstanceName(inst.name)}>
-                            <QrCode className="w-3 h-3" /> Conectar
-                          </Button>
-                        )}
-                        <Button
-                          size="sm" variant="ghost" className="text-[10px] h-6 px-2 gap-1 text-muted-foreground"
-                          onClick={() => { setAdminTab('chat'); setActiveAccountId(`evo_${inst.name}`); }}>
-                          <MessageSquare className="w-3 h-3" /> Ver chat
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+        {/* ════ COLUMN 1 — INSTANCES ════════════════════════════════════════ */}
+        <div className="w-[220px] flex-shrink-0 bg-card border-r border-border flex flex-col">
+          <div className="px-3 py-2.5 border-b border-border flex-shrink-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <Smartphone className="w-3.5 h-3.5" /> Instâncias
+            </p>
           </div>
-
-          {metaConns.length > 0 && (
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                🔵 Meta Cloud API — {metaConns.length} números
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                {metaConns.map(conn => (
-                  <div key={conn.id} className="glass-card p-4 border border-border rounded-xl">
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="text-xs font-semibold">{conn.label || conn.phoneNumberId}</p>
-                      <span className={cn(
-                        'text-[10px] px-1.5 py-0.5 rounded-full font-medium',
-                        conn.status === 'connected' ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'
-                      )}>
-                        {conn.status === 'connected' ? 'Conectado' : 'Erro'}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-muted-foreground font-mono">{conn.phoneNumberId}</p>
-                  </div>
-                ))}
+          <div className="flex-1 overflow-y-auto">
+            {evoLoading && (
+              <div className="flex items-center justify-center gap-2 p-4 text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" /><span className="text-xs">Carregando...</span>
               </div>
+            )}
+            {visibleInstances.map(inst => {
+              const isOpen = inst.connectionStatus === 'open';
+              const phone = inst.ownerJid?.replace('@s.whatsapp.net', '');
+              const assignedUser = MOCK_USERS.find(u => getInstanceForUser(u.id) === inst.name);
+              const isActive = activeInstance?.name === inst.name;
+              return (
+                <button
+                  key={inst.id}
+                  onClick={() => setActiveInstance(inst)}
+                  className={cn(
+                    'w-full flex items-center gap-2.5 px-3 py-3 text-left transition-colors border-b border-border/40',
+                    isActive ? 'bg-primary/10 border-l-2 border-l-primary' : 'hover:bg-muted/40 border-l-2 border-l-transparent'
+                  )}>
+                  <div className="relative flex-shrink-0">
+                    <AvatarInitials name={inst.profileName || inst.name} size="sm" src={inst.profilePicUrl} />
+                    <StatusDot status={inst.connectionStatus} className="absolute -bottom-0.5 -right-0.5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold truncate leading-tight">{inst.profileName || inst.name}</p>
+                    <p className="text-[10px] text-muted-foreground font-mono truncate">{phone || inst.name}</p>
+                    {assignedUser && (
+                      <p className="text-[10px] text-muted-foreground/70 truncate mt-0.5">{assignedUser.name}</p>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+            {!evoLoading && visibleInstances.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-10 text-muted-foreground px-3 text-center">
+                <Smartphone className="w-8 h-8 opacity-20 mb-2" />
+                <p className="text-xs">Nenhuma instância</p>
+                {isAdmin && (
+                  <Button size="sm" variant="outline" className="text-xs mt-3 h-7 border-border" onClick={() => setShowCreateInst(true)}>
+                    <Plus className="w-3 h-3 mr-1" /> Criar
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+          {/* QR connect button at bottom if selected instance is offline */}
+          {activeInstance && !isConnected && (
+            <div className="p-3 border-t border-border flex-shrink-0">
+              <Button
+                size="sm" variant="outline"
+                className="w-full text-xs h-8 border-border gap-1"
+                onClick={() => setQrInstanceName(activeInstance.name)}>
+                <QrCode className="w-3.5 h-3.5" /> Conectar via QR
+              </Button>
             </div>
           )}
         </div>
-      )}
 
-      {/* ── Chat Tab ───────────────────────────────────────────────────────────── */}
-      {(!isAdmin || adminTab === 'chat') && (
-        <div className="flex-1 flex gap-0 min-h-0 rounded-xl overflow-hidden border border-border">
-
-          {/* ── LEFT SIDEBAR ─────────────────────────────────────────────────── */}
-          <div className="w-[300px] flex-shrink-0 bg-card flex flex-col min-h-0 border-r border-border">
-
-            {/* Account selector */}
-            <div className="flex-shrink-0 border-b border-border">
-              {allAccounts.map(acc => (
-                <button
-                  key={acc.id}
-                  onClick={() => setActiveAccountId(acc.id)}
-                  className={cn(
-                    'w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors',
-                    activeAccountId === acc.id ? 'bg-primary/10 border-l-2 border-l-primary' : 'hover:bg-muted/40 border-l-2 border-l-transparent'
-                  )}>
-                  <div className="relative flex-shrink-0">
-                    {acc.avatarUrl
-                      ? <img src={acc.avatarUrl} className="w-8 h-8 rounded-full border border-border object-cover" alt="" />
-                      : <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold">
-                          {(acc.name || '?')[0]}
-                        </div>}
-                    <StatusDot status={acc.status} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold truncate">{acc.name}</p>
-                    <p className="text-[10px] text-muted-foreground font-mono truncate">{acc.phone}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-
-            {/* Search */}
-            <div className="px-3 py-2 border-b border-border flex-shrink-0">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                <Input
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  placeholder="Buscar conversa..."
-                  className="h-8 text-xs pl-7 bg-secondary border-border"
-                />
-              </div>
-            </div>
-
-            {/* Chat list */}
-            <div className="flex-1 overflow-y-auto">
-              {isConnected && loadingChats && (
-                <div className="flex items-center justify-center gap-2 p-6 text-muted-foreground">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span className="text-xs">Carregando...</span>
-                </div>
-              )}
-              {!isConnected && !loadingChats && (
-                <div className="p-6 text-center">
-                  <WifiOff className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
-                  <p className="text-xs text-muted-foreground mb-3">Instância desconectada</p>
-                  {activeAccount?.type === 'evolution' && (
-                    <Button
-                      size="sm" variant="outline" className="text-xs border-border gap-1 h-7"
-                      onClick={() => setQrInstanceName((activeAccount.raw as EvolutionInstance).name)}>
-                      <QrCode className="w-3 h-3" /> Gerar QR Code
-                    </Button>
-                  )}
-                </div>
-              )}
-
-              {filteredChats.map(chat => (
-                <div
-                  key={chat.id}
-                  onClick={() => setActiveChat(chat)}
-                  className={cn(
-                    'flex items-start gap-3 px-3 py-3 border-b border-border/40 cursor-pointer hover:bg-muted/30 transition-colors',
-                    activeChat?.id === chat.id && 'bg-muted/50'
-                  )}>
-                  <div className="relative flex-shrink-0">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary text-sm font-bold">
-                      {(displayName(chat) || '?')[0].toUpperCase()}
-                    </div>
-                    {chat.unread > 0 && (
-                      <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-success border-2 border-background" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1 mb-0.5">
-                      <p className={cn('text-xs font-semibold truncate', chat.unread > 0 ? 'text-foreground' : 'text-foreground/80')}>
-                        {displayName(chat)}
-                      </p>
-                      <span className="text-[10px] text-muted-foreground flex-shrink-0">
-                        {chat.lastMessageTs
-                          ? new Date(chat.lastMessageTs * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-                          : ''}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-1">
-                      <p className="text-[11px] text-muted-foreground truncate leading-snug">{chat.lastMessage || chat.phone}</p>
-                      {chat.unread > 0 && (
-                        <span className="flex-shrink-0 min-w-[18px] h-[18px] rounded-full bg-success text-white text-[10px] flex items-center justify-center font-bold px-1">
-                          {chat.unread > 99 ? '99+' : chat.unread}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              {isConnected && !loadingChats && filteredChats.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
-                  <MessageSquare className="w-8 h-8 opacity-30 mb-2" />
-                  <p className="text-xs">Nenhuma conversa</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* ── CHAT WINDOW ──────────────────────────────────────────────────── */}
-          <div className="flex-1 min-w-0 bg-card flex flex-col">
-            {!activeChat ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground bg-muted/10">
-                <MessageSquare className="w-12 h-12 opacity-20 mb-3" />
-                <p className="text-sm font-medium">Selecione uma conversa</p>
-                <p className="text-xs text-muted-foreground/60 mt-1">Escolha um contato ao lado para começar</p>
-              </div>
-            ) : (
-              <>
-                {/* Chat header */}
-                <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0 bg-card">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary text-sm font-bold">
-                      {(displayName(activeChat) || '?')[0].toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold leading-tight">{displayName(activeChat)}</p>
-                      <p className="text-[10px] text-muted-foreground font-mono">{activeChat.phone}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {activeAccount && <StatusDot status={activeAccount.status} />}
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setActiveChat(null)}>
-                      <X className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Messages */}
-                <div
-                  className="flex-1 overflow-y-auto p-4 space-y-1.5"
-                  style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, hsl(var(--border)) 1px, transparent 0)', backgroundSize: '24px 24px' }}
-                >
-                  {loadingMsgs ? (
-                    <div className="flex justify-center py-8">
-                      <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : messages.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
-                      <AlertCircle className="w-8 h-8 opacity-20 mb-2" />
-                      <p className="text-xs">Nenhuma mensagem</p>
-                    </div>
-                  ) : (
-                    messages.map(msg => (
-                      <div
-                        key={msg.id}
-                        className={cn('flex', msg.fromMe ? 'justify-end' : 'justify-start')}>
-                        <div className={cn(
-                          'max-w-[72%] px-3 py-2 rounded-2xl text-xs shadow-sm',
-                          msg.fromMe
-                            ? 'bg-primary text-primary-foreground rounded-br-sm'
-                            : 'bg-card text-foreground rounded-bl-sm border border-border/60'
-                        )}>
-                          <p className="leading-relaxed break-words whitespace-pre-wrap">{msg.body}</p>
-                          <p className={cn(
-                            'text-[10px] mt-0.5 text-right flex items-center justify-end gap-1',
-                            msg.fromMe ? 'text-primary-foreground/60' : 'text-muted-foreground'
-                          )}>
-                            {msg.timestamp > 0 && new Date(msg.timestamp * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                            {msg.fromMe && <CheckCheck className="w-3 h-3" />}
-                          </p>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                  <div ref={messagesEndRef} />
-                </div>
-
-                {/* Input area */}
-                <div className="px-4 py-3 border-t border-border flex-shrink-0 bg-card">
-                  {activeAccount?.type === 'evolution' && isConnected ? (
-                    <div className="flex items-center gap-2">
-                      <Input
-                        ref={inputRef}
-                        value={inputText}
-                        onChange={e => setInputText(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSend();
-                          }
-                        }}
-                        placeholder="Digite uma mensagem..."
-                        className="flex-1 h-10 text-sm bg-secondary border-border"
-                        disabled={sending}
-                      />
-                      <Button
-                        size="sm"
-                        className="h-10 w-10 p-0 bg-primary hover:bg-primary/90 flex-shrink-0"
-                        onClick={handleSend}
-                        disabled={sending || !inputText.trim()}>
-                        {sending
-                          ? <Loader2 className="w-4 h-4 animate-spin" />
-                          : <Send className="w-4 h-4" />}
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center gap-2 py-1">
-                      <AlertCircle className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-[11px] text-muted-foreground">
-                        {activeAccount?.type === 'meta'
-                          ? 'Envio via Meta API não disponível nesta versão'
-                          : 'Instância desconectada — conecte via QR Code para enviar mensagens'}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </>
+        {/* ════ COLUMN 2 — CONVERSATIONS ════════════════════════════════════ */}
+        <div className="w-[260px] flex-shrink-0 bg-card border-r border-border flex flex-col">
+          {/* Header */}
+          <div className="px-3 py-2.5 border-b border-border flex-shrink-0 flex items-center justify-between gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground truncate">
+              {activeInstance
+                ? (activeInstance.profileName || activeInstance.name)
+                : 'Conversas'}
+            </p>
+            {activeInstance && isConnected && (
+              <button
+                onClick={() => loadChats(activeInstance.name)}
+                className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0">
+                <RefreshCw className="w-3 h-3" />
+              </button>
             )}
           </div>
+
+          {/* Search */}
+          <div className="px-3 py-2 border-b border-border flex-shrink-0">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <Input
+                value={chatSearch}
+                onChange={e => setChatSearch(e.target.value)}
+                placeholder="Buscar conversa..."
+                className="h-8 text-xs pl-7 bg-secondary border-border"
+              />
+            </div>
+          </div>
+
+          {/* List */}
+          <div className="flex-1 overflow-y-auto">
+            {!activeInstance && (
+              <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+                <Smartphone className="w-7 h-7 opacity-20 mb-2" />
+                <p className="text-xs">Selecione uma instância</p>
+              </div>
+            )}
+            {activeInstance && !isConnected && (
+              <div className="flex flex-col items-center justify-center py-10 text-muted-foreground px-3 text-center">
+                <WifiOff className="w-7 h-7 opacity-20 mb-2" />
+                <p className="text-xs mb-2">Instância offline</p>
+                <Button size="sm" variant="outline" className="text-xs h-7 border-border gap-1"
+                  onClick={() => setQrInstanceName(activeInstance.name)}>
+                  <QrCode className="w-3 h-3" /> Conectar
+                </Button>
+              </div>
+            )}
+            {isConnected && loadingChats && (
+              <div className="flex items-center justify-center gap-2 p-6 text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" /><span className="text-xs">Carregando...</span>
+              </div>
+            )}
+            {isConnected && !loadingChats && filteredChats.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+                <MessageSquare className="w-7 h-7 opacity-20 mb-2" />
+                <p className="text-xs">Nenhuma conversa</p>
+              </div>
+            )}
+            {filteredChats.map(chat => (
+              <button
+                key={chat.id}
+                onClick={() => setActiveChat(chat)}
+                className={cn(
+                  'w-full flex items-start gap-2.5 px-3 py-3 text-left border-b border-border/40 transition-colors',
+                  activeChat?.id === chat.id ? 'bg-primary/10 border-l-2 border-l-primary' : 'hover:bg-muted/30 border-l-2 border-l-transparent'
+                )}>
+                <div className="relative flex-shrink-0 mt-0.5">
+                  <AvatarInitials name={displayName(chat)} size="sm" />
+                  {chat.unread > 0 && (
+                    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-success border-2 border-background" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-1 mb-0.5">
+                    <p className={cn('text-xs font-semibold truncate', chat.unread > 0 ? 'text-foreground' : 'text-foreground/80')}>
+                      {displayName(chat)}
+                    </p>
+                    <span className="text-[10px] text-muted-foreground flex-shrink-0">
+                      {chat.lastMessageTs
+                        ? new Date(chat.lastMessageTs * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+                        : ''}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-1">
+                    <p className="text-[11px] text-muted-foreground truncate">{chat.lastMessage || chat.phone}</p>
+                    {chat.unread > 0 && (
+                      <span className="flex-shrink-0 min-w-[18px] h-[18px] rounded-full bg-success text-white text-[10px] flex items-center justify-center font-bold px-1">
+                        {chat.unread > 99 ? '99+' : chat.unread}
+                      </span>
+                    )}
+                  </div>
+                  {chat.name && chat.name !== chat.phone && (
+                    <p className="text-[10px] text-muted-foreground/50 font-mono truncate">{chat.phone}</p>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
-      )}
+
+        {/* ════ COLUMN 3 — MESSAGES ═════════════════════════════════════════ */}
+        <div className="flex-1 min-w-0 flex flex-col bg-muted/5">
+          {!activeChat ? (
+            <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
+              <MessageSquare className="w-14 h-14 opacity-15 mb-3" />
+              <p className="text-sm font-medium">Selecione uma conversa</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">Escolha uma conversa ao lado para visualizar as mensagens</p>
+            </div>
+          ) : (
+            <>
+              {/* Chat header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0 bg-card">
+                <div className="flex items-center gap-3">
+                  <AvatarInitials name={displayName(activeChat)} size="sm" />
+                  <div>
+                    <p className="text-sm font-semibold leading-tight">{displayName(activeChat)}</p>
+                    <p className="text-[10px] text-muted-foreground font-mono">{activeChat.phone}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground"
+                    onClick={() => loadMessages(activeInstance!.name, activeChat.remoteJid, false)}>
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { setActiveChat(null); setMessages([]); }}>
+                    <X className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Messages area */}
+              <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1.5">
+                {loadingMsgs ? (
+                  <div className="flex justify-center py-10">
+                    <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : messages.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
+                    <AlertCircle className="w-8 h-8 opacity-20 mb-2" />
+                    <p className="text-xs">Nenhuma mensagem nesta conversa</p>
+                  </div>
+                ) : (
+                  messages.map(msg => (
+                    <div key={msg.id} className={cn('flex', msg.fromMe ? 'justify-end' : 'justify-start')}>
+                      <div className={cn(
+                        'max-w-[68%] px-3 py-2 rounded-2xl text-xs shadow-sm',
+                        msg.fromMe
+                          ? 'bg-primary text-primary-foreground rounded-br-sm'
+                          : 'bg-card text-foreground rounded-bl-sm border border-border/60'
+                      )}>
+                        <p className="leading-relaxed break-words whitespace-pre-wrap">{msg.body}</p>
+                        <p className={cn(
+                          'text-[10px] mt-0.5 text-right flex items-center justify-end gap-1',
+                          msg.fromMe ? 'text-primary-foreground/60' : 'text-muted-foreground'
+                        )}>
+                          {msg.timestamp > 0 && new Date(msg.timestamp * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          {msg.fromMe && <CheckCheck className="w-3 h-3" />}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Input */}
+              <div className="px-4 py-3 border-t border-border flex-shrink-0 bg-card">
+                {isConnected ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      ref={inputRef}
+                      value={inputText}
+                      onChange={e => setInputText(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                      placeholder="Digite uma mensagem..."
+                      className="flex-1 h-10 text-sm bg-secondary border-border"
+                      disabled={sending}
+                    />
+                    <Button
+                      size="sm"
+                      className="h-10 w-10 p-0 flex-shrink-0"
+                      onClick={handleSend}
+                      disabled={sending || !inputText.trim()}>
+                      {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-2 py-1">
+                    <AlertCircle className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-[11px] text-muted-foreground">Instância offline — conecte via QR Code para enviar</span>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+      </div>
 
       {/* Modals */}
       {qrInstanceName && <QRCodeModal instanceName={qrInstanceName} onClose={() => setQrInstanceName(null)} />}
-      {showAddMeta && <AddMetaModal onClose={() => setShowAddMeta(false)} onSave={handleAddMeta} />}
       {showCreateInst && <CreateInstanceModal onClose={() => setShowCreateInst(false)} onCreated={refetchEvo} />}
     </div>
   );
