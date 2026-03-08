@@ -18,6 +18,7 @@ import AdminPage from "@/pages/AdminPage";
 import ReportsPage from "@/pages/ReportsPage";
 import TrainingPage from "@/pages/TrainingPage";
 import AIConfigPage from "@/pages/AIConfigPage";
+import PerformancePage from "@/pages/PerformancePage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
