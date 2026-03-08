@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import {
   MessageSquare, Search, WifiOff, QrCode,
   RefreshCcw, Shield, AlertCircle, X, Loader2,
-  Smartphone, RefreshCw, Plus, CheckCheck,
+  Smartphone, RefreshCw, Plus, CheckCheck, Send,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -21,7 +21,7 @@ const EVOLUTION_API_URL = 'https://evolutionapic.contato-lojavirtual.com';
 const EVOLUTION_API_TOKEN = '3ce7a42f9bd96ea526b2b0bc39a4faec';
 const META_CONNECTIONS_KEY = 'meta_wa_connections';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface MetaConnection {
   id: string;
   label: string;
@@ -58,7 +58,7 @@ interface Message {
   timestamp: number;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 async function evoFetch(path: string, options: RequestInit = {}) {
   const res = await fetch(`${EVOLUTION_API_URL}${path}`, {
     ...options,
@@ -79,7 +79,7 @@ function saveMetaConnections(c: MetaConnection[]) {
   localStorage.setItem(META_CONNECTIONS_KEY, JSON.stringify(c));
 }
 
-// ─── QR Code Modal ───────────────────────────────────────────────────────────
+// ─── QR Code Modal ────────────────────────────────────────────────────────────
 function QRCodeModal({ instanceName, onClose }: { instanceName: string; onClose: () => void }) {
   const { toast } = useToast();
   const [qrBase64, setQrBase64] = useState<string | null>(null);
@@ -131,7 +131,7 @@ function QRCodeModal({ instanceName, onClose }: { instanceName: string; onClose:
   );
 }
 
-// ─── Create Instance Modal ───────────────────────────────────────────────────
+// ─── Create Instance Modal ────────────────────────────────────────────────────
 function CreateInstanceModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const { toast } = useToast();
   const [name, setName] = useState('');
@@ -184,7 +184,7 @@ function CreateInstanceModal({ onClose, onCreated }: { onClose: () => void; onCr
   );
 }
 
-// ─── Add Meta Modal ──────────────────────────────────────────────────────────
+// ─── Add Meta Modal ───────────────────────────────────────────────────────────
 function AddMetaModal({ onClose, onSave }: { onClose: () => void; onSave: (c: MetaConnection) => void }) {
   const { toast } = useToast();
   const [form, setForm] = useState({ label: '', token: '', phoneNumberId: '', businessId: '' });
@@ -242,7 +242,7 @@ function AddMetaModal({ onClose, onSave }: { onClose: () => void; onSave: (c: Me
   );
 }
 
-// ─── Status Dot ──────────────────────────────────────────────────────────────
+// ─── Status Dot ───────────────────────────────────────────────────────────────
 const StatusDot = ({ status }: { status: string }) => {
   const isOpen = status === 'open' || status === 'connected';
   const isWaiting = status === 'connecting' || status === 'qrcode';
@@ -254,7 +254,7 @@ const StatusDot = ({ status }: { status: string }) => {
   );
 };
 
-// ─── Main Page ───────────────────────────────────────────────────────────────
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function WhatsAppPage() {
   const { user, hasRole } = useAuth();
   const { toast } = useToast();
@@ -266,6 +266,7 @@ export default function WhatsAppPage() {
   const [showCreateInst, setShowCreateInst] = useState(false);
   const [qrInstanceName, setQrInstanceName] = useState<string | null>(null);
   const [teamFilter, setTeamFilter] = useState<string>('all');
+  const [adminTab, setAdminTab] = useState<'chat' | 'instances'>('chat');
 
   // Build unified account list
   const allAccounts: UnifiedAccount[] = [
@@ -303,8 +304,10 @@ export default function WhatsAppPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [search, setSearch] = useState('');
-  const [adminTab, setAdminTab] = useState<'chat' | 'instances'>('chat');
+  const [inputText, setInputText] = useState('');
+  const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Auto-select first account
   useEffect(() => {
@@ -328,7 +331,7 @@ export default function WhatsAppPage() {
     setMessages([]);
   }, [activeAccountId]);
 
-  // Resolve real phone from @lid JID using lastMessage alt fields
+  // Resolve real phone from @lid JID
   const resolvePhone = (c: any): string => {
     const jid: string = c.remoteJid || '';
     if (!jid.includes('@lid')) return jid.replace(/@.*/, '');
@@ -377,7 +380,7 @@ export default function WhatsAppPage() {
           });
         }
       }
-      setChats(Array.from(phoneMap.values()).slice(0, 80));
+      setChats(Array.from(phoneMap.values()).slice(0, 100));
     } catch {
       setChats([]);
     } finally {
@@ -425,7 +428,6 @@ export default function WhatsAppPage() {
       const parsed: Message[] = raw
         .filter((m: any) => {
           if (m.messageType === 'protocolMessage' || m.messageType === 'reactionMessage') return false;
-          // Safety: only messages from this exact chat (handles @lid via remoteJidAlt)
           const kr: string = m.key?.remoteJid || '';
           const krAlt: string = m.key?.remoteJidAlt || '';
           return kr === remoteJid || krAlt === remoteJid;
@@ -450,22 +452,47 @@ export default function WhatsAppPage() {
     finally { if (scroll) setLoadingMsgs(false); }
   };
 
-  // Real-time poll every 5 seconds
+  // Real-time poll every 3 seconds
   useEffect(() => {
     if (!activeChat || !activeAccount || activeAccount.type !== 'evolution') return;
     const inst = activeAccount.raw as EvolutionInstance;
     if (inst.connectionStatus !== 'open') return;
     const timer = setInterval(
       () => loadEvoMessages(inst.name, activeChat.remoteJid, false),
-      5000
+      3000
     );
     return () => clearInterval(timer);
   }, [activeChat?.id, activeAccountId]);
 
-  // Auto-scroll
+  // Auto-scroll on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // ─── Send message ───────────────────────────────────────────────────────────
+  const handleSend = async () => {
+    const text = inputText.trim();
+    if (!text || !activeChat || !activeAccount || activeAccount.type !== 'evolution') return;
+    const inst = activeAccount.raw as EvolutionInstance;
+    setSending(true);
+    try {
+      await evoFetch(`/message/sendText/${inst.name}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          number: activeChat.remoteJid,
+          text,
+        }),
+      });
+      setInputText('');
+      // Reload messages immediately after sending
+      await loadEvoMessages(inst.name, activeChat.remoteJid, false);
+      inputRef.current?.focus();
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro ao enviar mensagem', description: e.message });
+    } finally {
+      setSending(false);
+    }
+  };
 
   const handleAddMeta = (conn: MetaConnection) => {
     const updated = [...metaConns, conn];
@@ -482,6 +509,8 @@ export default function WhatsAppPage() {
   const displayName = (c: Chat) =>
     c.name && c.name !== c.phone ? c.name : c.phone;
 
+  const onlineCount = allAccounts.filter(a => a.status === 'open' || a.status === 'connected').length;
+
   return (
     <div className="page-container animate-fade-in h-[calc(100vh-56px)] flex flex-col">
       {/* Header */}
@@ -489,7 +518,7 @@ export default function WhatsAppPage() {
         <div>
           <h1 className="text-2xl font-display font-bold">WhatsApp</h1>
           <p className="text-sm text-muted-foreground">
-            {allAccounts.filter(a => a.status === 'open' || a.status === 'connected').length} online · {allAccounts.length} total
+            {onlineCount} online · {allAccounts.length} total
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -527,10 +556,9 @@ export default function WhatsAppPage() {
         </div>
       </div>
 
-      {/* ── Instances Tab (Admin) ─────────────────────────────────────────────── */}
+      {/* ── Instances Tab ──────────────────────────────────────────────────────── */}
       {isAdmin && adminTab === 'instances' && (
         <div className="flex-1 overflow-y-auto space-y-5">
-          {/* Team filter */}
           <div className="flex gap-1.5 flex-wrap">
             {[{ id: 'all', name: 'Todos os Times' }, ...MOCK_TEAMS].map(t => (
               <button
@@ -547,7 +575,6 @@ export default function WhatsAppPage() {
             ))}
           </div>
 
-          {/* Evolution instances grid */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
@@ -605,7 +632,6 @@ export default function WhatsAppPage() {
             </div>
           </div>
 
-          {/* Meta connections */}
           {metaConns.length > 0 && (
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
@@ -632,44 +658,48 @@ export default function WhatsAppPage() {
         </div>
       )}
 
-      {/* ── Chat Tab ─────────────────────────────────────────────────────────── */}
+      {/* ── Chat Tab ───────────────────────────────────────────────────────────── */}
       {(!isAdmin || adminTab === 'chat') && (
-        <div className="flex-1 flex gap-4 min-h-0">
-          {/* Sidebar: accounts + chat list */}
-          <div className="w-72 flex-shrink-0 glass-card flex flex-col min-h-0">
+        <div className="flex-1 flex gap-0 min-h-0 rounded-xl overflow-hidden border border-border">
+
+          {/* ── LEFT SIDEBAR ─────────────────────────────────────────────────── */}
+          <div className="w-[300px] flex-shrink-0 bg-card flex flex-col min-h-0 border-r border-border">
+
             {/* Account selector */}
-            <div className="p-2 border-b border-border space-y-1 flex-shrink-0 max-h-36 overflow-y-auto">
+            <div className="flex-shrink-0 border-b border-border">
               {allAccounts.map(acc => (
                 <button
                   key={acc.id}
                   onClick={() => setActiveAccountId(acc.id)}
                   className={cn(
-                    'w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left transition-colors',
-                    activeAccountId === acc.id ? 'bg-primary/10 text-primary' : 'hover:bg-muted/50 text-foreground'
+                    'w-full flex items-center gap-2.5 px-3 py-2.5 text-left transition-colors',
+                    activeAccountId === acc.id ? 'bg-primary/10 border-l-2 border-l-primary' : 'hover:bg-muted/40 border-l-2 border-l-transparent'
                   )}>
-                  {acc.avatarUrl
-                    ? <img src={acc.avatarUrl} className="w-6 h-6 rounded-full border border-border object-cover flex-shrink-0" alt="" />
-                    : <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center flex-shrink-0 text-[10px] font-bold">
-                        {(acc.name || '?')[0]}
-                      </div>}
+                  <div className="relative flex-shrink-0">
+                    {acc.avatarUrl
+                      ? <img src={acc.avatarUrl} className="w-8 h-8 rounded-full border border-border object-cover" alt="" />
+                      : <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold">
+                          {(acc.name || '?')[0]}
+                        </div>}
+                    <StatusDot status={acc.status} />
+                  </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[11px] font-semibold truncate">{acc.name}</p>
+                    <p className="text-xs font-semibold truncate">{acc.name}</p>
                     <p className="text-[10px] text-muted-foreground font-mono truncate">{acc.phone}</p>
                   </div>
-                  <StatusDot status={acc.status} />
                 </button>
               ))}
             </div>
 
             {/* Search */}
-            <div className="p-2 border-b border-border flex-shrink-0">
+            <div className="px-3 py-2 border-b border-border flex-shrink-0">
               <div className="relative">
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                 <Input
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   placeholder="Buscar conversa..."
-                  className="h-7 text-[11px] pl-6 bg-secondary border-border"
+                  className="h-8 text-xs pl-7 bg-secondary border-border"
                 />
               </div>
             </div>
@@ -677,15 +707,15 @@ export default function WhatsAppPage() {
             {/* Chat list */}
             <div className="flex-1 overflow-y-auto">
               {isConnected && loadingChats && (
-                <div className="flex items-center justify-center gap-2 p-4 text-muted-foreground">
+                <div className="flex items-center justify-center gap-2 p-6 text-muted-foreground">
                   <Loader2 className="w-4 h-4 animate-spin" />
                   <span className="text-xs">Carregando...</span>
                 </div>
               )}
-              {!isConnected && (
-                <div className="p-4 text-center">
+              {!isConnected && !loadingChats && (
+                <div className="p-6 text-center">
                   <WifiOff className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
-                  <p className="text-xs text-muted-foreground mb-2">Instância desconectada</p>
+                  <p className="text-xs text-muted-foreground mb-3">Instância desconectada</p>
                   {activeAccount?.type === 'evolution' && (
                     <Button
                       size="sm" variant="outline" className="text-xs border-border gap-1 h-7"
@@ -695,17 +725,17 @@ export default function WhatsAppPage() {
                   )}
                 </div>
               )}
+
               {filteredChats.map(chat => (
                 <div
                   key={chat.id}
                   onClick={() => setActiveChat(chat)}
                   className={cn(
-                    'flex items-start gap-3 p-3 border-b border-border/50 cursor-pointer hover:bg-muted/30 transition-colors',
+                    'flex items-start gap-3 px-3 py-3 border-b border-border/40 cursor-pointer hover:bg-muted/30 transition-colors',
                     activeChat?.id === chat.id && 'bg-muted/50'
                   )}>
-                  {/* Avatar with unread indicator */}
                   <div className="relative flex-shrink-0">
-                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary text-sm font-bold">
                       {(displayName(chat) || '?')[0].toUpperCase()}
                     </div>
                     {chat.unread > 0 && (
@@ -713,8 +743,8 @@ export default function WhatsAppPage() {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1">
-                      <p className={cn('text-xs font-semibold truncate', chat.unread > 0 && 'text-foreground')}>
+                    <div className="flex items-center justify-between gap-1 mb-0.5">
+                      <p className={cn('text-xs font-semibold truncate', chat.unread > 0 ? 'text-foreground' : 'text-foreground/80')}>
                         {displayName(chat)}
                       </p>
                       <span className="text-[10px] text-muted-foreground flex-shrink-0">
@@ -724,22 +754,19 @@ export default function WhatsAppPage() {
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-1">
-                      <p className="text-[11px] text-muted-foreground truncate">{chat.lastMessage}</p>
+                      <p className="text-[11px] text-muted-foreground truncate leading-snug">{chat.lastMessage || chat.phone}</p>
                       {chat.unread > 0 && (
                         <span className="flex-shrink-0 min-w-[18px] h-[18px] rounded-full bg-success text-white text-[10px] flex items-center justify-center font-bold px-1">
                           {chat.unread > 99 ? '99+' : chat.unread}
                         </span>
                       )}
                     </div>
-                    {/* Show phone as subtitle when contact has a name */}
-                    {chat.name && chat.name !== chat.phone && (
-                      <p className="text-[10px] text-muted-foreground/60 font-mono">{chat.phone}</p>
-                    )}
                   </div>
                 </div>
               ))}
+
               {isConnected && !loadingChats && filteredChats.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
                   <MessageSquare className="w-8 h-8 opacity-30 mb-2" />
                   <p className="text-xs">Nenhuma conversa</p>
                 </div>
@@ -747,23 +774,24 @@ export default function WhatsAppPage() {
             </div>
           </div>
 
-          {/* Chat window (read-only) */}
-          <div className="flex-1 min-w-0 glass-card flex flex-col">
+          {/* ── CHAT WINDOW ──────────────────────────────────────────────────── */}
+          <div className="flex-1 min-w-0 bg-card flex flex-col">
             {!activeChat ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
+              <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground bg-muted/10">
                 <MessageSquare className="w-12 h-12 opacity-20 mb-3" />
-                <p className="text-sm">Selecione uma conversa para visualizar</p>
+                <p className="text-sm font-medium">Selecione uma conversa</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">Escolha um contato ao lado para começar</p>
               </div>
             ) : (
               <>
-                {/* Header */}
-                <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
+                {/* Chat header */}
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0 bg-card">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center text-sm font-bold border border-border">
+                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary text-sm font-bold">
                       {(displayName(activeChat) || '?')[0].toUpperCase()}
                     </div>
                     <div>
-                      <p className="text-sm font-semibold">{displayName(activeChat)}</p>
+                      <p className="text-sm font-semibold leading-tight">{displayName(activeChat)}</p>
                       <p className="text-[10px] text-muted-foreground font-mono">{activeChat.phone}</p>
                     </div>
                   </div>
@@ -775,8 +803,11 @@ export default function WhatsAppPage() {
                   </div>
                 </div>
 
-                {/* Messages (read-only) */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                {/* Messages */}
+                <div
+                  className="flex-1 overflow-y-auto p-4 space-y-1.5"
+                  style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, hsl(var(--border)) 1px, transparent 0)', backgroundSize: '24px 24px' }}
+                >
                   {loadingMsgs ? (
                     <div className="flex justify-center py-8">
                       <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -792,15 +823,15 @@ export default function WhatsAppPage() {
                         key={msg.id}
                         className={cn('flex', msg.fromMe ? 'justify-end' : 'justify-start')}>
                         <div className={cn(
-                          'max-w-[70%] px-3 py-2 rounded-2xl text-xs',
+                          'max-w-[72%] px-3 py-2 rounded-2xl text-xs shadow-sm',
                           msg.fromMe
-                            ? 'bg-primary text-primary-foreground rounded-tr-sm'
-                            : 'bg-secondary text-foreground rounded-tl-sm'
+                            ? 'bg-primary text-primary-foreground rounded-br-sm'
+                            : 'bg-card text-foreground rounded-bl-sm border border-border/60'
                         )}>
-                          <p className="leading-relaxed break-words">{msg.body}</p>
+                          <p className="leading-relaxed break-words whitespace-pre-wrap">{msg.body}</p>
                           <p className={cn(
-                            'text-[10px] mt-1 text-right flex items-center justify-end gap-1',
-                            msg.fromMe ? 'text-primary-foreground/70' : 'text-muted-foreground'
+                            'text-[10px] mt-0.5 text-right flex items-center justify-end gap-1',
+                            msg.fromMe ? 'text-primary-foreground/60' : 'text-muted-foreground'
                           )}>
                             {msg.timestamp > 0 && new Date(msg.timestamp * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                             {msg.fromMe && <CheckCheck className="w-3 h-3" />}
@@ -812,10 +843,44 @@ export default function WhatsAppPage() {
                   <div ref={messagesEndRef} />
                 </div>
 
-                {/* Read-only notice */}
-                <div className="px-4 py-2 border-t border-border flex-shrink-0 bg-muted/30 flex items-center justify-center gap-2">
-                  <AlertCircle className="w-3.5 h-3.5 text-muted-foreground" />
-                  <span className="text-[11px] text-muted-foreground">Visualização somente leitura — responda diretamente no WhatsApp do vendedor</span>
+                {/* Input area */}
+                <div className="px-4 py-3 border-t border-border flex-shrink-0 bg-card">
+                  {activeAccount?.type === 'evolution' && isConnected ? (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        ref={inputRef}
+                        value={inputText}
+                        onChange={e => setInputText(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSend();
+                          }
+                        }}
+                        placeholder="Digite uma mensagem..."
+                        className="flex-1 h-10 text-sm bg-secondary border-border"
+                        disabled={sending}
+                      />
+                      <Button
+                        size="sm"
+                        className="h-10 w-10 p-0 bg-primary hover:bg-primary/90 flex-shrink-0"
+                        onClick={handleSend}
+                        disabled={sending || !inputText.trim()}>
+                        {sending
+                          ? <Loader2 className="w-4 h-4 animate-spin" />
+                          : <Send className="w-4 h-4" />}
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center gap-2 py-1">
+                      <AlertCircle className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-[11px] text-muted-foreground">
+                        {activeAccount?.type === 'meta'
+                          ? 'Envio via Meta API não disponível nesta versão'
+                          : 'Instância desconectada — conecte via QR Code para enviar mensagens'}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </>
             )}
