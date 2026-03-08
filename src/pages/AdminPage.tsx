@@ -126,11 +126,14 @@ export default function AdminPage() {
                       <p className="text-sm font-medium">{u.name}</p>
                       <p className="text-xs text-muted-foreground">{u.email}</p>
                     </div>
-                    <select className="text-xs bg-secondary border border-border rounded-lg px-2 py-1 text-foreground">
-                      <option value="admin"      selected={u.role === 'admin'}>Admin</option>
-                      <option value="director"   selected={u.role === 'director'}>Diretor</option>
-                      <option value="supervisor" selected={u.role === 'supervisor'}>Supervisor</option>
-                      <option value="member"     selected={u.role === 'member'}>Vendedor</option>
+                    <select
+                      defaultValue={u.role}
+                      className="text-xs bg-secondary border border-border rounded-lg px-2 py-1 text-foreground"
+                    >
+                      <option value="admin">Admin</option>
+                      <option value="director">Diretor</option>
+                      <option value="supervisor">Supervisor</option>
+                      <option value="member">Vendedor</option>
                     </select>
                     <span className={cn('w-2 h-2 rounded-full', u.status === 'active' ? 'bg-success' : 'bg-muted-foreground')} />
                   </div>
