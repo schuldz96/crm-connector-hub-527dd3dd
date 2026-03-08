@@ -392,15 +392,9 @@ export default function WhatsAppPage() {
   const loadEvoMessages = async (instanceName: string, remoteJid: string, scroll = false) => {
     if (scroll) setLoadingMsgs(true);
     try {
-      // Evolution API: use chatId (remoteJid of the chat) to fetch all messages in a thread,
-      // including received ones. The "where.key.remoteJid" only matches the top-level key field,
-      // but received messages use @lid JIDs. Use "where.chatId" instead which covers both sides.
-      const body: any = { limit: 50 };
-
-      // Try both strategies to capture all messages (sent + received)
       const data = await evoFetch(`/chat/findMessages/${instanceName}`, {
         method: 'POST',
-        body: JSON.stringify({ ...body, where: { chatId: remoteJid } }),
+        body: JSON.stringify({ where: { key: { remoteJid } }, limit: 50 }),
       });
 
       const raw: any[] = Array.isArray(data?.messages?.records)
