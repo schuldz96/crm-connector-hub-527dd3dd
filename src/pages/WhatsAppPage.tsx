@@ -12,13 +12,13 @@ import {
 import { cn } from '@/lib/utils';
 
 const TAG_COLORS: Record<string, string> = {
-  'quente': 'bg-red-500/15 text-red-400 border-red-500/20',
-  'morno': 'bg-yellow-500/15 text-yellow-400 border-yellow-500/20',
-  'frio': 'bg-blue-500/15 text-blue-400 border-blue-500/20',
-  'fechado': 'bg-green-500/15 text-green-400 border-green-500/20',
-  'demo': 'bg-purple-500/15 text-purple-400 border-purple-500/20',
-  'fechamento': 'bg-orange-500/15 text-orange-400 border-orange-500/20',
-  'objeção-preço': 'bg-red-500/15 text-red-400 border-red-500/20',
+  'quente': 'bg-destructive/10 text-destructive border-destructive/20',
+  'morno': 'bg-warning/10 text-warning border-warning/20',
+  'frio': 'bg-info/10 text-info border-info/20',
+  'fechado': 'bg-success/10 text-success border-success/20',
+  'demo': 'bg-primary/10 text-primary border-primary/20',
+  'fechamento': 'bg-accent/10 text-accent border-accent/20',
+  'objeção-preço': 'bg-destructive/10 text-destructive border-destructive/20',
 };
 
 function InstanceCard({ instance, active, onClick }: any) {

@@ -220,7 +220,7 @@ export default function DashboardPage() {
                     </span>
                   )}
                   {m.aiAnalyzed && (
-                    <Brain className="w-3.5 h-3.5 text-accent" title="Analisado por IA" />
+                    <Brain className="w-3.5 h-3.5 text-accent" aria-label="Analisado por IA" />
                   )}
                   <span className={statusStyle[m.status]}>{statusLabel[m.status]}</span>
                 </div>
