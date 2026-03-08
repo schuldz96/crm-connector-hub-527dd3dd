@@ -215,11 +215,27 @@ export default function WhatsAppPage() {
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
 
   // resolvePhone: for @lid JIDs, use the @lid number itself as the unique identifier.
-  // DO NOT use remoteJidAlt — that field contains the INSTANCE OWNER's JID, not the contact's.
+  // resolvePhone: extracts the numeric identifier from the JID for deduplication purposes only.
+  // For @lid JIDs this will be the LID number (used as map key only, not displayed).
   const resolvePhone = (c: any): string => {
     const jid: string = c.remoteJid || '';
-    // Strip the @domain suffix to get the numeric identifier
     return jid.replace(/@.*/, '');
+  };
+
+  // getRealPhone: returns the real phone number to display.
+  // Priority: API fields > extract from @s.whatsapp.net JID > fallback to LID number.
+  const getRealPhone = (c: any): string => {
+    // Some Evolution API responses include the real phone directly
+    if (c.phone) return String(c.phone).replace(/\D/g, '');
+    if (c.number) return String(c.number).replace(/\D/g, '');
+    if (c.contact?.phone) return String(c.contact.phone).replace(/\D/g, '');
+    const jid: string = c.remoteJid || '';
+    if (!jid.includes('@lid')) {
+      // @s.whatsapp.net — the number IS the phone
+      return jid.replace(/@.*/, '');
+    }
+    // @lid — we don't have the real phone yet, return empty (will be updated on merge)
+    return '';
   };
 
 
@@ -250,9 +266,6 @@ export default function WhatsAppPage() {
       });
       const raw: any[] = Array.isArray(data) ? data : (data?.chats || []);
 
-      // Deduplicate by phone — prefer @lid JID as primary (it has both sent+received)
-      // Key insight: Evolution stores received msgs under @lid and sent under @s.whatsapp.net
-      // We must query BOTH. Always keep @lid as remoteJid and phone JID as remoteJidAlt.
       const phoneMap = new Map<string, Chat>();
       for (const c of raw) {
         const phone = resolvePhone(c);
@@ -263,20 +276,19 @@ export default function WhatsAppPage() {
 
         const jid: string = c.remoteJid || c.id || '';
         const isLid = jid.includes('@lid');
-        const phoneJid = phone ? `${phone}@s.whatsapp.net` : undefined;
+
+        // Real phone to display: use getRealPhone which prefers @s.whatsapp.net or API fields
+        const realPhone = getRealPhone(c);
 
         const existing = phoneMap.get(phone);
 
         if (!existing) {
-          // displayPhone: for @lid use phoneJid number (real phone), for @s.whatsapp.net use phone directly
-          const displayPhone = isLid ? (phoneJid?.replace(/@.*/, '') || phone) : phone;
           phoneMap.set(phone, {
             id: jid,
             remoteJid: jid,
-            // For @lid chats, remoteJidAlt = phone JID; for phone JID chats, remoteJidAlt = undefined (not needed)
-            remoteJidAlt: isLid ? phoneJid : undefined,
-            phone: displayPhone,
-            name: c.name || c.pushName || c.lastMessage?.pushName || displayPhone || 'Desconhecido',
+            remoteJidAlt: undefined,
+            phone: realPhone || phone, // use real phone if available, else LID number as fallback
+            name: c.name || c.pushName || c.lastMessage?.pushName || realPhone || phone || 'Desconhecido',
             lastMessage:
               c.lastMessage?.message?.conversation ||
               c.lastMessage?.message?.extendedTextMessage?.text ||
@@ -302,13 +314,13 @@ export default function WhatsAppPage() {
             // New entry is @lid — upgrade primary JID to @lid, keep phone JID as alt
             mergedEntry.remoteJid = jid;
             mergedEntry.id = jid;
-            mergedEntry.remoteJidAlt = existing.remoteJid; // save the old @s.whatsapp.net as alt
+            mergedEntry.remoteJidAlt = existing.remoteJid;
             // existing.phone already has the real phone number (from @s.whatsapp.net)
             mergedEntry.phone = existing.phone;
           } else if (!isLid && existingIsLid) {
-            // Existing is @lid (preferred) — store new phone JID as alt, update phone to real number
+            // Existing is @lid — store new phone JID as alt, update phone to real number from @s.whatsapp.net
             mergedEntry.remoteJidAlt = jid;
-            mergedEntry.phone = phone; // phone here is extracted from @s.whatsapp.net = real number
+            mergedEntry.phone = realPhone || phone; // phone from @s.whatsapp.net is always real
           }
           phoneMap.set(phone, mergedEntry);
         }
