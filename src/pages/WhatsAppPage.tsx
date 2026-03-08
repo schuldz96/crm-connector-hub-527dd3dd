@@ -201,6 +201,7 @@ export default function WhatsAppPage() {
   const [instStatusFilter, setInstStatusFilter] = useState<InstStatusFilter>('all');
   const [instSortKey, setInstSortKey] = useState<InstSortKey>('recent');
   const [instSortDir, setInstSortDir] = useState<SortDir>('desc');
+  const [instTeamFilter, setInstTeamFilter] = useState<string>('all');
 
   // Filter instances for non-admins
   const baseInstances = evoInstances.filter(i => {
@@ -208,18 +209,27 @@ export default function WhatsAppPage() {
     return true;
   });
 
+  // Helper: find team for an instance by looking up the assigned user's teamId
+  const getInstTeamId = (instName: string): string | null => {
+    const assignedUser = MOCK_USERS.find(u => getInstanceForUser(u.id) === instName);
+    return assignedUser?.teamId ?? null;
+  };
+
   const visibleInstances = (() => {
     let list = baseInstances.filter(i => {
       if (instStatusFilter === 'connected') return i.connectionStatus === 'open';
       if (instStatusFilter === 'disconnected') return i.connectionStatus !== 'open';
       return true;
+    }).filter(i => {
+      if (instTeamFilter === 'all') return true;
+      if (instTeamFilter === 'unassigned') return !getInstTeamId(i.name);
+      return getInstTeamId(i.name) === instTeamFilter;
     });
     list = [...list].sort((a, b) => {
       let cmp = 0;
       if (instSortKey === 'alpha') {
         cmp = (a.profileName || a.name).localeCompare(b.profileName || b.name, 'pt-BR');
       } else {
-        // recent: sort by connected first, then by message count as proxy
         cmp = (b._count?.Message || 0) - (a._count?.Message || 0);
       }
       return instSortDir === 'asc' ? -cmp : cmp;
