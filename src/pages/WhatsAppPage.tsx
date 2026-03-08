@@ -324,6 +324,15 @@ export default function WhatsAppPage() {
     setMessages([]);
   }, [activeInstance?.name]);
 
+  // Poll chat list every 10s to update unread counts and new conversations
+  useEffect(() => {
+    if (!activeInstance || activeInstance.connectionStatus !== 'open') return;
+    const t = setInterval(() => loadChats(activeInstance.name), 10000);
+    return () => clearInterval(t);
+  }, [activeInstance?.name, activeInstance?.connectionStatus]);
+
+
+
   const filteredChats = chats.filter(c =>
     c.name.toLowerCase().includes(chatSearch.toLowerCase()) ||
     c.phone.includes(chatSearch) ||
@@ -593,45 +602,51 @@ export default function WhatsAppPage() {
                 <p className="text-xs">Nenhuma conversa</p>
               </div>
             )}
-            {filteredChats.map(chat => (
+            {filteredChats.map(chat => {
+              const hasUnread = activeChat?.id !== chat.id && chat.unread > 0;
+              return (
               <button
                 key={chat.id}
-                onClick={() => setActiveChat(chat)}
+                onClick={() => {
+                  setActiveChat(chat);
+                  // Zero unread badge visually when opening the chat
+                  setChats(prev => prev.map(c => c.id === chat.id ? { ...c, unread: 0 } : c));
+                }}
                 className={cn(
                   'w-full flex items-start gap-2.5 px-3 py-3 text-left border-b border-border/40 transition-colors',
                   activeChat?.id === chat.id ? 'bg-primary/10 border-l-2 border-l-primary' : 'hover:bg-muted/30 border-l-2 border-l-transparent'
                 )}>
                 <div className="relative flex-shrink-0 mt-0.5">
                   <AvatarInitials name={displayName(chat)} size="sm" />
-                  {chat.unread > 0 && (
-                    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-success border-2 border-background" />
+                  {hasUnread && (
+                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-destructive border-2 border-background flex items-center justify-center text-[9px] text-white font-bold px-0.5">
+                      {chat.unread > 99 ? '99+' : chat.unread}
+                    </span>
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1 mb-0.5">
-                    <p className={cn('text-xs font-semibold truncate', chat.unread > 0 ? 'text-foreground' : 'text-foreground/80')}>
+                    <p className={cn('text-xs font-semibold truncate', hasUnread ? 'text-foreground' : 'text-foreground/80')}>
                       {displayName(chat)}
                     </p>
-                    <span className="text-[10px] text-muted-foreground flex-shrink-0">
+                    <span className={cn('text-[10px] flex-shrink-0', hasUnread ? 'text-destructive font-semibold' : 'text-muted-foreground')}>
                       {chat.lastMessageTs
                         ? new Date(chat.lastMessageTs * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
                         : ''}
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-1">
-                    <p className="text-[11px] text-muted-foreground truncate">{chat.lastMessage || chat.phone}</p>
-                    {chat.unread > 0 && (
-                      <span className="flex-shrink-0 min-w-[18px] h-[18px] rounded-full bg-success text-white text-[10px] flex items-center justify-center font-bold px-1">
-                        {chat.unread > 99 ? '99+' : chat.unread}
-                      </span>
-                    )}
+                    <p className={cn('text-[11px] truncate', hasUnread ? 'text-foreground font-medium' : 'text-muted-foreground')}>
+                      {chat.lastMessage || chat.phone}
+                    </p>
                   </div>
                   {chat.name && chat.name !== chat.phone && (
                     <p className="text-[10px] text-muted-foreground/50 font-mono truncate">{chat.phone}</p>
                   )}
                 </div>
               </button>
-            ))}
+              );
+            })}
           </div>
         </div>
 
