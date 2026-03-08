@@ -6,10 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Plus, Brain, Trophy, Clock, Target,
-  X, Play, Sparkles, CheckCircle2, AlertTriangle,
+  X, Play, Sparkles, CheckCircle2,
   BookOpen, BarChart3, Mic, MicOff, Volume2, VolumeX,
-  Settings, Key, Eye, EyeOff, PhoneOff, Phone,
-  Loader2, Waves, MessageSquare
+  Key, Eye, EyeOff, PhoneOff, Phone,
+  Loader2, Waves, MessageSquare, ListChecks, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -24,8 +24,16 @@ interface TrainingScenario {
   avoidPoints: string[];
   difficulty: 'easy' | 'medium' | 'hard';
   persona: string;
+  script: ScriptStep[];
   createdBy: string;
   createdAt: string;
+}
+
+interface ScriptStep {
+  phase: string;
+  duration: string;
+  goal: string;
+  tips: string[];
 }
 
 interface TrainingSession {
@@ -45,6 +53,190 @@ interface VoiceMessage {
   content: string;
   timestamp: string;
 }
+
+// ─── Scripts por cenário ──────────────────────────────────────────────────────
+const SCRIPTS: Record<string, ScriptStep[]> = {
+  sc_001: [
+    {
+      phase: '1. Abertura',
+      duration: '0–3 min',
+      goal: 'Criar rapport e contextualizar a ligação',
+      tips: [
+        'Se apresente: nome, empresa e motivo do contato',
+        'Pergunte se tem 5 minutinhos disponíveis',
+        '"Tô ligando porque vi que você usa processadora de pagamentos e queria entender um pouco da sua operação"',
+      ],
+    },
+    {
+      phase: '2. Levantamento de Dados',
+      duration: '3–12 min',
+      goal: 'Coletar informações da operação antes de qualquer proposta',
+      tips: [
+        'Volume mensal processado (TPV)',
+        'Ticket médio e principais bandeiras (Visa, Master, Amex)',
+        'Taxa de aprovação atual e chargeback',
+        'Plataforma de e-commerce usada',
+        '"Qual taxa você paga hoje no crédito à vista?"',
+      ],
+    },
+    {
+      phase: '3. Apresentação de Valor',
+      duration: '12–22 min',
+      goal: 'Mostrar diferencial além da taxa',
+      tips: [
+        'Citar aprovação acima da média do mercado (Appmax ~87% vs ~80%)',
+        'Recuperação automática de carrinho abandonado',
+        'Retentativa inteligente de pagamento',
+        'Antifraude por IA + análise humana',
+        '"Além de taxa, o que mais te preocupa na operação?"',
+      ],
+    },
+    {
+      phase: '4. Negociação e Fechamento',
+      duration: '22–30 min',
+      goal: 'Propor revisão com base nos números levantados',
+      tips: [
+        'Só negocie taxa depois de conhecer o volume',
+        'Ancoragem: "Com esse volume, consigo levar uma proposta personalizada"',
+        'Propor próximo passo: demo, proposta ou trial',
+        '"Posso te mandar uma proposta ainda hoje com base nesse volume?"',
+      ],
+    },
+  ],
+  sc_002: [
+    {
+      phase: '1. Abertura Fria',
+      duration: '0–3 min',
+      goal: 'Despertar curiosidade sem parecer spam',
+      tips: [
+        'Seja direto: "Você tem 3 minutinhos? Tenho um dado interessante sobre aprovação de pagamentos."',
+        'Não fale de preço na abertura',
+        'Personalize: mencione a plataforma ou nicho dela',
+      ],
+    },
+    {
+      phase: '2. Qualificação',
+      duration: '3–10 min',
+      goal: 'Entender a operação e identificar a dor',
+      tips: [
+        'Volume mensal e tipo de produto (curso, mentoria, assinatura)',
+        'Taxa de aprovação atual — "De cada 10 vendas, quantas aprovam?"',
+        'Tem carrinho abandonado? Retentativa automática?',
+        'Plataforma atual: Hotmart, Kiwify, Eduzz?',
+      ],
+    },
+    {
+      phase: '3. Despertar a Dor',
+      duration: '10–18 min',
+      goal: 'Fazer o cliente perceber o que está perdendo',
+      tips: [
+        '"Se você aprova 75% e a gente aprova 87%, são X vendas a mais por mês"',
+        'Falar de recuperação de carrinho: média de 15–20% de recuperação',
+        '"Você já tentou entrar em contato com quem abandonou o checkout?"',
+      ],
+    },
+    {
+      phase: '4. Próximo Passo',
+      duration: '18–30 min',
+      goal: 'Converter curiosidade em reunião ou demo',
+      tips: [
+        'Proponha uma demo de 20 minutos',
+        '"Posso te mostrar quanto você estaria ganhando a mais com nossa aprovação"',
+        'Ou ofereça trial de 30 dias com integração gratuita',
+      ],
+    },
+  ],
+  sc_003: [
+    {
+      phase: '1. Boas-vindas e Escuta',
+      duration: '0–5 min',
+      goal: 'Entender as dúvidas e deixar o cliente à vontade',
+      tips: [
+        '"Seja bem-vindo! Você acabou de ativar a conta, certo? Quais são suas principais dúvidas?"',
+        'Escute sem interromper',
+        'Anote as dúvidas antes de responder',
+      ],
+    },
+    {
+      phase: '2. Integração',
+      duration: '5–15 min',
+      goal: 'Explicar as opções de forma simples',
+      tips: [
+        'Plugin nativo (Shopify, WooCommerce): mais fácil, sem código',
+        'API: para quem tem time técnico',
+        'Link de pagamento: solução rápida enquanto integra',
+        '"Qual plataforma você usa? Temos plugin nativo pra essa."',
+      ],
+    },
+    {
+      phase: '3. Financeiro e Saques',
+      duration: '15–22 min',
+      goal: 'Clareza sobre prazos e regras',
+      tips: [
+        'PIX: liquidação instantânea (D+0)',
+        'Crédito: D+2 após confirmação',
+        'Boleto: D+2 após compensação bancária',
+        '"Você pode acompanhar tudo em tempo real no dashboard."',
+      ],
+    },
+    {
+      phase: '4. Garantia e Suporte',
+      duration: '22–30 min',
+      goal: 'Transmitir segurança e eliminar medos',
+      tips: [
+        'Appmax é autorizada pelo Banco Central',
+        'Suporte técnico disponível por chat e e-mail',
+        'Ofereça agendar uma sessão de setup junto',
+        '"Se travar em qualquer etapa da integração, é só me chamar."',
+      ],
+    },
+  ],
+  sc_004: [
+    {
+      phase: '1. Escuta Ativa',
+      duration: '0–5 min',
+      goal: 'Deixar o cliente falar e validar a frustração',
+      tips: [
+        'Não se defenda na abertura',
+        '"Entendo sua insatisfação. Me conta o que aconteceu com mais detalhes."',
+        'Repita o que ele disse para mostrar que ouviu',
+      ],
+    },
+    {
+      phase: '2. Diagnóstico',
+      duration: '5–15 min',
+      goal: 'Descobrir a causa raiz da queda de aprovação',
+      tips: [
+        'Quando começou a queda?',
+        'Mudou algo: produto, plataforma, público, volume?',
+        'Qual % de reprovação é fraude vs insuficiência de limite?',
+        '"Você tem acesso ao dashboard de aprovação por bandeira?"',
+      ],
+    },
+    {
+      phase: '3. Apresentação de Solução',
+      duration: '15–22 min',
+      goal: 'Propor ações concretas, não promessas vagas',
+      tips: [
+        'Revisão de regras do antifraude (pode estar muito rígido)',
+        'Ajuste no checkout: order bump, PIX como primeiro método',
+        'Mostrar que aprovação média da Appmax é 87%',
+        'Oferecer acompanhamento semanal por 30 dias',
+      ],
+    },
+    {
+      phase: '4. Retenção',
+      duration: '22–30 min',
+      goal: 'Reverter o cancelamento com compromisso',
+      tips: [
+        '"Antes de você decidir, me dá 30 dias pra resolver isso juntos?"',
+        'Não ofereça desconto de taxa como primeira solução',
+        'Proponha uma call de revisão técnica com o time de performance',
+        '"A Cielo não tem recuperação de vendas nem checkout próprio."',
+      ],
+    },
+  ],
+};
 
 // ─── Mock data — Appmax ────────────────────────────────────────────────────────
 const MOCK_SCENARIOS: TrainingScenario[] = [
@@ -66,6 +258,7 @@ const MOCK_SCENARIOS: TrainingScenario[] = [
       'Prometer condições que precisam de aprovação sem alinhar internamente',
       'Ignorar a dor de perda de vendas por reprovação',
     ],
+    script: SCRIPTS.sc_001,
     difficulty: 'hard',
     persona: 'Ricardo, dono de e-commerce de moda feminina. Fatura R$180k/mês, ticket médio de R$220. Está com taxa de 3,2% no crédito e ouviu que um concorrente oferece 2,8%. É direto, fala rápido e quer números concretos.',
     createdBy: 'Appmax Training',
@@ -89,6 +282,7 @@ const MOCK_SCENARIOS: TrainingScenario[] = [
       'Gastar mais de 2 minutos sem fazer uma pergunta aberta',
       'Prometer funcionalidades sem confirmar se existem para o caso dele',
     ],
+    script: SCRIPTS.sc_002,
     difficulty: 'medium',
     persona: 'Fernanda, criadora de cursos online de nutrição. Vende entre R$40k e R$60k/mês, usa plataforma de infoproduto concorrente. Não está insatisfeita, mas se ouvir que perde vendas pode abrir espaço. É educada mas ocupada.',
     createdBy: 'Appmax Training',
@@ -112,6 +306,7 @@ const MOCK_SCENARIOS: TrainingScenario[] = [
       'Não oferecer suporte técnico ou materiais de apoio',
       'Ignorar perguntas sobre segurança e conformidade',
     ],
+    script: SCRIPTS.sc_003,
     difficulty: 'easy',
     persona: 'Carlos, dono de loja virtual de suplementos, 42 anos, não é técnico. Acabou de assinar com a Appmax mas está inseguro. Preocupado com "e se der erro na integração?" e "quando vou receber meu dinheiro?". Precisa de clareza e paciência.',
     createdBy: 'Appmax Training',
@@ -135,6 +330,7 @@ const MOCK_SCENARIOS: TrainingScenario[] = [
       'Deixar o cliente falar sem fazer perguntas de diagnóstico',
       'Ameaçar com multa contratual de cancelamento',
     ],
+    script: SCRIPTS.sc_004,
     difficulty: 'hard',
     persona: 'Alexandre, e-commerce de eletrônicos, fatura R$300k/mês. Taxa de aprovação caiu de 82% para 71% nos últimos 2 meses. Está irritado, já pesquisou concorrentes e tem uma reunião com a Cielo amanhã. Quer solução ou vai embora.',
     createdBy: 'Appmax Training',
@@ -302,6 +498,83 @@ function CreateScenarioModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+// ─── Script Panel ─────────────────────────────────────────────────────────────
+function ScriptPanel({ script, elapsedSeconds }: { script: ScriptStep[]; elapsedSeconds: number }) {
+  const [open, setOpen] = useState(true);
+  const totalSeconds = elapsedSeconds;
+  const minutes = Math.floor(totalSeconds / 60);
+
+  // Determine current phase based on elapsed time
+  const phaseRanges = [
+    { min: 0, max: 3 },
+    { min: 3, max: 12 },
+    { min: 12, max: 22 },
+    { min: 22, max: 30 },
+  ];
+  const currentPhaseIndex = phaseRanges.findIndex(r => minutes >= r.min && minutes < r.max);
+  const activeIndex = currentPhaseIndex === -1 ? script.length - 1 : currentPhaseIndex;
+
+  return (
+    <div className="flex flex-col bg-card border-l border-border w-72 flex-shrink-0 overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center justify-between px-3 py-2.5 border-b border-border hover:bg-muted/30 transition-colors"
+      >
+        <div className="flex items-center gap-1.5">
+          <ListChecks className="w-3.5 h-3.5 text-primary" />
+          <span className="text-xs font-semibold">Roteiro da Reunião</span>
+        </div>
+        {open ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+      </button>
+
+      {open && (
+        <div className="flex-1 overflow-y-auto p-2 space-y-2">
+          {script.map((step, i) => (
+            <div
+              key={i}
+              className={cn(
+                'rounded-lg border p-2.5 transition-all',
+                i === activeIndex
+                  ? 'border-primary/40 bg-primary/8'
+                  : i < activeIndex
+                  ? 'border-success/20 bg-success/5 opacity-60'
+                  : 'border-border bg-secondary/40 opacity-50'
+              )}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className={cn(
+                  'text-[10px] font-bold',
+                  i === activeIndex ? 'text-primary' : i < activeIndex ? 'text-success' : 'text-muted-foreground'
+                )}>
+                  {i < activeIndex ? '✓ ' : i === activeIndex ? '● ' : ''}{step.phase}
+                </span>
+                <span className="text-[9px] text-muted-foreground font-mono">{step.duration}</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground mb-1.5 leading-relaxed">{step.goal}</p>
+              {i === activeIndex && (
+                <ul className="space-y-1">
+                  {step.tips.map((tip, j) => (
+                    <li key={j} className="flex items-start gap-1 text-[9px] text-foreground/80">
+                      <span className="text-primary mt-0.5 flex-shrink-0">›</span>
+                      {tip}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+
+          <div className="mt-2 p-2 rounded-lg bg-muted/30 border border-border">
+            <p className="text-[9px] text-muted-foreground text-center">
+              Reunião padrão: <strong className="text-foreground">30 min</strong> · Tempo restante: <strong className={cn(elapsedSeconds > 25 * 60 ? 'text-destructive' : 'text-foreground')}>{Math.max(0, 30 - minutes)} min</strong>
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Voice Training Session ───────────────────────────────────────────────────
 type CallState = 'idle' | 'connecting' | 'listening' | 'processing' | 'speaking' | 'finished';
 
@@ -332,12 +605,21 @@ function VoiceTrainingSession({
   const historyRef = useRef<{ role: string; content: string }[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Timer
+  // Timer — auto-end at 30 min
   useEffect(() => {
     if (callState !== 'idle' && callState !== 'finished') {
-      timerRef.current = setInterval(() => setElapsedSeconds(s => s + 1), 1000);
+      timerRef.current = setInterval(() => {
+        setElapsedSeconds(s => {
+          if (s >= 30 * 60 - 1) {
+            endSession();
+            return s;
+          }
+          return s + 1;
+        });
+      }, 1000);
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callState]);
 
   useEffect(() => {
@@ -346,9 +628,9 @@ function VoiceTrainingSession({
 
   const formatTime = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 
-  // Build system prompt
+  // Build system prompt — AI is the CLIENT, stays reactive, does NOT lead
   const buildSystemPrompt = () => `
-Você é um cliente sendo abordado por um vendedor da Appmax, uma fintech brasileira de processamento de pagamentos para e-commerce e infoprodutos.
+Você é um CLIENTE sendo abordado por um vendedor da Appmax, uma fintech brasileira de processamento de pagamentos para e-commerce e infoprodutos.
 
 ━━━ SUA PERSONA ━━━
 ${scenario.persona}
@@ -366,34 +648,19 @@ A Appmax é uma processadora de pagamentos focada em e-commerce e negócios digi
 - Integrações com plataformas de e-commerce e infoprodutos
 - Autorizada pelo Banco Central do Brasil
 
-━━━ O QUE VOCÊ PODE PERGUNTAR AO VENDEDOR ━━━
-- Taxas de cartão de crédito (crédito à vista, parcelado, débito)
-- Taxa de PIX e boleto
-- Prazo de saque (D+2 crédito, D+0 PIX)
-- Como funciona o antifraude
-- Integrações disponíveis com plataformas (Shopify, WooCommerce, Hotmart, Kiwify etc.)
-- Taxa de chargeback e como a Appmax ajuda
-- Limite de transações ou volume mínimo
-- Suporte técnico e onboarding
-- Comparação com concorrentes (Pagar.me, Cielo, PagSeguro, Stripe, Mercado Pago)
-
-━━━ O QUE VOCÊ NÃO FAZ ━━━
-- Não fala sobre assuntos fora do contexto de pagamentos e e-commerce
-- Não toma decisões no primeiro contato sem pensar (seja realista)
-- Não aceita promessas vagas — exige números e prazos concretos
-- Não revela sua taxa atual facilmente — o vendedor precisa perguntar
-- Não simula ser técnico se sua persona for leiga em tecnologia
-
-━━━ REGRAS DO ROLEPLAY ━━━
-- Fale APENAS como o cliente descrito na sua persona. NUNCA quebre o personagem.
-- Responda de forma natural, como numa ligação ou reunião de vendas real.
-- Seja cético mas aberto: não ceda fácil, mas também não seja impossível.
-- Mantenha respostas curtas (2-4 frases) para simular ritmo de conversa real.
-- Faça perguntas que um dono de e-commerce faria naturalmente.
-- Após 7-9 trocas, encerre naturalmente: "Vou pensar e te retorno", "Me manda uma proposta" ou "Pode marcar uma demo".
+━━━ REGRAS CRÍTICAS DE COMPORTAMENTO ━━━
+- Você é o CLIENTE. O vendedor conduz a conversa. Você REAGE, não lidera.
+- Responda ao que o vendedor perguntou ou disse. Não mude de assunto por conta própria.
+- Respostas CURTAS: máximo 2 frases. Seja direto como uma conversa telefônica real.
+- NÃO faça mais de UMA pergunta por resposta. Geralmente nenhuma — espere o vendedor puxar a conversa.
+- Só faça perguntas se o vendedor apresentar algo que gera dúvida natural (ex: "que taxa é essa?").
+- NÃO interrompa o fluxo com perguntas encadeadas. Deixe o vendedor seguir o roteiro dele.
+- Seja cético mas receptivo. Não ceda fácil, mas não seja impossível.
+- Fale como dono de e-commerce real: prático, direto, sem jargões financeiros.
+- Após 10–12 trocas OU se o vendedor propuser próximo passo, encerre naturalmente: "Me manda uma proposta", "Vou pensar", "Pode marcar a demo".
+- NUNCA quebre o personagem, nunca mencione IA ou treinamento.
 - Responda SEMPRE em português brasileiro informal.
-- NUNCA mencione que é IA, simulação ou treinamento.
-- Se o vendedor cometer erros (dar desconto sem entender o volume, prometer sem checar), reaja como um cliente real ficaria: desconfiante ou explorador.
+- Se o vendedor cometer erros óbvios (prometer desconto sem saber o volume), reaja com ceticismo mas não encerre a conversa.
   `.trim();
 
   // Speak text via Web Speech Synthesis
@@ -408,7 +675,6 @@ A Appmax é uma processadora de pagamentos focada em e-commerce e negócios digi
     utter.rate = 1.0;
     utter.pitch = 1.0;
 
-    // Try to find a Portuguese voice
     const voices = synth.getVoices();
     const ptVoice = voices.find(v => v.lang.startsWith('pt')) || voices[0];
     if (ptVoice) utter.voice = ptVoice;
@@ -438,8 +704,8 @@ A Appmax é uma processadora de pagamentos focada em e-commerce e negócios digi
             { role: 'system', content: buildSystemPrompt() },
             ...historyRef.current,
           ],
-          max_tokens: 200,
-          temperature: 0.8,
+          max_tokens: 120, // Keep responses short
+          temperature: 0.75,
         }),
       });
 
@@ -459,9 +725,9 @@ A Appmax é uma processadora de pagamentos focada em e-commerce e negócios digi
         timestamp: new Date().toISOString(),
       }]);
 
-      // Check if session should end (after many turns or AI signals end)
-      const isEnd = historyRef.current.filter(m => m.role === 'user').length >= 9 ||
-        /encerr|finaliz|próxima reunião|obrigado pela conversa|até logo|me manda a proposta|vou pensar|retorno pra você|manda o contrato/i.test(reply);
+      const userTurns = historyRef.current.filter(m => m.role === 'user').length;
+      const isEnd = userTurns >= 12 ||
+        /encerr|finaliz|próxima reunião|obrigado pela conversa|até logo|me manda a proposta|vou pensar|retorno pra você|manda o contrato|pode marcar/i.test(reply);
 
       if (isEnd) {
         setCallState('speaking');
@@ -476,6 +742,7 @@ A Appmax é uma processadora de pagamentos focada em e-commerce e negócios digi
       setCallState('listening');
       startListening();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey, speak]);
 
   // Request final evaluation from OpenAI
@@ -525,7 +792,7 @@ Responda em JSON com:
           model: 'gpt-4o-mini',
           messages: [{ role: 'user', content: evalPrompt }],
           response_format: { type: 'json_object' },
-          max_tokens: 200,
+          max_tokens: 250,
         }),
       });
       const data = await res.json();
@@ -596,7 +863,7 @@ Responda em JSON com:
     };
 
     recognition.start();
-  }, [callOpenAI, callState]);
+  }, [callOpenAI, callState, toast]);
 
   // Start call
   const startCall = useCallback(async () => {
@@ -611,12 +878,10 @@ Responda em JSON com:
       return;
     }
 
-    // Initial AI greeting
     historyRef.current = [];
     setTranscript([]);
     setElapsedSeconds(0);
 
-    // Generate a natural greeting based on the scenario context
     const greetings: Record<string, string> = {
       sc_001: 'Alô? Oi, pode falar.',
       sc_002: 'Oi, tudo bem? Com quem eu tô falando?',
@@ -631,7 +896,7 @@ Responda em JSON com:
     setCallState('speaking');
 
     speak(greeting, () => startListening());
-  }, [apiKey, scenario, speak, startListening, onNeedKey]);
+  }, [apiKey, scenario, speak, startListening, onNeedKey, toast]);
 
   // Finished screen
   if (callState === 'finished' && finalScore !== null) {
@@ -706,233 +971,216 @@ Responda em JSON com:
 
   // ── Main call interface ──
   return (
-    <div className="flex flex-col h-full">
-      {/* Top bar */}
-      <div className="px-4 py-3 border-b border-border bg-secondary/30 flex items-center justify-between flex-shrink-0">
-        <div className="flex-1">
-          <p className="text-xs font-semibold">{scenario.title}</p>
-          <p className="text-[11px] text-muted-foreground">{scenario.persona}</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex flex-wrap gap-1 max-w-[200px]">
-            {scenario.focusPoints.slice(0, 2).map((p, i) => (
-              <span key={i} className="text-[9px] px-1.5 py-0.5 rounded-full bg-success/10 text-success border border-success/20">{p}</span>
-            ))}
+    <div className="flex h-full">
+      {/* Left: call area */}
+      <div className="flex flex-col flex-1 min-w-0">
+        {/* Top bar */}
+        <div className="px-4 py-2.5 border-b border-border bg-secondary/30 flex items-center justify-between flex-shrink-0">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold truncate">{scenario.title}</p>
+            <p className="text-[10px] text-muted-foreground truncate">{scenario.persona.split('.')[0]}</p>
           </div>
-          {/* Timer */}
-          {callState !== 'idle' && (
-            <span className="text-xs font-mono font-semibold text-foreground tabular-nums">
-              {formatTime(elapsedSeconds)}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Main area */}
-      <div className="flex-1 flex flex-col items-center justify-center gap-6 p-6 relative overflow-hidden">
-
-        {/* Status label */}
-        <div className="absolute top-4 left-0 right-0 flex justify-center">
-          <span className={cn(
-            'text-xs font-medium px-3 py-1 rounded-full border transition-all',
-            callState === 'idle' ? 'bg-muted/50 border-border text-muted-foreground' :
-            callState === 'connecting' ? 'bg-warning/10 border-warning/20 text-warning' :
-            callState === 'listening' ? 'bg-success/10 border-success/20 text-success' :
-            callState === 'processing' ? 'bg-primary/10 border-primary/20 text-primary' :
-            callState === 'speaking' ? 'bg-accent/10 border-accent/20 text-accent' : 'bg-muted border-border text-muted-foreground'
-          )}>
-            {{
-              idle: '● Aguardando início',
-              connecting: '◉ Conectando...',
-              listening: '🎙 Ouvindo você...',
-              processing: '⚡ IA processando...',
-              speaking: '🔊 Cliente respondendo...',
-              finished: '✓ Encerrado',
-            }[callState]}
-          </span>
-        </div>
-
-        {/* AI avatar with pulse animation */}
-        <div className="relative">
-          {/* Outer pulse rings */}
-          {(callState === 'speaking') && (
-            <>
-              <div className="absolute inset-0 rounded-full bg-accent/20 animate-ping scale-150" />
-              <div className="absolute inset-0 rounded-full bg-accent/10 animate-ping scale-125" style={{ animationDelay: '0.3s' }} />
-            </>
-          )}
-          {callState === 'listening' && (
-            <>
-              <div className="absolute inset-0 rounded-full bg-success/20 animate-ping scale-150" />
-              <div className="absolute inset-0 rounded-full bg-success/10 animate-ping scale-125" style={{ animationDelay: '0.5s' }} />
-            </>
-          )}
-          <div className={cn(
-            'w-28 h-28 rounded-full flex flex-col items-center justify-center transition-all duration-300 relative z-10 border-4',
-            callState === 'idle' ? 'bg-secondary border-border' :
-            callState === 'listening' ? 'bg-success/15 border-success/40' :
-            callState === 'processing' ? 'bg-primary/15 border-primary/40' :
-            callState === 'speaking' ? 'bg-accent/15 border-accent/40' :
-            callState === 'connecting' ? 'bg-warning/15 border-warning/40' : 'bg-secondary border-border'
-          )}>
-            <span className="text-4xl select-none">🧑‍💼</span>
+          <div className="flex items-center gap-3 ml-3">
+            {callState !== 'idle' && (
+              <span className="text-xs font-mono font-semibold text-foreground tabular-nums">
+                {formatTime(elapsedSeconds)}
+                <span className="text-[9px] text-muted-foreground ml-1">/ 30:00</span>
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Live transcript */}
-        <div className="w-full max-w-lg min-h-[80px] flex flex-col items-center justify-center gap-2">
-          {/* Last AI message */}
-          {transcript.length > 0 && callState === 'speaking' && (
-            <div className="w-full p-3 rounded-xl bg-accent/8 border border-accent/20 text-center">
-              <p className="text-xs text-muted-foreground font-semibold mb-1">Cliente:</p>
-              <p className="text-sm text-foreground leading-relaxed">
-                {transcript.filter(m => m.role === 'assistant').slice(-1)[0]?.content}
-              </p>
-            </div>
-          )}
+        {/* Main area */}
+        <div className="flex-1 flex flex-col items-center justify-center gap-5 p-5 relative overflow-hidden">
 
-          {/* Processing */}
-          {callState === 'processing' && (
-            <div className="flex items-center gap-2 text-primary">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span className="text-xs">Processando resposta...</span>
-            </div>
-          )}
-
-          {/* Live user speech */}
-          {callState === 'listening' && (
-            <div className="w-full">
-              {liveText ? (
-                <div className="p-3 rounded-xl bg-success/8 border border-success/20 text-center">
-                  <p className="text-xs text-muted-foreground font-semibold mb-1">Você:</p>
-                  <p className="text-sm text-foreground leading-relaxed italic">{liveText}</p>
-                </div>
-              ) : (
-                <div className="flex items-center justify-center gap-2 text-success">
-                  <Waves className="w-4 h-4" />
-                  <span className="text-xs">Fale agora...</span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Controls */}
-        <div className="flex items-center gap-4">
-          {callState === 'idle' ? (
-            <Button
-              size="lg"
-              className="bg-gradient-primary rounded-full w-16 h-16 p-0 shadow-lg hover:scale-105 transition-transform"
-              onClick={startCall}
-            >
-              <Phone className="w-6 h-6" />
-            </Button>
-          ) : (
-            <>
-              {/* Mute */}
-              <button
-                onClick={() => setIsMuted(m => !m)}
-                className={cn(
-                  'w-12 h-12 rounded-full border flex items-center justify-center transition-all',
-                  isMuted
-                    ? 'bg-destructive/15 border-destructive/30 text-destructive'
-                    : 'bg-secondary border-border text-muted-foreground hover:bg-muted'
-                )}
-                title={isMuted ? 'Ativar voz da IA' : 'Silenciar voz da IA'}
-              >
-                {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-              </button>
-
-              {/* Mic button */}
-              <button
-              onClick={() => {
-                if (callState === 'listening') {
-                  recognitionRef.current?.stop();
-                  setCallState('connecting');
-                } else {
-                  startListening();
-                }
-              }}
-              disabled={callState === 'processing' || callState === 'connecting' || callState === 'speaking'}
-                className={cn(
-                  'w-20 h-20 rounded-full flex items-center justify-center transition-all shadow-lg relative',
-                  callState === 'listening'
-                    ? 'bg-success text-white scale-110 shadow-success/40'
-                    : 'bg-primary text-primary-foreground hover:scale-105',
-                  (callState === 'processing' || callState === 'connecting' || callState === 'speaking') && 'opacity-40 cursor-not-allowed scale-100'
-                )}
-                title={callState === 'listening' ? 'Clique para parar' : 'Clique para falar'}
-              >
-                {callState === 'listening' ? (
-                  <MicOff className="w-7 h-7" />
-                ) : (
-                  <Mic className="w-7 h-7" />
-                )}
-              </button>
-
-              {/* End call */}
-              <button
-                onClick={endSession}
-                className="w-12 h-12 rounded-full bg-destructive/15 border border-destructive/30 text-destructive flex items-center justify-center hover:bg-destructive/25 transition-all"
-                title="Encerrar simulação"
-              >
-                <PhoneOff className="w-4 h-4" />
-              </button>
-            </>
-          )}
-        </div>
-
-        {/* Hint */}
-        {callState === 'idle' && (
-          <p className="text-xs text-muted-foreground text-center max-w-xs">
-            Clique em <strong>Iniciar</strong> para começar a simulação.<br />
-            O cliente vai falar primeiro, depois você responde pelo microfone.
-          </p>
-        )}
-
-        {callState === 'speaking' && (
-          <p className="text-xs text-muted-foreground/60 text-center">
-            Aguarde o cliente terminar de falar...
-          </p>
-        )}
-
-        {/* Turn counter */}
-        {transcript.length > 0 && callState !== 'finished' && (
-          <div className="absolute bottom-4 left-0 right-0 flex justify-center">
-            <span className="text-[10px] text-muted-foreground/50">
-              {transcript.filter(m => m.role === 'user').length} turnos · {transcript.filter(m => m.role === 'user').length >= 8 ? 'Próximo turno encerra' : `restam ~${8 - transcript.filter(m => m.role === 'user').length}`}
+          {/* Status label */}
+          <div className="absolute top-3 left-0 right-0 flex justify-center">
+            <span className={cn(
+              'text-xs font-medium px-3 py-1 rounded-full border transition-all',
+              callState === 'idle' ? 'bg-muted/50 border-border text-muted-foreground' :
+              callState === 'connecting' ? 'bg-warning/10 border-warning/20 text-warning' :
+              callState === 'listening' ? 'bg-success/10 border-success/20 text-success' :
+              callState === 'processing' ? 'bg-primary/10 border-primary/20 text-primary' :
+              callState === 'speaking' ? 'bg-accent/10 border-accent/20 text-accent' : 'bg-muted border-border text-muted-foreground'
+            )}>
+              {{
+                idle: '● Aguardando início',
+                connecting: '◉ Conectando...',
+                listening: '🎙 Ouvindo você...',
+                processing: '⚡ Processando...',
+                speaking: '🔊 Cliente respondendo...',
+                finished: '✓ Encerrado',
+              }[callState]}
             </span>
           </div>
-        )}
-      </div>
 
-      {/* Collapsible transcript */}
-      <div className="border-t border-border flex-shrink-0">
-        <button
-          onClick={() => setShowTranscript(s => !s)}
-          className="w-full flex items-center justify-between px-4 py-2 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
-        >
-          <div className="flex items-center gap-1.5">
-            <MessageSquare className="w-3 h-3" />
-            Transcrição ({transcript.length} mensagens)
+          {/* AI avatar */}
+          <div className="relative">
+            {callState === 'speaking' && (
+              <>
+                <div className="absolute inset-0 rounded-full bg-accent/20 animate-ping scale-150" />
+                <div className="absolute inset-0 rounded-full bg-accent/10 animate-ping scale-125" style={{ animationDelay: '0.3s' }} />
+              </>
+            )}
+            {callState === 'listening' && (
+              <>
+                <div className="absolute inset-0 rounded-full bg-success/20 animate-ping scale-150" />
+                <div className="absolute inset-0 rounded-full bg-success/10 animate-ping scale-125" style={{ animationDelay: '0.5s' }} />
+              </>
+            )}
+            <div className={cn(
+              'w-24 h-24 rounded-full flex flex-col items-center justify-center transition-all duration-300 relative z-10 border-4',
+              callState === 'idle' ? 'bg-secondary border-border' :
+              callState === 'listening' ? 'bg-success/15 border-success/40' :
+              callState === 'processing' ? 'bg-primary/15 border-primary/40' :
+              callState === 'speaking' ? 'bg-accent/15 border-accent/40' :
+              callState === 'connecting' ? 'bg-warning/15 border-warning/40' : 'bg-secondary border-border'
+            )}>
+              <span className="text-4xl select-none">🧑‍💼</span>
+            </div>
           </div>
-          <span>{showTranscript ? '▲' : '▼'}</span>
-        </button>
-        {showTranscript && (
-          <div className="max-h-48 overflow-y-auto px-4 pb-3 space-y-2">
-            {transcript.map((msg, i) => (
-              <div key={i} className={cn('flex gap-2', msg.role === 'user' ? 'flex-row-reverse' : 'flex-row')}>
-                <div className={cn('max-w-[80%] px-3 py-2 rounded-xl text-xs',
-                  msg.role === 'user' ? 'bg-primary/10 text-primary rounded-tr-sm' : 'bg-secondary text-muted-foreground rounded-tl-sm border border-border')}>
-                  <span className="font-semibold block text-[10px] mb-0.5">{msg.role === 'user' ? 'Você' : 'Cliente'}</span>
-                  {msg.content}
-                </div>
+
+          {/* Live feedback area */}
+          <div className="w-full max-w-md min-h-[70px] flex flex-col items-center justify-center gap-2">
+            {transcript.length > 0 && callState === 'speaking' && (
+              <div className="w-full p-3 rounded-xl bg-accent/8 border border-accent/20 text-center">
+                <p className="text-xs text-muted-foreground font-semibold mb-0.5">Cliente:</p>
+                <p className="text-sm text-foreground leading-relaxed">
+                  {transcript.filter(m => m.role === 'assistant').slice(-1)[0]?.content}
+                </p>
               </div>
-            ))}
-            <div ref={bottomRef} />
+            )}
+
+            {callState === 'processing' && (
+              <div className="flex items-center gap-2 text-primary">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="text-xs">Processando resposta...</span>
+              </div>
+            )}
+
+            {callState === 'listening' && (
+              <div className="w-full">
+                {liveText ? (
+                  <div className="p-3 rounded-xl bg-success/8 border border-success/20 text-center">
+                    <p className="text-xs text-muted-foreground font-semibold mb-0.5">Você:</p>
+                    <p className="text-sm text-foreground leading-relaxed italic">{liveText}</p>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-2 text-success">
+                    <Waves className="w-4 h-4" />
+                    <span className="text-xs">Fale agora...</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        )}
+
+          {/* Controls */}
+          <div className="flex items-center gap-4">
+            {callState === 'idle' ? (
+              <Button
+                size="lg"
+                className="bg-gradient-primary rounded-full w-16 h-16 p-0 shadow-lg hover:scale-105 transition-transform"
+                onClick={startCall}
+              >
+                <Phone className="w-6 h-6" />
+              </Button>
+            ) : (
+              <>
+                <button
+                  onClick={() => setIsMuted(m => !m)}
+                  className={cn(
+                    'w-11 h-11 rounded-full border flex items-center justify-center transition-all',
+                    isMuted
+                      ? 'bg-destructive/15 border-destructive/30 text-destructive'
+                      : 'bg-secondary border-border text-muted-foreground hover:bg-muted'
+                  )}
+                  title={isMuted ? 'Ativar voz da IA' : 'Silenciar voz da IA'}
+                >
+                  {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (callState === 'listening') {
+                      recognitionRef.current?.stop();
+                      setCallState('connecting');
+                    } else {
+                      startListening();
+                    }
+                  }}
+                  disabled={callState === 'processing' || callState === 'connecting' || callState === 'speaking'}
+                  className={cn(
+                    'w-18 h-18 rounded-full flex items-center justify-center transition-all shadow-lg relative',
+                    callState === 'listening'
+                      ? 'bg-success text-white scale-110 shadow-success/40'
+                      : 'bg-primary text-primary-foreground hover:scale-105',
+                    (callState === 'processing' || callState === 'connecting' || callState === 'speaking') && 'opacity-40 cursor-not-allowed scale-100'
+                  )}
+                  style={{ width: 72, height: 72 }}
+                  title={callState === 'listening' ? 'Clique para parar' : 'Clique para falar'}
+                >
+                  {callState === 'listening' ? <MicOff className="w-7 h-7" /> : <Mic className="w-7 h-7" />}
+                </button>
+
+                <button
+                  onClick={endSession}
+                  className="w-11 h-11 rounded-full bg-destructive/15 border border-destructive/30 text-destructive flex items-center justify-center hover:bg-destructive/25 transition-all"
+                  title="Encerrar simulação"
+                >
+                  <PhoneOff className="w-4 h-4" />
+                </button>
+              </>
+            )}
+          </div>
+
+          {callState === 'idle' && (
+            <p className="text-xs text-muted-foreground text-center max-w-xs">
+              Clique em <strong>Iniciar</strong> para começar.<br />
+              O cliente atende, você conduz a conversa.
+            </p>
+          )}
+
+          {callState === 'speaking' && (
+            <p className="text-xs text-muted-foreground/50 text-center">
+              Aguarde o cliente terminar...
+            </p>
+          )}
+        </div>
+
+        {/* Collapsible transcript */}
+        <div className="border-t border-border flex-shrink-0">
+          <button
+            onClick={() => setShowTranscript(s => !s)}
+            className="w-full flex items-center justify-between px-4 py-2 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors"
+          >
+            <div className="flex items-center gap-1.5">
+              <MessageSquare className="w-3 h-3" />
+              Transcrição ({transcript.length} mensagens)
+            </div>
+            <span>{showTranscript ? '▲' : '▼'}</span>
+          </button>
+          {showTranscript && (
+            <div className="max-h-40 overflow-y-auto px-4 pb-3 space-y-2">
+              {transcript.map((msg, i) => (
+                <div key={i} className={cn('flex gap-2', msg.role === 'user' ? 'flex-row-reverse' : 'flex-row')}>
+                  <div className={cn('max-w-[80%] px-3 py-2 rounded-xl text-xs',
+                    msg.role === 'user' ? 'bg-primary/10 text-primary rounded-tr-sm' : 'bg-secondary text-muted-foreground rounded-tl-sm border border-border')}>
+                    <span className="font-semibold block text-[10px] mb-0.5">{msg.role === 'user' ? 'Você' : 'Cliente'}</span>
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+              <div ref={bottomRef} />
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Right: script panel */}
+      {scenario.script && scenario.script.length > 0 && (
+        <ScriptPanel script={scenario.script} elapsedSeconds={elapsedSeconds} />
+      )}
     </div>
   );
 }
@@ -952,7 +1200,6 @@ export default function TrainingPage() {
   const [activeSession, setActiveSession] = useState<TrainingScenario | null>(null);
   const [showCreate, setShowCreate] = useState(false);
 
-  // Always use the training token from AppConfig context
   const apiKey = tokens.training;
 
   const myHistory = MOCK_SESSIONS.filter(s => s.userId === user?.id || isAdmin);
@@ -974,7 +1221,7 @@ export default function TrainingPage() {
             </button>
             <div>
               <h1 className="text-lg font-display font-bold">{activeSession.title}</h1>
-              <p className="text-xs text-muted-foreground">Simulação por voz em tempo real</p>
+              <p className="text-xs text-muted-foreground">Simulação por voz · 30 min</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1077,14 +1324,36 @@ export default function TrainingPage() {
                   <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center flex-shrink-0">
                     <Brain className="w-5 h-5 text-accent" />
                   </div>
-                  <span className={cn('text-[10px] px-2 py-0.5 rounded-full border font-medium', DIFF_CONFIG[scenario.difficulty].class)}>
-                    {DIFF_CONFIG[scenario.difficulty].label}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                      <Clock className="w-3 h-3" /> 30 min
+                    </span>
+                    <span className={cn('text-[10px] px-2 py-0.5 rounded-full border font-medium', DIFF_CONFIG[scenario.difficulty].class)}>
+                      {DIFF_CONFIG[scenario.difficulty].label}
+                    </span>
+                  </div>
                 </div>
                 <div>
                   <h3 className="font-semibold text-sm mb-1">{scenario.title}</h3>
                   <p className="text-xs text-muted-foreground leading-relaxed">{scenario.description}</p>
                 </div>
+
+                {/* Script preview — visible to all */}
+                {scenario.script && scenario.script.length > 0 && (
+                  <div className="p-2.5 rounded-lg bg-secondary/60 border border-border">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5 flex items-center gap-1">
+                      <ListChecks className="w-3 h-3" /> Roteiro ({scenario.script.length} fases)
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {scenario.script.map((s, i) => (
+                        <span key={i} className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/8 text-primary border border-primary/15">
+                          {s.phase.split('.')[1]?.trim() || s.phase} · {s.duration}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Only admins/supervisors see the coaching guide */}
                 {isAdmin && (
                   <div className="space-y-1.5">
@@ -1101,6 +1370,7 @@ export default function TrainingPage() {
                     </div>
                   </div>
                 )}
+
                 <div className="flex items-center justify-between mt-auto pt-2 border-t border-border">
                   {bestScore ? (
                     <span className={cn('text-xs font-semibold', bestScore >= 85 ? 'text-success' : bestScore >= 70 ? 'text-primary' : 'text-warning')}>
@@ -1178,7 +1448,6 @@ export default function TrainingPage() {
       )}
 
       {showCreate && <CreateScenarioModal onClose={() => setShowCreate(false)} />}
-      
     </div>
   );
 }
