@@ -4,22 +4,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
-  Shield, Users, Plug2, Bell, Building2, Key,
+  Shield, Users, Building2, Key,
   ChevronRight, CheckCircle2, AlertCircle, Save, Eye, EyeOff,
-  TrendingUp, Lock, ToggleLeft, ToggleRight, SlidersHorizontal
+  Lock, ToggleLeft, ToggleRight, SlidersHorizontal
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppConfig, DEFAULT_MODULES, type ModuleId } from '@/contexts/AppConfigContext';
 import { useToast } from '@/hooks/use-toast';
 
 const ADMIN_SECTIONS = [
-  { id: 'company',      label: 'Empresa',              icon: Building2 },
-  { id: 'users',        label: 'Usuários & Permissões', icon: Users },
-  { id: 'api-keys',     label: 'Tokens OpenAI',         icon: Key },
-  { id: 'modules',      label: 'Módulos Visíveis',      icon: ToggleRight },
-  { id: 'security',     label: 'Segurança & RLS',       icon: Lock },
-  { id: 'notifications',label: 'Notificações',          icon: Bell },
-  { id: 'billing',      label: 'Plano & Faturamento',   icon: TrendingUp },
+  { id: 'company',  label: 'Empresa',              icon: Building2 },
+  { id: 'users',    label: 'Usuários & Permissões', icon: Users },
+  { id: 'api-keys', label: 'Tokens OpenAI',         icon: Key },
+  { id: 'modules',  label: 'Módulos Visíveis',      icon: ToggleRight },
+  { id: 'security', label: 'Segurança & RLS',       icon: Lock },
 ];
 
 const TOKEN_FIELDS: { key: keyof import('@/contexts/AppConfigContext').OpenAITokens; label: string; desc: string; icon: string }[] = [
@@ -128,11 +126,14 @@ export default function AdminPage() {
                       <p className="text-sm font-medium">{u.name}</p>
                       <p className="text-xs text-muted-foreground">{u.email}</p>
                     </div>
-                    <select className="text-xs bg-secondary border border-border rounded-lg px-2 py-1 text-foreground">
-                      <option value="admin"      selected={u.role === 'admin'}>Admin</option>
-                      <option value="director"   selected={u.role === 'director'}>Diretor</option>
-                      <option value="supervisor" selected={u.role === 'supervisor'}>Supervisor</option>
-                      <option value="member"     selected={u.role === 'member'}>Vendedor</option>
+                    <select
+                      defaultValue={u.role}
+                      className="text-xs bg-secondary border border-border rounded-lg px-2 py-1 text-foreground"
+                    >
+                      <option value="admin">Admin</option>
+                      <option value="director">Diretor</option>
+                      <option value="supervisor">Supervisor</option>
+                      <option value="member">Vendedor</option>
                     </select>
                     <span className={cn('w-2 h-2 rounded-full', u.status === 'active' ? 'bg-success' : 'bg-muted-foreground')} />
                   </div>
@@ -356,22 +357,8 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* ── Pendentes ── */}
-          {(section === 'notifications' || section === 'billing') && (
-            <div className="glass-card p-6 text-center py-16">
-              <div className="w-12 h-12 rounded-xl bg-muted mx-auto mb-4 flex items-center justify-center">
-                {section === 'notifications'
-                  ? <Bell className="w-6 h-6 text-muted-foreground" />
-                  : <TrendingUp className="w-6 h-6 text-muted-foreground" />
-                }
-              </div>
-              <h3 className="font-display font-semibold mb-2">
-                {section === 'notifications' ? 'Notificações' : 'Plano & Faturamento'}
-              </h3>
-              <p className="text-sm text-muted-foreground">Esta seção está em desenvolvimento.</p>
-              <Button size="sm" className="mt-4 bg-gradient-primary text-xs">Em Breve</Button>
-            </div>
-          )}
+
+
         </div>
       </div>
     </div>
