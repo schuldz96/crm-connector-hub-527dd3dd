@@ -22,7 +22,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  loginWithGoogle: () => Promise<void>;
+  loginWithGoogle: (googleUser: { email: string; name: string; picture?: string }) => Promise<void>;
   logout: () => void;
   hasRole: (roles: UserRole[]) => boolean;
   hasMinRole: (minRole: UserRole) => boolean;
