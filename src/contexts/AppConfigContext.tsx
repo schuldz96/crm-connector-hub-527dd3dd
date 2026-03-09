@@ -52,13 +52,13 @@ export type ModuleOverrides = Record<string, Set<ModuleId>>;
 
 interface AppConfigContextType {
   tokens: OpenAITokens;
+  models: ModuleModels;
   modules: ModuleConfig[];
-  // per-user overrides stored as Record<userId|teamId, ModuleId[]>
   userModuleOverrides: Record<string, ModuleId[]>;
   setToken: (module: keyof OpenAITokens, value: string) => void;
+  setModuleModel: (module: ModuleAIKey, model: AIModelId) => void;
   setModuleEnabled: (id: ModuleId, enabled: boolean) => void;
   isModuleEnabled: (id: ModuleId) => boolean;
-  // Per-entity overrides
   setUserModuleOverride: (entityId: string, disabledModules: ModuleId[]) => void;
   getUserDisabledModules: (entityId: string) => ModuleId[];
   isModuleEnabledForUser: (moduleId: ModuleId, userId: string, teamId?: string) => boolean;
