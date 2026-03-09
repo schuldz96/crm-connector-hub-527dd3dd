@@ -37,7 +37,7 @@ function sessionToUser(session: Session): User {
       meta.avatar_url ??
       meta.picture ??
       `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`,
-    role: (meta.role as UserRole) ?? 'viewer',
+    role: (meta.role as UserRole) ?? 'member',
     company: 'Appmax',
     status: 'active',
     createdAt: session.user.created_at?.slice(0, 10) ?? '',
