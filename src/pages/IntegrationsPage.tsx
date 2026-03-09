@@ -131,7 +131,7 @@ function GooglePanel() {
   const [session, setSession] = useState<GoogleSession | null>(() => getGoogleSession(userId));
   const [connecting, setConnecting] = useState(false);
 
-  const hasClientId = !!GOOGLE_CLIENT_ID;
+  const hasClientId = !!(GOOGLE_CLIENT_ID || getStoredGoogleClientId());
 
   const googleLogin = useGoogleLogin({
     scope: [
