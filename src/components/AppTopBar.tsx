@@ -1,20 +1,22 @@
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Bell, Search, Plus, ChevronRight, Home } from 'lucide-react';
+import { Search, ChevronRight, Home } from 'lucide-react';
+import NotificationBell from '@/components/NotificationBell';
 
 const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
-  '/dashboard': { title: 'Dashboard', subtitle: 'Visão geral de performance' },
-  '/meetings': { title: 'Reuniões', subtitle: 'Gerencie e analise suas reuniões comerciais' },
-  '/whatsapp': { title: 'WhatsApp', subtitle: 'Instâncias e conversas' },
-  '/teams': { title: 'Times', subtitle: 'Gerencie equipes e performance' },
-  '/users': { title: 'Usuários', subtitle: 'Gestão de acesso e permissões' },
-  '/reports': { title: 'Relatórios', subtitle: 'Análises e exportações' },
-  '/integrations': { title: 'Integrações', subtitle: 'Conecte ferramentas externas' },
-  '/automations': { title: 'Automações', subtitle: 'Fluxos com N8N' },
-  '/admin': { title: 'Painel Admin', subtitle: 'Configurações globais da plataforma' },
-  '/settings': { title: 'Configurações', subtitle: 'Preferências da sua conta' },
+  '/dashboard':    { title: 'Dashboard',       subtitle: 'Visão geral de performance' },
+  '/meetings':     { title: 'Reuniões',         subtitle: 'Gerencie e analise suas reuniões comerciais' },
+  '/whatsapp':     { title: 'WhatsApp',         subtitle: 'Instâncias e conversas' },
+  '/teams':        { title: 'Times',            subtitle: 'Gerencie equipes e performance' },
+  '/users':        { title: 'Usuários',         subtitle: 'Gestão de acesso e permissões' },
+  '/reports':      { title: 'Relatórios',       subtitle: 'Análises e exportações' },
+  '/integrations': { title: 'Integrações',      subtitle: 'Conecte ferramentas externas' },
+  '/automations':  { title: 'Automações',       subtitle: 'Fluxos com N8N' },
+  '/admin':        { title: 'Painel Admin',     subtitle: 'Configurações globais da plataforma' },
+  '/performance':  { title: 'Desempenho',       subtitle: 'Acompanhe métricas de performance' },
+  '/training':     { title: 'Treinamentos',     subtitle: 'Simulações e aprendizado' },
+  '/ai-config':    { title: 'Config. IA',       subtitle: 'Modelos e tokens de inteligência artificial' },
 };
 
 export default function AppTopBar() {
@@ -41,18 +43,7 @@ export default function AppTopBar() {
           />
         </div>
 
-        <Button
-          size="sm"
-          className="h-8 text-xs font-medium bg-gradient-primary hover:opacity-90 hidden sm:flex"
-        >
-          <Plus className="w-3.5 h-3.5 mr-1" />
-          Nova Reunião
-        </Button>
-
-        <button className="relative w-8 h-8 rounded-lg bg-secondary border border-border flex items-center justify-center hover:bg-muted transition-colors">
-          <Bell className="w-4 h-4 text-muted-foreground" />
-          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-primary" />
-        </button>
+        <NotificationBell />
 
         <img
           src={user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name}`}
