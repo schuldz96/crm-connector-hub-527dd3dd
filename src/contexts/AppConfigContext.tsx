@@ -140,6 +140,10 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
     setTokens(prev => ({ ...prev, [module]: value }));
   };
 
+  const setModuleModel = (module: ModuleAIKey, model: AIModelId) => {
+    setModels(prev => ({ ...prev, [module]: model }));
+  };
+
   const setModuleEnabled = (id: ModuleId, enabled: boolean) => {
     setModules(prev => prev.map(m => m.id === id ? { ...m, enabled } : m));
   };
