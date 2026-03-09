@@ -9,7 +9,7 @@ import {
   Lock, ToggleLeft, ToggleRight, SlidersHorizontal,
   Layers, Plus, Trash2, ChevronDown, ChevronUp, GitBranch,
   ScrollText, LogIn, LogOut, MonitorSmartphone, Search, RefreshCw, Trash,
-  Filter,
+  Filter, Plug, Copy, ExternalLink,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppConfig, DEFAULT_MODULES, type ModuleId, AI_MODELS, type ModuleAIKey } from '@/contexts/AppConfigContext';
