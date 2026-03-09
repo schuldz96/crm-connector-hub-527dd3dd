@@ -17,18 +17,20 @@ export type AIModelId =
   | 'gpt-4o'
   | 'gpt-4-turbo'
   | 'gpt-4'
-  | 'gpt-3.5-turbo'
   | 'o1-mini'
-  | 'o1-preview';
+  | 'o1-preview'
+  | 'o3-mini'
+  | 'o3';
 
 export const AI_MODELS: { id: AIModelId; label: string; desc: string; badge: string }[] = [
-  { id: 'gpt-4o-mini',   label: 'GPT-4o Mini',    desc: 'Rápido e econômico — melhor custo-benefício',          badge: '⚡ Padrão'     },
-  { id: 'gpt-4o',        label: 'GPT-4o',          desc: 'Multimodal e poderoso — equilíbrio perfeito',          badge: '⚖️ Balanceado' },
-  { id: 'gpt-4-turbo',   label: 'GPT-4 Turbo',     desc: 'Alta capacidade com janela de contexto ampla',         badge: '🚀 Turbo'      },
-  { id: 'gpt-4',         label: 'GPT-4',           desc: 'Raciocínio avançado e tarefas complexas',              badge: '🧠 Premium'    },
-  { id: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo',   desc: 'Ultra rápido — tarefas simples e alto volume',         badge: '💨 Econômico'  },
-  { id: 'o1-mini',       label: 'o1 Mini',          desc: 'Raciocínio passo a passo — tarefas técnicas',          badge: '🔬 Raciocínio' },
-  { id: 'o1-preview',    label: 'o1 Preview',       desc: 'Máximo raciocínio — problemas complexos e científicos', badge: '🏆 Top'        },
+  { id: 'gpt-4o-mini',  label: 'GPT-4o Mini',  desc: 'Rápido e econômico — melhor custo-benefício',            badge: '⚡ Padrão'     },
+  { id: 'gpt-4o',       label: 'GPT-4o',        desc: 'Multimodal e poderoso — equilíbrio perfeito',            badge: '⚖️ Balanceado' },
+  { id: 'gpt-4-turbo',  label: 'GPT-4 Turbo',   desc: 'Alta capacidade com janela de contexto ampla',           badge: '🚀 Turbo'      },
+  { id: 'gpt-4',        label: 'GPT-4',          desc: 'Raciocínio avançado e tarefas complexas',               badge: '🧠 Premium'    },
+  { id: 'o1-mini',      label: 'o1 Mini',        desc: 'Raciocínio passo a passo — tarefas técnicas',            badge: '🔬 Raciocínio' },
+  { id: 'o1-preview',   label: 'o1 Preview',     desc: 'Máximo raciocínio — problemas complexos e científicos',  badge: '🏆 Top'        },
+  { id: 'o3-mini',      label: 'o3 Mini',        desc: 'Nova geração de raciocínio — eficiente e rápido',        badge: '🆕 o3'         },
+  { id: 'o3',           label: 'o3',             desc: 'Topo absoluto da OpenAI — raciocínio de nível humano',   badge: '👑 Elite'      },
 ];
 
 export type ModuleAIKey = 'meetings' | 'training' | 'whatsapp' | 'reports' | 'automations';
