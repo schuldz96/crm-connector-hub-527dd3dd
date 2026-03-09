@@ -12,7 +12,7 @@ import {
   Filter,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useAppConfig, DEFAULT_MODULES, type ModuleId } from '@/contexts/AppConfigContext';
+import { useAppConfig, DEFAULT_MODULES, type ModuleId, AI_MODELS, type ModuleAIKey } from '@/contexts/AppConfigContext';
 import { useToast } from '@/hooks/use-toast';
 import {
   useRolePermissions,
@@ -69,7 +69,7 @@ export default function AdminPage() {
   const [logTypeFilter, setLogTypeFilter] = useState<AuditEventType | 'all'>('all');
   const [logRoleFilter, setLogRoleFilter] = useState<UserRole | 'all'>('all');
 
-  const { tokens, setToken, modules, setModuleEnabled, saveConfig,
+  const { tokens, setToken, models, setModuleModel, modules, setModuleEnabled, saveConfig,
           getUserDisabledModules, setUserModuleOverride } = useAppConfig();
   const { permissions, updatePermission } = useRolePermissions();
   const { getLogs, clearLogs } = useAuditLog();
