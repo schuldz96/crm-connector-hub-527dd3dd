@@ -11,6 +11,7 @@ import { AuditLogProvider } from "@/contexts/AuditLogContext";
 import { NotificationsProvider } from "@/contexts/NotificationsContext";
 import AppLayout from "@/components/AppLayout";
 import LoginPage from "@/pages/LoginPage";
+import GoogleCallbackPage from "@/pages/GoogleCallbackPage";
 import DashboardPage from "@/pages/DashboardPage";
 import MeetingsPage from "@/pages/MeetingsPage";
 import WhatsAppPage from "@/pages/WhatsAppPage";
@@ -85,8 +86,11 @@ const App = () => (
                 <AuthProvider>
                   <NotificationsProvider>
                     <Routes>
-                      <Route path="/login" element={<LoginPageWrapper />} />
-                      <Route path="/*"     element={<ProtectedRoutes />} />
+                      {/* Public routes */}
+                      <Route path="/login"                element={<LoginPageWrapper />} />
+                      <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
+                      {/* Protected routes */}
+                      <Route path="/*" element={<ProtectedRoutes />} />
                     </Routes>
                   </NotificationsProvider>
                 </AuthProvider>

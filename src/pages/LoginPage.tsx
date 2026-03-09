@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGoogleLogin } from '@react-oauth/google';
+import { GOOGLE_CLIENT_ID } from '@/App';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,12 +10,15 @@ import { Eye, EyeOff, Mail, Lock, TrendingUp, BarChart3, MessageSquare, Brain, S
 import heroBg from '@/assets/hero-bg.jpg';
 
 export default function LoginPage() {
-  const { login, loginWithGoogle } = useAuth();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Read error from URL (e.g. after Google callback failure)
+  const urlError = new URLSearchParams(window.location.search).get('error');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,34 +34,24 @@ export default function LoginPage() {
     }
   };
 
-  // Direct Google OAuth — opens Google consent popup via @react-oauth/google
+  // Use redirect mode to avoid iframe popup blocking
   const googleLogin = useGoogleLogin({
+    ux_mode: 'redirect',
+    redirect_uri: `${window.location.origin}/auth/google/callback`,
     scope: 'openid email profile',
     hosted_domain: 'appmax.com.br',
-    onSuccess: async (tokenResponse) => {
-      try {
-        const infoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-          headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
-        });
-        const info = await infoRes.json();
-        await loginWithGoogle({ email: info.email, name: info.name, picture: info.picture });
-      } catch (err: any) {
-        setError(err?.message ?? 'Erro ao obter dados do Google.');
-      } finally {
-        setLoading(false);
-      }
-    },
+    // onSuccess / onError are not called in redirect mode
     onError: () => {
-      setError('Autenticação cancelada ou erro no Google.');
-      setLoading(false);
-    },
-    onNonOAuthError: () => {
-      setError('Popup bloqueado. Permita popups para este site e tente novamente.');
+      setError('Erro ao iniciar autenticação com Google.');
       setLoading(false);
     },
   });
 
   const handleGoogle = () => {
+    if (!GOOGLE_CLIENT_ID) {
+      setError('Google OAuth não configurado. Fale com o administrador.');
+      return;
+    }
     setError('');
     setLoading(true);
     googleLogin();
@@ -69,6 +63,8 @@ export default function LoginPage() {
     { icon: MessageSquare, label: 'WhatsApp Analytics', desc: 'Monitore conversas' },
     { icon: TrendingUp, label: 'Revenue Intelligence', desc: 'Insights que convertem' },
   ];
+
+  const displayError = error || (urlError === 'google_failed' ? 'Falha na autenticação com Google. Tente novamente.' : urlError === 'not_authorized' ? 'Conta Google não autorizada para esta plataforma.' : '');
 
   return (
     <div className="min-h-screen flex">
@@ -116,7 +112,6 @@ export default function LoginPage() {
       {/* Right panel */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-background">
         <div className="w-full max-w-md animate-fade-in">
-          {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-3 mb-10">
             <div className="w-10 h-10 rounded-xl bg-gradient-primary flex items-center justify-center">
               <TrendingUp className="w-5 h-5 text-primary-foreground" />
@@ -129,7 +124,7 @@ export default function LoginPage() {
             <p className="text-muted-foreground text-sm">Acesse sua conta para continuar</p>
           </div>
 
-          {/* Google OAuth */}
+          {/* Google OAuth — redirect mode */}
           <Button
             variant="outline"
             className="w-full mb-6 h-11 font-medium border-border hover:bg-secondary"
@@ -142,7 +137,7 @@ export default function LoginPage() {
               <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
             </svg>
-            {loading ? 'Entrando...' : 'Continuar com Google'}
+            {loading ? 'Redirecionando...' : 'Continuar com Google'}
           </Button>
 
           <div className="flex items-center gap-4 mb-6">
@@ -170,9 +165,6 @@ export default function LoginPage() {
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <Label htmlFor="password" className="text-sm font-medium">Senha</Label>
-                <button type="button" className="text-xs text-primary hover:underline">
-                  Esqueci minha senha
-                </button>
               </div>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -194,9 +186,9 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
-            {error && (
+            {displayError && (
               <p className="text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
-                {error}
+                {displayError}
               </p>
             )}
             <Button

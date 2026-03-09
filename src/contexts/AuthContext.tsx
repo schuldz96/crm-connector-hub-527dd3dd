@@ -3,13 +3,18 @@ import type { User, UserRole } from '@/types';
 import { ROLE_HIERARCHY } from '@/types';
 import { useRolePermissions } from '@/contexts/RolePermissionsContext';
 import { useAuditLog } from '@/contexts/AuditLogContext';
-import { supabase } from '@/integrations/supabase/client';
 
 const ALLOWED_DOMAIN = 'appmax.com.br';
 
 export function isAppmaxEmail(email: string): boolean {
   return email.trim().toLowerCase().endsWith(`@${ALLOWED_DOMAIN}`);
 }
+
+// ─── Hardcoded allowed users ──────────────────────────────────────────────────
+const ALLOWED_USERS: Array<{ email: string; password: string; name: string; role: UserRole }> = [
+  { email: 'marcos.schuldz@appmax.com.br', password: 'Appmax102030@', name: 'Marcos Schuldz', role: 'admin' },
+  { email: 'yuri.santos@appmax.com.br',    password: 'Appmax102030@', name: 'Yuri Santos',    role: 'admin' },
+];
 
 interface AuthContextType {
   user: User | null;
@@ -25,12 +30,18 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-function buildUser(id: string, email: string, name: string, avatar?: string, role: UserRole = 'member'): User {
+function buildUser(
+  id: string,
+  email: string,
+  name: string,
+  role: UserRole = 'member',
+  avatar?: string,
+): User {
   return {
     id,
     name,
     email,
-    avatar: avatar ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`,
+    avatar: avatar ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(email)}`,
     role,
     company: 'Appmax',
     status: 'active',
@@ -44,30 +55,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { canAccess: roleCanAccess } = useRolePermissions();
   const { addEvent } = useAuditLog();
 
-  // Restore session from localStorage on mount
   useEffect(() => {
     const stored = localStorage.getItem('appmax_user');
     if (stored) {
       try { setUser(JSON.parse(stored)); }
       catch { localStorage.removeItem('appmax_user'); }
     }
-
-    // Also check Supabase session (for email/password users)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session && !localStorage.getItem('appmax_user')) {
-        const meta = session.user.user_metadata ?? {};
-        const email = session.user.email ?? '';
-        const u = buildUser(
-          session.user.id,
-          email,
-          meta.full_name ?? meta.name ?? email.split('@')[0],
-          meta.avatar_url ?? meta.picture,
-        );
-        setUser(u);
-        localStorage.setItem('appmax_user', JSON.stringify(u));
-      }
-      setIsLoading(false);
-    });
+    setIsLoading(false);
   }, []);
 
   const recordLogin = (u: User) => {
@@ -82,23 +76,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  // Email + password login via Supabase Auth
+  // Email + password — validates against hardcoded allowed users list
   const login = async (email: string, password: string) => {
     setIsLoading(true);
+    await new Promise(r => setTimeout(r, 500));
     try {
-      if (!isAppmaxEmail(email)) {
+      const normalized = email.trim().toLowerCase();
+
+      if (!isAppmaxEmail(normalized)) {
         throw new Error('Apenas e-mails @appmax.com.br são permitidos.');
       }
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw new Error(error.message);
 
-      const meta = data.user?.user_metadata ?? {};
-      const u = buildUser(
-        data.user!.id,
-        email,
-        meta.full_name ?? meta.name ?? email.split('@')[0],
-        meta.avatar_url ?? meta.picture,
+      const match = ALLOWED_USERS.find(
+        u => u.email.toLowerCase() === normalized && u.password === password
       );
+
+      if (!match) {
+        throw new Error('Credenciais inválidas. Verifique seu e-mail e senha.');
+      }
+
+      const u = buildUser(`user_${normalized}`, match.email, match.name, match.role);
       setUser(u);
       localStorage.setItem('appmax_user', JSON.stringify(u));
       recordLogin(u);
@@ -107,26 +104,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Google OAuth via @react-oauth/google — receives user info after consent popup
+  // Google OAuth callback — receives user info after consent redirect
   const loginWithGoogle = async (googleUser: { email: string; name: string; picture?: string }) => {
-    if (!isAppmaxEmail(googleUser.email)) {
+    const normalized = googleUser.email.trim().toLowerCase();
+
+    if (!isAppmaxEmail(normalized)) {
       throw new Error(`Apenas contas @${ALLOWED_DOMAIN} podem acessar a plataforma.`);
     }
 
+    // Find the matching allowed user to get the correct role
+    const match = ALLOWED_USERS.find(u => u.email.toLowerCase() === normalized);
+    if (!match) {
+      throw new Error('Conta Google não autorizada. Contate o administrador.');
+    }
+
     const u = buildUser(
-      `google_${googleUser.email}`,
-      googleUser.email,
-      googleUser.name,
+      `google_${normalized}`,
+      match.email,
+      googleUser.name || match.name,
+      match.role,
       googleUser.picture,
     );
 
-    localStorage.setItem(`google_connected_${u.id}`, 'true');
     setUser(u);
     localStorage.setItem('appmax_user', JSON.stringify(u));
     recordLogin(u);
   };
 
-  const logout = async () => {
+  const logout = () => {
     if (user) {
       addEvent({
         type: 'logout',
@@ -140,8 +145,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     setUser(null);
     localStorage.removeItem('appmax_user');
-    // Also sign out from Supabase in case they used email/password
-    await supabase.auth.signOut();
   };
 
   const hasRole = (roles: UserRole[]) => !!user && roles.includes(user.role);
