@@ -58,10 +58,13 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
             <Select value={form.role} onValueChange={v => setForm(f => ({ ...f, role: v }))}>
               <SelectTrigger className="h-9 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger>
               <SelectContent className="bg-card border-border">
-                <SelectItem value="member"     className="text-xs">Vendedor</SelectItem>
-                <SelectItem value="supervisor" className="text-xs">Supervisor</SelectItem>
-                <SelectItem value="director"   className="text-xs">Diretor</SelectItem>
-                <SelectItem value="admin"      className="text-xs">Admin</SelectItem>
+                <SelectItem value="member"      className="text-xs">Vendedor</SelectItem>
+                <SelectItem value="supervisor"  className="text-xs">Supervisor</SelectItem>
+                <SelectItem value="coordinator" className="text-xs">Coordenador</SelectItem>
+                <SelectItem value="manager"     className="text-xs">Gerente</SelectItem>
+                <SelectItem value="director"    className="text-xs">Diretor</SelectItem>
+                <SelectItem value="ceo"         className="text-xs">CEO</SelectItem>
+                <SelectItem value="admin"       className="text-xs">Admin</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -111,10 +114,13 @@ function ChangeRoleModal({ user, onClose, onSave }: { user: User; onClose: () =>
             <Select value={role} onValueChange={v => setRole(v as UserRole)}>
               <SelectTrigger className="h-9 text-xs bg-secondary border-border"><SelectValue /></SelectTrigger>
               <SelectContent className="bg-card border-border">
-                <SelectItem value="member"     className="text-xs">Vendedor — acesso básico</SelectItem>
-                <SelectItem value="supervisor" className="text-xs">Supervisor — vê seu time</SelectItem>
-                <SelectItem value="director"   className="text-xs">Diretor — vê todos os times</SelectItem>
-                <SelectItem value="admin"      className="text-xs">Admin — acesso total</SelectItem>
+                <SelectItem value="member"      className="text-xs">Vendedor — acesso básico</SelectItem>
+                <SelectItem value="supervisor"  className="text-xs">Supervisor — vê seu time</SelectItem>
+                <SelectItem value="coordinator" className="text-xs">Coordenador — vê sua área</SelectItem>
+                <SelectItem value="manager"     className="text-xs">Gerente — gestão de área</SelectItem>
+                <SelectItem value="director"    className="text-xs">Diretor — vê todos os times</SelectItem>
+                <SelectItem value="ceo"         className="text-xs">CEO — visão total</SelectItem>
+                <SelectItem value="admin"       className="text-xs">Admin — acesso total</SelectItem>
               </SelectContent>
             </Select>
           </div>
