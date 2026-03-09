@@ -194,8 +194,13 @@ export default function PerformancePage() {
     return { team, members, avgOverall, totalMeetings, totalWaAnalyses };
   };
 
-  const userPerf = mode === 'person' ? buildUserPerf(selectedUserId) : null;
-  const teamPerf = mode === 'team' ? buildTeamPerf(selectedTeamId) : null;
+  // For members, always show their own profile regardless of selection
+  const effectiveUserId = role === 'member' ? (user?.id ?? selectedUserId) : selectedUserId;
+  // For supervisors with only one team, auto-use that team
+  const effectiveTeamId = visibleTeams.length === 1 ? visibleTeams[0].id : selectedTeamId;
+
+  const userPerf = mode === 'person' ? buildUserPerf(effectiveUserId) : null;
+  const teamPerf = mode === 'team' ? buildTeamPerf(effectiveTeamId) : null;
 
   return (
     <div className="page-container animate-fade-in">
