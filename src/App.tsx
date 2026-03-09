@@ -26,8 +26,10 @@ import NotFound from "@/pages/NotFound";
 
 // ⚠️  Replace with your Google OAuth Client ID from Google Cloud Console
 // APIs & Services → Credentials → OAuth 2.0 Client ID (Web Application)
-// Authorized JS origins: https://smart-deal-coach.lovable.app
-export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+// Or configure via Admin → Integrações OAuth (recommended)
+export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || (() => {
+  try { return atob(localStorage.getItem('admin_google_client_id') || '') || ''; } catch { return ''; }
+})();
 
 const queryClient = new QueryClient();
 
