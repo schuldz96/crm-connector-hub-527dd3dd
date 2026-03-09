@@ -101,28 +101,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(false);
   };
 
-  const loginWithGoogle = async () => {
-    // Google domain restriction is enforced client-side via the hd (hosted domain) hint
-    // and validated server-side. Here we simulate the check.
-    setIsLoading(true);
-    await new Promise(r => setTimeout(r, 600));
-
-    // In a real OAuth flow the email comes from Google's ID token.
-    // We simulate a Google login with the demo user (already @appmax.com.br).
-    const googleEmail = MOCK_USER.email;
-
-    if (!isAppmaxEmail(googleEmail)) {
-      setIsLoading(false);
+  // Called by LoginPage/IntegrationsPage after real Google OAuth succeeds
+  const loginWithGoogle = async (googleUser: { email: string; name: string; picture?: string }) => {
+    if (!isAppmaxEmail(googleUser.email)) {
       throw new Error(`Apenas contas @${ALLOWED_DOMAIN} podem acessar a plataforma.`);
     }
 
-    const u = { ...MOCK_USER };
-    // Mark this session as Google-authenticated
+    const u: User = {
+      ...MOCK_USER,
+      email: googleUser.email,
+      name: googleUser.name,
+      avatar: googleUser.picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${googleUser.name}`,
+    };
+
     localStorage.setItem(`google_connected_${u.id}`, 'true');
     setUser(u);
     localStorage.setItem('appmax_user', JSON.stringify(u));
     recordLogin(u);
-    setIsLoading(false);
   };
 
   const logout = () => {

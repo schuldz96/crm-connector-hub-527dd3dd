@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useGoogleLogin } from '@react-oauth/google';
+import { GOOGLE_CLIENT_ID } from '@/App';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -33,16 +35,41 @@ export default function LoginPage() {
     }
   };
 
-  const handleGoogle = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      await loginWithGoogle();
-    } catch (err: any) {
-      setError(err?.message ?? 'Erro ao autenticar com Google.');
-    } finally {
+  // Real Google OAuth — opens Google consent popup
+  const googleLogin = useGoogleLogin({
+    scope: 'openid email profile',
+    hosted_domain: 'appmax.com.br',   // hints Google to pre-select @appmax.com.br accounts
+    onSuccess: async (tokenResponse) => {
+      try {
+        const infoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
+        });
+        const info = await infoRes.json();
+        await loginWithGoogle({ email: info.email, name: info.name, picture: info.picture });
+      } catch (err: any) {
+        setError(err?.message ?? 'Erro ao obter dados do Google.');
+      } finally {
+        setLoading(false);
+      }
+    },
+    onError: () => {
+      setError('Autenticação cancelada ou erro no Google.');
       setLoading(false);
+    },
+    onNonOAuthError: () => {
+      setError('Popup bloqueado. Permita popups para este site e tente novamente.');
+      setLoading(false);
+    },
+  });
+
+  const handleGoogle = () => {
+    if (!GOOGLE_CLIENT_ID) {
+      setError('Google OAuth não configurado. Fale com o administrador do sistema.');
+      return;
     }
+    setError('');
+    setLoading(true);
+    googleLogin();
   };
 
   const features = [
