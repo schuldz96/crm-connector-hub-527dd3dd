@@ -23,8 +23,8 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { path: '/dashboard',    label: 'Dashboard',     icon: LayoutDashboard, resource: 'dashboard' },
-  { path: '/meetings',     label: 'Reuniões',       icon: Video,           resource: 'meetings',     badge: 3 },
-  { path: '/whatsapp',     label: 'WhatsApp',       icon: MessageSquare,   resource: 'whatsapp',     badge: 6 },
+  { path: '/meetings',     label: 'Reuniões',       icon: Video,           resource: 'meetings' },
+  { path: '/whatsapp',     label: 'WhatsApp',       icon: MessageSquare,   resource: 'whatsapp' },
   { path: '/performance',  label: 'Desempenho',     icon: Activity,        resource: 'performance' },
   { path: '/training',     label: 'Treinamentos',   icon: GraduationCap,   resource: 'training' },
   { path: '/teams',        label: 'Times',          icon: Target,          resource: 'teams' },
