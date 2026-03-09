@@ -1,23 +1,33 @@
 import { useState } from 'react';
-import { MOCK_USERS, MOCK_TEAMS } from '@/data/mockData';
+import { MOCK_USERS, MOCK_TEAMS, MOCK_AREAS } from '@/data/mockData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
   Shield, Users, Building2, Key,
   ChevronRight, CheckCircle2, AlertCircle, Save, Eye, EyeOff,
-  Lock, ToggleLeft, ToggleRight, SlidersHorizontal
+  Lock, ToggleLeft, ToggleRight, SlidersHorizontal,
+  Layers, Plus, Trash2, ChevronDown, ChevronUp, GitBranch,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppConfig, DEFAULT_MODULES, type ModuleId } from '@/contexts/AppConfigContext';
 import { useToast } from '@/hooks/use-toast';
+import {
+  useRolePermissions,
+  ALL_RESOURCES,
+  SCOPE_LABELS,
+  DEFAULT_ROLE_PERMISSIONS,
+} from '@/contexts/RolePermissionsContext';
+import type { UserRole, ResourceId } from '@/types';
+import { ROLE_LABELS, ROLE_HIERARCHY } from '@/types';
 
 const ADMIN_SECTIONS = [
-  { id: 'company',  label: 'Empresa',              icon: Building2 },
-  { id: 'users',    label: 'Usuários & Permissões', icon: Users },
-  { id: 'api-keys', label: 'Tokens OpenAI',         icon: Key },
-  { id: 'modules',  label: 'Módulos Visíveis',      icon: ToggleRight },
-  { id: 'security', label: 'Segurança & RLS',       icon: Lock },
+  { id: 'company',    label: 'Empresa',              icon: Building2 },
+  { id: 'roles',      label: 'Níveis de Acesso',     icon: Layers },
+  { id: 'users',      label: 'Usuários',             icon: Users },
+  { id: 'api-keys',   label: 'Tokens OpenAI',        icon: Key },
+  { id: 'modules',    label: 'Módulos Visíveis',     icon: ToggleRight },
+  { id: 'security',   label: 'Segurança & RLS',      icon: Lock },
 ];
 
 const TOKEN_FIELDS: { key: keyof import('@/contexts/AppConfigContext').OpenAITokens; label: string; desc: string; icon: string }[] = [
@@ -28,12 +38,30 @@ const TOKEN_FIELDS: { key: keyof import('@/contexts/AppConfigContext').OpenAITok
   { key: 'automations', label: 'Token — Automações',              icon: '⚡', desc: 'IA nos gatilhos e ações das automações' },
 ];
 
+// Role color badge classes
+const roleColorMap: Record<string, { bg: string; text: string; border: string }> = {
+  destructive:        { bg: 'bg-destructive/10',       text: 'text-destructive',       border: 'border-destructive/20' },
+  primary:            { bg: 'bg-primary/10',           text: 'text-primary',           border: 'border-primary/20' },
+  accent:             { bg: 'bg-accent/15',            text: 'text-accent',            border: 'border-accent/30' },
+  warning:            { bg: 'bg-warning/10',           text: 'text-warning',           border: 'border-warning/20' },
+  success:            { bg: 'bg-success/10',           text: 'text-success',           border: 'border-success/20' },
+  'muted-foreground': { bg: 'bg-muted',                text: 'text-muted-foreground',  border: 'border-border' },
+};
+
+const SCOPE_ICONS: Record<string, string> = {
+  all: '🌐', area: '🏢', team: '👥', self: '👤',
+};
+
 export default function AdminPage() {
-  const [section, setSection] = useState('company');
+  const [section, setSection] = useState('roles');
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
-  const [moduleTarget, setModuleTarget] = useState<'global' | string>('global'); // 'global' | userId | teamId
+  const [moduleTarget, setModuleTarget] = useState<'global' | string>('global');
+  const [selectedRole, setSelectedRole] = useState<UserRole>('ceo');
+  const [expandedRole, setExpandedRole] = useState<UserRole | null>('ceo');
+
   const { tokens, setToken, modules, setModuleEnabled, saveConfig,
           getUserDisabledModules, setUserModuleOverride } = useAppConfig();
+  const { permissions, updatePermission } = useRolePermissions();
   const { toast } = useToast();
 
   const toggleKey = (k: string) => setShowKey(prev => ({ ...prev, [k]: !prev[k] }));
@@ -45,18 +73,40 @@ export default function AdminPage() {
 
   const isLocked = (id: ModuleId) => id === 'admin';
 
-  // For per-user/team module overrides
   const targetDisabled = moduleTarget === 'global' ? [] : getUserDisabledModules(moduleTarget);
   const toggleTargetModule = (id: ModuleId) => {
     if (moduleTarget === 'global') {
       setModuleEnabled(id, !!modules.find(m => m.id === id && !m.enabled));
-      return;
+    } else {
+      const cur = getUserDisabledModules(moduleTarget);
+      const next = cur.includes(id) ? cur.filter(m => m !== id) : [...cur, id];
+      setUserModuleOverride(moduleTarget, next);
+      toast({ title: 'Salvo', description: 'Permissões de módulo atualizadas.' });
     }
-    const cur = getUserDisabledModules(moduleTarget);
-    const next = cur.includes(id) ? cur.filter(m => m !== id) : [...cur, id];
-    setUserModuleOverride(moduleTarget, next);
-    toast({ title: 'Salvo', description: 'Permissões de módulo atualizadas.' });
   };
+
+  const toggleResource = (role: UserRole, resourceId: ResourceId) => {
+    const perm = permissions.find(p => p.role === role);
+    if (!perm) return;
+    const has = perm.resources.includes(resourceId);
+    const next = has
+      ? perm.resources.filter(r => r !== resourceId)
+      : [...perm.resources, resourceId];
+    updatePermission(role, { resources: next });
+    toast({ title: 'Permissão atualizada', description: `${ROLE_LABELS[role]} — ${resourceId} ${has ? 'removido' : 'adicionado'}.` });
+  };
+
+  const handleScopeChange = (role: UserRole, scope: 'all' | 'area' | 'team' | 'self') => {
+    updatePermission(role, { scope });
+    toast({ title: 'Escopo atualizado', description: `${ROLE_LABELS[role]} agora enxerga: ${SCOPE_LABELS[scope]}` });
+  };
+
+  // Build org-tree levels for display
+  const orgLevels = ROLE_HIERARCHY.map(role => ({
+    role,
+    perm: permissions.find(p => p.role === role),
+    users: MOCK_USERS.filter(u => u.role === role),
+  }));
 
   return (
     <div className="page-container animate-fade-in">
@@ -84,7 +134,7 @@ export default function AdminPage() {
         </div>
 
         {/* Content */}
-        <div className="flex-1 space-y-4">
+        <div className="flex-1 space-y-4 min-w-0">
 
           {/* ── Empresa ── */}
           {section === 'company' && (
@@ -95,7 +145,7 @@ export default function AdminPage() {
                   { label: 'Nome da Empresa', value: 'Appmax', placeholder: 'Sua empresa' },
                   { label: 'Domínio', value: 'appmax.com.br', placeholder: 'dominio.com.br' },
                   { label: 'CNPJ', value: '', placeholder: '00.000.000/0001-00' },
-                  { label: 'Email de Contato', value: 'admin@dealintel.com.br', placeholder: 'admin@empresa.com' },
+                  { label: 'Email de Contato', value: 'admin@appmax.com.br', placeholder: 'admin@empresa.com' },
                 ].map(f => (
                   <div key={f.label}>
                     <label className="text-xs font-medium block mb-1.5">{f.label}</label>
@@ -103,10 +153,215 @@ export default function AdminPage() {
                   </div>
                 ))}
               </div>
-              <div className="pt-2">
-                <Button size="sm" className="bg-gradient-primary text-xs">
-                  <Save className="w-3 h-3 mr-1" /> Salvar Alterações
-                </Button>
+              <Button size="sm" className="bg-gradient-primary text-xs">
+                <Save className="w-3 h-3 mr-1" /> Salvar Alterações
+              </Button>
+            </div>
+          )}
+
+          {/* ── Níveis de Acesso ── */}
+          {section === 'roles' && (
+            <div className="space-y-4">
+              {/* Org chart visual */}
+              <div className="glass-card p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <GitBranch className="w-4 h-4 text-primary" />
+                  <h2 className="font-display font-semibold text-lg">Organograma de Hierarquia</h2>
+                </div>
+                <p className="text-xs text-muted-foreground mb-5">
+                  Cada nível só enxerga os níveis abaixo de si, dentro do seu escopo de visibilidade.
+                </p>
+
+                {/* Org tree */}
+                <div className="space-y-1">
+                  {orgLevels.map((item, idx) => {
+                    const color = roleColorMap[item.perm?.color ?? 'muted-foreground'];
+                    const isAdmin = item.role === 'admin';
+                    return (
+                      <div key={item.role}>
+                        {/* Indent line */}
+                        <div className="flex items-stretch gap-0">
+                          {/* Left indent bars */}
+                          {Array.from({ length: idx }).map((_, i) => (
+                            <div key={i} className="w-5 flex-shrink-0 flex justify-center">
+                              <div className="w-px bg-border/50 h-full" />
+                            </div>
+                          ))}
+                          {/* Row */}
+                          <div className="flex-1">
+                            <button
+                              onClick={() => setExpandedRole(expandedRole === item.role ? null : item.role)}
+                              className={cn(
+                                'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl border transition-all text-left',
+                                expandedRole === item.role
+                                  ? `${color.bg} ${color.border} border`
+                                  : 'border-border/30 hover:bg-muted/30'
+                              )}
+                            >
+                              {/* Hierarchy level dot */}
+                              <div className={cn('w-2.5 h-2.5 rounded-full flex-shrink-0', color.bg, `border ${color.border}`)}>
+                                <div className={cn('w-full h-full rounded-full', color.text.replace('text-', 'bg-'))} />
+                              </div>
+                              <span className={cn('text-sm font-semibold', color.text)}>{ROLE_LABELS[item.role]}</span>
+                              {isAdmin && <Lock className="w-3 h-3 text-muted-foreground" />}
+                              <span className="text-[10px] text-muted-foreground ml-1">
+                                {SCOPE_ICONS[item.perm?.scope ?? 'self']} {SCOPE_LABELS[item.perm?.scope ?? 'self']}
+                              </span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground ml-auto">
+                                {item.users.length} {item.users.length === 1 ? 'usuário' : 'usuários'}
+                              </span>
+                              {expandedRole === item.role
+                                ? <ChevronUp className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                                : <ChevronDown className="w-3 h-3 text-muted-foreground flex-shrink-0" />}
+                            </button>
+
+                            {/* Expanded: permission config */}
+                            {expandedRole === item.role && (
+                              <div className="mt-2 ml-1 mb-3 p-4 rounded-xl border border-border/50 bg-muted/10 space-y-4">
+                                {isAdmin && (
+                                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-destructive/5 border border-destructive/20 text-xs text-destructive">
+                                    <Lock className="w-3.5 h-3.5" />
+                                    O Administrador possui acesso total e não pode ter permissões removidas.
+                                  </div>
+                                )}
+
+                                {!isAdmin && (
+                                  <>
+                                    {/* Scope selector */}
+                                    <div>
+                                      <p className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wide">Escopo de visibilidade</p>
+                                      <div className="flex flex-wrap gap-2">
+                                        {(['all', 'area', 'team', 'self'] as const).map(scope => (
+                                          <button
+                                            key={scope}
+                                            onClick={() => handleScopeChange(item.role, scope)}
+                                            className={cn(
+                                              'flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-all',
+                                              item.perm?.scope === scope
+                                                ? `${color.bg} ${color.border} ${color.text} font-medium`
+                                                : 'border-border text-muted-foreground hover:bg-muted'
+                                            )}
+                                          >
+                                            <span>{SCOPE_ICONS[scope]}</span>
+                                            {SCOPE_LABELS[scope]}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    {/* Resources */}
+                                    <div>
+                                      <p className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wide">Módulos com acesso</p>
+                                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                                        {ALL_RESOURCES.map(res => {
+                                          const hasIt = item.perm?.resources.includes(res.id) ?? false;
+                                          return (
+                                            <button
+                                              key={res.id}
+                                              onClick={() => toggleResource(item.role, res.id)}
+                                              className={cn(
+                                                'flex items-center gap-1.5 text-xs px-2.5 py-2 rounded-lg border transition-all text-left',
+                                                hasIt
+                                                  ? `${color.bg} ${color.border} ${color.text}`
+                                                  : 'border-border/40 text-muted-foreground/50 bg-muted/10 hover:bg-muted/30'
+                                              )}
+                                            >
+                                              <span className="text-sm">{res.icon}</span>
+                                              <span className="truncate">{res.label}</span>
+                                              {hasIt
+                                                ? <CheckCircle2 className="w-3 h-3 ml-auto flex-shrink-0" />
+                                                : <div className="w-3 h-3 rounded-full border border-border/40 ml-auto flex-shrink-0" />}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
+
+                                {/* Users in this role */}
+                                {item.users.length > 0 && (
+                                  <div>
+                                    <p className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wide">Usuários neste nível</p>
+                                    <div className="flex flex-wrap gap-2">
+                                      {item.users.map(u => (
+                                        <div key={u.id} className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-full border border-border bg-muted/30">
+                                          <img src={u.avatar} alt={u.name} className="w-4 h-4 rounded-full" />
+                                          {u.name.split(' ')[0]}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Areas */}
+              <div className="glass-card p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-accent" />
+                    <h2 className="font-display font-semibold">Áreas da Empresa</h2>
+                  </div>
+                  <Button size="sm" variant="outline" className="text-xs h-7 gap-1">
+                    <Plus className="w-3 h-3" /> Nova Área
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Áreas agrupam times sob um Gerente. Coordenadores e abaixo enxergam apenas dentro da sua área.
+                </p>
+                <div className="space-y-3">
+                  {MOCK_AREAS.map(area => {
+                    const manager = MOCK_USERS.find(u => u.id === area.managerId);
+                    const areaTeams = MOCK_TEAMS.filter(t => area.teamIds.includes(t.id));
+                    const areaMembers = MOCK_USERS.filter(u => u.areaId === area.id);
+                    return (
+                      <div key={area.id} className="p-4 rounded-xl border border-border/60 bg-muted/10 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-semibold">{area.name}</p>
+                            {manager && (
+                              <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                <img src={manager.avatar} alt={manager.name} className="w-3.5 h-3.5 rounded-full" />
+                                Gerente: {manager.name}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                            <span>{areaTeams.length} times</span>
+                            <span>{areaMembers.length} pessoas</span>
+                          </div>
+                        </div>
+                        {/* Teams in area */}
+                        <div className="flex flex-wrap gap-1.5">
+                          {areaTeams.map(team => {
+                            const sup = MOCK_USERS.find(u => u.id === team.supervisorId);
+                            return (
+                              <div key={team.id} className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-full bg-secondary border border-border">
+                                <span>👥</span> {team.name}
+                                {sup && <span className="text-muted-foreground">· {sup.name.split(' ')[0]}</span>}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Info box */}
+              <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  💡 <strong>Como funciona a hierarquia:</strong> Admin e CEO veem tudo. Diretores veem toda a empresa. Gerentes veem sua Área. Coordenadores e Supervisores veem seus Times. Vendedores veem apenas seus próprios dados.
+                </p>
               </div>
             </div>
           )}
@@ -119,25 +374,31 @@ export default function AdminPage() {
                 <Button size="sm" className="text-xs bg-gradient-primary h-8">+ Convidar</Button>
               </div>
               <div className="space-y-2">
-                {MOCK_USERS.map(u => (
-                  <div key={u.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/30 transition-colors">
-                    <img src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full border border-border" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">{u.name}</p>
-                      <p className="text-xs text-muted-foreground">{u.email}</p>
+                {MOCK_USERS.map(u => {
+                  const perm = permissions.find(p => p.role === u.role);
+                  const color = roleColorMap[perm?.color ?? 'muted-foreground'];
+                  return (
+                    <div key={u.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/30 transition-colors">
+                      <img src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full border border-border" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{u.name}</p>
+                        <p className="text-xs text-muted-foreground">{u.email}</p>
+                      </div>
+                      <span className={cn('text-[10px] px-2 py-0.5 rounded-full border font-medium', color.bg, color.text, color.border)}>
+                        {ROLE_LABELS[u.role]}
+                      </span>
+                      <select
+                        defaultValue={u.role}
+                        className="text-xs bg-secondary border border-border rounded-lg px-2 py-1 text-foreground"
+                      >
+                        {ROLE_HIERARCHY.map(r => (
+                          <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                        ))}
+                      </select>
+                      <span className={cn('w-2 h-2 rounded-full', u.status === 'active' ? 'bg-success' : 'bg-muted-foreground')} />
                     </div>
-                    <select
-                      defaultValue={u.role}
-                      className="text-xs bg-secondary border border-border rounded-lg px-2 py-1 text-foreground"
-                    >
-                      <option value="admin">Admin</option>
-                      <option value="director">Diretor</option>
-                      <option value="supervisor">Supervisor</option>
-                      <option value="member">Vendedor</option>
-                    </select>
-                    <span className={cn('w-2 h-2 rounded-full', u.status === 'active' ? 'bg-success' : 'bg-muted-foreground')} />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -189,7 +450,7 @@ export default function AdminPage() {
                 ))}
                 <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
                   <p className="text-xs text-muted-foreground">
-                    🔐 As chaves ficam salvas no armazenamento local do seu dispositivo. Para ambientes de produção, utilize Lovable Cloud com secrets.
+                    🔐 As chaves ficam salvas no armazenamento local do seu dispositivo.
                   </p>
                 </div>
                 <Button size="sm" className="bg-gradient-primary text-xs" onClick={handleSaveTokens}>
@@ -208,8 +469,6 @@ export default function AdminPage() {
                   Configure quais módulos aparecem no menu para cada usuário ou time.
                 </p>
               </div>
-
-              {/* Target selector */}
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Configurar para:</label>
                 <div className="flex flex-wrap gap-2">
@@ -248,24 +507,14 @@ export default function AdminPage() {
                     </button>
                   ))}
                 </div>
-                {moduleTarget !== 'global' && (
-                  <div className="p-2.5 rounded-lg bg-accent/5 border border-accent/20 text-xs text-muted-foreground">
-                    ℹ️ Módulos desativados globalmente não podem ser reativados aqui. As permissões individuais se somam às globais.
-                  </div>
-                )}
               </div>
-
-              {/* Module toggles */}
               <div className="space-y-2">
                 {DEFAULT_MODULES.map(mod => {
                   const globallyOff = !modules.find(m => m.id === mod.id)?.enabled;
                   const userOff = moduleTarget !== 'global'
                     ? getUserDisabledModules(moduleTarget).includes(mod.id)
                     : false;
-                  const isOn = moduleTarget === 'global'
-                    ? !globallyOff
-                    : !globallyOff && !userOff;
-
+                  const isOn = moduleTarget === 'global' ? !globallyOff : !globallyOff && !userOff;
                   return (
                     <div
                       key={mod.id}
@@ -277,15 +526,11 @@ export default function AdminPage() {
                       <div className="flex items-center gap-2">
                         {isOn
                           ? <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0" />
-                          : <AlertCircle  className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                        }
+                          : <AlertCircle  className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
                         <div>
                           <p className="text-sm font-medium">{mod.label}</p>
                           <p className="text-[10px] text-muted-foreground font-mono">/{mod.id}</p>
                         </div>
-                        {moduleTarget !== 'global' && globallyOff && (
-                          <span className="text-[9px] text-muted-foreground ml-1">(desativado globalmente)</span>
-                        )}
                       </div>
                       <button
                         disabled={isLocked(mod.id) || (moduleTarget !== 'global' && globallyOff)}
@@ -301,24 +546,16 @@ export default function AdminPage() {
                         className={cn(
                           'transition-colors',
                           (isLocked(mod.id) || (moduleTarget !== 'global' && globallyOff))
-                            ? 'opacity-30 cursor-not-allowed'
-                            : 'cursor-pointer'
+                            ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'
                         )}
-                        title={isLocked(mod.id) ? 'Este módulo não pode ser desativado' : undefined}
                       >
                         {isOn
                           ? <ToggleRight className="w-8 h-8 text-primary" />
-                          : <ToggleLeft  className="w-8 h-8 text-muted-foreground" />
-                        }
+                          : <ToggleLeft  className="w-8 h-8 text-muted-foreground" />}
                       </button>
                     </div>
                   );
                 })}
-              </div>
-              <div className="p-3 rounded-lg bg-warning/5 border border-warning/20">
-                <p className="text-xs text-muted-foreground">
-                  ⚠️ Módulos desativados ficam ocultos no menu lateral. Para bloqueio total de URL, use as permissões de role.
-                </p>
               </div>
             </div>
           )}
@@ -337,8 +574,7 @@ export default function AdminPage() {
                   <div key={item.label} className="flex items-start gap-3 p-3 rounded-xl bg-muted/30">
                     {item.status
                       ? <CheckCircle2 className="w-4 h-4 text-success mt-0.5 flex-shrink-0" />
-                      : <AlertCircle  className="w-4 h-4 text-warning mt-0.5 flex-shrink-0" />
-                    }
+                      : <AlertCircle  className="w-4 h-4 text-warning mt-0.5 flex-shrink-0" />}
                     <div>
                       <p className="text-sm font-medium">{item.label}</p>
                       <p className="text-xs text-muted-foreground">{item.desc}</p>
@@ -356,8 +592,6 @@ export default function AdminPage() {
               </div>
             </div>
           )}
-
-
 
         </div>
       </div>

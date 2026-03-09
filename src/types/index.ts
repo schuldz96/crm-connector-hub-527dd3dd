@@ -1,6 +1,63 @@
 // Types for the entire application
 
-export type UserRole = 'admin' | 'director' | 'supervisor' | 'member';
+export type UserRole =
+  | 'admin'
+  | 'ceo'
+  | 'director'
+  | 'manager'
+  | 'coordinator'
+  | 'supervisor'
+  | 'member';
+
+// Ordered from highest to lowest authority
+export const ROLE_HIERARCHY: UserRole[] = [
+  'admin', 'ceo', 'director', 'manager', 'coordinator', 'supervisor', 'member',
+];
+
+export const ROLE_LABELS: Record<UserRole, string> = {
+  admin:       'Administrador',
+  ceo:         'CEO',
+  director:    'Diretor',
+  manager:     'Gerente',
+  coordinator: 'Coordenador',
+  supervisor:  'Supervisor',
+  member:      'Vendedor',
+};
+
+// Resources that can be toggled per role
+export type ResourceId =
+  | 'dashboard'
+  | 'meetings'
+  | 'whatsapp'
+  | 'performance'
+  | 'training'
+  | 'teams'
+  | 'areas'
+  | 'users'
+  | 'reports'
+  | 'integrations'
+  | 'automations'
+  | 'ai-config'
+  | 'admin';
+
+export interface RolePermission {
+  role: UserRole;
+  label: string;
+  color: string;        // tailwind color token e.g. "primary", "success"
+  canDelete: boolean;   // admin can never be deleted
+  resources: ResourceId[];
+  // org scope: what the role can see
+  scope: 'all' | 'area' | 'team' | 'self';
+}
+
+export interface Area {
+  id: string;
+  name: string;
+  managerId?: string;   // manager-level user who owns this area
+  teamIds: string[];
+  companyId: string;
+  createdAt: string;
+}
 
 export interface User {
   id: string;
@@ -9,6 +66,7 @@ export interface User {
   avatar?: string;
   role: UserRole;
   teamId?: string;
+  areaId?: string;
   company: string;
   status: 'active' | 'inactive';
   createdAt: string;
@@ -20,6 +78,7 @@ export interface Team {
   supervisorId: string;
   memberIds: string[];
   companyId: string;
+  areaId?: string;
   goal?: number;
   createdAt: string;
 }

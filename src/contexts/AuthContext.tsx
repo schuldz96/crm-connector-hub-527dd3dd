@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { User, UserRole } from '@/types';
+import { ROLE_HIERARCHY } from '@/types';
+import { useRolePermissions } from '@/contexts/RolePermissionsContext';
 
 interface AuthContextType {
   user: User | null;
@@ -8,15 +10,18 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: () => Promise<void>;
   logout: () => void;
+  /** True if user's role is one of the listed roles */
   hasRole: (roles: UserRole[]) => boolean;
+  /** True if user's role is >= minRole in the hierarchy (i.e. has equal or higher authority) */
+  hasMinRole: (minRole: UserRole) => boolean;
   canAccess: (resource: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-// Mock user for demo
+// Mock admin user for demo
 const MOCK_USER: User = {
-  id: 'usr_admin_001',
+  id: 'usr_001',
   name: 'Marcos Schuldz',
   email: 'marcos.schuldz@appmax.com.br',
   avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Marcos',
@@ -26,32 +31,21 @@ const MOCK_USER: User = {
   createdAt: '2026-01-01',
 };
 
-// Valid demo credentials
 const DEMO_CREDENTIALS = {
   email: 'marcos.schuldz@appmax.com.br',
   password: 'Appmax102030@',
 };
 
-const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
-  admin: ['*'],
-  director: ['dashboard', 'meetings', 'whatsapp', 'teams', 'users', 'reports', 'integrations'],
-  supervisor: ['dashboard', 'meetings', 'whatsapp', 'teams', 'reports'],
-  member: ['dashboard', 'meetings', 'whatsapp'],
-};
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const { canAccess: roleCanAccess } = useRolePermissions();
 
   useEffect(() => {
-    // Check for stored session
     const stored = localStorage.getItem('appmax_user');
     if (stored) {
-      try {
-        setUser(JSON.parse(stored));
-      } catch {
-        localStorage.removeItem('appmax_user');
-      }
+      try { setUser(JSON.parse(stored)); }
+      catch { localStorage.removeItem('appmax_user'); }
     }
     setIsLoading(false);
   }, []);
@@ -59,19 +53,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     await new Promise(r => setTimeout(r, 600));
-    // Check exact credentials OR allow any email (demo mode)
-    const isValidCredentials =
+    const isValid =
       (email === DEMO_CREDENTIALS.email && password === DEMO_CREDENTIALS.password) ||
       (email.length > 0 && password.length > 0);
-    if (!isValidCredentials) {
-      setIsLoading(false);
-      throw new Error('Credenciais inválidas');
-    }
-    const mockUser = email === DEMO_CREDENTIALS.email
-      ? { ...MOCK_USER }
-      : { ...MOCK_USER, email };
-    setUser(mockUser);
-    localStorage.setItem('appmax_user', JSON.stringify(mockUser));
+    if (!isValid) { setIsLoading(false); throw new Error('Credenciais inválidas'); }
+    const u = email === DEMO_CREDENTIALS.email ? { ...MOCK_USER } : { ...MOCK_USER, email };
+    setUser(u);
+    localStorage.setItem('appmax_user', JSON.stringify(u));
     setIsLoading(false);
   };
 
@@ -88,27 +76,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('appmax_user');
   };
 
-  const hasRole = (roles: UserRole[]) => {
+  const hasRole = (roles: UserRole[]) => !!user && roles.includes(user.role);
+
+  // Returns true if the logged-in user has authority >= minRole
+  const hasMinRole = (minRole: UserRole): boolean => {
     if (!user) return false;
-    return roles.includes(user.role);
+    const userIdx = ROLE_HIERARCHY.indexOf(user.role);
+    const minIdx  = ROLE_HIERARCHY.indexOf(minRole);
+    return userIdx <= minIdx; // lower index = higher authority
   };
 
   const canAccess = (resource: string) => {
     if (!user) return false;
-    const perms = ROLE_PERMISSIONS[user.role];
-    return perms.includes('*') || perms.includes(resource);
+    // admin always gets everything
+    if (user.role === 'admin') return true;
+    return roleCanAccess(user.role, resource as any);
   };
 
   return (
     <AuthContext.Provider value={{
-      user,
-      isAuthenticated: !!user,
-      isLoading,
-      login,
-      loginWithGoogle,
-      logout,
-      hasRole,
-      canAccess,
+      user, isAuthenticated: !!user, isLoading,
+      login, loginWithGoogle, logout,
+      hasRole, hasMinRole, canAccess,
     }}>
       {children}
     </AuthContext.Provider>
