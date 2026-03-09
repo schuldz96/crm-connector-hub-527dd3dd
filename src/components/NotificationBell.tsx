@@ -1,14 +1,14 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, X, CheckCheck, Filter, Video, MessageSquare, Zap, AlertCircle } from 'lucide-react';
+import { Bell, X, CheckCheck, Video, MessageSquare, Zap, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications, type NotificationType } from '@/contexts/NotificationsContext';
 
 const TYPE_CONFIG: Record<NotificationType, { icon: React.ElementType; color: string; bg: string; label: string }> = {
-  meeting:     { icon: Video,          color: 'text-primary',     bg: 'bg-primary/10',     label: 'Reunião' },
-  whatsapp:    { icon: MessageSquare,  color: 'text-success',     bg: 'bg-success/10',     label: 'WhatsApp' },
-  performance: { icon: Zap,            color: 'text-warning',     bg: 'bg-warning/10',     label: 'Desempenho' },
-  system:      { icon: AlertCircle,    color: 'text-accent',      bg: 'bg-accent/10',      label: 'Sistema' },
+  meeting:     { icon: Video,         color: 'text-primary',   bg: 'bg-primary/10',   label: 'Reunião' },
+  whatsapp:    { icon: MessageSquare, color: 'text-success',   bg: 'bg-success/10',   label: 'WhatsApp' },
+  performance: { icon: Zap,           color: 'text-warning',   bg: 'bg-warning/10',   label: 'Desempenho' },
+  system:      { icon: AlertCircle,   color: 'text-accent',    bg: 'bg-accent/10',    label: 'Sistema' },
 };
 
 function timeAgo(iso: string): string {
@@ -27,17 +27,24 @@ export default function NotificationBell() {
   const { notifications, unreadCount, markAsRead, markAllAsRead, removeNotification } = useNotifications();
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<FilterMode>('all');
+  const bellRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  // Close on outside click
+  // Close on outside click — only close if click is outside BOTH the bell and the panel
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const outsideBell = bellRef.current && !bellRef.current.contains(target);
+      const outsidePanel = panelRef.current && !panelRef.current.contains(target);
+      if (outsideBell && outsidePanel) {
         setOpen(false);
       }
     }
-    if (open) document.addEventListener('mousedown', handleClick);
+    if (open) {
+      // Use setTimeout to let the current click cycle finish first
+      setTimeout(() => document.addEventListener('mousedown', handleClick), 0);
+    }
     return () => document.removeEventListener('mousedown', handleClick);
   }, [open]);
 
@@ -45,7 +52,8 @@ export default function NotificationBell() {
     ? notifications.filter(n => !n.read)
     : notifications;
 
-  const handleClick = (id: string, link?: string) => {
+  const handleItemClick = (id: string, link?: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     markAsRead(id);
     if (link) {
       navigate(link);
@@ -54,9 +62,10 @@ export default function NotificationBell() {
   };
 
   return (
-    <div className="relative" ref={panelRef}>
+    <>
       {/* Bell button */}
       <button
+        ref={bellRef}
         onClick={() => setOpen(o => !o)}
         className={cn(
           'relative w-8 h-8 rounded-lg border flex items-center justify-center transition-colors',
@@ -67,15 +76,19 @@ export default function NotificationBell() {
       >
         <Bell className="w-4 h-4" />
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-primary text-primary-foreground text-[9px] font-bold flex items-center justify-center px-1">
+          <span className="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full bg-primary text-primary-foreground text-[9px] font-bold flex items-center justify-center px-1 pointer-events-none">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
-      {/* Panel */}
+      {/* Portal-like panel: rendered at body level via fixed positioning */}
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-[360px] rounded-2xl border border-border bg-popover shadow-2xl z-50 overflow-hidden animate-fade-in">
+        <div
+          ref={panelRef}
+          className="fixed top-14 right-4 w-[360px] rounded-2xl border border-border bg-popover shadow-2xl z-[9999] overflow-hidden animate-fade-in"
+          style={{ maxHeight: 'calc(100vh - 80px)' }}
+        >
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <div className="flex items-center gap-2">
@@ -98,10 +111,10 @@ export default function NotificationBell() {
           {/* Filters */}
           <div className="flex items-center justify-between px-4 py-2 border-b border-border/50 bg-muted/20">
             <div className="flex items-center gap-1">
-              {([['all', 'Todas'], ['unread', 'Não lidas']] as [FilterMode, string][]).map(([val, label]) => (
+              {(['all', 'unread'] as FilterMode[]).map(val => (
                 <button
                   key={val}
-                  onClick={() => setFilter(val)}
+                  onClick={(e) => { e.stopPropagation(); setFilter(val); }}
                   className={cn(
                     'text-[11px] px-2.5 py-1 rounded-lg font-medium transition-colors',
                     filter === val
@@ -109,13 +122,13 @@ export default function NotificationBell() {
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                   )}
                 >
-                  {label}
+                  {val === 'all' ? 'Todas' : 'Não lidas'}
                 </button>
               ))}
             </div>
             {unreadCount > 0 && (
               <button
-                onClick={markAllAsRead}
+                onClick={(e) => { e.stopPropagation(); markAllAsRead(); }}
                 className="flex items-center gap-1 text-[11px] text-primary hover:underline"
               >
                 <CheckCheck className="w-3 h-3" /> Marcar todas como lidas
@@ -124,7 +137,7 @@ export default function NotificationBell() {
           </div>
 
           {/* List */}
-          <div className="max-h-[380px] overflow-y-auto">
+          <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 180px)' }}>
             {visible.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 text-center">
                 <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mb-3">
@@ -142,10 +155,10 @@ export default function NotificationBell() {
                 return (
                   <div
                     key={n.id}
-                    onClick={() => handleClick(n.id, n.link)}
+                    onClick={(e) => handleItemClick(n.id, n.link, e)}
                     className={cn(
                       'group flex items-start gap-3 px-4 py-3 border-b border-border/40 transition-colors cursor-pointer last:border-0',
-                      !n.read ? 'bg-primary/[0.03] hover:bg-primary/[0.06]' : 'hover:bg-muted/30'
+                      !n.read ? 'bg-primary/[0.04] hover:bg-primary/[0.08]' : 'hover:bg-muted/30'
                     )}
                   >
                     {/* Icon */}
@@ -156,7 +169,7 @@ export default function NotificationBell() {
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
-                        <p className={cn('text-xs font-semibold leading-snug', !n.read && 'text-foreground')}>
+                        <p className={cn('text-xs font-semibold leading-snug', !n.read ? 'text-foreground' : 'text-muted-foreground')}>
                           {n.title}
                         </p>
                         <div className="flex items-center gap-1 flex-shrink-0">
@@ -201,6 +214,6 @@ export default function NotificationBell() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
