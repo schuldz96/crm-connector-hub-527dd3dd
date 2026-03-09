@@ -220,7 +220,7 @@ function GooglePanel() {
           <div>
             <p className="text-xs font-semibold text-warning mb-1">Client ID do Google não configurado</p>
             <p className="text-[11px] text-muted-foreground leading-relaxed">
-              Para ativar o OAuth real, adicione a variável <code className="bg-muted px-1 rounded font-mono">VITE_GOOGLE_CLIENT_ID</code> nas configurações do projeto com o Client ID gerado no Google Cloud Console.
+              Para ativar o OAuth real, vá em <strong>Admin → Integrações OAuth</strong> e cadastre o Client ID do Google Cloud Console.
             </p>
             <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline mt-1.5">
