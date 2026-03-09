@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppConfig } from '@/contexts/AppConfigContext';
+import { useRolePermissions } from '@/contexts/RolePermissionsContext';
+import { ROLE_LABELS } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import {
   LayoutDashboard, Video, MessageSquare, Users,
@@ -16,27 +18,28 @@ interface NavItem {
   label: string;
   icon: React.ElementType;
   badge?: number;
-  roles?: string[];
+  resource?: string;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { path: '/dashboard',    label: 'Dashboard',     icon: LayoutDashboard },
-  { path: '/meetings',     label: 'Reuniões',       icon: Video,           badge: 3 },
-  { path: '/whatsapp',     label: 'WhatsApp',       icon: MessageSquare,   badge: 6 },
-  { path: '/performance',  label: 'Desempenho',     icon: Activity },
-  { path: '/training',     label: 'Treinamentos',   icon: GraduationCap },
-  { path: '/teams',        label: 'Times',          icon: Target,          roles: ['admin', 'director', 'supervisor'] },
-  { path: '/users',        label: 'Usuários',       icon: Users,           roles: ['admin', 'director'] },
-  { path: '/reports',      label: 'Relatórios',     icon: BarChart3 },
-  { path: '/integrations', label: 'Integrações',    icon: Plug2,           roles: ['admin'] },
-  { path: '/automations',  label: 'Automações',     icon: Zap,             roles: ['admin'] },
-  { path: '/ai-config',    label: 'Config. IA',     icon: SlidersHorizontal, roles: ['admin'] },
-  { path: '/admin',        label: 'Admin',          icon: Shield,          roles: ['admin'] },
+  { path: '/dashboard',    label: 'Dashboard',     icon: LayoutDashboard, resource: 'dashboard' },
+  { path: '/meetings',     label: 'Reuniões',       icon: Video,           resource: 'meetings',     badge: 3 },
+  { path: '/whatsapp',     label: 'WhatsApp',       icon: MessageSquare,   resource: 'whatsapp',     badge: 6 },
+  { path: '/performance',  label: 'Desempenho',     icon: Activity,        resource: 'performance' },
+  { path: '/training',     label: 'Treinamentos',   icon: GraduationCap,   resource: 'training' },
+  { path: '/teams',        label: 'Times',          icon: Target,          resource: 'teams' },
+  { path: '/users',        label: 'Usuários',       icon: Users,           resource: 'users' },
+  { path: '/reports',      label: 'Relatórios',     icon: BarChart3,       resource: 'reports' },
+  { path: '/integrations', label: 'Integrações',    icon: Plug2,           resource: 'integrations' },
+  { path: '/automations',  label: 'Automações',     icon: Zap,             resource: 'automations' },
+  { path: '/ai-config',    label: 'Config. IA',     icon: SlidersHorizontal, resource: 'ai-config' },
+  { path: '/admin',        label: 'Admin',          icon: Shield,          resource: 'admin' },
 ];
 
 export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
-  const { user, logout, hasRole } = useAuth();
-  const { isModuleEnabled, isModuleEnabledForUser } = useAppConfig();
+  const { user, logout, canAccess } = useAuth();
+  const { isModuleEnabledForUser } = useAppConfig();
+  const { getPermission } = useRolePermissions();
   const location = useLocation();
   const navigate = useNavigate();
   const [profileOpen, setProfileOpen] = useState(false);
@@ -45,16 +48,22 @@ export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean
 
   const visibleItems = NAV_ITEMS.filter(item => {
     const moduleId = item.path.replace('/', '') as any;
-    const roleOk = !item.roles || hasRole(item.roles as any[]);
+    const resourceOk = !item.resource || canAccess(item.resource);
     const moduleOk = isModuleEnabledForUser(moduleId, user?.id ?? '', user?.teamId);
-    return roleOk && moduleOk;
+    return resourceOk && moduleOk;
   });
 
-  const roleLabels: Record<string, string> = {
-    admin: 'Administrador',
-    director: 'Diretor',
-    supervisor: 'Supervisor',
-    member: 'Vendedor',
+  const roleLabel = user?.role ? (ROLE_LABELS[user.role] ?? user.role) : 'Usuário';
+  const rolePerm = user?.role ? getPermission(user.role) : undefined;
+
+  // Color badge per role
+  const roleColorClass: Record<string, string> = {
+    destructive: 'text-destructive',
+    primary: 'text-primary',
+    accent: 'text-accent',
+    warning: 'text-warning',
+    success: 'text-success',
+    'muted-foreground': 'text-muted-foreground',
   };
 
   return (
@@ -133,7 +142,9 @@ export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean
             <>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-foreground truncate">{user?.name}</p>
-                <p className="text-[10px] text-muted-foreground">{roleLabels[user?.role || 'member']}</p>
+                <p className={cn('text-[10px]', rolePerm ? roleColorClass[rolePerm.color] : 'text-muted-foreground')}>
+                  {roleLabel}
+                </p>
               </div>
               <ChevronDown className={cn('w-3 h-3 text-muted-foreground transition-transform', profileOpen && 'rotate-180')} />
             </>
@@ -150,18 +161,16 @@ export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean
                   </p>
                 </div>
                 <button
-                  onClick={() => { setProfileOpen(false); }}
+                  onClick={() => setProfileOpen(false)}
                   className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
                 >
-                  <User className="w-3 h-3" />
-                  Meu Perfil
+                  <User className="w-3 h-3" /> Meu Perfil
                 </button>
                 <button
-                  onClick={() => { setProfileOpen(false); }}
+                  onClick={() => setProfileOpen(false)}
                   className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
                 >
-                  <Building2 className="w-3 h-3" />
-                  {roleLabels[user?.role || 'member']}
+                  <Building2 className="w-3 h-3" /> {roleLabel}
                 </button>
                 <div className="h-px bg-sidebar-border mx-2 my-1" />
               </>

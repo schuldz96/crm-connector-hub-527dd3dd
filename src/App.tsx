@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppConfigProvider } from "@/contexts/AppConfigContext";
+import { RolePermissionsProvider } from "@/contexts/RolePermissionsContext";
 import AppLayout from "@/components/AppLayout";
 import LoginPage from "@/pages/LoginPage";
 import DashboardPage from "@/pages/DashboardPage";
@@ -44,20 +45,20 @@ function ProtectedRoutes() {
   return (
     <Routes>
       <Route element={<AppLayout />}>
-        <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/meetings" element={<MeetingsPage />} />
-        <Route path="/whatsapp" element={<WhatsAppPage />} />
-        <Route path="/training" element={<TrainingPage />} />
-        <Route path="/teams" element={<TeamsPage />} />
-        <Route path="/users" element={<UsersPage />} />
-        <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/dashboard"    element={<DashboardPage />} />
+        <Route path="/meetings"     element={<MeetingsPage />} />
+        <Route path="/whatsapp"     element={<WhatsAppPage />} />
+        <Route path="/training"     element={<TrainingPage />} />
+        <Route path="/teams"        element={<TeamsPage />} />
+        <Route path="/users"        element={<UsersPage />} />
+        <Route path="/reports"      element={<ReportsPage />} />
         <Route path="/integrations" element={<IntegrationsPage />} />
-        <Route path="/automations" element={<AutomationsPage />} />
-        <Route path="/ai-config" element={<AIConfigPage />} />
-        <Route path="/admin" element={<AdminPage />} />
-        <Route path="/performance" element={<PerformancePage />} />
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="*" element={<NotFound />} />
+        <Route path="/automations"  element={<AutomationsPage />} />
+        <Route path="/ai-config"    element={<AIConfigPage />} />
+        <Route path="/admin"        element={<AdminPage />} />
+        <Route path="/performance"  element={<PerformancePage />} />
+        <Route path="/"             element={<Navigate to="/dashboard" replace />} />
+        <Route path="*"             element={<NotFound />} />
       </Route>
     </Routes>
   );
@@ -69,14 +70,16 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <AppConfigProvider>
-        <AuthProvider>
-          <Routes>
-            <Route path="/login" element={<LoginPageWrapper />} />
-            <Route path="/*" element={<ProtectedRoutes />} />
-          </Routes>
-        </AuthProvider>
-        </AppConfigProvider>
+        <RolePermissionsProvider>
+          <AppConfigProvider>
+            <AuthProvider>
+              <Routes>
+                <Route path="/login" element={<LoginPageWrapper />} />
+                <Route path="/*"     element={<ProtectedRoutes />} />
+              </Routes>
+            </AuthProvider>
+          </AppConfigProvider>
+        </RolePermissionsProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
