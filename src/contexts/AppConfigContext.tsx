@@ -13,26 +13,22 @@ export interface ModuleConfig {
 }
 
 export type AIModelId =
-  | 'openai/gpt-5'
-  | 'openai/gpt-5-mini'
-  | 'openai/gpt-5-nano'
-  | 'openai/gpt-5.2'
-  | 'google/gemini-2.5-pro'
-  | 'google/gemini-3.1-pro-preview'
-  | 'google/gemini-3-flash-preview'
-  | 'google/gemini-2.5-flash'
-  | 'google/gemini-2.5-flash-lite';
+  | 'gpt-4o-mini'
+  | 'gpt-4o'
+  | 'gpt-4-turbo'
+  | 'gpt-4'
+  | 'gpt-3.5-turbo'
+  | 'o1-mini'
+  | 'o1-preview';
 
 export const AI_MODELS: { id: AIModelId; label: string; desc: string; badge: string }[] = [
-  { id: 'google/gemini-3-flash-preview', label: 'Gemini 3 Flash (padrão)', desc: 'Rápido e eficiente — melhor custo-benefício',           badge: '⚡ Recomendado' },
-  { id: 'google/gemini-2.5-flash',       label: 'Gemini 2.5 Flash',        desc: 'Balanceado — multimodal + raciocínio',                  badge: '⚖️ Balanceado' },
-  { id: 'google/gemini-2.5-pro',         label: 'Gemini 2.5 Pro',          desc: 'Máximo desempenho em raciocínio e contexto grande',     badge: '🏆 Premium' },
-  { id: 'google/gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro Preview',  desc: 'Próxima geração do Google — raciocínio avançado',       badge: '🔬 Preview' },
-  { id: 'google/gemini-2.5-flash-lite',  label: 'Gemini 2.5 Flash Lite',   desc: 'Mais rápido e barato — tarefas simples',                badge: '🚀 Econômico' },
-  { id: 'openai/gpt-5',                  label: 'GPT-5',                   desc: 'Poderoso — raciocínio e multimodal de alto nível',      badge: '🧠 OpenAI' },
-  { id: 'openai/gpt-5-mini',             label: 'GPT-5 Mini',              desc: 'Menor custo com forte desempenho',                      badge: '💡 OpenAI' },
-  { id: 'openai/gpt-5-nano',             label: 'GPT-5 Nano',              desc: 'Ultra rápido — tarefas simples e alto volume',          badge: '⚡ OpenAI' },
-  { id: 'openai/gpt-5.2',               label: 'GPT-5.2',                  desc: 'Mais recente da OpenAI — raciocínio complexo aprimorado', badge: '🆕 OpenAI' },
+  { id: 'gpt-4o-mini',   label: 'GPT-4o Mini',    desc: 'Rápido e econômico — melhor custo-benefício',          badge: '⚡ Padrão'     },
+  { id: 'gpt-4o',        label: 'GPT-4o',          desc: 'Multimodal e poderoso — equilíbrio perfeito',          badge: '⚖️ Balanceado' },
+  { id: 'gpt-4-turbo',   label: 'GPT-4 Turbo',     desc: 'Alta capacidade com janela de contexto ampla',         badge: '🚀 Turbo'      },
+  { id: 'gpt-4',         label: 'GPT-4',           desc: 'Raciocínio avançado e tarefas complexas',              badge: '🧠 Premium'    },
+  { id: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo',   desc: 'Ultra rápido — tarefas simples e alto volume',         badge: '💨 Econômico'  },
+  { id: 'o1-mini',       label: 'o1 Mini',          desc: 'Raciocínio passo a passo — tarefas técnicas',          badge: '🔬 Raciocínio' },
+  { id: 'o1-preview',    label: 'o1 Preview',       desc: 'Máximo raciocínio — problemas complexos e científicos', badge: '🏆 Top'        },
 ];
 
 export type ModuleAIKey = 'meetings' | 'training' | 'whatsapp' | 'reports' | 'automations';
@@ -93,11 +89,11 @@ const STORAGE_KEY_MODULES   = 'appmax_modules_config';
 const STORAGE_KEY_OVERRIDES = 'appmax_user_module_overrides';
 
 const DEFAULT_MODELS: ModuleModels = {
-  meetings:    'google/gemini-3-flash-preview',
-  training:    'google/gemini-3-flash-preview',
-  whatsapp:    'google/gemini-3-flash-preview',
-  reports:     'google/gemini-3-flash-preview',
-  automations: 'google/gemini-3-flash-preview',
+  meetings:    'gpt-4o-mini',
+  training:    'gpt-4o-mini',
+  whatsapp:    'gpt-4o-mini',
+  reports:     'gpt-4o-mini',
+  automations: 'gpt-4o-mini',
 };
 
 const AppConfigContext = createContext<AppConfigContextType | null>(null);
