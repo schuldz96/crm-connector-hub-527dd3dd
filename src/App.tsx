@@ -71,16 +71,18 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <RolePermissionsProvider>
-          <AppConfigProvider>
-            <AuthProvider>
-              <Routes>
-                <Route path="/login" element={<LoginPageWrapper />} />
-                <Route path="/*"     element={<ProtectedRoutes />} />
-              </Routes>
-            </AuthProvider>
-          </AppConfigProvider>
-        </RolePermissionsProvider>
+        <AuditLogProvider>
+          <RolePermissionsProvider>
+            <AppConfigProvider>
+              <AuthProvider>
+                <Routes>
+                  <Route path="/login" element={<LoginPageWrapper />} />
+                  <Route path="/*"     element={<ProtectedRoutes />} />
+                </Routes>
+              </AuthProvider>
+            </AppConfigProvider>
+          </RolePermissionsProvider>
+        </AuditLogProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
