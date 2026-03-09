@@ -63,10 +63,26 @@ export default function AdminPage() {
   const [selectedRole, setSelectedRole] = useState<UserRole>('ceo');
   const [expandedRole, setExpandedRole] = useState<UserRole | null>('ceo');
 
+  // Audit logs state
+  const [logs, setLogs] = useState<AuditEvent[]>([]);
+  const [logSearch, setLogSearch] = useState('');
+  const [logTypeFilter, setLogTypeFilter] = useState<AuditEventType | 'all'>('all');
+  const [logRoleFilter, setLogRoleFilter] = useState<UserRole | 'all'>('all');
+
   const { tokens, setToken, modules, setModuleEnabled, saveConfig,
           getUserDisabledModules, setUserModuleOverride } = useAppConfig();
   const { permissions, updatePermission } = useRolePermissions();
+  const { getLogs, clearLogs } = useAuditLog();
   const { toast } = useToast();
+
+  // Load logs whenever the tab is selected
+  useEffect(() => {
+    if (section === 'logs') {
+      setLogs(getLogs());
+    }
+  }, [section, getLogs]);
+
+  const refreshLogs = () => setLogs(getLogs());
 
   const toggleKey = (k: string) => setShowKey(prev => ({ ...prev, [k]: !prev[k] }));
 
