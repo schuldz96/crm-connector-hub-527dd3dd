@@ -425,6 +425,7 @@ export default function UsersPage() {
               <th className="text-left">Usuário</th>
               <th className="text-left hidden md:table-cell">Email</th>
               <th className="text-center hidden xl:table-cell">WhatsApp</th>
+              <th className="text-center hidden xl:table-cell">Google</th>
               <th className="text-center">Perfil</th>
               <th className="text-center">Status</th>
               <th className="text-center hidden lg:table-cell">Desde</th>
