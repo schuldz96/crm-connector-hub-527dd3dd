@@ -439,6 +439,8 @@ export default function UsersPage() {
               const instName = getInstanceForUser(u.id);
               const assignedInst = instances.find(i => i.name === instName);
               const isInstOpen = assignedInst?.connectionStatus === 'open';
+              // Google: persisted per user in localStorage by Google OAuth flow
+              const googleConnected = !!localStorage.getItem(`google_connected_${u.id}`);
               return (
                 <tr key={u.id} className={cn(u.status === 'inactive' && 'opacity-60')}>
                   <td>
