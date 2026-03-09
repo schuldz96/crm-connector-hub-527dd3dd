@@ -613,6 +613,192 @@ export default function AdminPage() {
             </div>
           )}
 
+          {/* ── Logs de Acesso ── */}
+          {section === 'logs' && (() => {
+            const EVENT_LABELS: Record<AuditEventType, { label: string; icon: React.ReactNode; color: string }> = {
+              login:     { label: 'Login',        icon: <LogIn  className="w-3.5 h-3.5" />, color: 'text-success bg-success/10 border-success/20' },
+              logout:    { label: 'Logout',       icon: <LogOut className="w-3.5 h-3.5" />, color: 'text-warning bg-warning/10 border-warning/20' },
+              page_view: { label: 'Página acessada', icon: <MonitorSmartphone className="w-3.5 h-3.5" />, color: 'text-primary bg-primary/10 border-primary/20' },
+            };
+
+            const filtered = logs.filter(e => {
+              const matchType = logTypeFilter === 'all' || e.type === logTypeFilter;
+              const matchRole = logRoleFilter === 'all' || e.userRole === logRoleFilter;
+              const q = logSearch.toLowerCase();
+              const matchSearch = !q || e.userName.toLowerCase().includes(q) || e.userEmail.toLowerCase().includes(q) || e.pageLabel.toLowerCase().includes(q);
+              return matchType && matchRole && matchSearch;
+            });
+
+            const fmt = (iso: string) => {
+              const d = new Date(iso);
+              return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            };
+
+            return (
+              <div className="space-y-4">
+                {/* Header */}
+                <div className="glass-card p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <ScrollText className="w-4 h-4 text-primary" />
+                      <h2 className="font-display font-semibold text-lg">Logs de Acesso</h2>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-muted border border-border text-muted-foreground">
+                        {filtered.length} registros
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={refreshLogs}>
+                        <RefreshCw className="w-3 h-3" /> Atualizar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs gap-1 text-destructive border-destructive/30 hover:bg-destructive/5"
+                        onClick={() => {
+                          clearLogs();
+                          setLogs([]);
+                          toast({ title: 'Logs apagados', description: 'Histórico de auditoria limpo.' });
+                        }}
+                      >
+                        <Trash className="w-3 h-3" /> Limpar
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Filters */}
+                  <div className="flex flex-wrap gap-2">
+                    {/* Search */}
+                    <div className="relative flex-1 min-w-40">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                      <Input
+                        value={logSearch}
+                        onChange={e => setLogSearch(e.target.value)}
+                        placeholder="Buscar usuário, e-mail ou página..."
+                        className="h-8 pl-8 text-xs bg-secondary border-border"
+                      />
+                    </div>
+                    {/* Type filter */}
+                    <select
+                      value={logTypeFilter}
+                      onChange={e => setLogTypeFilter(e.target.value as AuditEventType | 'all')}
+                      className="h-8 text-xs bg-secondary border border-border rounded-lg px-2 text-foreground"
+                    >
+                      <option value="all">Todos os eventos</option>
+                      <option value="login">Login</option>
+                      <option value="logout">Logout</option>
+                      <option value="page_view">Páginas</option>
+                    </select>
+                    {/* Role filter */}
+                    <select
+                      value={logRoleFilter}
+                      onChange={e => setLogRoleFilter(e.target.value as UserRole | 'all')}
+                      className="h-8 text-xs bg-secondary border border-border rounded-lg px-2 text-foreground"
+                    >
+                      <option value="all">Todos os cargos</option>
+                      {ROLE_HIERARCHY.map(r => (
+                        <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Stats summary */}
+                {logs.length > 0 && (
+                  <div className="grid grid-cols-3 gap-3">
+                    {(
+                      [
+                        { type: 'login',     label: 'Logins',   color: 'text-success',  bg: 'bg-success/10',  icon: <LogIn  className="w-4 h-4" /> },
+                        { type: 'logout',    label: 'Logouts',  color: 'text-warning',  bg: 'bg-warning/10',  icon: <LogOut className="w-4 h-4" /> },
+                        { type: 'page_view', label: 'Páginas',  color: 'text-primary',  bg: 'bg-primary/10',  icon: <MonitorSmartphone className="w-4 h-4" /> },
+                      ] as { type: AuditEventType; label: string; color: string; bg: string; icon: React.ReactNode }[]
+                    ).map(s => (
+                      <div key={s.type} className="glass-card p-4 flex items-center gap-3">
+                        <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0', s.bg, s.color)}>
+                          {s.icon}
+                        </div>
+                        <div>
+                          <p className="text-xl font-bold">{logs.filter(e => e.type === s.type).length}</p>
+                          <p className="text-xs text-muted-foreground">{s.label}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Table */}
+                <div className="glass-card overflow-hidden">
+                  {filtered.length === 0 ? (
+                    <div className="py-16 text-center">
+                      <ScrollText className="w-8 h-8 mx-auto text-muted-foreground/30 mb-3" />
+                      <p className="text-sm text-muted-foreground">
+                        {logs.length === 0 ? 'Nenhum evento registrado ainda. Navegue pela plataforma para gerar logs.' : 'Nenhum evento corresponde aos filtros.'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-border bg-muted/30">
+                            <th className="text-left px-4 py-3 font-semibold text-muted-foreground uppercase tracking-wide">Data/Hora</th>
+                            <th className="text-left px-4 py-3 font-semibold text-muted-foreground uppercase tracking-wide">Evento</th>
+                            <th className="text-left px-4 py-3 font-semibold text-muted-foreground uppercase tracking-wide">Usuário</th>
+                            <th className="text-left px-4 py-3 font-semibold text-muted-foreground uppercase tracking-wide">Cargo</th>
+                            <th className="text-left px-4 py-3 font-semibold text-muted-foreground uppercase tracking-wide">Página</th>
+                            <th className="text-left px-4 py-3 font-semibold text-muted-foreground uppercase tracking-wide">Sessão</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filtered.slice(0, 200).map((log, i) => {
+                            const ev = EVENT_LABELS[log.type];
+                            return (
+                              <tr
+                                key={log.id}
+                                className={cn(
+                                  'border-b border-border/40 transition-colors hover:bg-muted/20',
+                                  i % 2 === 0 ? 'bg-transparent' : 'bg-muted/10'
+                                )}
+                              >
+                                <td className="px-4 py-2.5 font-mono text-muted-foreground whitespace-nowrap">
+                                  {fmt(log.timestamp)}
+                                </td>
+                                <td className="px-4 py-2.5">
+                                  <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-medium', ev.color)}>
+                                    {ev.icon}
+                                    {ev.label}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-2.5">
+                                  <div className="font-medium text-foreground">{log.userName}</div>
+                                  <div className="text-muted-foreground">{log.userEmail}</div>
+                                </td>
+                                <td className="px-4 py-2.5 text-muted-foreground">{ROLE_LABELS[log.userRole]}</td>
+                                <td className="px-4 py-2.5">
+                                  {log.pageLabel ? (
+                                    <span className="font-mono text-muted-foreground">{log.pageLabel}</span>
+                                  ) : (
+                                    <span className="text-muted-foreground/40">—</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-2.5 font-mono text-muted-foreground/60 text-[10px]">
+                                  #{log.sessionId}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                      {filtered.length > 200 && (
+                        <p className="text-xs text-center text-muted-foreground py-3">
+                          Exibindo 200 de {filtered.length} registros. Use os filtros para refinar.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
         </div>
       </div>
     </div>
