@@ -18,12 +18,16 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) { setError('Preencha todos os campos'); return; }
+    if (!email.toLowerCase().endsWith('@appmax.com.br')) {
+      setError('Apenas e-mails @appmax.com.br são permitidos.');
+      return;
+    }
     setError('');
     setLoading(true);
     try {
       await login(email, password);
-    } catch {
-      setError('Credenciais inválidas. Tente novamente.');
+    } catch (err: any) {
+      setError(err?.message ?? 'Credenciais inválidas. Tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -31,10 +35,11 @@ export default function LoginPage() {
 
   const handleGoogle = async () => {
     setLoading(true);
+    setError('');
     try {
       await loginWithGoogle();
-    } catch {
-      setError('Erro ao autenticar com Google.');
+    } catch (err: any) {
+      setError(err?.message ?? 'Erro ao autenticar com Google.');
     } finally {
       setLoading(false);
     }
