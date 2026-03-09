@@ -24,12 +24,12 @@ import ReportsPage from "@/pages/ReportsPage";
 import TrainingPage from "@/pages/TrainingPage";
 import AIConfigPage from "@/pages/AIConfigPage";
 import PerformancePage from "@/pages/PerformancePage";
+import MyProfilePage from "@/pages/MyProfilePage";
 import NotFound from "@/pages/NotFound";
 
 // Publishable Google OAuth Client ID (safe to expose in frontend)
 export const GOOGLE_CLIENT_ID =
-  import.meta.env.VITE_GOOGLE_CLIENT_ID ||
-  '19779916042-ur7fs5qdorm32bsen7vtfcurkoka4sp7.apps.googleusercontent.com';
+  import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 
 const queryClient = new QueryClient();
 
@@ -40,9 +40,7 @@ function ProtectedRoutes() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-primary flex items-center justify-center animate-pulse">
-            <span className="text-primary-foreground font-bold text-lg">D</span>
-          </div>
+          <img src="/appmax-favicon.png" alt="Appmax" className="w-10 h-10 rounded-xl animate-pulse" />
           <p className="text-sm text-muted-foreground">Carregando...</p>
         </div>
       </div>
@@ -66,6 +64,7 @@ function ProtectedRoutes() {
         <Route path="/ai-config"    element={<AIConfigPage />} />
         <Route path="/admin"        element={<AdminPage />} />
         <Route path="/performance"  element={<PerformancePage />} />
+        <Route path="/me"           element={<MyProfilePage />} />
         <Route path="/"             element={<Navigate to="/dashboard" replace />} />
         <Route path="*"             element={<NotFound />} />
       </Route>

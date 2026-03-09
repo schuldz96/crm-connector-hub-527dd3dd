@@ -21,8 +21,8 @@ import { MOCK_USERS, MOCK_TEAMS } from '@/data/mockData';
 import { useAppConfig } from '@/contexts/AppConfigContext';
 import { AI_CONFIG_STORAGE, DEFAULT_WHATSAPP_CRITERIA } from '@/pages/AIConfigPage';
 
-const EVOLUTION_API_URL = 'https://evolutionapic.contato-lojavirtual.com';
-const EVOLUTION_API_TOKEN = '3ce7a42f9bd96ea526b2b0bc39a4faec';
+const EVOLUTION_API_URL = import.meta.env.VITE_EVOLUTION_API_URL || '';
+const EVOLUTION_API_TOKEN = import.meta.env.VITE_EVOLUTION_API_TOKEN || '';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Chat {
@@ -465,8 +465,8 @@ export default function WhatsAppPage() {
 
   // Helper: find team for an instance by looking up the assigned user's teamId
   const getInstTeamId = (instName: string): string | null => {
-    const assignedUser = MOCK_USERS.find(u => getInstanceForUser(u.id) === instName);
-    return assignedUser?.teamId ?? null;
+    const assignedUser = realUsers.find(u => getInstanceForUser(u.id) === instName);
+    return assignedUser ? null : null;
   };
 
   const visibleInstances = (() => {
@@ -878,9 +878,6 @@ export default function WhatsAppPage() {
                 onChange={e => setInstTeamFilter(e.target.value)}
                 className="w-full text-[10px] bg-secondary text-muted-foreground rounded-md px-2 py-1.5 border border-border focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer">
                 <option value="all">🏷 Todos os times</option>
-                {MOCK_TEAMS.map(t => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
                 <option value="unassigned">Sem time</option>
               </select>
             </div>
@@ -896,7 +893,7 @@ export default function WhatsAppPage() {
             {visibleInstances.map(inst => {
               const isOpen = inst.connectionStatus === 'open';
               const phone = inst.ownerJid?.replace('@s.whatsapp.net', '');
-              const assignedUser = MOCK_USERS.find(u => getInstanceForUser(u.id) === inst.name);
+              const assignedUser = realUsers.find(u => getInstanceForUser(u.id) === inst.name);
               const isActive = activeInstance?.name === inst.name;
               return (
                 <button

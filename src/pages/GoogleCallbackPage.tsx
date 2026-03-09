@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { TrendingUp } from 'lucide-react';
 
 export default function GoogleCallbackPage() {
   const navigate = useNavigate();
@@ -59,9 +58,7 @@ export default function GoogleCallbackPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="flex flex-col items-center gap-4">
-        <div className="w-12 h-12 rounded-xl bg-gradient-primary flex items-center justify-center animate-pulse">
-          <TrendingUp className="w-6 h-6 text-primary-foreground" />
-        </div>
+        <img src="/appmax-favicon.png" alt="Appmax" className="w-12 h-12 rounded-xl animate-pulse" />
         <p className="text-sm text-muted-foreground">{status}</p>
       </div>
     </div>

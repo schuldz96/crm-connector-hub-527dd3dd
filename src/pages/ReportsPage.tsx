@@ -1,26 +1,46 @@
-import { MOCK_MEETINGS, CHART_DATA } from '@/data/mockData';
+import { useMemo } from 'react';
+import { MOCK_MEETINGS, MOCK_EVALUATIONS, CHART_DATA } from '@/data/mockData';
 import { Button } from '@/components/ui/button';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, Radar
 } from 'recharts';
-import { Download, FileText, TrendingUp, Users, Video, Star, Calendar, Filter } from 'lucide-react';
-
-const RADAR_DATA = [
-  { subject: 'Rapport', A: 87, B: 73, fullMark: 100 },
-  { subject: 'Descoberta', A: 82, B: 68, fullMark: 100 },
-  { subject: 'Apresentação', A: 90, B: 77, fullMark: 100 },
-  { subject: 'Objeções', A: 79, B: 65, fullMark: 100 },
-  { subject: 'Próx. Passos', A: 88, B: 70, fullMark: 100 },
-];
-
-const SELLER_PERF = [
-  { name: 'Julia Lima', meetings: 18, score: 91, conversions: 9 },
-  { name: 'Diego Alves', meetings: 15, score: 79, conversions: 6 },
-  { name: 'Mariana Costa', meetings: 14, score: 72, conversions: 5 },
-];
+import { Download, Calendar } from 'lucide-react';
 
 export default function ReportsPage() {
+  const sellerPerf = useMemo(() => {
+    const bySeller = new Map<string, { name: string; meetings: number; scoreSum: number; scoreCount: number; conversions: number }>();
+    for (const m of MOCK_MEETINGS) {
+      const cur = bySeller.get(m.sellerId) || { name: m.sellerName, meetings: 0, scoreSum: 0, scoreCount: 0, conversions: 0 };
+      cur.meetings += 1;
+      if (typeof m.score === 'number') {
+        cur.scoreSum += m.score;
+        cur.scoreCount += 1;
+      }
+      if (m.status === 'completed') cur.conversions += 1;
+      bySeller.set(m.sellerId, cur);
+    }
+    return Array.from(bySeller.values()).map(s => ({
+      name: s.name,
+      meetings: s.meetings,
+      score: s.scoreCount ? Math.round(s.scoreSum / s.scoreCount) : 0,
+      conversions: s.conversions,
+    }));
+  }, []);
+
+  const radarData = useMemo(() => {
+    if (!MOCK_EVALUATIONS.length) return [];
+    const avg = (key: keyof (typeof MOCK_EVALUATIONS)[number]) =>
+      Math.round(MOCK_EVALUATIONS.reduce((sum, e) => sum + (Number(e[key]) || 0), 0) / MOCK_EVALUATIONS.length);
+    return [
+      { subject: 'Rapport', A: avg('rapport'), B: Math.max(avg('rapport') - 10, 0), fullMark: 100 },
+      { subject: 'Descoberta', A: avg('discovery'), B: Math.max(avg('discovery') - 10, 0), fullMark: 100 },
+      { subject: 'Apresentação', A: avg('presentation'), B: Math.max(avg('presentation') - 10, 0), fullMark: 100 },
+      { subject: 'Objeções', A: avg('objections'), B: Math.max(avg('objections') - 10, 0), fullMark: 100 },
+      { subject: 'Próx. Passos', A: avg('nextSteps'), B: Math.max(avg('nextSteps') - 10, 0), fullMark: 100 },
+    ];
+  }, []);
+
   return (
     <div className="page-container animate-fade-in">
       <div className="flex items-center justify-between mb-6">
@@ -50,13 +70,13 @@ export default function ReportsPage() {
             </div>
           </div>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={SELLER_PERF} barGap={4}>
+            <BarChart data={sellerPerf} barGap={4}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
               <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} />
-              <Bar dataKey="meetings" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="Reuniões" />
-              <Bar dataKey="conversions" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} name="Conversões" />
+              <Bar dataKey="meetings" fill="hsl(261 86% 68%)" radius={[6, 6, 0, 0]} name="Reuniões" />
+              <Bar dataKey="conversions" fill="hsl(258 55% 76%)" radius={[6, 6, 0, 0]} name="Conversões" />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -70,11 +90,11 @@ export default function ReportsPage() {
             </div>
           </div>
           <ResponsiveContainer width="100%" height={220}>
-            <RadarChart data={RADAR_DATA}>
+            <RadarChart data={radarData}>
               <PolarGrid stroke="hsl(var(--border))" />
               <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
-              <Radar name="Alpha" dataKey="A" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.2} />
-              <Radar name="Beta" dataKey="B" stroke="hsl(var(--accent))" fill="hsl(var(--accent))" fillOpacity={0.2} />
+              <Radar name="Alpha" dataKey="A" stroke="hsl(261 86% 68%)" fill="hsl(261 86% 68%)" fillOpacity={0.2} />
+              <Radar name="Beta" dataKey="B" stroke="hsl(258 55% 76%)" fill="hsl(258 55% 76%)" fillOpacity={0.2} />
               <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }} />
             </RadarChart>
           </ResponsiveContainer>
@@ -105,6 +125,9 @@ export default function ReportsPage() {
                 <span className="font-semibold">{t.value}%</span>
               </div>
             ))}
+            {CHART_DATA.conversionByTeam.length === 0 && (
+              <p className="text-xs text-muted-foreground">Sem dados de conversão por time.</p>
+            )}
           </div>
         </div>
 
@@ -122,7 +145,7 @@ export default function ReportsPage() {
               </tr>
             </thead>
             <tbody>
-              {SELLER_PERF.map((s, i) => (
+              {sellerPerf.map((s, i) => (
                 <tr key={s.name}>
                   <td>
                     <div className="flex items-center gap-2">
@@ -141,6 +164,11 @@ export default function ReportsPage() {
                   </td>
                 </tr>
               ))}
+              {sellerPerf.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="text-center text-xs text-muted-foreground py-5">Sem dados de vendedores ainda.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

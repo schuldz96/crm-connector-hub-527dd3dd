@@ -71,3 +71,32 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+
+## Google SSO (Workspace)
+
+Para habilitar login com Google no ambiente web:
+
+1. Configure no `.env`:
+
+```sh
+VITE_GOOGLE_CLIENT_ID="SEU_CLIENT_ID.apps.googleusercontent.com"
+VITE_GOOGLE_ALLOWED_DOMAIN="appmax.com.br"
+VITE_GOOGLE_REDIRECT_URI="http://localhost:8080/auth/google/callback"
+```
+
+2. No Google Cloud Console (OAuth Client Web), adicione:
+- **Authorized JavaScript origins**: `http://localhost:8080` (e sua URL de produção)
+- **Authorized redirect URIs**: `http://localhost:8080/auth/google/callback` (e callback de produção)
+
+3. Reinicie o frontend após alterar `.env`.
+
+## Banco de dados real (Supabase/PostgreSQL)
+
+Migrations criadas neste projeto:
+
+- `supabase/migrations/20260309164000_schema_saas.sql`
+- `supabase/migrations/20260309164500_seed_inicial_saas.sql`
+
+Documentação completa das tabelas e instruções de aplicação:
+
+- `docs/banco-dados-saas.md`

@@ -1,13 +1,15 @@
 import { useState } from 'react';
+import type { ElementType } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useRolePermissions } from '@/contexts/RolePermissionsContext';
 import { ROLE_LABELS } from '@/types';
 import { Badge } from '@/components/ui/badge';
+import BrandLogo from '@/components/BrandLogo';
 import {
   LayoutDashboard, Video, MessageSquare, Users,
-  BarChart3, Zap, ChevronLeft, ChevronRight, TrendingUp,
+  BarChart3, Zap, ChevronLeft, ChevronRight,
   LogOut, ChevronDown, Building2, Shield, Plug2,
   GraduationCap, SlidersHorizontal, User, Target, Activity
 } from 'lucide-react';
@@ -16,7 +18,7 @@ import { cn } from '@/lib/utils';
 interface NavItem {
   path: string;
   label: string;
-  icon: React.ElementType;
+  icon: ElementType;
   badge?: number;
   resource?: string;
 }
@@ -79,17 +81,7 @@ export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean
         'flex items-center border-b border-sidebar-border h-14 flex-shrink-0',
         collapsed ? 'justify-center px-0' : 'px-4 gap-3'
       )}>
-        <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center flex-shrink-0">
-          <TrendingUp className="w-4 h-4 text-primary-foreground" />
-        </div>
-        {!collapsed && (
-          <div>
-            <span className="font-display font-bold text-foreground text-sm">Appmax</span>
-            <div className="flex items-center gap-1 mt-0.5">
-              <span className="text-[10px] text-muted-foreground">Revenue Intelligence</span>
-            </div>
-          </div>
-        )}
+        <BrandLogo compact={collapsed} />
       </div>
 
       {/* Nav */}
@@ -161,13 +153,19 @@ export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean
                   </p>
                 </div>
                 <button
-                  onClick={() => setProfileOpen(false)}
+                  onClick={() => {
+                    setProfileOpen(false);
+                    navigate('/me');
+                  }}
                   className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
                 >
                   <User className="w-3 h-3" /> Meu Perfil
                 </button>
                 <button
-                  onClick={() => setProfileOpen(false)}
+                  onClick={() => {
+                    setProfileOpen(false);
+                    navigate(canAccess('admin') ? '/admin' : '/users');
+                  }}
                   className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
                 >
                   <Building2 className="w-3 h-3" /> {roleLabel}

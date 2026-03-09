@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGoogleLogin } from '@react-oauth/google';
+import { useNavigate } from 'react-router-dom';
 import { GOOGLE_CLIENT_ID } from '@/App';
+import BrandLogo from '@/components/BrandLogo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Eye, EyeOff, Mail, Lock, TrendingUp, BarChart3, MessageSquare, Brain, ShieldCheck } from 'lucide-react';
-import heroBg from '@/assets/hero-bg.jpg';
+import { Eye, EyeOff, Mail, Lock, BarChart3, MessageSquare, Brain, ShieldCheck } from 'lucide-react';
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
@@ -34,15 +36,32 @@ export default function LoginPage() {
     }
   };
 
-  // Use redirect mode to avoid iframe popup blocking
+  // Google OAuth via popup to avoid callback redirect loops
   const googleLogin = useGoogleLogin({
-    ux_mode: 'redirect',
-    redirect_uri: `${window.location.origin}/auth/google/callback`,
+    flow: 'implicit',
     scope: 'openid email profile',
-    hosted_domain: 'appmax.com.br',
-    // onSuccess / onError are not called in redirect mode
+    hosted_domain: (import.meta.env.VITE_GOOGLE_ALLOWED_DOMAIN || 'appmax.com.br').trim().toLowerCase(),
+    onSuccess: async (tokenResponse) => {
+      try {
+        const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
+        });
+        if (!res.ok) throw new Error('Falha ao buscar dados do Google.');
+        const info = await res.json();
+        await loginWithGoogle({ email: info.email, name: info.name, picture: info.picture });
+        navigate('/dashboard', { replace: true });
+      } catch (err: any) {
+        setError(err?.message ?? 'Falha na autenticação com Google.');
+      } finally {
+        setLoading(false);
+      }
+    },
     onError: () => {
       setError('Erro ao iniciar autenticação com Google.');
+      setLoading(false);
+    },
+    onNonOAuthError: () => {
+      setError('Popup bloqueado pelo navegador. Permita popups e tente novamente.');
       setLoading(false);
     },
   });
@@ -61,7 +80,7 @@ export default function LoginPage() {
     { icon: BarChart3, label: 'Análise de Performance', desc: 'Dashboards em tempo real' },
     { icon: Brain, label: 'IA para Vendas', desc: 'Análise automática de reuniões' },
     { icon: MessageSquare, label: 'WhatsApp Analytics', desc: 'Monitore conversas' },
-    { icon: TrendingUp, label: 'Revenue Intelligence', desc: 'Insights que convertem' },
+    { icon: ShieldCheck, label: 'Governança Comercial', desc: 'Operação com segurança' },
   ];
 
   const displayError = error || (urlError === 'google_failed' ? 'Falha na autenticação com Google. Tente novamente.' : urlError === 'not_authorized' ? 'Conta Google não autorizada para esta plataforma.' : '');
@@ -70,24 +89,19 @@ export default function LoginPage() {
     <div className="min-h-screen flex">
       {/* Left panel */}
       <div
-        className="hidden lg:flex lg:w-1/2 relative flex-col justify-between p-12"
-        style={{ backgroundImage: `url(${heroBg})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+        className="hidden lg:flex lg:w-1/2 relative flex-col justify-between p-12 overflow-hidden"
+        style={{ background: 'radial-gradient(1200px 600px at 20% -10%, hsl(var(--primary)/0.25), transparent 55%), radial-gradient(700px 700px at 80% 120%, hsl(var(--accent)/0.18), transparent 60%), linear-gradient(180deg, hsl(var(--background)), hsl(255 28% 4%))' }}
       >
-        <div className="absolute inset-0 bg-background/70" />
+        <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'linear-gradient(hsl(var(--border)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--border)) 1px, transparent 1px)', backgroundSize: '34px 34px' }} />
         <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-12">
-            <div className="w-10 h-10 rounded-xl bg-gradient-primary flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <span className="text-xl font-display font-bold">Appmax</span>
-          </div>
+          <BrandLogo className="mb-12" />
           <div className="mb-10">
             <h1 className="text-4xl font-display font-bold mb-4 leading-tight">
-              Revenue Intelligence<br />
-              <span className="gradient-text">para equipes de elite.</span>
+              Performance comercial<br />
+              <span className="gradient-text">com padrão Appmax.</span>
             </h1>
             <p className="text-muted-foreground text-lg">
-              Analise reuniões, conversas e performance comercial com IA.
+              Operação, IA e gestão em uma plataforma com identidade da sua marca.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -112,12 +126,7 @@ export default function LoginPage() {
       {/* Right panel */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-background">
         <div className="w-full max-w-md animate-fade-in">
-          <div className="lg:hidden flex items-center gap-3 mb-10">
-            <div className="w-10 h-10 rounded-xl bg-gradient-primary flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <span className="text-xl font-display font-bold">Appmax</span>
-          </div>
+          <BrandLogo className="lg:hidden mb-10" />
 
           <div className="mb-8">
             <h2 className="text-2xl font-display font-bold mb-1">Bem-vindo de volta</h2>

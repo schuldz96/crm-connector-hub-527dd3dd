@@ -154,20 +154,20 @@ const roleLabels: Record<string, string> = {
 export default function TeamsPage() {
   const { toast } = useToast();
   const [teams, setTeams] = useState(MOCK_TEAMS);
-  const [selected, setSelected] = useState(MOCK_TEAMS[0].id);
+  const [selected, setSelected] = useState(MOCK_TEAMS[0]?.id ?? '');
   const [showCreate, setShowCreate] = useState(false);
   const [editTarget, setEditTarget] = useState<Team | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Team | null>(null);
 
-  const team = teams.find(t => t.id === selected)!;
+  const team = teams.find(t => t.id === selected) ?? null;
   const supervisor = team ? MOCK_USERS.find(u => u.id === team.supervisorId) : null;
   const members = team ? MOCK_USERS.filter(u => team.memberIds.includes(u.id)) : [];
 
-  const teamStats = [
+  const teamStats = team ? [
     { label: 'Reuniões',    value: selected === 'team_001' ? '32' : '25', icon: Video },
     { label: 'Score Médio', value: selected === 'team_001' ? '79' : '73', icon: Trophy },
     { label: 'Meta',        value: `${team?.goal ?? 0}`,                  icon: Target },
-  ];
+  ] : [];
 
   const handleCreate = (data: Partial<Team>) => {
     const newTeam: Team = {
@@ -258,6 +258,15 @@ export default function TeamsPage() {
               </div>
             );
           })}
+          {teams.length === 0 && (
+            <div className="glass-card p-5 text-center">
+              <p className="text-sm font-medium mb-1">Nenhum time criado</p>
+              <p className="text-xs text-muted-foreground mb-3">Comece criando seu primeiro time real.</p>
+              <Button size="sm" className="bg-gradient-primary text-xs h-8" onClick={() => setShowCreate(true)}>
+                <Plus className="w-3.5 h-3.5 mr-1.5" /> Criar Time
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Team Detail */}

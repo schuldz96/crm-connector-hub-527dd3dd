@@ -3,18 +3,17 @@ import type { User, UserRole } from '@/types';
 import { ROLE_HIERARCHY } from '@/types';
 import { useRolePermissions } from '@/contexts/RolePermissionsContext';
 import { useAuditLog } from '@/contexts/AuditLogContext';
+import {
+  createOrRefreshAccessRequest,
+  getAllowedUserByEmail,
+  updateAllowedUserProfile,
+} from '@/lib/accessControl';
 
-const ALLOWED_DOMAIN = 'appmax.com.br';
+const ALLOWED_DOMAIN = (import.meta.env.VITE_GOOGLE_ALLOWED_DOMAIN || 'appmax.com.br').trim().toLowerCase();
 
 export function isAppmaxEmail(email: string): boolean {
   return email.trim().toLowerCase().endsWith(`@${ALLOWED_DOMAIN}`);
 }
-
-// ─── Hardcoded allowed users ──────────────────────────────────────────────────
-const ALLOWED_USERS: Array<{ email: string; password: string; name: string; role: UserRole }> = [
-  { email: 'marcos.schuldz@appmax.com.br', password: 'Appmax102030@', name: 'Marcos Schuldz', role: 'admin' },
-  { email: 'yuri.santos@appmax.com.br',    password: 'Appmax102030@', name: 'Yuri Santos',    role: 'admin' },
-];
 
 interface AuthContextType {
   user: User | null;
@@ -23,6 +22,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: (googleUser: { email: string; name: string; picture?: string }) => Promise<void>;
   logout: () => void;
+  updateProfile: (changes: { name?: string; avatar?: string }) => Promise<void>;
   hasRole: (roles: UserRole[]) => boolean;
   hasMinRole: (minRole: UserRole) => boolean;
   canAccess: (resource: string) => boolean;
@@ -56,11 +56,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { addEvent } = useAuditLog();
 
   useEffect(() => {
-    const stored = localStorage.getItem('appmax_user');
-    if (stored) {
-      try { setUser(JSON.parse(stored)); }
-      catch { localStorage.removeItem('appmax_user'); }
-    }
     setIsLoading(false);
   }, []);
 
@@ -76,7 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  // Email + password — validates against hardcoded allowed users list
+  // Email + password — validates against allowed users list
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     await new Promise(r => setTimeout(r, 500));
@@ -87,24 +82,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error('Apenas e-mails @appmax.com.br são permitidos.');
       }
 
-      const match = ALLOWED_USERS.find(
-        u => u.email.toLowerCase() === normalized && u.password === password
-      );
+      const allowedMatch = await getAllowedUserByEmail(normalized);
+      if (!allowedMatch) {
+        throw new Error('Usuário não autorizado.');
+      }
 
-      if (!match) {
+      if (!allowedMatch.password || allowedMatch.password !== password) {
         throw new Error('Credenciais inválidas. Verifique seu e-mail e senha.');
       }
 
-      const u = buildUser(`user_${normalized}`, match.email, match.name, match.role);
+      const u = buildUser(
+        `user_${normalized}`,
+        allowedMatch.email,
+        allowedMatch.name,
+        allowedMatch.role,
+        allowedMatch.avatar
+      );
       setUser(u);
-      localStorage.setItem('appmax_user', JSON.stringify(u));
       recordLogin(u);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Google OAuth callback — receives user info after consent redirect
+  // Google OAuth callback — receives user info after consent
   const loginWithGoogle = async (googleUser: { email: string; name: string; picture?: string }) => {
     const normalized = googleUser.email.trim().toLowerCase();
 
@@ -112,10 +113,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(`Apenas contas @${ALLOWED_DOMAIN} podem acessar a plataforma.`);
     }
 
-    // Find the matching allowed user to get the correct role
-    const match = ALLOWED_USERS.find(u => u.email.toLowerCase() === normalized);
+    const match = await getAllowedUserByEmail(normalized);
     if (!match) {
-      throw new Error('Conta Google não autorizada. Contate o administrador.');
+      await createOrRefreshAccessRequest({
+        email: normalized,
+        name: googleUser.name,
+        picture: googleUser.picture,
+      });
+      throw new Error('Acesso pendente de aprovação. Um administrador precisa aprovar sua conta.');
     }
 
     const u = buildUser(
@@ -127,7 +132,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     );
 
     setUser(u);
-    localStorage.setItem('appmax_user', JSON.stringify(u));
     recordLogin(u);
   };
 
@@ -144,7 +148,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
     }
     setUser(null);
-    localStorage.removeItem('appmax_user');
+  };
+
+  const updateProfile = async (changes: { name?: string; avatar?: string }) => {
+    if (!user) return;
+    await updateAllowedUserProfile({
+      email: user.email,
+      name: changes.name,
+      avatar: changes.avatar,
+    });
+    setUser(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        ...(typeof changes.name === 'string' ? { name: changes.name.trim() || prev.name } : {}),
+        ...(typeof changes.avatar === 'string' ? { avatar: changes.avatar } : {}),
+      };
+    });
   };
 
   const hasRole = (roles: UserRole[]) => !!user && roles.includes(user.role);
@@ -166,6 +186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider value={{
       user, isAuthenticated: !!user, isLoading,
       login, loginWithGoogle, logout,
+      updateProfile,
       hasRole, hasMinRole, canAccess,
     }}>
       {children}

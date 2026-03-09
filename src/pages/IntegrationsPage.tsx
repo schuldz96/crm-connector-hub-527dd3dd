@@ -1,12 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { MOCK_USERS } from '@/data/mockData';
 import { Button } from '@/components/ui/button';
 import { useGoogleLogin } from '@react-oauth/google';
 import { getStoredGoogleClientId } from '@/pages/AdminPage';
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || (() => {
-  try { return atob(localStorage.getItem('admin_google_client_id') || '') || ''; } catch { return ''; }
-})();
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 import {
   RefreshCw, Loader2, Smartphone, QrCode, MessageSquare,
   Phone, Wifi, WifiOff, X, CheckCircle2, XCircle,
@@ -18,11 +15,12 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { getInstanceForUser, setInstanceForUser } from '@/hooks/useEvolutionInstances';
+import { loadAllowedUsers } from '@/lib/accessControl';
 
 // ─── Evolution API config ─────────────────────────────────────────────────────
-const EVOLUTION_API_URL = 'https://evolutionapic.contato-lojavirtual.com';
-const EVOLUTION_API_TOKEN = '3ce7a42f9bd96ea526b2b0bc39a4faec';
-const ALLOWED_DOMAIN = 'appmax.com.br';
+const EVOLUTION_API_URL = import.meta.env.VITE_EVOLUTION_API_URL || '';
+const EVOLUTION_API_TOKEN = import.meta.env.VITE_EVOLUTION_API_TOKEN || '';
+const ALLOWED_DOMAIN = (import.meta.env.VITE_GOOGLE_ALLOWED_DOMAIN || 'appmax.com.br').trim().toLowerCase();
 
 // ─── Google services config ───────────────────────────────────────────────────
 const GOOGLE_SERVICES = [
@@ -96,6 +94,9 @@ interface EvolutionInstance {
 }
 
 async function evolutionFetch(path: string, options: RequestInit = {}) {
+  if (!EVOLUTION_API_URL || !EVOLUTION_API_TOKEN) {
+    throw new Error('Evolution API não configurada no .env');
+  }
   const res = await fetch(`${EVOLUTION_API_URL}${path}`, {
     ...options,
     headers: {
@@ -398,6 +399,7 @@ function EvolutionPanel() {
   const { toast } = useToast();
   const { user: currentUser, hasRole } = useAuth();
   const isAdmin = hasRole(['admin', 'director', 'supervisor']);
+  const [realUsers, setRealUsers] = useState<Array<{ id: string; name: string; email: string; avatar: string; status: 'active' }>>([]);
 
   const [instances, setInstances] = useState<EvolutionInstance[]>([]);
   const [loading, setLoading] = useState(false);
@@ -407,12 +409,33 @@ function EvolutionPanel() {
   const [loadingQr, setLoadingQr] = useState(false);
   const [instanceUserMap, setInstanceUserMap] = useState<Record<string, string>>(() => {
     const map: Record<string, string> = {};
-    MOCK_USERS.forEach(u => {
-      const inst = getInstanceForUser(u.id);
-      if (inst) map[inst] = u.id;
-    });
     return map;
   });
+
+  useEffect(() => {
+    const run = async () => {
+      try {
+        const users = await loadAllowedUsers();
+        const mapped = users.map((u) => ({
+          id: `user_${u.email.toLowerCase()}`,
+          name: u.name,
+          email: u.email.toLowerCase(),
+          avatar: u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.email.toLowerCase())}`,
+          status: 'active' as const,
+        }));
+        setRealUsers(mapped);
+        const map: Record<string, string> = {};
+        mapped.forEach(u => {
+          const inst = getInstanceForUser(u.id);
+          if (inst) map[inst] = u.id;
+        });
+        setInstanceUserMap(map);
+      } catch (e: any) {
+        toast({ variant: 'destructive', title: 'Erro ao carregar usuários', description: e?.message || 'Tente novamente.' });
+      }
+    };
+    run();
+  }, [toast]);
 
   const fetchInstances = useCallback(async () => {
     setLoading(true);
@@ -446,7 +469,7 @@ function EvolutionPanel() {
   };
 
   const handleAssignUser = (instanceName: string, userId: string) => {
-    MOCK_USERS.forEach(u => {
+    realUsers.forEach(u => {
       if (getInstanceForUser(u.id) === instanceName) setInstanceForUser(u.id, '');
     });
     if (userId) setInstanceForUser(userId, instanceName);
@@ -524,7 +547,7 @@ function EvolutionPanel() {
             const isOpen = inst.connectionStatus === 'open';
             const phone = inst.ownerJid?.replace('@s.whatsapp.net', '');
             const assignedUserId = instanceUserMap[inst.name];
-            const assignedUser = MOCK_USERS.find(u => u.id === assignedUserId);
+            const assignedUser = realUsers.find(u => u.id === assignedUserId);
 
             return (
               <div key={inst.id} className="glass-card p-4 flex flex-col gap-3 border-border hover:border-primary/20 transition-all">
@@ -568,7 +591,7 @@ function EvolutionPanel() {
                       className="w-full h-7 text-[10px] bg-secondary border border-border rounded-lg px-2 text-foreground"
                     >
                       <option value="">— Sem atribuição —</option>
-                      {MOCK_USERS.filter(u => u.status === 'active').map(u => (
+                      {realUsers.filter(u => u.status === 'active').map(u => (
                         <option key={u.id} value={u.id}>{u.name}</option>
                       ))}
                     </select>
@@ -627,13 +650,7 @@ interface WebhookLog {
   duration: number;
 }
 
-const MOCK_WEBHOOK_LOGS: WebhookLog[] = [
-  { id: 'wh_001', direction: 'inbound', source: 'Evolution API', event: 'messages.upsert', status: 'success', statusCode: 200, payload: '{"event":"messages.upsert","instance":"Vendas Principal","data":{"key":{"id":"3EB0F..."},"message":{"conversation":"Pode me enviar a proposta?"}}}', response: '{"status":"ok"}', timestamp: '2026-03-08T16:20:15Z', duration: 42 },
-  { id: 'wh_002', direction: 'outbound', source: 'Google Calendar', event: 'meeting.completed', status: 'success', statusCode: 200, payload: '{"meetingId":"mtg_001","title":"Demo Produto - Acme Corp","duration":45}', response: '{"analyzed":true}', timestamp: '2026-03-08T15:55:00Z', duration: 28 },
-  { id: 'wh_003', direction: 'inbound', source: 'Google Drive', event: 'transcript.available', status: 'success', statusCode: 200, payload: '{"fileId":"1BxCv...","meetingId":"mtg_001","transcriptUrl":"..."}', response: '{"queued":true}', timestamp: '2026-03-08T15:56:00Z', duration: 15 },
-  { id: 'wh_004', direction: 'outbound', source: 'Google Meet', event: 'meeting.ended', status: 'error', statusCode: 500, payload: '{"meetingId":"mtg_002","participants":3}', response: '{"error":"Transcript not ready"}', timestamp: '2026-03-08T14:30:00Z', duration: 5001 },
-  { id: 'wh_005', direction: 'inbound', source: 'Evolution API', event: 'connection.update', status: 'success', statusCode: 200, payload: '{"instance":"Closer CS","state":"close"}', response: '{"status":"ok"}', timestamp: '2026-03-08T10:00:00Z', duration: 18 },
-];
+const MOCK_WEBHOOK_LOGS: WebhookLog[] = [];
 
 function WebhookLogs() {
   const [selected, setSelected] = useState<WebhookLog | null>(null);

@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { MOCK_USERS } from '@/data/mockData';
+import { useEffect, useState } from 'react';
 import type { User, UserRole } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +19,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { useEvolutionInstances, getInstanceForUser, setInstanceForUser } from '@/hooks/useEvolutionInstances';
+import {
+  loadAllowedUsers,
+  upsertAllowedUser,
+  removeAllowedUser,
+  type AllowedUser,
+} from '@/lib/accessControl';
 
 const ROLE_CONFIG: Record<UserRole, { label: string; class: string }> = {
   admin:       { label: 'Admin',        class: 'bg-destructive/10 text-destructive border-destructive/20' },
@@ -32,9 +37,24 @@ const ROLE_CONFIG: Record<UserRole, { label: string; class: string }> = {
 };
 
 // ─── Create user modal ────────────────────────────────────────────────────────
-function CreateUserModal({ onClose }: { onClose: () => void }) {
+function CreateUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (payload: { name: string; email: string; role: UserRole; password: string }) => Promise<void> }) {
   const [showPass, setShowPass] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', role: 'member', password: '' });
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    const name = form.name.trim();
+    const email = form.email.trim().toLowerCase();
+    const password = form.password.trim();
+    if (!name || !email || !password) return;
+    setSaving(true);
+    try {
+      await onCreate({ name, email, role: form.role as UserRole, password });
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -81,7 +101,9 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
             <p className="text-[11px] text-muted-foreground">O usuário receberá um e-mail de boas-vindas e deverá redefinir a senha no primeiro acesso.</p>
           </div>
           <div className="flex gap-2 pt-1">
-            <Button size="sm" className="flex-1 bg-gradient-primary text-xs h-9"><UserPlus className="w-3.5 h-3.5 mr-1.5" /> Criar Usuário</Button>
+            <Button size="sm" className="flex-1 bg-gradient-primary text-xs h-9" onClick={submit} disabled={saving}>
+              <UserPlus className="w-3.5 h-3.5 mr-1.5" /> {saving ? 'Criando...' : 'Criar Usuário'}
+            </Button>
             <Button size="sm" variant="outline" className="text-xs border-border h-9" onClick={onClose}>Cancelar</Button>
           </div>
         </div>
@@ -342,7 +364,7 @@ export default function UsersPage() {
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
   const { instances } = useEvolutionInstances();
-  const [users, setUsers] = useState(MOCK_USERS);
+  const [users, setUsers] = useState<User[]>([]);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [showCreate, setShowCreate] = useState(false);
@@ -350,19 +372,23 @@ export default function UsersPage() {
   const [roleTarget, setRoleTarget] = useState<User | null>(null);
   const [profileTarget, setProfileTarget] = useState<User | null>(null);
 
+  useEffect(() => {
+    const run = async () => {
+      try {
+        const allowed = await loadAllowedUsers();
+        setUsers(mapAllowedUsersToUsers(allowed));
+      } catch (e: any) {
+        toast({ variant: 'destructive', title: 'Erro ao carregar usuários', description: e?.message || 'Tente novamente.' });
+      }
+    };
+    run();
+  }, [toast]);
+
   const filtered = users.filter(u => {
     const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase());
     const matchRole = roleFilter === 'all' || u.role === roleFilter;
     return matchSearch && matchRole;
   });
-
-  const handleToggleStatus = (u: User) => {
-    if (u.id === currentUser?.id) {
-      toast({ variant: 'destructive', title: 'Ação bloqueada', description: 'Você não pode desativar sua própria conta.' });
-      return;
-    }
-    setConfirmTarget({ user: u, action: u.status === 'active' ? 'deactivate' : 'activate' });
-  };
 
   const handleDelete = (u: User) => {
     if (u.id === currentUser?.id) {
@@ -372,22 +398,51 @@ export default function UsersPage() {
     setConfirmTarget({ user: u, action: 'delete' });
   };
 
-  const confirmAction = () => {
+  const confirmAction = async () => {
     if (!confirmTarget) return;
     const { user: u, action } = confirmTarget;
     if (action === 'delete') {
-      setUsers(prev => prev.filter(x => x.id !== u.id));
-      toast({ title: 'Usuário excluído', variant: 'destructive' });
+      const ok = await removeAllowedUser(u.email);
+      if (!ok) {
+        toast({
+          variant: 'destructive',
+          title: 'Ação bloqueada',
+          description: 'Conta base do sistema não pode ser removida.',
+        });
+        return;
+      }
+      const allowed = await loadAllowedUsers();
+      setUsers(mapAllowedUsersToUsers(allowed));
+      toast({ title: 'Usuário removido da whitelist', variant: 'destructive' });
     } else {
-      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, status: action === 'deactivate' ? 'inactive' : 'active' } : x));
-      toast({ title: action === 'deactivate' ? 'Usuário desativado' : 'Usuário ativado' });
+      toast({
+        title: 'Ação não aplicável',
+        description: 'No fluxo SSO, use remover da whitelist para bloquear acesso.',
+      });
     }
   };
 
-  const handleRoleSave = (role: UserRole) => {
+  const handleRoleSave = async (role: UserRole) => {
     if (!roleTarget) return;
-    setUsers(prev => prev.map(u => u.id === roleTarget.id ? { ...u, role } : u));
+    await upsertAllowedUser({ email: roleTarget.email, name: roleTarget.name, role });
+    const allowed = await loadAllowedUsers();
+    setUsers(mapAllowedUsersToUsers(allowed));
     toast({ title: 'Perfil atualizado', description: `${roleTarget.name} agora é ${ROLE_CONFIG[role].label}.` });
+  };
+
+  const handleCreateUser = async (payload: { name: string; email: string; role: UserRole; password: string }) => {
+    if (!payload.email.endsWith('@appmax.com.br')) {
+      toast({ variant: 'destructive', title: 'Domínio inválido', description: 'Use um e-mail @appmax.com.br.' });
+      return;
+    }
+    if (payload.password.length < 8) {
+      toast({ variant: 'destructive', title: 'Senha fraca', description: 'Use pelo menos 8 caracteres.' });
+      return;
+    }
+    await upsertAllowedUser(payload);
+    const allowed = await loadAllowedUsers();
+    setUsers(mapAllowedUsersToUsers(allowed));
+    toast({ title: 'Usuário criado', description: `${payload.name} foi adicionado e já pode acessar.` });
   };
 
   return (
@@ -395,9 +450,9 @@ export default function UsersPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-display font-bold">Usuários</h1>
-          <p className="text-sm text-muted-foreground">{users.length} usuários cadastrados</p>
+          <p className="text-sm text-muted-foreground">{users.length} usuários autorizados no SSO</p>
         </div>
-        <Button size="sm" className="bg-gradient-primary text-xs h-8" onClick={() => setShowCreate(true)}>
+        <Button size="sm" className="text-xs h-8 bg-gradient-primary" onClick={() => setShowCreate(true)}>
           <Plus className="w-3.5 h-3.5 mr-1.5" /> Criar Usuário
         </Button>
       </div>
@@ -439,8 +494,7 @@ export default function UsersPage() {
               const instName = getInstanceForUser(u.id);
               const assignedInst = instances.find(i => i.name === instName);
               const isInstOpen = assignedInst?.connectionStatus === 'open';
-              // Google: persisted per user in localStorage by Google OAuth flow
-              const googleConnected = !!localStorage.getItem(`google_connected_${u.id}`);
+              const googleConnected = false;
               return (
                 <tr key={u.id} className={cn(u.status === 'inactive' && 'opacity-60')}>
                   <td>
@@ -512,20 +566,12 @@ export default function UsersPage() {
                         <DropdownMenuItem className="gap-2 cursor-pointer text-xs" onClick={() => setRoleTarget(u)}>
                           <Shield className="w-3.5 h-3.5 text-accent" /> Alterar perfil
                         </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className={cn('gap-2 cursor-pointer text-xs', isSelf && 'opacity-40 cursor-not-allowed')}
-                          onClick={() => handleToggleStatus(u)}
-                        >
-                          {u.status === 'active'
-                            ? <><UserX className="w-3.5 h-3.5 text-warning" /> Desativar usuário</>
-                            : <><UserCheck className="w-3.5 h-3.5 text-success" /> Ativar usuário</>}
-                        </DropdownMenuItem>
                         <DropdownMenuSeparator className="bg-border" />
                         <DropdownMenuItem
                           className={cn('gap-2 cursor-pointer text-xs text-destructive focus:text-destructive focus:bg-destructive/10', isSelf && 'opacity-40 cursor-not-allowed')}
                           onClick={() => handleDelete(u)}
                         >
-                          <Trash2 className="w-3.5 h-3.5" /> Excluir usuário
+                          <Trash2 className="w-3.5 h-3.5" /> Remover da whitelist
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -537,9 +583,9 @@ export default function UsersPage() {
         </table>
       </div>
 
-      {showCreate    && <CreateUserModal onClose={() => setShowCreate(false)} />}
       {roleTarget    && <ChangeRoleModal user={roleTarget} onClose={() => setRoleTarget(null)} onSave={handleRoleSave} />}
       {profileTarget && <UserProfileModal user={profileTarget} onClose={() => setProfileTarget(null)} />}
+      {showCreate && <CreateUserModal onClose={() => setShowCreate(false)} onCreate={handleCreateUser} />}
       {confirmTarget && (
         <ConfirmModal
           user={confirmTarget.user}
@@ -550,4 +596,17 @@ export default function UsersPage() {
       )}
     </div>
   );
+}
+
+function mapAllowedUsersToUsers(allowed: AllowedUser[]): User[] {
+  return allowed.map((u) => ({
+    id: `user_${u.email.toLowerCase()}`,
+    name: u.name,
+    email: u.email.toLowerCase(),
+    avatar: u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.email.toLowerCase())}`,
+    role: u.role,
+    company: 'Appmax',
+    status: 'active',
+    createdAt: u.createdAt ? new Date(u.createdAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+  }));
 }

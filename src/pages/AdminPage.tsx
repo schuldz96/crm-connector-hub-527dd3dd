@@ -23,6 +23,15 @@ import {
 import type { UserRole, ResourceId } from '@/types';
 import { ROLE_LABELS, ROLE_HIERARCHY } from '@/types';
 import { useAuditLog, type AuditEvent, type AuditEventType } from '@/contexts/AuditLogContext';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  getPendingAccessRequests,
+  approveAccessRequest,
+  rejectAccessRequest,
+  loadAllowedUsers,
+  type AllowedUser,
+  type AccessRequest,
+} from '@/lib/accessControl';
 
 const ADMIN_SECTIONS = [
   { id: 'company',      label: 'Empresa',              icon: Building2 },
@@ -46,15 +55,17 @@ function deobfuscate(value: string): string {
   try { return atob(value); } catch { return ''; }
 }
 function saveOAuthSetting(key: string, value: string) {
-  if (value) localStorage.setItem(key, obfuscate(value));
-  else localStorage.removeItem(key);
+  // Sensitive OAuth credentials are not persisted in browser anymore.
+  // Keep function for backward compatibility with old UI actions.
+  void key;
+  void value;
 }
 function loadOAuthSetting(key: string): string {
-  const raw = localStorage.getItem(key);
-  return raw ? deobfuscate(raw) : '';
+  if (key === GOOG_KEY) return import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+  return '';
 }
 export function getStoredGoogleClientId(): string {
-  return loadOAuthSetting(GOOG_KEY);
+  return import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
 }
 
 const TOKEN_FIELDS: { key: keyof import('@/contexts/AppConfigContext').OpenAITokens; label: string; desc: string; icon: string }[] = [
@@ -93,25 +104,42 @@ export default function AdminPage() {
   const [showOauthSecret, setShowOauthSecret] = useState(false);
   const [showOauthClientId, setShowOauthClientId] = useState(false);
   const APP_URL = window.location.origin;
-  const CALLBACK_URL = `${APP_URL}/auth/google/callback`;
+  const CALLBACK_URL = import.meta.env.VITE_GOOGLE_REDIRECT_URI || `${APP_URL}/auth/google/callback`;
   // Audit logs state
   const [logs, setLogs] = useState<AuditEvent[]>([]);
   const [logSearch, setLogSearch] = useState('');
   const [logTypeFilter, setLogTypeFilter] = useState<AuditEventType | 'all'>('all');
   const [logRoleFilter, setLogRoleFilter] = useState<UserRole | 'all'>('all');
+  const [pendingAccess, setPendingAccess] = useState<AccessRequest[]>([]);
+  const [allowedAccounts, setAllowedAccounts] = useState<AllowedUser[]>([]);
+  const [triageRoles, setTriageRoles] = useState<Record<string, UserRole>>({});
 
   const { tokens, setToken, models, setModuleModel, modules, setModuleEnabled, saveConfig,
           getUserDisabledModules, setUserModuleOverride } = useAppConfig();
+  const { user: currentUser } = useAuth();
   const { permissions, updatePermission } = useRolePermissions();
   const { getLogs, clearLogs } = useAuditLog();
   const { toast } = useToast();
 
   // Load logs whenever the tab is selected
   useEffect(() => {
+    const loadAccessData = async () => {
+      try {
+        const [pending, allowed] = await Promise.all([getPendingAccessRequests(), loadAllowedUsers()]);
+        setPendingAccess(pending);
+        setAllowedAccounts(allowed);
+      } catch (e: any) {
+        toast({ variant: 'destructive', title: 'Erro ao carregar acessos', description: e?.message || 'Tente novamente.' });
+      }
+    };
+
     if (section === 'logs') {
       setLogs(getLogs());
     }
-  }, [section, getLogs]);
+    if (section === 'users') {
+      loadAccessData();
+    }
+  }, [section, getLogs, toast]);
 
   const refreshLogs = () => setLogs(getLogs());
 
@@ -133,6 +161,37 @@ export default function AdminPage() {
   const handleCopy = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     toast({ title: `${label} copiada!` });
+  };
+
+  const handleApproveAccess = async (req: AccessRequest) => {
+    const role = triageRoles[req.id] || 'member';
+    const ok = await approveAccessRequest({
+      requestId: req.id,
+      role,
+      approverEmail: currentUser?.email || 'admin@appmax.com.br',
+    });
+    if (!ok) {
+      toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível aprovar a solicitação.' });
+      return;
+    }
+    const [pending, allowed] = await Promise.all([getPendingAccessRequests(), loadAllowedUsers()]);
+    setPendingAccess(pending);
+    setAllowedAccounts(allowed);
+    toast({ title: 'Acesso aprovado', description: `${req.email} aprovado como ${ROLE_LABELS[role]}.` });
+  };
+
+  const handleRejectAccess = async (req: AccessRequest) => {
+    const ok = await rejectAccessRequest({
+      requestId: req.id,
+      approverEmail: currentUser?.email || 'admin@appmax.com.br',
+    });
+    if (!ok) {
+      toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível rejeitar a solicitação.' });
+      return;
+    }
+    const pending = await getPendingAccessRequests();
+    setPendingAccess(pending);
+    toast({ title: 'Solicitação rejeitada', description: `${req.email} foi rejeitado.` });
   };
 
   const isLocked = (id: ModuleId) => id === 'admin';
@@ -432,37 +491,98 @@ export default function AdminPage() {
 
           {/* ── Usuários ── */}
           {section === 'users' && (
-            <div className="glass-card p-6">
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="font-display font-semibold text-lg">Usuários & Permissões</h2>
-                <Button size="sm" className="text-xs bg-gradient-primary h-8">+ Convidar</Button>
-              </div>
-              <div className="space-y-2">
-                {MOCK_USERS.map(u => {
-                  const perm = permissions.find(p => p.role === u.role);
-                  const color = roleColorMap[perm?.color ?? 'muted-foreground'];
-                  return (
-                    <div key={u.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/30 transition-colors">
-                      <img src={u.avatar} alt={u.name} className="w-8 h-8 rounded-full border border-border" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">{u.name}</p>
-                        <p className="text-xs text-muted-foreground">{u.email}</p>
+            <div className="space-y-4">
+              <div className="glass-card p-6">
+                <div className="flex items-center justify-between mb-5">
+                  <h2 className="font-display font-semibold text-lg">Triagem de Acesso (SSO)</h2>
+                  <span className={cn(
+                    'text-xs px-2 py-1 rounded-full border',
+                    pendingAccess.length > 0
+                      ? 'bg-warning/10 text-warning border-warning/20'
+                      : 'bg-success/10 text-success border-success/20'
+                  )}>
+                    {pendingAccess.length} pendente(s)
+                  </span>
+                </div>
+
+                {pendingAccess.length === 0 ? (
+                  <div className="text-sm text-muted-foreground p-4 rounded-lg bg-muted/30 border border-border/50">
+                    Nenhuma solicitação pendente no momento.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {pendingAccess.map(req => (
+                      <div key={req.id} className="p-3 rounded-xl border border-border/50 bg-muted/20">
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{req.name || req.email}</p>
+                            <p className="text-xs text-muted-foreground">{req.email}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                              Solicitado em {new Date(req.requestedAt).toLocaleString('pt-BR')}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={triageRoles[req.id] || 'member'}
+                              onChange={e => setTriageRoles(prev => ({ ...prev, [req.id]: e.target.value as UserRole }))}
+                              className="text-xs bg-secondary border border-border rounded-lg px-2 py-1 text-foreground"
+                            >
+                              {ROLE_HIERARCHY.map(r => (
+                                <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                              ))}
+                            </select>
+                            <Button
+                              size="sm"
+                              className="text-xs h-7 bg-success hover:bg-success/90 text-success-foreground"
+                              onClick={() => handleApproveAccess(req)}
+                            >
+                              Aprovar
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-7 border-destructive/40 text-destructive hover:bg-destructive/10"
+                              onClick={() => handleRejectAccess(req)}
+                            >
+                              Rejeitar
+                            </Button>
+                          </div>
+                        </div>
                       </div>
-                      <span className={cn('text-[10px] px-2 py-0.5 rounded-full border font-medium', color.bg, color.text, color.border)}>
-                        {ROLE_LABELS[u.role]}
-                      </span>
-                      <select
-                        defaultValue={u.role}
-                        className="text-xs bg-secondary border border-border rounded-lg px-2 py-1 text-foreground"
-                      >
-                        {ROLE_HIERARCHY.map(r => (
-                          <option key={r} value={r}>{ROLE_LABELS[r]}</option>
-                        ))}
-                      </select>
-                      <span className={cn('w-2 h-2 rounded-full', u.status === 'active' ? 'bg-success' : 'bg-muted-foreground')} />
-                    </div>
-                  );
-                })}
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="glass-card p-6">
+                <div className="flex items-center justify-between mb-5">
+                  <h2 className="font-display font-semibold text-lg">Contas autorizadas no SSO</h2>
+                  <span className="text-xs px-2 py-1 rounded-full border bg-primary/10 text-primary border-primary/20">
+                    {allowedAccounts.length} conta(s)
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {allowedAccounts.map(acc => {
+                    const color = roleColorMap[permissions.find(p => p.role === acc.role)?.color ?? 'muted-foreground'];
+                    return (
+                      <div key={acc.email} className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/30 transition-colors">
+                        <img
+                          src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(acc.email)}`}
+                          alt={acc.name}
+                          className="w-8 h-8 rounded-full border border-border"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">{acc.name}</p>
+                          <p className="text-xs text-muted-foreground">{acc.email}</p>
+                        </div>
+                        <span className={cn('text-[10px] px-2 py-0.5 rounded-full border font-medium', color.bg, color.text, color.border)}>
+                          {ROLE_LABELS[acc.role]}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}
@@ -471,87 +591,25 @@ export default function AdminPage() {
           {section === 'api-keys' && (
             <div className="glass-card p-6 space-y-5">
               <div>
-                <h2 className="font-display font-semibold text-lg">Tokens & Modelos de IA por Módulo</h2>
+                <h2 className="font-display font-semibold text-lg">Configuração de IA via .env</h2>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Configure a chave de API e o modelo de IA para cada funcionalidade do sistema.
+                  Tokens sensíveis não são mais gerenciados no frontend. Configure tudo no arquivo <code>.env</code>.
                 </p>
               </div>
-              <div className="space-y-4">
-                {TOKEN_FIELDS.map(f => {
-                  const currentModel = models[f.key as ModuleAIKey];
-                  const modelInfo = AI_MODELS.find(m => m.id === currentModel);
-                  return (
-                    <div key={f.key} className="p-4 rounded-xl bg-muted/30 border border-border/50 space-y-3">
-                      {/* Header */}
-                      <div>
-                        <label className="text-xs font-semibold flex items-center gap-1.5 mb-0.5">
-                          <span>{f.icon}</span> {f.label}
-                        </label>
-                        <p className="text-[10px] text-muted-foreground">{f.desc}</p>
-                      </div>
-
-                      {/* Model selector */}
-                      <div>
-                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Modelo de IA</p>
-                        <select
-                          value={currentModel}
-                          onChange={e => setModuleModel(f.key as ModuleAIKey, e.target.value as any)}
-                          className="w-full text-xs bg-secondary border border-border rounded-lg px-3 py-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
-                        >
-                          {AI_MODELS.map(m => (
-                            <option key={m.id} value={m.id}>
-                              {m.badge}  {m.label} — {m.desc}
-                            </option>
-                          ))}
-                        </select>
-                        {modelInfo && (
-                          <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
-                            <span>{modelInfo.badge}</span>
-                            <span className="font-mono text-primary/70">{modelInfo.id}</span>
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Token input */}
-                      <div>
-                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Chave de API</p>
-                        <div className="flex gap-2">
-                          <div className="relative flex-1">
-                            <Input
-                              type={showKey[f.key] ? 'text' : 'password'}
-                              value={tokens[f.key]}
-                              onChange={e => setToken(f.key, e.target.value)}
-                              placeholder="sk-proj-..."
-                              className="h-9 text-xs bg-secondary border-border pr-10 font-mono"
-                            />
-                            <button
-                              onClick={() => toggleKey(f.key)}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                            >
-                              {showKey[f.key] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                            </button>
-                          </div>
-                          <div className={cn(
-                            'flex items-center px-2 rounded-lg text-[10px] font-medium border whitespace-nowrap',
-                            tokens[f.key].startsWith('sk-')
-                              ? 'bg-success/10 text-success border-success/20'
-                              : 'bg-muted text-muted-foreground border-border'
-                          )}>
-                            {tokens[f.key].startsWith('sk-') ? '✓ OK' : 'Vazio'}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+              <div className="space-y-3">
+                <div className="p-4 rounded-xl bg-muted/30 border border-border/50 space-y-2">
+                  <p className="text-xs font-semibold">Variáveis esperadas:</p>
+                  <code className="block text-[11px] text-muted-foreground">VITE_OPENAI_TOKEN_MEETINGS</code>
+                  <code className="block text-[11px] text-muted-foreground">VITE_OPENAI_TOKEN_TRAINING</code>
+                  <code className="block text-[11px] text-muted-foreground">VITE_OPENAI_TOKEN_WHATSAPP</code>
+                  <code className="block text-[11px] text-muted-foreground">VITE_OPENAI_TOKEN_REPORTS</code>
+                  <code className="block text-[11px] text-muted-foreground">VITE_OPENAI_TOKEN_AUTOMATIONS</code>
+                </div>
+                <div className="p-3 rounded-lg bg-warning/5 border border-warning/20">
                   <p className="text-xs text-muted-foreground">
-                    🔐 As chaves e modelos ficam salvos no armazenamento local do seu dispositivo.
+                    Em produção, use backend com segredo server-side. <code>VITE_*</code> é visível no bundle frontend.
                   </p>
                 </div>
-                <Button size="sm" className="bg-gradient-primary text-xs" onClick={handleSaveTokens}>
-                  <Save className="w-3 h-3 mr-1" /> Salvar Configurações
-                </Button>
               </div>
             </div>
           )}
@@ -885,7 +943,7 @@ export default function AdminPage() {
                   <h2 className="font-display font-semibold text-lg">Integrações OAuth</h2>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Configure as credenciais OAuth para que qualquer membro da equipe possa conectar a conta Google com um clique.
+                  Credenciais sensíveis não são mais armazenadas no frontend. A configuração é 100% via <code>.env</code>.
                 </p>
               </div>
 
@@ -931,104 +989,24 @@ export default function AdminPage() {
                 </a>
               </div>
 
-              {/* Google OAuth credentials */}
               <div className="glass-card p-5 space-y-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <svg className="w-4 h-4" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                  </svg>
-                  <h3 className="font-semibold text-sm">Google OAuth 2.0</h3>
-                  {oauthClientId && (
-                    <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-success/10 border border-success/20 text-success font-medium ml-auto">
-                      <CheckCircle2 className="w-3 h-3" /> Configurado
-                    </span>
-                  )}
-                </div>
-
-                {/* Client ID */}
-                <div>
-                  <label className="text-xs font-medium block mb-1.5">Client ID</label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type={showOauthClientId ? 'text' : 'password'}
-                      value={oauthClientId}
-                      onChange={e => setOauthClientId(e.target.value)}
-                      placeholder="000000000000-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com"
-                      className="h-9 text-xs bg-secondary border-border font-mono"
-                    />
-                    <Button size="sm" variant="outline" className="h-9 px-3 border-border flex-shrink-0" onClick={() => setShowOauthClientId(v => !v)}>
-                      {showOauthClientId ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                    </Button>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    Encontrado em Google Cloud Console → Credentials → seu OAuth 2.0 Client ID
-                  </p>
-                </div>
-
-                {/* Client Secret */}
-                <div>
-                  <label className="text-xs font-medium block mb-1.5">Client Secret</label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type={showOauthSecret ? 'text' : 'password'}
-                      value={oauthClientSecret}
-                      onChange={e => setOauthClientSecret(e.target.value)}
-                      placeholder="GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                      className="h-9 text-xs bg-secondary border-border font-mono"
-                    />
-                    <Button size="sm" variant="outline" className="h-9 px-3 border-border flex-shrink-0" onClick={() => setShowOauthSecret(v => !v)}>
-                      {showOauthSecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                    </Button>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    Gerado junto com o Client ID no Google Cloud Console
-                  </p>
-                </div>
-
-                <div className="p-3 rounded-lg bg-warning/5 border border-warning/20 text-[11px] text-muted-foreground leading-relaxed flex items-start gap-2">
-                  <span className="text-warning mt-0.5">⚠️</span>
-                  <span>
-                    As credenciais são <strong>ofuscadas</strong> e armazenadas localmente neste dispositivo admin. 
-                    Para produção, recomendamos ativar o <strong>Lovable Cloud</strong> e usar Secrets para maior segurança.
-                  </span>
-                </div>
-
-                <Button
-                  size="sm"
-                  className="bg-gradient-primary text-xs"
-                  onClick={handleSaveOAuth}
-                  disabled={!oauthClientId.trim()}
-                >
-                  {oauthSaved
-                    ? <><CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Salvo!</>
-                    : <><Save className="w-3 h-3 mr-1.5" /> Salvar Credenciais</>}
-                </Button>
-              </div>
-
-              {/* Step by step guide */}
-              <div className="glass-card p-5 border-primary/20 bg-primary/5 space-y-3">
-                <p className="text-xs font-semibold flex items-center gap-2">
-                  <span>📋</span> Passo a passo: Google Cloud Console
-                </p>
-                <ol className="space-y-2">
+                <h3 className="font-semibold text-sm">Variáveis .env (somente leitura no Admin)</h3>
+                <div className="p-4 rounded-xl bg-muted/30 border border-border/50 space-y-2">
                   {[
-                    'Acesse console.cloud.google.com e crie ou selecione um projeto',
-                    'Vá em APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID',
-                    'Tipo de aplicativo: Web application',
-                    `Em "Authorized JavaScript origins" adicione: ${APP_URL}`,
-                    `Em "Authorized redirect URIs" adicione: ${CALLBACK_URL}`,
-                    'Copie o Client ID e o Client Secret e cole nos campos acima',
-                    'Clique em "Salvar Credenciais" — a equipe já poderá usar "Entrar com Google"',
-                  ].map((step, i) => (
-                    <li key={i} className="flex items-start gap-2.5 text-[11px] text-muted-foreground">
-                      <span className="w-4 h-4 rounded-full bg-primary/15 text-primary text-[9px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
-                      {step}
-                    </li>
+                    'VITE_GOOGLE_CLIENT_ID',
+                    'VITE_GOOGLE_ALLOWED_DOMAIN',
+                    'VITE_GOOGLE_REDIRECT_URI',
+                    'VITE_EVOLUTION_API_URL',
+                    'VITE_EVOLUTION_API_TOKEN',
+                  ].map(v => (
+                    <code key={v} className="block text-[11px] text-muted-foreground">{v}</code>
                   ))}
-                </ol>
+                </div>
+                <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                  <p className="text-xs text-muted-foreground">
+                    Status Google Client ID: {oauthClientId ? 'configurado' : 'não configurado'}.
+                  </p>
+                </div>
               </div>
             </div>
           )}

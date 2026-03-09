@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { getSaasEmpresaId } from '@/lib/saas';
 
 // ─── Module IDs (must match NAV_ITEMS paths) ─────────────────────────────────
 export type ModuleId =
@@ -82,11 +84,11 @@ interface AppConfigContextType {
 }
 
 const DEFAULT_TOKENS: OpenAITokens = {
-  meetings: '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',
-  training: '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',
-  whatsapp: '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',
-  reports: '',
-  automations: '',
+  meetings: import.meta.env.VITE_OPENAI_TOKEN_MEETINGS || '',
+  training: import.meta.env.VITE_OPENAI_TOKEN_TRAINING || '',
+  whatsapp: import.meta.env.VITE_OPENAI_TOKEN_WHATSAPP || '',
+  reports: import.meta.env.VITE_OPENAI_TOKEN_REPORTS || '',
+  automations: import.meta.env.VITE_OPENAI_TOKEN_AUTOMATIONS || '',
 };
 
 export const DEFAULT_MODULES: ModuleConfig[] = [
@@ -103,11 +105,6 @@ export const DEFAULT_MODULES: ModuleConfig[] = [
   { id: 'admin',        label: 'Admin',          enabled: true },
 ];
 
-const STORAGE_KEY_TOKENS    = 'appmax_openai_tokens';
-const STORAGE_KEY_MODELS    = 'appmax_ai_models';
-const STORAGE_KEY_MODULES   = 'appmax_modules_config';
-const STORAGE_KEY_OVERRIDES = 'appmax_user_module_overrides';
-
 const DEFAULT_MODELS: ModuleModels = {
   meetings:    'gpt-4o-mini',
   training:    'gpt-4o-mini',
@@ -119,49 +116,131 @@ const DEFAULT_MODELS: ModuleModels = {
 const AppConfigContext = createContext<AppConfigContextType | null>(null);
 
 export function AppConfigProvider({ children }: { children: React.ReactNode }) {
-  const [tokens, setTokens] = useState<OpenAITokens>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY_TOKENS);
-      return stored ? { ...DEFAULT_TOKENS, ...JSON.parse(stored) } : DEFAULT_TOKENS;
-    } catch { return DEFAULT_TOKENS; }
-  });
+  const [tokens, setTokens] = useState<OpenAITokens>(DEFAULT_TOKENS);
+  const [models, setModels] = useState<ModuleModels>(DEFAULT_MODELS);
+  const [modules, setModules] = useState<ModuleConfig[]>(DEFAULT_MODULES);
+  const [userModuleOverrides, setUserModuleOverrides] = useState<Record<string, ModuleId[]>>({});
 
-  const [models, setModels] = useState<ModuleModels>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY_MODELS);
-      return stored ? { ...DEFAULT_MODELS, ...JSON.parse(stored) } : DEFAULT_MODELS;
-    } catch { return DEFAULT_MODELS; }
-  });
+  useEffect(() => {
+    const loadFromDb = async () => {
+      try {
+        const empresaId = await getSaasEmpresaId();
 
-  const [modules, setModules] = useState<ModuleConfig[]>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY_MODULES);
-      if (stored) {
-        const saved: Partial<Record<ModuleId, boolean>> = JSON.parse(stored);
-        return DEFAULT_MODULES.map(m => ({ ...m, enabled: saved[m.id] ?? m.enabled }));
+        const [tokensRes, modulesRes, usersRes, userModsRes] = await Promise.all([
+          supabase
+            .schema('saas')
+            .from('tokens_ia_modulo')
+            .select('modulo_codigo,token_criptografado,modelo')
+            .eq('empresa_id', empresaId)
+            .eq('provedor', 'openai'),
+          supabase
+            .schema('saas')
+            .from('configuracoes_modulos_empresa')
+            .select('modulo_codigo,habilitado')
+            .eq('empresa_id', empresaId),
+          supabase
+            .schema('saas')
+            .from('usuarios')
+            .select('id,email')
+            .eq('empresa_id', empresaId)
+            .eq('status', 'ativo'),
+          supabase
+            .schema('saas')
+            .from('configuracoes_modulos_usuario')
+            .select('usuario_id,modulo_codigo,habilitado'),
+        ]);
+
+        if (!tokensRes.error && tokensRes.data) {
+          const nextTokens = { ...DEFAULT_TOKENS };
+          const nextModels = { ...DEFAULT_MODELS };
+          for (const row of tokensRes.data) {
+            if (row.modulo_codigo in nextTokens) {
+              (nextTokens as any)[row.modulo_codigo] = row.token_criptografado || '';
+              if (row.modelo) (nextModels as any)[row.modulo_codigo] = row.modelo;
+            }
+          }
+          setTokens(nextTokens);
+          setModels(nextModels);
+        }
+
+        if (!modulesRes.error && modulesRes.data) {
+          const enabledMap = new Map<string, boolean>();
+          for (const row of modulesRes.data) enabledMap.set(row.modulo_codigo, !!row.habilitado);
+          setModules(DEFAULT_MODULES.map((m) => ({ ...m, enabled: enabledMap.get(m.id) ?? m.enabled })));
+        }
+
+        if (!usersRes.error && !userModsRes.error && usersRes.data && userModsRes.data) {
+          const userById = new Map<string, string>();
+          for (const u of usersRes.data) userById.set(u.id, `user_${(u.email || '').toLowerCase()}`);
+          const next: Record<string, ModuleId[]> = {};
+          for (const row of userModsRes.data) {
+            const key = userById.get(row.usuario_id);
+            if (!key) continue;
+            if (!row.habilitado) {
+              next[key] = next[key] || [];
+              next[key].push(row.modulo_codigo as ModuleId);
+            }
+          }
+          setUserModuleOverrides(next);
+        }
+      } catch {
+        // keep defaults
       }
-    } catch {}
-    return DEFAULT_MODULES;
-  });
-
-  // Per-user/team overrides: Record<entityId, ModuleId[]> (disabled list)
-  const [userModuleOverrides, setUserModuleOverrides] = useState<Record<string, ModuleId[]>>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY_OVERRIDES);
-      return stored ? JSON.parse(stored) : {};
-    } catch { return {}; }
-  });
+    };
+    loadFromDb();
+  }, []);
 
   const setToken = (module: keyof OpenAITokens, value: string) => {
     setTokens(prev => ({ ...prev, [module]: value }));
+    void (async () => {
+      try {
+        const empresaId = await getSaasEmpresaId();
+        await supabase
+          .schema('saas')
+          .from('tokens_ia_modulo')
+          .upsert({
+            empresa_id: empresaId,
+            modulo_codigo: module,
+            provedor: 'openai',
+            token_criptografado: value,
+            modelo: models[module],
+            ativo: true,
+          }, { onConflict: 'empresa_id,modulo_codigo,provedor' });
+      } catch {}
+    })();
   };
 
   const setModuleModel = (module: ModuleAIKey, model: AIModelId) => {
     setModels(prev => ({ ...prev, [module]: model }));
+    void (async () => {
+      try {
+        const empresaId = await getSaasEmpresaId();
+        await supabase
+          .schema('saas')
+          .from('tokens_ia_modulo')
+          .upsert({
+            empresa_id: empresaId,
+            modulo_codigo: module,
+            provedor: 'openai',
+            token_criptografado: tokens[module],
+            modelo: model,
+            ativo: true,
+          }, { onConflict: 'empresa_id,modulo_codigo,provedor' });
+      } catch {}
+    })();
   };
 
   const setModuleEnabled = (id: ModuleId, enabled: boolean) => {
     setModules(prev => prev.map(m => m.id === id ? { ...m, enabled } : m));
+    void (async () => {
+      try {
+        const empresaId = await getSaasEmpresaId();
+        await supabase
+          .schema('saas')
+          .from('configuracoes_modulos_empresa')
+          .upsert({ empresa_id: empresaId, modulo_codigo: id, habilitado: enabled }, { onConflict: 'empresa_id,modulo_codigo' });
+      } catch {}
+    })();
   };
 
   const isModuleEnabled = (id: ModuleId) =>
@@ -169,6 +248,38 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
 
   const setUserModuleOverride = (entityId: string, disabledModules: ModuleId[]) => {
     setUserModuleOverrides(prev => ({ ...prev, [entityId]: disabledModules }));
+    // Persist only user_* overrides in DB.
+    if (!entityId.startsWith('user_')) return;
+    const email = entityId.replace(/^user_/, '').toLowerCase();
+    void (async () => {
+      try {
+        const empresaId = await getSaasEmpresaId();
+        const { data: u } = await supabase
+          .schema('saas')
+          .from('usuarios')
+          .select('id')
+          .eq('empresa_id', empresaId)
+          .eq('email', email)
+          .maybeSingle();
+        if (!u?.id) return;
+
+        await supabase
+          .schema('saas')
+          .from('configuracoes_modulos_usuario')
+          .delete()
+          .eq('usuario_id', u.id);
+
+        const rows = DEFAULT_MODULES.map((m) => ({
+          usuario_id: u.id,
+          modulo_codigo: m.id,
+          habilitado: !disabledModules.includes(m.id),
+        }));
+        await supabase
+          .schema('saas')
+          .from('configuracoes_modulos_usuario')
+          .upsert(rows, { onConflict: 'usuario_id,modulo_codigo' });
+      } catch {}
+    })();
   };
 
   const getUserDisabledModules = (entityId: string): ModuleId[] =>
@@ -185,28 +296,8 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
   };
 
   const saveConfig = () => {
-    localStorage.setItem(STORAGE_KEY_TOKENS, JSON.stringify(tokens));
-    const moduleMap = Object.fromEntries(modules.map(m => [m.id, m.enabled]));
-    localStorage.setItem(STORAGE_KEY_MODULES, JSON.stringify(moduleMap));
-    localStorage.setItem(STORAGE_KEY_OVERRIDES, JSON.stringify(userModuleOverrides));
+    // Persistência já acontece nos setters.
   };
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_TOKENS, JSON.stringify(tokens));
-  }, [tokens]);
-
-  useEffect(() => {
-    const moduleMap = Object.fromEntries(modules.map(m => [m.id, m.enabled]));
-    localStorage.setItem(STORAGE_KEY_MODULES, JSON.stringify(moduleMap));
-  }, [modules]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_OVERRIDES, JSON.stringify(userModuleOverrides));
-  }, [userModuleOverrides]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_MODELS, JSON.stringify(models));
-  }, [models]);
 
   return (
     <AppConfigContext.Provider value={{

@@ -5,8 +5,8 @@
  */
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { UserRole, ResourceId, RolePermission } from '@/types';
-
-export const STORAGE_KEY = 'appmax_role_permissions';
+import { supabase } from '@/integrations/supabase/client';
+import { roleFromDb, roleToDb, scopeFromDb, scopeToDb } from '@/lib/saas';
 
 export const ALL_RESOURCES: { id: ResourceId; label: string; icon: string }[] = [
   { id: 'dashboard',    label: 'Dashboard',        icon: '📊' },
@@ -104,19 +104,7 @@ interface RolePermissionsContextType {
 const RolePermissionsContext = createContext<RolePermissionsContextType | null>(null);
 
 function load(): RolePermission[] {
-  try {
-    const s = localStorage.getItem(STORAGE_KEY);
-    if (!s) return DEFAULT_ROLE_PERMISSIONS;
-    const saved: RolePermission[] = JSON.parse(s);
-    // Merge: saved overrides defaults but keep any new defaults not in saved
-    const merged = DEFAULT_ROLE_PERMISSIONS.map(def => {
-      const found = saved.find(s => s.role === def.role);
-      return found ? { ...def, ...found } : def;
-    });
-    return merged;
-  } catch {
-    return DEFAULT_ROLE_PERMISSIONS;
-  }
+  return DEFAULT_ROLE_PERMISSIONS;
 }
 
 import { ROLE_HIERARCHY } from '@/types';
@@ -125,14 +113,68 @@ export function RolePermissionsProvider({ children }: { children: React.ReactNod
   const [permissions, setPermissions] = useState<RolePermission[]>(load);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(permissions));
-  }, [permissions]);
+    const run = async () => {
+      try {
+        const { data, error } = await supabase
+          .schema('saas')
+          .from('permissoes_papeis')
+          .select('papel,recurso,escopo,permitido');
+        if (error) throw error;
+        if (!data) return;
+
+        const byRole = new Map<UserRole, { resources: ResourceId[]; scope: RolePermission['scope'] }>();
+        for (const row of data) {
+          if (!row.permitido) continue;
+          const role = roleFromDb(row.papel);
+          const current = byRole.get(role) || { resources: [], scope: scopeFromDb(row.escopo) };
+          if (!current.resources.includes(row.recurso as ResourceId)) {
+            current.resources.push(row.recurso as ResourceId);
+          }
+          current.scope = scopeFromDb(row.escopo);
+          byRole.set(role, current);
+        }
+
+        setPermissions(prev =>
+          prev.map(def => {
+            const db = byRole.get(def.role);
+            return db ? { ...def, resources: db.resources, scope: db.scope } : def;
+          }),
+        );
+      } catch {
+        // Keep defaults in case of DB failures
+      }
+    };
+    run();
+  }, []);
 
   const getPermission = useCallback((role: UserRole) =>
     permissions.find(p => p.role === role), [permissions]);
 
   const updatePermission = useCallback((role: UserRole, patch: Partial<RolePermission>) => {
-    setPermissions(prev => prev.map(p => p.role === role ? { ...p, ...patch } : p));
+    setPermissions(prev => {
+      const next = prev.map(p => p.role === role ? { ...p, ...patch } : p);
+      const updated = next.find(p => p.role === role);
+      if (updated) {
+        void (async () => {
+          try {
+            const rows = ALL_RESOURCES.map((r) => ({
+              papel: roleToDb(role),
+              recurso: r.id,
+              escopo: scopeToDb(updated.scope),
+              permitido: updated.resources.includes(r.id),
+            }));
+            const { error } = await supabase
+              .schema('saas')
+              .from('permissoes_papeis')
+              .upsert(rows, { onConflict: 'papel,recurso' });
+            if (error) throw error;
+          } catch {
+            // Keep UI responsive; DB retry can be done by user action
+          }
+        })();
+      }
+      return next;
+    });
   }, []);
 
   const canAccess = useCallback((role: UserRole, resource: ResourceId): boolean => {

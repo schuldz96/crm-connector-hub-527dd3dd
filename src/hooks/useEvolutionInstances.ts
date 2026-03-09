@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 
-const EVOLUTION_API_URL = 'https://evolutionapic.contato-lojavirtual.com';
-const EVOLUTION_API_TOKEN = '3ce7a42f9bd96ea526b2b0bc39a4faec';
+const EVOLUTION_API_URL = import.meta.env.VITE_EVOLUTION_API_URL || '';
+const EVOLUTION_API_TOKEN = import.meta.env.VITE_EVOLUTION_API_TOKEN || '';
 
 export interface EvolutionInstance {
   id: string;
@@ -22,6 +22,9 @@ export function useEvolutionInstances() {
     setLoading(true);
     setError(null);
     try {
+      if (!EVOLUTION_API_URL || !EVOLUTION_API_TOKEN) {
+        throw new Error('Evolution API não configurada no .env');
+      }
       const res = await window.fetch(`${EVOLUTION_API_URL}/instance/fetchInstances`, {
         headers: { apikey: EVOLUTION_API_TOKEN, 'Content-Type': 'application/json' },
       });
