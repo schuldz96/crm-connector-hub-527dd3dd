@@ -85,10 +85,12 @@ const App = () => (
             <RolePermissionsProvider>
               <AppConfigProvider>
                 <AuthProvider>
-                  <Routes>
-                    <Route path="/login" element={<LoginPageWrapper />} />
-                    <Route path="/*"     element={<ProtectedRoutes />} />
-                  </Routes>
+                  <NotificationsProvider>
+                    <Routes>
+                      <Route path="/login" element={<LoginPageWrapper />} />
+                      <Route path="/*"     element={<ProtectedRoutes />} />
+                    </Routes>
+                  </NotificationsProvider>
                 </AuthProvider>
               </AppConfigProvider>
             </RolePermissionsProvider>
