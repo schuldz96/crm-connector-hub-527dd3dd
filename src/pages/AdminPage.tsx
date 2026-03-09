@@ -25,14 +25,37 @@ import { ROLE_LABELS, ROLE_HIERARCHY } from '@/types';
 import { useAuditLog, type AuditEvent, type AuditEventType } from '@/contexts/AuditLogContext';
 
 const ADMIN_SECTIONS = [
-  { id: 'company',    label: 'Empresa',              icon: Building2 },
-  { id: 'roles',      label: 'Níveis de Acesso',     icon: Layers },
-  { id: 'users',      label: 'Usuários',             icon: Users },
-  { id: 'api-keys',   label: 'Tokens OpenAI',        icon: Key },
-  { id: 'modules',    label: 'Módulos Visíveis',     icon: ToggleRight },
-  { id: 'security',   label: 'Segurança & RLS',      icon: Lock },
-  { id: 'logs',       label: 'Logs de Acesso',       icon: ScrollText },
+  { id: 'company',      label: 'Empresa',              icon: Building2 },
+  { id: 'roles',        label: 'Níveis de Acesso',     icon: Layers },
+  { id: 'users',        label: 'Usuários',             icon: Users },
+  { id: 'api-keys',     label: 'Tokens OpenAI',        icon: Key },
+  { id: 'integrations', label: 'Integrações OAuth',    icon: Plug },
+  { id: 'modules',      label: 'Módulos Visíveis',     icon: ToggleRight },
+  { id: 'security',     label: 'Segurança & RLS',      icon: Lock },
+  { id: 'logs',         label: 'Logs de Acesso',       icon: ScrollText },
 ];
+
+// ── Helpers para salvar Client ID criptografado (ofuscado) no localStorage ──
+const GOOG_KEY = 'admin_google_client_id';
+const GOOG_SECRET = 'admin_google_client_secret';
+
+function obfuscate(value: string): string {
+  return btoa(value);
+}
+function deobfuscate(value: string): string {
+  try { return atob(value); } catch { return ''; }
+}
+function saveOAuthSetting(key: string, value: string) {
+  if (value) localStorage.setItem(key, obfuscate(value));
+  else localStorage.removeItem(key);
+}
+function loadOAuthSetting(key: string): string {
+  const raw = localStorage.getItem(key);
+  return raw ? deobfuscate(raw) : '';
+}
+export function getStoredGoogleClientId(): string {
+  return loadOAuthSetting(GOOG_KEY);
+}
 
 const TOKEN_FIELDS: { key: keyof import('@/contexts/AppConfigContext').OpenAITokens; label: string; desc: string; icon: string }[] = [
   { key: 'meetings',    label: 'Token — Reuniões',                icon: '🎙️', desc: 'Análise e transcrição de reuniões gravadas' },
