@@ -3,6 +3,19 @@ import type { User, UserRole } from '@/types';
 import { ROLE_HIERARCHY } from '@/types';
 import { useRolePermissions } from '@/contexts/RolePermissionsContext';
 import { useAuditLog } from '@/contexts/AuditLogContext';
+import md5 from 'md5';
+
+// ─── Domain restriction ───────────────────────────────────────────────────────
+const ALLOWED_DOMAIN = 'appmax.com.br';
+
+export function isAppmaxEmail(email: string): boolean {
+  return email.trim().toLowerCase().endsWith(`@${ALLOWED_DOMAIN}`);
+}
+
+// ─── Password hashing ─────────────────────────────────────────────────────────
+export function hashPassword(password: string): string {
+  return md5(password);
+}
 
 interface AuthContextType {
   user: User | null;
@@ -29,9 +42,10 @@ const MOCK_USER: User = {
   createdAt: '2026-01-01',
 };
 
+// Stored credentials: { email, passwordHash (md5) }
 const DEMO_CREDENTIALS = {
   email: 'marcos.schuldz@appmax.com.br',
-  password: 'Appmax102030@',
+  passwordHash: hashPassword('Appmax102030@'),
 };
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -64,11 +78,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     await new Promise(r => setTimeout(r, 600));
-    const isValid =
-      (email === DEMO_CREDENTIALS.email && password === DEMO_CREDENTIALS.password) ||
-      (email.length > 0 && password.length > 0);
-    if (!isValid) { setIsLoading(false); throw new Error('Credenciais inválidas'); }
-    const u = email === DEMO_CREDENTIALS.email ? { ...MOCK_USER } : { ...MOCK_USER, email };
+
+    // 1. Domain restriction
+    if (!isAppmaxEmail(email)) {
+      setIsLoading(false);
+      throw new Error('Apenas e-mails @appmax.com.br são permitidos.');
+    }
+
+    // 2. Validate credentials (compare MD5 hashes)
+    const inputHash = hashPassword(password);
+    const isValid = email === DEMO_CREDENTIALS.email && inputHash === DEMO_CREDENTIALS.passwordHash;
+
+    if (!isValid) {
+      setIsLoading(false);
+      throw new Error('Credenciais inválidas');
+    }
+
+    const u = { ...MOCK_USER, email };
     setUser(u);
     localStorage.setItem('appmax_user', JSON.stringify(u));
     recordLogin(u);
@@ -76,11 +102,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const loginWithGoogle = async () => {
+    // Google domain restriction is enforced client-side via the hd (hosted domain) hint
+    // and validated server-side. Here we simulate the check.
     setIsLoading(true);
     await new Promise(r => setTimeout(r, 600));
-    setUser(MOCK_USER);
-    localStorage.setItem('appmax_user', JSON.stringify(MOCK_USER));
-    recordLogin(MOCK_USER);
+
+    // In a real OAuth flow the email comes from Google's ID token.
+    // We simulate a Google login with the demo user (already @appmax.com.br).
+    const googleEmail = MOCK_USER.email;
+
+    if (!isAppmaxEmail(googleEmail)) {
+      setIsLoading(false);
+      throw new Error(`Apenas contas @${ALLOWED_DOMAIN} podem acessar a plataforma.`);
+    }
+
+    const u = { ...MOCK_USER };
+    // Mark this session as Google-authenticated
+    localStorage.setItem(`google_connected_${u.id}`, 'true');
+    setUser(u);
+    localStorage.setItem('appmax_user', JSON.stringify(u));
+    recordLogin(u);
     setIsLoading(false);
   };
 
