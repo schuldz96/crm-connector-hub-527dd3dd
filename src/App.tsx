@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { GoogleOAuthProvider } from "@react-oauth/google";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppConfigProvider } from "@/contexts/AppConfigContext";
 import { RolePermissionsProvider } from "@/contexts/RolePermissionsContext";
@@ -23,6 +24,11 @@ import TrainingPage from "@/pages/TrainingPage";
 import AIConfigPage from "@/pages/AIConfigPage";
 import PerformancePage from "@/pages/PerformancePage";
 import NotFound from "@/pages/NotFound";
+
+// Publishable Google OAuth Client ID (safe to expose in frontend)
+export const GOOGLE_CLIENT_ID =
+  import.meta.env.VITE_GOOGLE_CLIENT_ID ||
+  '19779916042-ur7fs5qdorm32bsen7vtfcurkoka4sp7.apps.googleusercontent.com';
 
 const queryClient = new QueryClient();
 
@@ -67,28 +73,30 @@ function ProtectedRoutes() {
 }
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuditLogProvider>
-          <RolePermissionsProvider>
-            <AppConfigProvider>
-              <AuthProvider>
-                <NotificationsProvider>
-                  <Routes>
-                    <Route path="/login" element={<LoginPageWrapper />} />
-                    <Route path="/*"     element={<ProtectedRoutes />} />
-                  </Routes>
-                </NotificationsProvider>
-              </AuthProvider>
-            </AppConfigProvider>
-          </RolePermissionsProvider>
-        </AuditLogProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+  <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuditLogProvider>
+            <RolePermissionsProvider>
+              <AppConfigProvider>
+                <AuthProvider>
+                  <NotificationsProvider>
+                    <Routes>
+                      <Route path="/login" element={<LoginPageWrapper />} />
+                      <Route path="/*"     element={<ProtectedRoutes />} />
+                    </Routes>
+                  </NotificationsProvider>
+                </AuthProvider>
+              </AppConfigProvider>
+            </RolePermissionsProvider>
+          </AuditLogProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </GoogleOAuthProvider>
 );
 
 function LoginPageWrapper() {

@@ -4,7 +4,6 @@ import { ROLE_HIERARCHY } from '@/types';
 import { useRolePermissions } from '@/contexts/RolePermissionsContext';
 import { useAuditLog } from '@/contexts/AuditLogContext';
 import { supabase } from '@/integrations/supabase/client';
-import type { Session } from '@supabase/supabase-js';
 
 const ALLOWED_DOMAIN = 'appmax.com.br';
 
@@ -17,7 +16,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  loginWithGoogle: () => Promise<void>;
+  loginWithGoogle: (googleUser: { email: string; name: string; picture?: string }) => Promise<void>;
   logout: () => void;
   hasRole: (roles: UserRole[]) => boolean;
   hasMinRole: (minRole: UserRole) => boolean;
@@ -26,21 +25,16 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-function sessionToUser(session: Session): User {
-  const meta = session.user.user_metadata ?? {};
-  const email = session.user.email ?? '';
+function buildUser(id: string, email: string, name: string, avatar?: string, role: UserRole = 'member'): User {
   return {
-    id: session.user.id,
-    name: meta.full_name ?? meta.name ?? email.split('@')[0],
+    id,
+    name,
     email,
-    avatar:
-      meta.avatar_url ??
-      meta.picture ??
-      `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`,
-    role: (meta.role as UserRole) ?? 'member',
+    avatar: avatar ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${email}`,
+    role,
     company: 'Appmax',
     status: 'active',
-    createdAt: session.user.created_at?.slice(0, 10) ?? '',
+    createdAt: new Date().toISOString().slice(0, 10),
   };
 }
 
@@ -49,6 +43,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const { canAccess: roleCanAccess } = useRolePermissions();
   const { addEvent } = useAuditLog();
+
+  // Restore session from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem('appmax_user');
+    if (stored) {
+      try { setUser(JSON.parse(stored)); }
+      catch { localStorage.removeItem('appmax_user'); }
+    }
+
+    // Also check Supabase session (for email/password users)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session && !localStorage.getItem('appmax_user')) {
+        const meta = session.user.user_metadata ?? {};
+        const email = session.user.email ?? '';
+        const u = buildUser(
+          session.user.id,
+          email,
+          meta.full_name ?? meta.name ?? email.split('@')[0],
+          meta.avatar_url ?? meta.picture,
+        );
+        setUser(u);
+        localStorage.setItem('appmax_user', JSON.stringify(u));
+      }
+      setIsLoading(false);
+    });
+  }, []);
 
   const recordLogin = (u: User) => {
     addEvent({
@@ -62,31 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  useEffect(() => {
-    // Listen for auth state changes BEFORE calling getSession
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (session) {
-          const u = sessionToUser(session);
-          setUser(u);
-        } else {
-          setUser(null);
-        }
-        setIsLoading(false);
-      }
-    );
-
-    // Get existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        setUser(sessionToUser(session));
-      }
-      setIsLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
+  // Email + password login via Supabase Auth
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
@@ -95,27 +91,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw new Error(error.message);
-      if (data.user) {
-        const u = sessionToUser(data.session!);
-        recordLogin(u);
-      }
+
+      const meta = data.user?.user_metadata ?? {};
+      const u = buildUser(
+        data.user!.id,
+        email,
+        meta.full_name ?? meta.name ?? email.split('@')[0],
+        meta.avatar_url ?? meta.picture,
+      );
+      setUser(u);
+      localStorage.setItem('appmax_user', JSON.stringify(u));
+      recordLogin(u);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Google OAuth via Supabase — redirects to Google consent screen
-  const loginWithGoogle = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: window.location.origin,
-        queryParams: {
-          hd: ALLOWED_DOMAIN, // hints Google to pre-select @appmax.com.br accounts
-        },
-      },
-    });
-    if (error) throw new Error(error.message);
+  // Google OAuth via @react-oauth/google — receives user info after consent popup
+  const loginWithGoogle = async (googleUser: { email: string; name: string; picture?: string }) => {
+    if (!isAppmaxEmail(googleUser.email)) {
+      throw new Error(`Apenas contas @${ALLOWED_DOMAIN} podem acessar a plataforma.`);
+    }
+
+    const u = buildUser(
+      `google_${googleUser.email}`,
+      googleUser.email,
+      googleUser.name,
+      googleUser.picture,
+    );
+
+    localStorage.setItem(`google_connected_${u.id}`, 'true');
+    setUser(u);
+    localStorage.setItem('appmax_user', JSON.stringify(u));
+    recordLogin(u);
   };
 
   const logout = async () => {
@@ -130,8 +138,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         pageLabel: '',
       });
     }
-    await supabase.auth.signOut();
     setUser(null);
+    localStorage.removeItem('appmax_user');
+    // Also sign out from Supabase in case they used email/password
+    await supabase.auth.signOut();
   };
 
   const hasRole = (roles: UserRole[]) => !!user && roles.includes(user.role);
@@ -139,7 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const hasMinRole = (minRole: UserRole): boolean => {
     if (!user) return false;
     const userIdx = ROLE_HIERARCHY.indexOf(user.role);
-    const minIdx = ROLE_HIERARCHY.indexOf(minRole);
+    const minIdx  = ROLE_HIERARCHY.indexOf(minRole);
     return userIdx <= minIdx;
   };
 
@@ -150,19 +160,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated: !!user,
-        isLoading,
-        login,
-        loginWithGoogle,
-        logout,
-        hasRole,
-        hasMinRole,
-        canAccess,
-      }}
-    >
+    <AuthContext.Provider value={{
+      user, isAuthenticated: !!user, isLoading,
+      login, loginWithGoogle, logout,
+      hasRole, hasMinRole, canAccess,
+    }}>
       {children}
     </AuthContext.Provider>
   );
