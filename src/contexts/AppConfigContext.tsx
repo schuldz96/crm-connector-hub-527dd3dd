@@ -20,17 +20,35 @@ export type AIModelId =
   | 'o1-mini'
   | 'o1-preview'
   | 'o3-mini'
-  | 'o3';
+  | 'o3'
+  | 'gpt-5o-mini'
+  | 'gpt-5o'
+  | 'gpt-5-turbo'
+  | 'gpt-5'
+  | 'o4-mini'
+  | 'o4-preview'
+  | 'o5-mini'
+  | 'o5';
 
 export const AI_MODELS: { id: AIModelId; label: string; desc: string; badge: string }[] = [
-  { id: 'gpt-4o-mini',  label: 'GPT-4o Mini',  desc: 'Rápido e econômico — melhor custo-benefício',            badge: '⚡ Padrão'     },
-  { id: 'gpt-4o',       label: 'GPT-4o',        desc: 'Multimodal e poderoso — equilíbrio perfeito',            badge: '⚖️ Balanceado' },
-  { id: 'gpt-4-turbo',  label: 'GPT-4 Turbo',   desc: 'Alta capacidade com janela de contexto ampla',           badge: '🚀 Turbo'      },
-  { id: 'gpt-4',        label: 'GPT-4',          desc: 'Raciocínio avançado e tarefas complexas',               badge: '🧠 Premium'    },
-  { id: 'o1-mini',      label: 'o1 Mini',        desc: 'Raciocínio passo a passo — tarefas técnicas',            badge: '🔬 Raciocínio' },
-  { id: 'o1-preview',   label: 'o1 Preview',     desc: 'Máximo raciocínio — problemas complexos e científicos',  badge: '🏆 Top'        },
-  { id: 'o3-mini',      label: 'o3 Mini',        desc: 'Nova geração de raciocínio — eficiente e rápido',        badge: '🆕 o3'         },
-  { id: 'o3',           label: 'o3',             desc: 'Topo absoluto da OpenAI — raciocínio de nível humano',   badge: '👑 Elite'      },
+  // GPT-4 series
+  { id: 'gpt-4o-mini',  label: 'GPT-4o Mini',   desc: 'Rápido e econômico — melhor custo-benefício',            badge: '⚡ Padrão'     },
+  { id: 'gpt-4o',       label: 'GPT-4o',         desc: 'Multimodal e poderoso — equilíbrio perfeito',            badge: '⚖️ Balanceado' },
+  { id: 'gpt-4-turbo',  label: 'GPT-4 Turbo',    desc: 'Alta capacidade com janela de contexto ampla',           badge: '🚀 Turbo'      },
+  { id: 'gpt-4',        label: 'GPT-4',           desc: 'Raciocínio avançado e tarefas complexas',               badge: '🧠 Premium'    },
+  { id: 'o1-mini',      label: 'o1 Mini',         desc: 'Raciocínio passo a passo — tarefas técnicas',            badge: '🔬 Raciocínio' },
+  { id: 'o1-preview',   label: 'o1 Preview',      desc: 'Máximo raciocínio — problemas complexos e científicos',  badge: '🏆 Top'        },
+  { id: 'o3-mini',      label: 'o3 Mini',         desc: 'Nova geração de raciocínio — eficiente e rápido',        badge: '🆕 o3'         },
+  { id: 'o3',           label: 'o3',              desc: 'Topo absoluto da série 4 — raciocínio de nível humano',  badge: '👑 Elite'      },
+  // GPT-5 series
+  { id: 'gpt-5o-mini',  label: 'GPT-5o Mini',    desc: 'GPT-5 compacto — rápido e econômico',                    badge: '⚡ GPT-5'      },
+  { id: 'gpt-5o',       label: 'GPT-5o',          desc: 'Multimodal de nova geração — desempenho superior',       badge: '⚖️ GPT-5'      },
+  { id: 'gpt-5-turbo',  label: 'GPT-5 Turbo',     desc: 'GPT-5 acelerado — contexto amplo e alta velocidade',    badge: '🚀 GPT-5'      },
+  { id: 'gpt-5',        label: 'GPT-5',           desc: 'Modelo mais avançado da OpenAI — máxima inteligência',   badge: '🧠 GPT-5'      },
+  { id: 'o4-mini',      label: 'o4 Mini',         desc: 'Raciocínio avançado compacto — série 5',                 badge: '🔬 o4'         },
+  { id: 'o4-preview',   label: 'o4 Preview',      desc: 'Raciocínio o4 completo — precisão máxima',               badge: '🏆 o4'         },
+  { id: 'o5-mini',      label: 'o5 Mini',         desc: 'Topo da nova série — raciocínio eficiente',              badge: '🆕 o5'         },
+  { id: 'o5',           label: 'o5',              desc: 'Ápice absoluto da OpenAI — inteligência de ponta',       badge: '👑 o5'         },
 ];
 
 export type ModuleAIKey = 'meetings' | 'training' | 'whatsapp' | 'reports' | 'automations';
