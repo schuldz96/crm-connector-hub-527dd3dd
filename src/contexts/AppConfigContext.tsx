@@ -89,11 +89,11 @@ const STORAGE_KEY_MODULES   = 'appmax_modules_config';
 const STORAGE_KEY_OVERRIDES = 'appmax_user_module_overrides';
 
 const DEFAULT_MODELS: ModuleModels = {
-  meetings:    'google/gemini-3-flash-preview',
-  training:    'google/gemini-3-flash-preview',
-  whatsapp:    'google/gemini-3-flash-preview',
-  reports:     'google/gemini-3-flash-preview',
-  automations: 'google/gemini-3-flash-preview',
+  meetings:    'gpt-4o-mini',
+  training:    'gpt-4o-mini',
+  whatsapp:    'gpt-4o-mini',
+  reports:     'gpt-4o-mini',
+  automations: 'gpt-4o-mini',
 };
 
 const AppConfigContext = createContext<AppConfigContextType | null>(null);
