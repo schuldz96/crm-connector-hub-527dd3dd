@@ -88,8 +88,17 @@ export const DEFAULT_MODULES: ModuleConfig[] = [
 ];
 
 const STORAGE_KEY_TOKENS    = 'appmax_openai_tokens';
+const STORAGE_KEY_MODELS    = 'appmax_ai_models';
 const STORAGE_KEY_MODULES   = 'appmax_modules_config';
 const STORAGE_KEY_OVERRIDES = 'appmax_user_module_overrides';
+
+const DEFAULT_MODELS: ModuleModels = {
+  meetings:    'google/gemini-3-flash-preview',
+  training:    'google/gemini-3-flash-preview',
+  whatsapp:    'google/gemini-3-flash-preview',
+  reports:     'google/gemini-3-flash-preview',
+  automations: 'google/gemini-3-flash-preview',
+};
 
 const AppConfigContext = createContext<AppConfigContextType | null>(null);
 
@@ -99,6 +108,13 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
       const stored = localStorage.getItem(STORAGE_KEY_TOKENS);
       return stored ? { ...DEFAULT_TOKENS, ...JSON.parse(stored) } : DEFAULT_TOKENS;
     } catch { return DEFAULT_TOKENS; }
+  });
+
+  const [models, setModels] = useState<ModuleModels>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY_MODELS);
+      return stored ? { ...DEFAULT_MODELS, ...JSON.parse(stored) } : DEFAULT_MODELS;
+    } catch { return DEFAULT_MODELS; }
   });
 
   const [modules, setModules] = useState<ModuleConfig[]>(() => {
