@@ -1,84 +1,98 @@
 import { useState, useEffect, useCallback } from 'react';
-import { MOCK_INTEGRATIONS, MOCK_USERS } from '@/data/mockData';
-import type { Integration } from '@/types';
+import { MOCK_USERS } from '@/data/mockData';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
-  Plug2, CheckCircle2, XCircle, AlertCircle, Settings2, RefreshCcw,
-  Eye, EyeOff, Save, Zap, Brain, Workflow, Activity, ArrowDown,
-  ArrowUp, Clock, CheckCheck, AlertTriangle, X, Loader2,
-  Smartphone, QrCode, Link2, MessageSquare, Phone, Wifi, WifiOff,
-  ExternalLink, RefreshCw
+  RefreshCw, Loader2, Smartphone, QrCode, MessageSquare,
+  Phone, Wifi, WifiOff, X, CheckCircle2, XCircle,
+  Calendar, Video, HardDrive, LogIn, LogOut, ShieldCheck,
+  AlertTriangle, Activity, ArrowDown, ArrowUp, CheckCheck,
+  ExternalLink
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { getInstanceForUser, setInstanceForUser } from '@/hooks/useEvolutionInstances';
 
-// ─── Evolution API config (hardcoded from user) ───────────────────────────────
+// ─── Evolution API config ─────────────────────────────────────────────────────
 const EVOLUTION_API_URL = 'https://evolutionapic.contato-lojavirtual.com';
 const EVOLUTION_API_TOKEN = '3ce7a42f9bd96ea526b2b0bc39a4faec';
+const ALLOWED_DOMAIN = 'appmax.com.br';
 
-const INTEGRATION_META: Record<string, { icon: string; color: string; desc: string }> = {
-  google_calendar: { icon: '📅', color: 'hsl(var(--info))', desc: 'Sincroniza reuniões automaticamente do Google Calendar' },
-  google_meet: { icon: '🎥', color: 'hsl(var(--success))', desc: 'Captura dados de chamadas do Google Meet' },
-  hubspot: { icon: '🧡', color: 'hsl(38 92% 50%)', desc: 'CRM — sincronize contatos, empresas e negócios' },
-  openai: { icon: '🤖', color: 'hsl(var(--primary))', desc: 'IA para análise de reuniões e conversas' },
-  evolution_api: { icon: '💬', color: 'hsl(var(--accent))', desc: 'WhatsApp Business via Evolution API' },
-  n8n: { icon: '⚡', color: 'hsl(270 80% 65%)', desc: 'Orquestração de automações e fluxos' },
-};
+// ─── Google services config ───────────────────────────────────────────────────
+const GOOGLE_SERVICES = [
+  {
+    id: 'calendar',
+    label: 'Google Calendar',
+    icon: Calendar,
+    color: 'hsl(210 100% 56%)',
+    desc: 'Sincroniza reuniões e agenda automaticamente',
+    scope: 'https://www.googleapis.com/auth/calendar.readonly',
+  },
+  {
+    id: 'meet',
+    label: 'Google Meet',
+    icon: Video,
+    color: 'hsl(168 80% 42%)',
+    desc: 'Captura dados e transcrições de chamadas',
+    scope: 'https://www.googleapis.com/auth/meetings.space.readonly',
+  },
+  {
+    id: 'drive',
+    label: 'Google Drive',
+    icon: HardDrive,
+    color: 'hsl(38 92% 50%)',
+    desc: 'Acessa transcrições e arquivos gerados pelo Meet',
+    scope: 'https://www.googleapis.com/auth/drive.readonly',
+  },
+] as const;
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-// The Evolution API returns a flat structure directly
+type GoogleServiceId = 'calendar' | 'meet' | 'drive';
+
+interface GoogleSession {
+  email: string;
+  name: string;
+  picture?: string;
+  connectedAt: string;
+  services: GoogleServiceId[];
+}
+
+// localStorage helpers for Google session
+const GOOGLE_SESSION_KEY = (userId: string) => `google_session_${userId}`;
+
+function getGoogleSession(userId: string): GoogleSession | null {
+  try {
+    const raw = localStorage.getItem(GOOGLE_SESSION_KEY(userId));
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function saveGoogleSession(userId: string, session: GoogleSession) {
+  localStorage.setItem(GOOGLE_SESSION_KEY(userId), JSON.stringify(session));
+  // also mark the simpler flag used by UsersPage
+  localStorage.setItem(`google_connected_${userId}`, 'true');
+}
+
+function clearGoogleSession(userId: string) {
+  localStorage.removeItem(GOOGLE_SESSION_KEY(userId));
+  localStorage.removeItem(`google_connected_${userId}`);
+}
+
+// ─── Evolution API helpers ────────────────────────────────────────────────────
 interface EvolutionInstance {
   id: string;
   name: string;
-  connectionStatus: string; // "open" | "close" | "connecting" | "qrcode"
+  connectionStatus: string;
   ownerJid?: string;
   profileName?: string;
   profilePicUrl?: string;
-  number?: string;
-  token?: string;
   _count?: { Message: number; Contact: number; Chat: number };
 }
 
-interface EvolutionMessage {
-  key: { id: string; remoteJid: string; fromMe: boolean };
-  message?: { conversation?: string; extendedTextMessage?: { text: string }; imageMessage?: { caption?: string } };
-  pushName?: string;
-  messageTimestamp?: number;
-  messageType?: string;
-}
-
-interface WebhookLog {
-  id: string;
-  direction: 'inbound' | 'outbound';
-  source: string;
-  event: string;
-  status: 'success' | 'error' | 'pending';
-  statusCode?: number;
-  payload: string;
-  response?: string;
-  timestamp: string;
-  duration: number;
-}
-
-const MOCK_WEBHOOK_LOGS: WebhookLog[] = [
-  { id: 'wh_001', direction: 'inbound', source: 'Evolution API', event: 'messages.upsert', status: 'success', statusCode: 200, payload: '{"event":"messages.upsert","instance":"Vendas Principal","data":{"key":{"id":"3EB0F..."},"message":{"conversation":"Pode me enviar a proposta?"}}}', response: '{"status":"ok"}', timestamp: '2026-03-08T16:20:15Z', duration: 42 },
-  { id: 'wh_002', direction: 'outbound', source: 'HubSpot', event: 'contact.note.create', status: 'success', statusCode: 201, payload: '{"contactId":"C-3912","note":"WhatsApp: +55 11 91234-5678 — Solicitou proposta comercial","ownerId":"U-887"}', response: '{"id":"note_99182"}', timestamp: '2026-03-08T16:20:18Z', duration: 310 },
-  { id: 'wh_003', direction: 'inbound', source: 'Google Calendar', event: 'meeting.completed', status: 'success', statusCode: 200, payload: '{"meetingId":"mtg_001","title":"Demo Produto - Acme Corp","duration":45}', response: '{"analyzed":true}', timestamp: '2026-03-08T15:55:00Z', duration: 28 },
-  { id: 'wh_004', direction: 'outbound', source: 'N8N', event: 'meeting.analyzed', status: 'error', statusCode: 500, payload: '{"meetingId":"mtg_001","score":87,"aiSummary":"Excelente reunião..."}', response: '{"error":"Connection refused"}', timestamp: '2026-03-08T15:55:05Z', duration: 5001 },
-  { id: 'wh_005', direction: 'inbound', source: 'Evolution API', event: 'connection.update', status: 'success', statusCode: 200, payload: '{"instance":"Closer CS","state":"close"}', response: '{"status":"ok"}', timestamp: '2026-03-08T10:00:00Z', duration: 18 },
-  { id: 'wh_006', direction: 'outbound', source: 'HubSpot', event: 'deal.note.create', status: 'pending', payload: '{"dealId":"D-5521","note":"Call com Roberto Faria — Score 87..."}', timestamp: '2026-03-08T09:00:00Z', duration: 0 },
-  { id: 'wh_007', direction: 'inbound', source: 'Evolution API', event: 'messages.upsert', status: 'success', statusCode: 200, payload: '{"event":"messages.upsert","instance":"SDR Team Beta","data":{...}}', response: '{"status":"ok"}', timestamp: '2026-03-08T08:00:00Z', duration: 55 },
-];
-
-// ─── Evolution API helpers ────────────────────────────────────────────────────
 async function evolutionFetch(path: string, options: RequestInit = {}) {
   const res = await fetch(`${EVOLUTION_API_URL}${path}`, {
     ...options,
     headers: {
-      'apikey': EVOLUTION_API_TOKEN,
+      apikey: EVOLUTION_API_TOKEN,
       'Content-Type': 'application/json',
       ...(options.headers || {}),
     },
@@ -87,7 +101,7 @@ async function evolutionFetch(path: string, options: RequestInit = {}) {
   return res.json();
 }
 
-// ─── Instance Status Badge ────────────────────────────────────────────────────
+// ─── Status badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: string }) {
   const isOpen = status === 'open' || status === 'connected';
   const isConnecting = status === 'connecting' || status === 'qrcode';
@@ -104,6 +118,221 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// ─── Google Integration Panel ─────────────────────────────────────────────────
+function GooglePanel() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const userId = user?.id || '';
+
+  const [session, setSession] = useState<GoogleSession | null>(() => getGoogleSession(userId));
+  const [connecting, setConnecting] = useState(false);
+
+  // Simulate Google OAuth popup + domain check
+  const handleConnect = async () => {
+    setConnecting(true);
+    // Simulate OAuth round-trip (1.2s)
+    await new Promise(r => setTimeout(r, 1200));
+
+    // In production: open Google OAuth popup with hd=appmax.com.br param
+    // and validate the returned id_token email domain server-side.
+    // Here we simulate a successful login with the current user's email.
+    const simulatedEmail = user?.email ?? '';
+
+    if (!simulatedEmail.endsWith(`@${ALLOWED_DOMAIN}`)) {
+      toast({
+        variant: 'destructive',
+        title: 'Domínio não autorizado',
+        description: `Apenas contas @${ALLOWED_DOMAIN} podem conectar ao Google.`,
+      });
+      setConnecting(false);
+      return;
+    }
+
+    const newSession: GoogleSession = {
+      email: simulatedEmail,
+      name: user?.name ?? simulatedEmail,
+      picture: user?.avatar,
+      connectedAt: new Date().toISOString(),
+      services: ['calendar', 'meet', 'drive'],
+    };
+
+    saveGoogleSession(userId, newSession);
+    setSession(newSession);
+    setConnecting(false);
+    toast({
+      title: 'Google conectado com sucesso!',
+      description: 'Calendar, Meet e Drive estão sincronizados.',
+    });
+  };
+
+  const handleDisconnect = () => {
+    clearGoogleSession(userId);
+    setSession(null);
+    toast({ title: 'Google desconectado', description: 'Sua conta Google foi removida.' });
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Header card */}
+      <div className="glass-card p-5" style={{ background: 'linear-gradient(135deg, hsl(210 100% 56% / 0.06), hsl(168 80% 42% / 0.04))' }}>
+        <div className="flex items-start justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-4">
+            {/* Google logo */}
+            <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center border border-border flex-shrink-0">
+              <svg className="w-7 h-7" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+              </svg>
+            </div>
+            <div>
+              <p className="font-display font-semibold text-sm">Google Workspace</p>
+              <p className="text-xs text-muted-foreground">
+                Uma única autenticação conecta Calendar, Meet e Drive
+              </p>
+              <div className="flex items-center gap-1.5 mt-1.5">
+                <ShieldCheck className="w-3 h-3 text-primary" />
+                <span className="text-[11px] text-muted-foreground">Restrito a <strong>@{ALLOWED_DOMAIN}</strong></span>
+              </div>
+            </div>
+          </div>
+
+          {session ? (
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-success/10 border border-success/20 text-success font-medium">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Conectado
+              </span>
+              <Button size="sm" variant="outline" className="text-xs h-8 border-border text-destructive hover:text-destructive hover:border-destructive/30" onClick={handleDisconnect}>
+                <LogOut className="w-3 h-3 mr-1.5" /> Desconectar
+              </Button>
+            </div>
+          ) : (
+            <Button
+              size="sm"
+              className="bg-white text-foreground border border-border hover:bg-muted text-xs h-9 font-medium shadow-sm"
+              onClick={handleConnect}
+              disabled={connecting}
+            >
+              {connecting ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                </svg>
+              )}
+              {connecting ? 'Autenticando...' : 'Entrar com Google'}
+            </Button>
+          )}
+        </div>
+
+        {/* Account info when connected */}
+        {session && (
+          <div className="mt-4 pt-4 border-t border-border flex items-center gap-3">
+            {session.picture ? (
+              <img src={session.picture} alt={session.name} className="w-8 h-8 rounded-full border border-border" />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
+                {session.name.charAt(0)}
+              </div>
+            )}
+            <div>
+              <p className="text-xs font-semibold">{session.name}</p>
+              <p className="text-[11px] text-muted-foreground">{session.email}</p>
+            </div>
+            <span className="ml-auto text-[10px] text-muted-foreground">
+              Conectado em {new Date(session.connectedAt).toLocaleDateString('pt-BR')}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Services grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {GOOGLE_SERVICES.map(svc => {
+          const Icon = svc.icon;
+          const isActive = session?.services.includes(svc.id) ?? false;
+          return (
+            <div key={svc.id} className={cn(
+              'glass-card p-4 transition-all',
+              isActive ? 'border-border' : 'opacity-50'
+            )}>
+              <div className="flex items-start justify-between mb-3">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${svc.color}20` }}>
+                  <Icon className="w-4.5 h-4.5" style={{ color: svc.color, width: 18, height: 18 }} />
+                </div>
+                {isActive ? (
+                  <CheckCircle2 className="w-4 h-4 text-success" />
+                ) : (
+                  <XCircle className="w-4 h-4 text-muted-foreground/40" />
+                )}
+              </div>
+              <p className="text-xs font-semibold mb-1">{svc.label}</p>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">{svc.desc}</p>
+              {isActive && (
+                <div className="mt-3 pt-3 border-t border-border/50">
+                  <span className="text-[10px] text-success font-medium flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                    Sincronizando
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* How it works */}
+      {!session && (
+        <div className="glass-card p-4 border-primary/20 bg-primary/5">
+          <p className="text-xs font-semibold mb-3 flex items-center gap-2">
+            <Activity className="w-3.5 h-3.5 text-primary" />
+            Como funciona
+          </p>
+          <ol className="space-y-2">
+            {[
+              'Clique em "Entrar com Google" — use sua conta @appmax.com.br',
+              'Autorize o acesso ao Calendar, Meet e Drive de uma só vez',
+              'O sistema sincroniza reuniões e puxa transcrições automaticamente',
+              'A IA analisa as transcrições e popula os scorecards de Reuniões',
+            ].map((step, i) => (
+              <li key={i} className="flex items-start gap-2.5 text-[11px] text-muted-foreground">
+                <span className="w-4 h-4 rounded-full bg-primary/15 text-primary text-[9px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</span>
+                {step}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      {/* Transcriptions info when connected */}
+      {session && (
+        <div className="glass-card p-4 border-success/20 bg-success/5">
+          <p className="text-xs font-semibold mb-2 flex items-center gap-2 text-success">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            Transcrições habilitadas
+          </p>
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            O sistema buscará automaticamente transcrições de reuniões salvas no Google Drive.
+            Elas serão enviadas ao modelo de IA configurado no módulo de Reuniões para análise e geração de scorecards.
+          </p>
+          <a
+            href="https://support.google.com/meet/answer/10167275"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline mt-2"
+          >
+            Como ativar transcrições no Google Meet <ExternalLink className="w-3 h-3" />
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Evolution Instances Panel ────────────────────────────────────────────────
 function EvolutionPanel() {
   const { toast } = useToast();
@@ -113,16 +342,10 @@ function EvolutionPanel() {
   const [instances, setInstances] = useState<EvolutionInstance[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedInstance, setSelectedInstance] = useState<EvolutionInstance | null>(null);
-  const [messages, setMessages] = useState<EvolutionMessage[]>([]);
-  const [loadingMessages, setLoadingMessages] = useState(false);
-  // per-instance QR tracking (name → base64|null)
   const [qrInstanceName, setQrInstanceName] = useState<string | null>(null);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [loadingQr, setLoadingQr] = useState(false);
-  // instance → userId: read from shared localStorage (same key as UsersPage)
   const [instanceUserMap, setInstanceUserMap] = useState<Record<string, string>>(() => {
-    // build map from localStorage on init
     const map: Record<string, string> = {};
     MOCK_USERS.forEach(u => {
       const inst = getInstanceForUser(u.id);
@@ -136,8 +359,7 @@ function EvolutionPanel() {
     setError(null);
     try {
       const data = await evolutionFetch('/instance/fetchInstances');
-      const list: EvolutionInstance[] = Array.isArray(data) ? data : [];
-      setInstances(list);
+      setInstances(Array.isArray(data) ? data : []);
     } catch (e: any) {
       setError(`Erro ao carregar instâncias: ${e.message}`);
     } finally {
@@ -147,29 +369,6 @@ function EvolutionPanel() {
 
   useEffect(() => { fetchInstances(); }, [fetchInstances]);
 
-  const fetchMessages = async (instanceName: string) => {
-    setLoadingMessages(true);
-    try {
-      const data = await evolutionFetch(`/chat/findMessages/${instanceName}`, {
-        method: 'POST',
-        body: JSON.stringify({ where: {}, limit: 20 }),
-      });
-      const msgs: EvolutionMessage[] = Array.isArray(data?.messages?.records) ? data.messages.records : [];
-      setMessages(msgs);
-    } catch {
-      setMessages([]);
-    } finally {
-      setLoadingMessages(false);
-    }
-  };
-
-  const handleSelectInstance = (inst: EvolutionInstance) => {
-    setSelectedInstance(inst);
-    setQrCode(null);
-    fetchMessages(inst.name);
-  };
-
-  // Per-instance QR — never affects other instances
   const handleGetQr = async (instanceName: string) => {
     setQrInstanceName(instanceName);
     setLoadingQr(true);
@@ -186,17 +385,13 @@ function EvolutionPanel() {
     }
   };
 
-  // Assign user to instance — syncs with UsersPage via shared localStorage key
   const handleAssignUser = (instanceName: string, userId: string) => {
-    // Clear old assignment for this instance
     MOCK_USERS.forEach(u => {
       if (getInstanceForUser(u.id) === instanceName) setInstanceForUser(u.id, '');
     });
-    // Set new assignment
     if (userId) setInstanceForUser(userId, instanceName);
     setInstanceUserMap(m => {
       const next = { ...m };
-      // remove other users mapped to this instance
       Object.keys(next).forEach(k => { if (next[k] === instanceName) delete next[k]; });
       if (userId) next[instanceName] = userId;
       return next;
@@ -207,7 +402,6 @@ function EvolutionPanel() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-accent/10 flex items-center justify-center">
@@ -224,7 +418,6 @@ function EvolutionPanel() {
         </Button>
       </div>
 
-      {/* My instance banner (non-admin) */}
       {!isAdmin && myInstance && (
         <div className={cn(
           'p-3 rounded-xl border flex items-center gap-3',
@@ -233,9 +426,7 @@ function EvolutionPanel() {
           <Phone className="w-4 h-4 text-muted-foreground flex-shrink-0" />
           <div className="flex-1">
             <p className="text-xs font-semibold">{myInstance.profileName || myInstance.name}</p>
-            <p className="text-xs text-muted-foreground">
-              {myInstance.ownerJid?.replace('@s.whatsapp.net', '') || '—'}
-            </p>
+            <p className="text-xs text-muted-foreground">{myInstance.ownerJid?.replace('@s.whatsapp.net', '') || '—'}</p>
           </div>
           <StatusBadge status={myInstance.connectionStatus} />
           {myInstance.connectionStatus !== 'open' && (
@@ -267,47 +458,33 @@ function EvolutionPanel() {
         </div>
       )}
 
-      {/* Instances grid */}
       {!loading && instances.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {instances.map(inst => {
-            const name = inst.name;
-            const status = inst.connectionStatus;
-            const isOpen = status === 'open';
-            const phoneNumber = inst.ownerJid?.replace('@s.whatsapp.net', '');
-            const assignedUserId = instanceUserMap[name];
+            const isOpen = inst.connectionStatus === 'open';
+            const phone = inst.ownerJid?.replace('@s.whatsapp.net', '');
+            const assignedUserId = instanceUserMap[inst.name];
             const assignedUser = MOCK_USERS.find(u => u.id === assignedUserId);
-            const isSelected = selectedInstance?.name === name;
 
             return (
-              <div
-                key={inst.id}
-                className={cn(
-                  'glass-card p-4 flex flex-col gap-3 cursor-pointer transition-all border',
-                  isSelected ? 'border-primary/40 bg-primary/5' : 'border-border hover:border-primary/20'
-                )}
-                onClick={() => handleSelectInstance(inst)}
-              >
+              <div key={inst.id} className="glass-card p-4 flex flex-col gap-3 border-border hover:border-primary/20 transition-all">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-2.5">
                     {inst.profilePicUrl ? (
-                      <img src={inst.profilePicUrl} alt={name} className="w-9 h-9 rounded-full border border-border object-cover" />
+                      <img src={inst.profilePicUrl} alt={inst.name} className="w-9 h-9 rounded-full border border-border object-cover" />
                     ) : (
                       <div className="w-9 h-9 rounded-full bg-accent/10 flex items-center justify-center">
                         <Smartphone className="w-4 h-4 text-accent" />
                       </div>
                     )}
                     <div className="min-w-0">
-                      <p className="text-xs font-semibold truncate">{inst.profileName || name}</p>
-                      <p className="text-[10px] text-muted-foreground font-mono truncate">
-                        {phoneNumber || name}
-                      </p>
+                      <p className="text-xs font-semibold truncate">{inst.profileName || inst.name}</p>
+                      <p className="text-[10px] text-muted-foreground font-mono truncate">{phone || inst.name}</p>
                     </div>
                   </div>
-                  <StatusBadge status={status} />
+                  <StatusBadge status={inst.connectionStatus} />
                 </div>
 
-                {/* Stats row */}
                 {inst._count && (
                   <div className="flex gap-3 text-[10px] text-muted-foreground">
                     <span>💬 {inst._count.Message.toLocaleString('pt-BR')} msgs</span>
@@ -323,11 +500,11 @@ function EvolutionPanel() {
                 )}
 
                 {isAdmin && (
-                  <div onClick={e => e.stopPropagation()}>
+                  <div>
                     <label className="text-[10px] text-muted-foreground block mb-1">Atribuir a usuário</label>
                     <select
                       value={assignedUserId || ''}
-                      onChange={e => handleAssignUser(name, e.target.value)}
+                      onChange={e => handleAssignUser(inst.name, e.target.value)}
                       className="w-full h-7 text-[10px] bg-secondary border border-border rounded-lg px-2 text-foreground"
                     >
                       <option value="">— Sem atribuição —</option>
@@ -338,18 +515,16 @@ function EvolutionPanel() {
                   </div>
                 )}
 
-                {/* QR to connect — never disconnect/delete */}
                 {!isOpen && (
-                  <div className="flex gap-1.5">
-                    <Button
-                      size="sm"
-                      className="flex-1 text-[10px] h-6 bg-gradient-primary"
-                      onClick={e => { e.stopPropagation(); handleGetQr(name); }}
-                      disabled={loadingQr && qrInstanceName === name}
-                    >
-                      <QrCode className="w-3 h-3 mr-1" /> {loadingQr && qrInstanceName === name ? 'Aguarde...' : 'Conectar / QR'}
-                    </Button>
-                  </div>
+                  <Button
+                    size="sm"
+                    className="text-[10px] h-6 bg-gradient-primary"
+                    onClick={() => handleGetQr(inst.name)}
+                    disabled={loadingQr && qrInstanceName === inst.name}
+                  >
+                    <QrCode className="w-3 h-3 mr-1" />
+                    {loadingQr && qrInstanceName === inst.name ? 'Aguarde...' : 'Conectar / QR'}
+                  </Button>
                 )}
               </div>
             );
@@ -374,277 +549,32 @@ function EvolutionPanel() {
           </div>
         </div>
       )}
-
-      {/* Messages panel */}
-      {selectedInstance && (
-        <div className="glass-card p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <MessageSquare className="w-4 h-4 text-accent" />
-              <p className="text-xs font-semibold">
-                Mensagens — {selectedInstance.profileName || selectedInstance.name}
-              </p>
-            </div>
-            <Button size="sm" variant="outline" className="text-xs h-6 border-border" onClick={() => fetchMessages(selectedInstance.name)}>
-              <RefreshCw className="w-3 h-3" />
-            </Button>
-          </div>
-
-          {loadingMessages && (
-            <div className="flex items-center justify-center py-4 gap-2 text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span className="text-xs">Carregando mensagens...</span>
-            </div>
-          )}
-
-          {!loadingMessages && messages.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center py-4">Nenhuma mensagem encontrada</p>
-          )}
-
-          {!loadingMessages && messages.length > 0 && (
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {messages.slice(0, 20).map((msg, i) => {
-                const text = msg.message?.conversation
-                  || msg.message?.extendedTextMessage?.text
-                  || msg.message?.imageMessage?.caption
-                  || '[mídia]';
-                const isOut = msg.key.fromMe;
-                const ts = msg.messageTimestamp ? new Date(msg.messageTimestamp * 1000) : null;
-                const jid = msg.key.remoteJid?.replace('@s.whatsapp.net', '').replace('@g.us', ' (grupo)');
-                return (
-                  <div key={i} className={cn('flex gap-2', isOut ? 'flex-row-reverse' : 'flex-row')}>
-                    <div className={cn(
-                      'max-w-[75%] px-3 py-2 rounded-xl text-xs',
-                      isOut ? 'bg-primary/10 text-primary rounded-tr-sm' : 'bg-secondary text-muted-foreground rounded-tl-sm border border-border'
-                    )}>
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="font-semibold text-[10px]">
-                          {isOut ? 'Você' : (msg.pushName || jid)}
-                        </span>
-                        <span className="text-[9px] opacity-60">{ts?.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
-                        <span className={cn('text-[8px] px-1 rounded', isOut ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground')}>
-                          {isOut ? '↑ saída' : '↓ entrada'}
-                        </span>
-                      </div>
-                      <p>{text}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
 
-// ─── Meta WhatsApp Config ─────────────────────────────────────────────────────
-function MetaWhatsAppPanel() {
-  const { toast } = useToast();
-  const [showToken, setShowToken] = useState(false);
-  const [form, setForm] = useState({
-    token: localStorage.getItem('meta_wa_token') || '',
-    phoneNumberId: localStorage.getItem('meta_wa_phone_id') || '',
-    businessId: localStorage.getItem('meta_wa_business_id') || '',
-  });
-  const [testing, setTesting] = useState(false);
-
-  const handleSave = () => {
-    localStorage.setItem('meta_wa_token', form.token);
-    localStorage.setItem('meta_wa_phone_id', form.phoneNumberId);
-    localStorage.setItem('meta_wa_business_id', form.businessId);
-    toast({ title: 'Credenciais Meta salvas', description: 'Configuração da API do WhatsApp (Meta) atualizada.' });
-  };
-
-  const handleTest = async () => {
-    if (!form.token || !form.phoneNumberId) {
-      toast({ variant: 'destructive', title: 'Preencha Token e Phone Number ID antes de testar.' });
-      return;
-    }
-    setTesting(true);
-    try {
-      const res = await fetch(`https://graph.facebook.com/v19.0/${form.phoneNumberId}`, {
-        headers: { Authorization: `Bearer ${form.token}` },
-      });
-      const data = await res.json();
-      if (res.ok) {
-        toast({ title: 'Conexão OK!', description: `Número: ${data.display_phone_number || form.phoneNumberId}` });
-      } else {
-        toast({ variant: 'destructive', title: 'Falha na conexão', description: data.error?.message || 'Verifique o token.' });
-      }
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Erro', description: e.message });
-    } finally {
-      setTesting(false);
-    }
-  };
-
-  return (
-    <div className="glass-card p-5 space-y-4">
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xl" style={{ background: 'hsl(215 100% 56% / 0.1)' }}>
-          🔵
-        </div>
-        <div>
-          <p className="text-sm font-semibold">WhatsApp Business API — Meta</p>
-          <p className="text-xs text-muted-foreground">Conecte via token de acesso da Meta (Cloud API)</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div className="md:col-span-2">
-          <label className="text-xs font-medium block mb-1.5">Access Token</label>
-          <div className="relative">
-            <Input
-              type={showToken ? 'text' : 'password'}
-              value={form.token}
-              onChange={e => setForm(f => ({ ...f, token: e.target.value }))}
-              placeholder="EAAxxxxx..."
-              className="h-9 text-xs bg-secondary border-border pr-9 font-mono"
-            />
-            <button onClick={() => setShowToken(s => !s)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground">
-              {showToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-            </button>
-          </div>
-        </div>
-        <div>
-          <label className="text-xs font-medium block mb-1.5">Phone Number ID</label>
-          <Input
-            value={form.phoneNumberId}
-            onChange={e => setForm(f => ({ ...f, phoneNumberId: e.target.value }))}
-            placeholder="1234567890"
-            className="h-9 text-xs bg-secondary border-border font-mono"
-          />
-        </div>
-        <div>
-          <label className="text-xs font-medium block mb-1.5">Business ID</label>
-          <Input
-            value={form.businessId}
-            onChange={e => setForm(f => ({ ...f, businessId: e.target.value }))}
-            placeholder="9876543210"
-            className="h-9 text-xs bg-secondary border-border font-mono"
-          />
-        </div>
-      </div>
-
-      <div className="p-3 rounded-lg bg-info/5 border border-info/20">
-        <p className="text-[10px] text-muted-foreground leading-relaxed">
-          Obtenha as credenciais em{' '}
-          <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener noreferrer" className="text-primary underline inline-flex items-center gap-0.5">
-            developers.facebook.com <ExternalLink className="w-2.5 h-2.5" />
-          </a>
-          {' '}→ Seu App → WhatsApp → Configuração da API.
-        </p>
-      </div>
-
-      <div className="flex gap-2">
-        <Button size="sm" className="flex-1 text-xs h-8 bg-gradient-primary" onClick={handleSave}>
-          <Save className="w-3 h-3 mr-1.5" /> Salvar
-        </Button>
-        <Button size="sm" variant="outline" className="text-xs h-8 border-border" onClick={handleTest} disabled={testing}>
-          {testing ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Link2 className="w-3 h-3 mr-1" />}
-          Testar Conexão
-        </Button>
-      </div>
-    </div>
-  );
+// ─── Mock webhook logs ─────────────────────────────────────────────────────────
+interface WebhookLog {
+  id: string;
+  direction: 'inbound' | 'outbound';
+  source: string;
+  event: string;
+  status: 'success' | 'error' | 'pending';
+  statusCode?: number;
+  payload: string;
+  response?: string;
+  timestamp: string;
+  duration: number;
 }
 
-// ─── Other integration card ────────────────────────────────────────────────────
-function IntegrationCard({ integration, onConfig }: { integration: Integration; onConfig: (i: Integration) => void }) {
-  const meta = INTEGRATION_META[integration.type];
-  const statusConfig = {
-    connected: { icon: CheckCircle2, class: 'text-success', label: 'Conectado' },
-    disconnected: { icon: XCircle, class: 'text-muted-foreground', label: 'Desconectado' },
-    error: { icon: AlertCircle, class: 'text-destructive', label: 'Erro' },
-  }[integration.status];
+const MOCK_WEBHOOK_LOGS: WebhookLog[] = [
+  { id: 'wh_001', direction: 'inbound', source: 'Evolution API', event: 'messages.upsert', status: 'success', statusCode: 200, payload: '{"event":"messages.upsert","instance":"Vendas Principal","data":{"key":{"id":"3EB0F..."},"message":{"conversation":"Pode me enviar a proposta?"}}}', response: '{"status":"ok"}', timestamp: '2026-03-08T16:20:15Z', duration: 42 },
+  { id: 'wh_002', direction: 'outbound', source: 'Google Calendar', event: 'meeting.completed', status: 'success', statusCode: 200, payload: '{"meetingId":"mtg_001","title":"Demo Produto - Acme Corp","duration":45}', response: '{"analyzed":true}', timestamp: '2026-03-08T15:55:00Z', duration: 28 },
+  { id: 'wh_003', direction: 'inbound', source: 'Google Drive', event: 'transcript.available', status: 'success', statusCode: 200, payload: '{"fileId":"1BxCv...","meetingId":"mtg_001","transcriptUrl":"..."}', response: '{"queued":true}', timestamp: '2026-03-08T15:56:00Z', duration: 15 },
+  { id: 'wh_004', direction: 'outbound', source: 'Google Meet', event: 'meeting.ended', status: 'error', statusCode: 500, payload: '{"meetingId":"mtg_002","participants":3}', response: '{"error":"Transcript not ready"}', timestamp: '2026-03-08T14:30:00Z', duration: 5001 },
+  { id: 'wh_005', direction: 'inbound', source: 'Evolution API', event: 'connection.update', status: 'success', statusCode: 200, payload: '{"instance":"Closer CS","state":"close"}', response: '{"status":"ok"}', timestamp: '2026-03-08T10:00:00Z', duration: 18 },
+];
 
-  return (
-    <div className="glass-card-hover p-5">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style={{ background: `${meta.color}20` }}>
-            {meta.icon}
-          </div>
-          <div>
-            <p className="font-semibold text-sm">{integration.name}</p>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <statusConfig.icon className={cn('w-3 h-3', statusConfig.class)} />
-              <span className={cn('text-xs', statusConfig.class)}>{statusConfig.label}</span>
-            </div>
-          </div>
-        </div>
-        <button onClick={() => onConfig(integration)} className="w-7 h-7 rounded-lg hover:bg-muted flex items-center justify-center transition-colors">
-          <Settings2 className="w-3.5 h-3.5 text-muted-foreground" />
-        </button>
-      </div>
-      <p className="text-xs text-muted-foreground mb-4">{meta.desc}</p>
-      <div className="flex items-center gap-2">
-        {integration.status === 'connected' ? (
-          <Button size="sm" variant="outline" className="text-xs h-7 border-border flex-1">
-            <RefreshCcw className="w-3 h-3 mr-1" /> Sincronizar
-          </Button>
-        ) : (
-          <Button size="sm" className="text-xs h-7 bg-gradient-primary flex-1">
-            <Plug2 className="w-3 h-3 mr-1" /> Conectar
-          </Button>
-        )}
-        {integration.configuredAt && (
-          <span className="text-[10px] text-muted-foreground">
-            {new Date(integration.configuredAt).toLocaleDateString('pt-BR')}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ConfigPanel({ integration, onClose }: { integration: Integration; onClose: () => void }) {
-  const [showKey, setShowKey] = useState(false);
-  const fields: Record<string, { fields: { key: string; label: string; placeholder: string }[] }> = {
-    openai: { fields: [{ key: 'api_key', label: 'API Key', placeholder: 'sk-proj-...' }] },
-    evolution_api: { fields: [{ key: 'url', label: 'URL da API', placeholder: 'https://api.evolution.com' }, { key: 'token', label: 'API Token', placeholder: 'Token de autenticação' }] },
-    n8n: { fields: [{ key: 'webhook_url', label: 'Webhook URL', placeholder: 'https://n8n.meudominio.com/webhook/...' }, { key: 'api_key', label: 'API Key (opcional)', placeholder: 'Bearer token' }] },
-    hubspot: { fields: [{ key: 'access_token', label: 'Access Token', placeholder: 'pat-...' }] },
-    google_calendar: { fields: [{ key: 'client_id', label: 'Client ID', placeholder: 'xxx.apps.googleusercontent.com' }, { key: 'client_secret', label: 'Client Secret', placeholder: 'GOCSPX-...' }] },
-    google_meet: { fields: [{ key: 'same', label: 'Usa as mesmas credenciais do Google Calendar', placeholder: '' }] },
-  };
-  const config = fields[integration.type];
-
-  return (
-    <div className="glass-card p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-display font-semibold text-sm">Configurar {integration.name}</h3>
-        <button onClick={onClose} className="w-6 h-6 rounded flex items-center justify-center hover:bg-muted">
-          <X className="w-3.5 h-3.5 text-muted-foreground" />
-        </button>
-      </div>
-      <div className="space-y-3">
-        {config?.fields.map(f => (
-          <div key={f.key}>
-            <label className="text-xs font-medium block mb-1.5">{f.label}</label>
-            <div className="relative">
-              <Input type={showKey ? 'text' : 'password'} placeholder={f.placeholder} className="h-8 text-xs bg-secondary border-border pr-8" />
-              <button onClick={() => setShowKey(!showKey)} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground">
-                {showKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-          </div>
-        ))}
-        <div className="p-3 rounded-lg bg-muted/50 border border-border">
-          <p className="text-xs text-muted-foreground">⚠️ As credenciais são armazenadas com criptografia e nunca expostas no frontend.</p>
-        </div>
-        <div className="flex gap-2">
-          <Button size="sm" className="flex-1 text-xs bg-gradient-primary h-8"><Save className="w-3 h-3 mr-1" /> Salvar</Button>
-          <Button size="sm" variant="outline" className="text-xs border-border h-8">Testar Conexão</Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Webhook Logs ─────────────────────────────────────────────────────────────
 function WebhookLogs() {
   const [selected, setSelected] = useState<WebhookLog | null>(null);
   const [dirFilter, setDirFilter] = useState<'all' | 'inbound' | 'outbound'>('all');
@@ -657,9 +587,9 @@ function WebhookLogs() {
   });
 
   const statusConfig = {
-    success: { icon: CheckCheck, class: 'text-success bg-success/10 border-success/20', dot: 'bg-success' },
-    error: { icon: AlertTriangle, class: 'text-destructive bg-destructive/10 border-destructive/20', dot: 'bg-destructive' },
-    pending: { icon: Loader2, class: 'text-warning bg-warning/10 border-warning/20', dot: 'bg-warning' },
+    success: { icon: CheckCheck, class: 'text-success bg-success/10 border-success/20' },
+    error: { icon: AlertTriangle, class: 'text-destructive bg-destructive/10 border-destructive/20' },
+    pending: { icon: Loader2, class: 'text-warning bg-warning/10 border-warning/20' },
   };
 
   return (
@@ -716,25 +646,23 @@ function WebhookLogs() {
             <tbody>
               {filtered.map(log => {
                 const sc = statusConfig[log.status];
+                const ScIcon = sc.icon;
                 return (
                   <tr key={log.id} className={cn('cursor-pointer', selected?.id === log.id && 'bg-primary/5')}
                     onClick={() => setSelected(selected?.id === log.id ? null : log)}>
                     <td>
-                      <div>
-                        <p className="text-xs font-medium">{log.source}</p>
-                        <p className="text-[10px] text-muted-foreground font-mono">{log.event}</p>
-                      </div>
+                      <p className="text-xs font-medium">{log.source}</p>
+                      <p className="text-[10px] text-muted-foreground font-mono">{log.event}</p>
                     </td>
                     <td className="text-center">
                       <span className={cn('inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border',
                         log.direction === 'inbound' ? 'bg-info/10 text-info border-info/20' : 'bg-accent/10 text-accent border-accent/20')}>
-                        {log.direction === 'inbound'
-                          ? <><ArrowDown className="w-2.5 h-2.5" /> Recebido</>
-                          : <><ArrowUp className="w-2.5 h-2.5" /> Enviado</>}
+                        {log.direction === 'inbound' ? <><ArrowDown className="w-2.5 h-2.5" /> Recebido</> : <><ArrowUp className="w-2.5 h-2.5" /> Enviado</>}
                       </span>
                     </td>
                     <td className="text-center">
-                      <span className={cn('text-[10px] px-1.5 py-0.5 rounded border', sc.class)}>
+                      <span className={cn('inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border', sc.class)}>
+                        <ScIcon className="w-2.5 h-2.5" />
                         {log.status === 'success' ? 'Sucesso' : log.status === 'error' ? 'Erro' : 'Pendente'}
                       </span>
                     </td>
@@ -799,76 +727,45 @@ function WebhookLogs() {
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function IntegrationsPage() {
-  const [configuring, setConfiguring] = useState<Integration | null>(null);
-  const [tab, setTab] = useState<'integrations' | 'evolution' | 'meta' | 'webhooks'>('integrations');
-
-  const otherIntegrations = MOCK_INTEGRATIONS.filter(i => i.type !== 'evolution_api');
+  const [tab, setTab] = useState<'google' | 'whatsapp' | 'logs'>('google');
 
   return (
     <div className="page-container animate-fade-in">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-display font-bold">Integrações</h1>
-          <p className="text-sm text-muted-foreground">Conecte ferramentas à Appmax</p>
+          <p className="text-sm text-muted-foreground">Conecte sua conta Google e gerencie o WhatsApp</p>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-secondary rounded-lg border border-border mb-6 w-fit flex-wrap">
+      <div className="flex gap-1 p-1 bg-secondary rounded-lg border border-border mb-6 w-fit">
         {[
-          { key: 'integrations', label: 'Conexões', icon: Plug2 },
-          { key: 'evolution', label: 'Evolution API', icon: MessageSquare },
-          { key: 'meta', label: 'Meta WhatsApp', icon: Phone },
-          { key: 'webhooks', label: 'Logs', icon: Activity },
-        ].map(t => (
-          <button key={t.key} onClick={() => setTab(t.key as any)}
-            className={cn('flex items-center gap-1.5 px-4 py-2 rounded-md text-xs font-medium transition-colors',
-              tab === t.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
-            <t.icon className="w-3.5 h-3.5" />
-            {t.label}
-          </button>
-        ))}
+          { key: 'google',   label: 'Google',    icon: () => (
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            </svg>
+          )},
+          { key: 'whatsapp', label: 'WhatsApp',  icon: MessageSquare },
+          { key: 'logs',     label: 'Logs',      icon: Activity },
+        ].map(t => {
+          const IconComp = t.icon;
+          return (
+            <button key={t.key} onClick={() => setTab(t.key as any)}
+              className={cn('flex items-center gap-1.5 px-4 py-2 rounded-md text-xs font-medium transition-colors',
+                tab === t.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+              <IconComp className="w-3.5 h-3.5" />
+              {t.label}
+            </button>
+          );
+        })}
       </div>
 
-      {tab === 'integrations' && (
-        <>
-          <div className="glass-card p-5 mb-6 border-primary/20" style={{ background: 'linear-gradient(135deg, hsl(var(--primary)/0.08), hsl(var(--accent)/0.05))' }}>
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <Zap className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <p className="font-display font-semibold">Automações N8N</p>
-                  <p className="text-xs text-muted-foreground">Dispare fluxos automáticos a partir de eventos na plataforma</p>
-                </div>
-              </div>
-              <div className="flex gap-2 flex-wrap">
-                <Button size="sm" variant="outline" className="text-xs h-8 border-primary/30 text-primary"><Zap className="w-3 h-3 mr-1" /> Iniciar Automação WhatsApp</Button>
-                <Button size="sm" variant="outline" className="text-xs h-8 border-primary/30 text-primary"><Brain className="w-3 h-3 mr-1" /> Analisar Conversa</Button>
-                <Button size="sm" variant="outline" className="text-xs h-8 border-primary/30 text-primary"><Workflow className="w-3 h-3 mr-1" /> Fluxo de Vendas</Button>
-              </div>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {otherIntegrations.map(i => (
-              <IntegrationCard key={i.id} integration={i} onConfig={setConfiguring} />
-            ))}
-          </div>
-        </>
-      )}
-
-      {tab === 'evolution' && <EvolutionPanel />}
-      {tab === 'meta' && <MetaWhatsAppPanel />}
-      {tab === 'webhooks' && <WebhookLogs />}
-
-      {configuring && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setConfiguring(null)}>
-          <div className="w-full max-w-md" onClick={e => e.stopPropagation()}>
-            <ConfigPanel integration={configuring} onClose={() => setConfiguring(null)} />
-          </div>
-        </div>
-      )}
+      {tab === 'google'   && <GooglePanel />}
+      {tab === 'whatsapp' && <EvolutionPanel />}
+      {tab === 'logs'     && <WebhookLogs />}
     </div>
   );
 }
