@@ -140,10 +140,6 @@ export default function MeetingsPage() {
               <h1 className="text-2xl font-display font-bold">Reuniões</h1>
               <p className="text-sm text-muted-foreground">{filtered.length} reuniões encontradas</p>
             </div>
-            <Button size="sm" className="bg-gradient-primary text-xs font-medium h-8">
-              <Plus className="w-3.5 h-3.5 mr-1.5" />
-              Nova Reunião
-            </Button>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 mb-4">
