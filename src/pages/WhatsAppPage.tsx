@@ -8,6 +8,7 @@ import {
   Smartphone, RefreshCw, Plus, CheckCheck, Send,
   ArrowUpDown, ArrowDownAZ, SortAsc, SortDesc,
   Brain, Sparkles, AlertTriangle, ChevronRight, Star,
+  Paperclip, Mic, MicOff, Image as ImageIcon, FileText, Play, Download, MapPin, Volume2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -40,11 +41,22 @@ interface Chat {
   unread: number;
 }
 
+type MsgType = 'text' | 'image' | 'video' | 'audio' | 'ptt' | 'document' | 'sticker' | 'location' | 'contact' | 'unknown';
+
 interface Message {
   id: string;
   fromMe: boolean;
   body: string;
   timestamp: number;
+  type: MsgType;
+  mediaUrl?: string;
+  mimetype?: string;
+  fileName?: string;
+  thumbnailB64?: string;
+  latitude?: number;
+  longitude?: number;
+  // raw message key for getBase64 API
+  rawMsgKeyId?: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -445,6 +457,216 @@ Responda APENAS com JSON válido no seguinte formato (sem markdown, sem explica�
   );
 }
 
+// ─── Message Content Renderer ────────────────────────────────────────────────
+function MessageContent({
+  msg,
+  instanceName,
+  fetchBase64,
+}: {
+  msg: Message;
+  instanceName: string;
+  fetchBase64: (inst: string, keyId: string, mp4?: boolean) => Promise<string | null>;
+}) {
+  const [mediaData, setMediaData] = useState<string | null>(null);
+  const [loadingMedia, setLoadingMedia] = useState(false);
+  const isFromMe = msg.fromMe;
+
+  const loadMedia = async () => {
+    if (mediaData || loadingMedia || !msg.rawMsgKeyId) return;
+    setLoadingMedia(true);
+    const b64 = await fetchBase64(instanceName, msg.rawMsgKeyId, msg.type === 'video');
+    if (b64) {
+      const mime = msg.mimetype || 'application/octet-stream';
+      setMediaData(`data:${mime};base64,${b64}`);
+    }
+    setLoadingMedia(false);
+  };
+
+  // Auto-load for audio/ptt (users expect instant playback)
+  useEffect(() => {
+    if ((msg.type === 'audio' || msg.type === 'ptt') && !msg.mediaUrl && msg.rawMsgKeyId) {
+      loadMedia();
+    }
+  }, [msg.id]);
+
+  const audioSrc = msg.mediaUrl || mediaData;
+  const imgSrc = msg.mediaUrl || (msg.thumbnailB64 ? `data:image/jpeg;base64,${msg.thumbnailB64}` : null);
+
+  switch (msg.type) {
+    case 'image':
+      return (
+        <div>
+          {imgSrc ? (
+            <img
+              src={msg.mediaUrl || mediaData || `data:image/jpeg;base64,${msg.thumbnailB64}`}
+              alt="imagem"
+              className="max-w-full max-h-72 object-contain cursor-pointer"
+              onClick={() => {
+                if (msg.mediaUrl) window.open(msg.mediaUrl, '_blank');
+                else if (!mediaData) loadMedia();
+              }}
+            />
+          ) : (
+            <button
+              onClick={loadMedia}
+              className="flex items-center gap-2 px-3 py-2"
+              disabled={loadingMedia}
+            >
+              {loadingMedia ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
+              <span className="text-xs">Carregar imagem</span>
+            </button>
+          )}
+          {msg.body && msg.body !== '[mídia]' && (
+            <p className="px-3 pt-1.5 leading-relaxed break-words whitespace-pre-wrap">{msg.body}</p>
+          )}
+        </div>
+      );
+
+    case 'video':
+      return (
+        <div>
+          {msg.mediaUrl || mediaData ? (
+            <video
+              src={msg.mediaUrl || mediaData || undefined}
+              controls
+              className="max-w-full max-h-72 rounded-lg"
+              preload="metadata"
+            />
+          ) : msg.thumbnailB64 ? (
+            <div className="relative cursor-pointer" onClick={loadMedia}>
+              <img
+                src={`data:image/jpeg;base64,${msg.thumbnailB64}`}
+                alt="vídeo"
+                className="max-w-full max-h-72 object-contain opacity-80"
+              />
+              <div className="absolute inset-0 flex items-center justify-center">
+                {loadingMedia ? (
+                  <Loader2 className="w-8 h-8 animate-spin text-white drop-shadow" />
+                ) : (
+                  <Play className="w-10 h-10 text-white drop-shadow-lg" />
+                )}
+              </div>
+            </div>
+          ) : (
+            <button onClick={loadMedia} className="flex items-center gap-2 px-3 py-2" disabled={loadingMedia}>
+              {loadingMedia ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+              <span className="text-xs">Carregar vídeo</span>
+            </button>
+          )}
+          {msg.body && msg.body !== '[mídia]' && (
+            <p className="px-3 pt-1.5 leading-relaxed break-words whitespace-pre-wrap">{msg.body}</p>
+          )}
+        </div>
+      );
+
+    case 'audio':
+    case 'ptt':
+      return (
+        <div className="px-3 py-2">
+          {audioSrc ? (
+            <audio controls className="max-w-[240px] h-8" preload="auto">
+              <source src={audioSrc} type={msg.mimetype || 'audio/ogg'} />
+            </audio>
+          ) : (
+            <button
+              onClick={loadMedia}
+              className={cn(
+                'flex items-center gap-2 py-1 rounded-full text-xs',
+                isFromMe ? 'text-primary-foreground/80' : 'text-muted-foreground'
+              )}
+              disabled={loadingMedia}
+            >
+              {loadingMedia ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Volume2 className="w-4 h-4" />
+              )}
+              <span>{msg.type === 'ptt' ? 'Mensagem de voz' : 'Áudio'}</span>
+              <span className="text-[10px] opacity-60">toque para ouvir</span>
+            </button>
+          )}
+        </div>
+      );
+
+    case 'document':
+      return (
+        <div className="px-3 py-2">
+          <div className={cn(
+            'flex items-center gap-2.5 p-2 rounded-lg',
+            isFromMe ? 'bg-primary-foreground/10' : 'bg-muted/50'
+          )}>
+            <FileText className="w-5 h-5 flex-shrink-0 opacity-70" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium truncate">{msg.fileName || msg.body || 'Documento'}</p>
+              <p className="text-[10px] opacity-60">{msg.mimetype || 'documento'}</p>
+            </div>
+            {msg.mediaUrl ? (
+              <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
+                <Download className="w-4 h-4 opacity-70 hover:opacity-100" />
+              </a>
+            ) : (
+              <button onClick={loadMedia} disabled={loadingMedia} className="flex-shrink-0">
+                {loadingMedia ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4 opacity-70 hover:opacity-100" />}
+              </button>
+            )}
+          </div>
+        </div>
+      );
+
+    case 'sticker':
+      return (
+        <div className="p-1">
+          {imgSrc ? (
+            <img
+              src={msg.mediaUrl || mediaData || `data:image/jpeg;base64,${msg.thumbnailB64}`}
+              alt="sticker"
+              className="w-28 h-28 object-contain"
+            />
+          ) : (
+            <button onClick={loadMedia} className="w-28 h-28 flex items-center justify-center" disabled={loadingMedia}>
+              {loadingMedia ? <Loader2 className="w-5 h-5 animate-spin" /> : <span className="text-3xl">🪄</span>}
+            </button>
+          )}
+        </div>
+      );
+
+    case 'location':
+      return (
+        <div className="px-3 py-2">
+          {msg.latitude && msg.longitude ? (
+            <a
+              href={`https://www.google.com/maps?q=${msg.latitude},${msg.longitude}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(
+                'flex items-center gap-2 p-2 rounded-lg',
+                isFromMe ? 'bg-primary-foreground/10 hover:bg-primary-foreground/20' : 'bg-muted/50 hover:bg-muted'
+              )}
+            >
+              <MapPin className="w-5 h-5 flex-shrink-0" />
+              <div className="text-xs">
+                <p className="font-medium">Localização</p>
+                <p className="opacity-60 text-[10px]">{msg.latitude.toFixed(5)}, {msg.longitude.toFixed(5)}</p>
+              </div>
+            </a>
+          ) : (
+            <p className="text-xs flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> Localização</p>
+          )}
+        </div>
+      );
+
+    case 'contact':
+      return (
+        <p className="px-3 py-2 leading-relaxed break-words whitespace-pre-wrap">👤 {msg.body}</p>
+      );
+
+    default:
+      return (
+        <p className="px-3 py-2 leading-relaxed break-words whitespace-pre-wrap">{msg.body}</p>
+      );
+  }
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function WhatsAppPage() {
   const { user, hasRole } = useAuth();
@@ -521,20 +743,79 @@ export default function WhatsAppPage() {
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
   const [chatSortKey, setChatSortKey] = useState<ChatSortKey>('recent');
 
-  // resolvePhone: for @lid JIDs, use the @lid number itself as the unique identifier.
-  const parseBody = (m: any): string => {
+  // ── Message parsing with full media support ────────────────────────────────
+  const parseBodyText = (m: any): string => {
     const msg = m.message || {};
     return (
       msg.conversation ||
       msg.extendedTextMessage?.text ||
       msg.imageMessage?.caption ||
       msg.videoMessage?.caption ||
-      msg.documentMessage?.title ||
+      msg.documentMessage?.title || msg.documentMessage?.fileName ||
       (msg.audioMessage ? '🎵 Áudio' : '') ||
       (msg.stickerMessage ? '🪄 Sticker' : '') ||
       (msg.locationMessage ? '📍 Localização' : '') ||
+      (msg.contactMessage || msg.contactsArrayMessage ? '👤 Contato' : '') ||
       '[mídia]'
     );
+  };
+
+  const detectMsgType = (m: any): MsgType => {
+    const msg = m.message || {};
+    if (msg.imageMessage) return 'image';
+    if (msg.videoMessage) return 'video';
+    if (msg.audioMessage) return msg.audioMessage.ptt ? 'ptt' : 'audio';
+    if (msg.documentMessage || msg.documentWithCaptionMessage) return 'document';
+    if (msg.stickerMessage) return 'sticker';
+    if (msg.locationMessage || msg.liveLocationMessage) return 'location';
+    if (msg.contactMessage || msg.contactsArrayMessage) return 'contact';
+    if (msg.conversation || msg.extendedTextMessage) return 'text';
+    return 'unknown';
+  };
+
+  const extractMediaUrl = (m: any): string | undefined => {
+    const msg = m.message || {};
+    // Evolution API often provides URL directly on media message objects
+    return msg.imageMessage?.url || msg.videoMessage?.url ||
+      msg.audioMessage?.url || msg.documentMessage?.url ||
+      msg.documentWithCaptionMessage?.message?.documentMessage?.url ||
+      msg.stickerMessage?.url || undefined;
+  };
+
+  const parseFullMessage = (m: any): Message => {
+    const msg = m.message || {};
+    const type = detectMsgType(m);
+    const mediaUrl = extractMediaUrl(m);
+    const docMsg = msg.documentMessage || msg.documentWithCaptionMessage?.message?.documentMessage;
+
+    return {
+      id: m.key?.id || m.id || '',
+      fromMe: m.key?.fromMe === true,
+      body: parseBodyText(m),
+      timestamp: m.messageTimestamp || 0,
+      type,
+      mediaUrl,
+      mimetype: msg.imageMessage?.mimetype || msg.videoMessage?.mimetype ||
+        msg.audioMessage?.mimetype || docMsg?.mimetype ||
+        msg.stickerMessage?.mimetype || undefined,
+      fileName: docMsg?.fileName || docMsg?.title || undefined,
+      thumbnailB64: msg.imageMessage?.jpegThumbnail || msg.videoMessage?.jpegThumbnail ||
+        msg.stickerMessage?.jpegThumbnail || undefined,
+      latitude: msg.locationMessage?.degreesLatitude || msg.liveLocationMessage?.degreesLatitude,
+      longitude: msg.locationMessage?.degreesLongitude || msg.liveLocationMessage?.degreesLongitude,
+      rawMsgKeyId: m.key?.id,
+    };
+  };
+
+  /** Fetch base64 for a media message from Evolution API */
+  const fetchMediaBase64 = async (instanceName: string, msgKeyId: string, convertToMp4 = false): Promise<string | null> => {
+    try {
+      const data = await evoFetch(`/chat/getBase64FromMediaMessage/${instanceName}`, {
+        method: 'POST',
+        body: JSON.stringify({ message: { key: { id: msgKeyId } }, convertToMp4 }),
+      });
+      return data?.base64 || null;
+    } catch { return null; }
   };
 
   // For @lid chats, the real phone number is in lastMessage.key.remoteJidAlt.
@@ -581,9 +862,18 @@ export default function WhatsAppPage() {
           : jid.replace(/@.*/, '');
 
         const name = c.name || c.pushName || c.lastMessage?.pushName || '';
+        const lm = c.lastMessage?.message || {};
         const lastMsg =
-          c.lastMessage?.message?.conversation ||
-          c.lastMessage?.message?.extendedTextMessage?.text || '';
+          lm.conversation ||
+          lm.extendedTextMessage?.text ||
+          (lm.imageMessage ? '📷 Foto' + (lm.imageMessage.caption ? ` ${lm.imageMessage.caption}` : '') : '') ||
+          (lm.videoMessage ? '🎬 Vídeo' + (lm.videoMessage.caption ? ` ${lm.videoMessage.caption}` : '') : '') ||
+          (lm.audioMessage ? (lm.audioMessage.ptt ? '🎤 Áudio' : '🎵 Áudio') : '') ||
+          (lm.documentMessage ? `📄 ${lm.documentMessage.fileName || lm.documentMessage.title || 'Documento'}` : '') ||
+          (lm.stickerMessage ? '🪄 Sticker' : '') ||
+          (lm.locationMessage || lm.liveLocationMessage ? '📍 Localização' : '') ||
+          (lm.contactMessage || lm.contactsArrayMessage ? '👤 Contato' : '') ||
+          '';
 
         const existing = phoneMap.get(key);
 
@@ -713,8 +1003,12 @@ export default function WhatsAppPage() {
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // Ref to track active chat inside polling callbacks without stale closure
   const activeChatRef = useRef<Chat | null>(null);
   useEffect(() => { activeChatRef.current = activeChat; }, [activeChat]);
@@ -754,12 +1048,7 @@ export default function WhatsAppPage() {
           const msgId = m.key?.id || m.id;
           if (!msgId || seen.has(msgId)) continue;
           seen.add(msgId);
-          parsed.push({
-            id: msgId,
-            fromMe: m.key?.fromMe === true,
-            body: parseBody(m),
-            timestamp: m.messageTimestamp || 0,
-          });
+          parsed.push(parseFullMessage(m));
         }
       }
 
@@ -805,6 +1094,101 @@ export default function WhatsAppPage() {
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Erro ao enviar', description: e.message });
     } finally { setSending(false); }
+  };
+
+  // ── Send media (image/video/document) ──────────────────────────────────────
+  const handleSendMedia = async (file: File) => {
+    if (!activeChat || !activeInstance) return;
+    setSending(true);
+    try {
+      const reader = new FileReader();
+      const base64 = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const isImage = file.type.startsWith('image/');
+      const isVideo = file.type.startsWith('video/');
+      const mediatype = isImage ? 'image' : isVideo ? 'video' : 'document';
+
+      await evoFetch(`/message/sendMedia/${activeInstance.name}`, {
+        method: 'POST',
+        body: JSON.stringify({
+          number: activeChat.phone || activeChat.remoteJid,
+          mediatype,
+          mimetype: file.type,
+          caption: '',
+          media: `data:${file.type};base64,${base64}`,
+          fileName: file.name,
+        }),
+      });
+      await loadMessages(activeInstance.name, activeChat, false);
+      inputRef.current?.focus();
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro ao enviar mídia', description: e.message });
+    } finally { setSending(false); }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleSendMedia(file);
+    // Reset so same file can be selected again
+    e.target.value = '';
+  };
+
+  // ── Audio recording ────────────────────────────────────────────────────────
+  const startRecording = async () => {
+    if (!activeChat || !activeInstance) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        if (blob.size < 100) return; // Too short, ignore
+
+        setSending(true);
+        try {
+          const reader = new FileReader();
+          const base64 = await new Promise<string>((resolve, reject) => {
+            reader.onload = () => resolve((reader.result as string).split(',')[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+
+          await evoFetch(`/message/sendWhatsAppAudio/${activeInstance!.name}`, {
+            method: 'POST',
+            body: JSON.stringify({
+              number: activeChat!.phone || activeChat!.remoteJid,
+              audio: `data:audio/ogg;base64,${base64}`,
+            }),
+          });
+          await loadMessages(activeInstance!.name, activeChat!, false);
+        } catch (e: any) {
+          toast({ variant: 'destructive', title: 'Erro ao enviar áudio', description: e.message });
+        } finally { setSending(false); }
+      };
+
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      setRecording(true);
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro ao acessar microfone', description: e.message || 'Permita o acesso ao microfone.' });
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    setRecording(false);
   };
 
   const isConnected = activeInstance?.connectionStatus === 'open';
@@ -1166,14 +1550,16 @@ export default function WhatsAppPage() {
                   messages.map(msg => (
                     <div key={msg.id} className={cn('flex', msg.fromMe ? 'justify-end' : 'justify-start')}>
                       <div className={cn(
-                        'max-w-[68%] px-3 py-2 rounded-2xl text-xs shadow-sm',
+                        'max-w-[68%] rounded-2xl text-xs shadow-sm overflow-hidden',
                         msg.fromMe
                           ? 'bg-primary text-primary-foreground rounded-br-sm'
                           : 'bg-card text-foreground rounded-bl-sm border border-border/60'
                       )}>
-                        <p className="leading-relaxed break-words whitespace-pre-wrap">{msg.body}</p>
+                        {/* ── Media content ── */}
+                        <MessageContent msg={msg} instanceName={activeInstance!.name} fetchBase64={fetchMediaBase64} />
+                        {/* ── Timestamp ── */}
                         <p className={cn(
-                          'text-[10px] mt-0.5 text-right flex items-center justify-end gap-1',
+                          'text-[10px] px-3 pb-1.5 text-right flex items-center justify-end gap-1',
                           msg.fromMe ? 'text-primary-foreground/60' : 'text-muted-foreground'
                         )}>
                           {msg.timestamp > 0 && new Date(msg.timestamp * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
@@ -1189,23 +1575,61 @@ export default function WhatsAppPage() {
               {/* Input */}
               <div className="px-4 py-3 border-t border-border flex-shrink-0 bg-card">
                 {isConnected ? (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    {/* Hidden file input */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar"
+                      onChange={handleFileSelect}
+                    />
+                    {/* Attachment button */}
+                    <Button
+                      size="sm" variant="ghost"
+                      className="h-10 w-10 p-0 flex-shrink-0 text-muted-foreground hover:text-foreground"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={sending || recording}
+                      title="Enviar arquivo, imagem ou vídeo">
+                      <Paperclip className="w-4 h-4" />
+                    </Button>
+                    {/* Text input */}
                     <Input
                       ref={inputRef}
                       value={inputText}
                       onChange={e => setInputText(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                      placeholder="Digite uma mensagem..."
+                      placeholder={recording ? 'Gravando áudio...' : 'Digite uma mensagem...'}
                       className="flex-1 h-10 text-sm bg-secondary border-border"
-                      disabled={sending}
+                      disabled={sending || recording}
                     />
-                    <Button
-                      size="sm"
-                      className="h-10 w-10 p-0 flex-shrink-0"
-                      onClick={handleSend}
-                      disabled={sending || !inputText.trim()}>
-                      {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                    </Button>
+                    {/* Send or Mic button */}
+                    {inputText.trim() ? (
+                      <Button
+                        size="sm"
+                        className="h-10 w-10 p-0 flex-shrink-0"
+                        onClick={handleSend}
+                        disabled={sending}>
+                        {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                      </Button>
+                    ) : recording ? (
+                      <Button
+                        size="sm"
+                        className="h-10 w-10 p-0 flex-shrink-0 bg-destructive hover:bg-destructive/90 animate-pulse"
+                        onClick={stopRecording}
+                        title="Parar gravação">
+                        <MicOff className="w-4 h-4" />
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm" variant="ghost"
+                        className="h-10 w-10 p-0 flex-shrink-0 text-muted-foreground hover:text-foreground"
+                        onClick={startRecording}
+                        disabled={sending}
+                        title="Gravar áudio">
+                        <Mic className="w-4 h-4" />
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <div className="flex items-center justify-center gap-2 py-1">
