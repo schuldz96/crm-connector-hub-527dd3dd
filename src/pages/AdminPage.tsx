@@ -33,6 +33,13 @@ import {
   type AllowedUser,
   type AccessRequest,
 } from '@/lib/accessControl';
+import {
+  loadAreas,
+  createArea,
+  updateArea,
+  deleteArea,
+  type AreaRecord,
+} from '@/lib/areasService';
 
 const ADMIN_SECTIONS = [
   { id: 'company',      label: 'Empresa',              icon: Building2 },
@@ -115,6 +122,13 @@ export default function AdminPage() {
   const [allowedAccounts, setAllowedAccounts] = useState<AllowedUser[]>([]);
   const [triageRoles, setTriageRoles] = useState<Record<string, UserRole>>({});
 
+  // Areas state
+  const [dbAreas, setDbAreas] = useState<AreaRecord[]>([]);
+  const [showAreaForm, setShowAreaForm] = useState(false);
+  const [editingArea, setEditingArea] = useState<AreaRecord | null>(null);
+  const [areaName, setAreaName] = useState('');
+  const [areaGerente, setAreaGerente] = useState('');
+
   const { tokens, setToken, models, setModuleModel, modules, setModuleEnabled, saveConfig,
           getUserDisabledModules, setUserModuleOverride } = useAppConfig();
   const { user: currentUser } = useAuth();
@@ -140,9 +154,62 @@ export default function AdminPage() {
     if (section === 'users') {
       loadAccessData();
     }
+    if (section === 'roles') {
+      loadAreas().then(setDbAreas).catch(() => {});
+      loadAllowedUsers().then(setAllowedAccounts).catch(() => {});
+    }
   }, [section, getLogs, toast]);
 
   const refreshLogs = () => setLogs(getLogs());
+
+  // Area handlers
+  const handleSaveArea = async () => {
+    if (!areaName.trim()) {
+      toast({ variant: 'destructive', title: 'Nome obrigatório', description: 'Informe o nome da área.' });
+      return;
+    }
+    try {
+      if (editingArea) {
+        await updateArea(editingArea.id, areaName, areaGerente || undefined);
+        toast({ title: 'Área atualizada' });
+      } else {
+        await createArea(areaName, areaGerente || undefined);
+        toast({ title: 'Área criada', description: `"${areaName}" criada com sucesso.` });
+      }
+      setShowAreaForm(false);
+      setEditingArea(null);
+      setAreaName('');
+      setAreaGerente('');
+      loadAreas().then(setDbAreas).catch(() => {});
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: e?.message || 'Falha ao salvar área.' });
+    }
+  };
+
+  const handleDeleteArea = async (area: AreaRecord) => {
+    if (!confirm(`Excluir a área "${area.nome}"? Times e usuários vinculados ficarão sem área.`)) return;
+    try {
+      await deleteArea(area.id);
+      toast({ title: 'Área excluída' });
+      loadAreas().then(setDbAreas).catch(() => {});
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: e?.message || 'Falha ao excluir.' });
+    }
+  };
+
+  const openEditArea = (area: AreaRecord) => {
+    setEditingArea(area);
+    setAreaName(area.nome);
+    setAreaGerente(area.gerente_email || '');
+    setShowAreaForm(true);
+  };
+
+  const openNewArea = () => {
+    setEditingArea(null);
+    setAreaName('');
+    setAreaGerente('');
+    setShowAreaForm(true);
+  };
 
   const toggleKey = (k: string) => setShowKey(prev => ({ ...prev, [k]: !prev[k] }));
 
@@ -434,50 +501,90 @@ export default function AdminPage() {
                     <Building2 className="w-4 h-4 text-accent" />
                     <h2 className="font-display font-semibold">Áreas da Empresa</h2>
                   </div>
-                  <Button size="sm" variant="outline" className="text-xs h-7 gap-1">
+                  <Button size="sm" variant="outline" className="text-xs h-7 gap-1" onClick={openNewArea}>
                     <Plus className="w-3 h-3" /> Nova Área
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground mb-4">
                   Áreas agrupam times sob um Gerente. Coordenadores e abaixo enxergam apenas dentro da sua área.
                 </p>
+
+                {/* Area form (create/edit) */}
+                {showAreaForm && (
+                  <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 mb-4 space-y-3">
+                    <p className="text-xs font-semibold">{editingArea ? 'Editar Área' : 'Nova Área'}</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] text-muted-foreground block mb-1">Nome da Área *</label>
+                        <Input
+                          value={areaName}
+                          onChange={e => setAreaName(e.target.value)}
+                          placeholder="Ex: Comercial, Customer Success..."
+                          className="h-8 text-xs bg-secondary border-border"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-muted-foreground block mb-1">Gerente (e-mail)</label>
+                        <select
+                          value={areaGerente}
+                          onChange={e => setAreaGerente(e.target.value)}
+                          className="w-full h-8 text-xs bg-secondary border border-border rounded-md px-2 text-foreground"
+                        >
+                          <option value="">— Sem gerente —</option>
+                          {allowedAccounts.filter(u => ['gerente', 'diretor', 'ceo', 'admin'].includes((u as any).role || '')).length === 0
+                            ? allowedAccounts.map(u => (
+                                <option key={u.email} value={u.email}>{u.name} ({u.email})</option>
+                              ))
+                            : allowedAccounts.map(u => (
+                                <option key={u.email} value={u.email}>{u.name} ({u.email})</option>
+                              ))
+                          }
+                        </select>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" className="text-xs h-7 bg-gradient-primary" onClick={handleSaveArea}>
+                        <Save className="w-3 h-3 mr-1" /> {editingArea ? 'Salvar' : 'Criar Área'}
+                      </Button>
+                      <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => { setShowAreaForm(false); setEditingArea(null); }}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-3">
-                  {MOCK_AREAS.map(area => {
-                    const manager = MOCK_USERS.find(u => u.id === area.managerId);
-                    const areaTeams = MOCK_TEAMS.filter(t => area.teamIds.includes(t.id));
-                    const areaMembers = MOCK_USERS.filter(u => u.areaId === area.id);
-                    return (
-                      <div key={area.id} className="p-4 rounded-xl border border-border/60 bg-muted/10 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-semibold">{area.name}</p>
-                            {manager && (
-                              <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                                <img src={manager.avatar} alt={manager.name} className="w-3.5 h-3.5 rounded-full" />
-                                Gerente: {manager.name}
-                              </p>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                            <span>{areaTeams.length} times</span>
-                            <span>{areaMembers.length} pessoas</span>
-                          </div>
+                  {dbAreas.length === 0 && !showAreaForm && (
+                    <div className="text-center py-6 text-muted-foreground">
+                      <Building2 className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                      <p className="text-xs">Nenhuma área criada ainda.</p>
+                      <p className="text-[10px] mt-1">Clique em "+ Nova Área" para começar.</p>
+                    </div>
+                  )}
+                  {dbAreas.map(area => (
+                    <div key={area.id} className="p-4 rounded-xl border border-border/60 bg-muted/10 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold">{area.nome}</p>
+                          {area.gerente_nome ? (
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Gerente: {area.gerente_nome}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-amber-500 mt-0.5">Sem gerente atribuído</p>
+                          )}
                         </div>
-                        {/* Teams in area */}
-                        <div className="flex flex-wrap gap-1.5">
-                          {areaTeams.map(team => {
-                            const sup = MOCK_USERS.find(u => u.id === team.supervisorId);
-                            return (
-                              <div key={team.id} className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-full bg-secondary border border-border">
-                                <span>👥</span> {team.name}
-                                {sup && <span className="text-muted-foreground">· {sup.name.split(' ')[0]}</span>}
-                              </div>
-                            );
-                          })}
+                        <div className="flex items-center gap-1.5">
+                          <Button size="sm" variant="ghost" className="text-xs h-6 px-2" onClick={() => openEditArea(area)}>
+                            Editar
+                          </Button>
+                          <Button size="sm" variant="ghost" className="text-xs h-6 px-2 text-destructive hover:text-destructive" onClick={() => handleDeleteArea(area)}>
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
                         </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               </div>
 
