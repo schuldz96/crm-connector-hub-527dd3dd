@@ -1,4 +1,11 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import {
+  loadNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+  deleteNotification,
+} from '@/lib/notificationsService';
+import { useAuth } from '@/contexts/AuthContext';
 
 export type NotificationType = 'meeting' | 'whatsapp' | 'system' | 'performance';
 
@@ -23,65 +30,34 @@ interface NotificationsContextValue {
 
 const NotificationsContext = createContext<NotificationsContextValue | null>(null);
 
-const INITIAL_NOTIFICATIONS: Notification[] = [
-  {
-    id: '1',
-    type: 'meeting',
-    title: 'Nova transcrição disponível',
-    description: 'A reunião com cliente Appmax foi transcrita e está pronta para análise.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
-    read: false,
-    link: '/meetings',
-  },
-  {
-    id: '2',
-    type: 'whatsapp',
-    title: '3 conversas sem resposta',
-    description: 'Você tem conversas pendentes há mais de 2 horas no WhatsApp.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-    read: false,
-    link: '/whatsapp',
-  },
-  {
-    id: '3',
-    type: 'performance',
-    title: 'Meta semanal atingida',
-    description: 'Você atingiu 100% da meta de reuniões esta semana. Parabéns!',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
-    read: false,
-    link: '/performance',
-  },
-  {
-    id: '4',
-    type: 'system',
-    title: 'Google Calendar sincronizado',
-    description: 'Todas as reuniões foram importadas com sucesso do Google Calendar.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 8).toISOString(),
-    read: true,
-  },
-  {
-    id: '5',
-    type: 'meeting',
-    title: 'Scorecard gerado automaticamente',
-    description: 'A IA analisou a reunião de demo e gerou um scorecard com nota 8.4.',
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-    read: true,
-    link: '/meetings',
-  },
-];
-
 export function NotificationsProvider({ children }: { children: ReactNode }) {
-  const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS);
+  const { user } = useAuth();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  // Load from DB when user changes
+  useEffect(() => {
+    if (!user?.email) {
+      setNotifications([]);
+      return;
+    }
+    loadNotifications(user.email)
+      .then(setNotifications)
+      .catch(() => setNotifications([]));
+  }, [user?.email]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const markAsRead = useCallback((id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    markNotificationRead(id).catch(() => {});
   }, []);
 
   const markAllAsRead = useCallback(() => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-  }, []);
+    if (user?.email) {
+      markAllNotificationsRead(user.email).catch(() => {});
+    }
+  }, [user?.email]);
 
   const addNotification = useCallback((n: Omit<Notification, 'id' | 'read' | 'createdAt'>) => {
     setNotifications(prev => [{
@@ -94,6 +70,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
 
   const removeNotification = useCallback((id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
+    deleteNotification(id).catch(() => {});
   }, []);
 
   return (
