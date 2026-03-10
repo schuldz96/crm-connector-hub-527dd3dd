@@ -18,7 +18,7 @@ import { useAppConfig, DEFAULT_MODULES, type ModuleId } from '@/contexts/AppConf
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
-import { useEvolutionInstances, getInstanceForUser, setInstanceForUser } from '@/hooks/useEvolutionInstances';
+import { useEvolutionInstances, getInstanceForUserFromList, assignInstanceToUser } from '@/hooks/useEvolutionInstances';
 import {
   loadAllowedUsers,
   upsertAllowedUser,
@@ -222,7 +222,7 @@ function UserProfileModal({ user, onClose }: { user: User; onClose: () => void }
   const { instances, loading: loadingInst } = useEvolutionInstances();
   const [disabled, setDisabled] = useState<ModuleId[]>(getUserDisabledModules(user.id));
   // stored as instance.name (the Evolution instance name)
-  const [selectedInstance, setSelectedInstance] = useState(() => getInstanceForUser(user.id));
+  const [selectedInstance, setSelectedInstance] = useState(() => getInstanceForUserFromList(instances, user.id));
 
   const toggle = (id: ModuleId) => {
     setDisabled(prev => prev.includes(id) ? prev.filter(m => m !== id) : [...prev, id]);
@@ -234,7 +234,7 @@ function UserProfileModal({ user, onClose }: { user: User; onClose: () => void }
 
   const save = () => {
     setUserModuleOverride(user.id, disabled);
-    setInstanceForUser(user.id, selectedInstance);
+    assignInstanceToUser(selectedInstance, user.id).catch(() => {});
     toast({ title: 'Perfil salvo', description: `Configurações de ${user.name} atualizadas.` });
     onClose();
   };
@@ -503,7 +503,7 @@ export default function UsersPage() {
             {filtered.map(u => {
               const rc = ROLE_CONFIG[u.role];
               const isSelf = u.id === currentUser?.id;
-              const instName = getInstanceForUser(u.id);
+              const instName = getInstanceForUserFromList(instances, u.id);
               const assignedInst = instances.find(i => i.name === instName);
               const isInstOpen = assignedInst?.connectionStatus === 'open';
               const googleConnected = googleConnectedEmails.has(u.email.toLowerCase());

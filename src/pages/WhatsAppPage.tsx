@@ -14,7 +14,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useToast } from '@/hooks/use-toast';
 import {
   useEvolutionInstances,
-  getInstanceForUser,
   type EvolutionInstance,
 } from '@/hooks/useEvolutionInstances';
 import { MOCK_USERS, MOCK_TEAMS } from '@/data/mockData';
@@ -461,13 +460,14 @@ export default function WhatsAppPage() {
 
   // Filter instances for non-admins
   const baseInstances = evoInstances.filter(i => {
-    if (!isAdmin) return getInstanceForUser(user?.id || '') === i.name;
+    if (!isAdmin) return i.assignedUserEmail?.toLowerCase() === user?.email?.toLowerCase();
     return true;
   });
 
   // Helper: find team for an instance by looking up the assigned user's teamId
   const getInstTeamId = (instName: string): string | null => {
-    const assignedUser = MOCK_USERS.find(u => getInstanceForUser(u.id) === instName);
+    const inst = evoInstances.find(i => i.name === instName);
+    const assignedUser = inst?.assignedUserEmail ? MOCK_USERS.find(u => u.email?.toLowerCase() === inst.assignedUserEmail?.toLowerCase()) : undefined;
     return assignedUser ? null : null;
   };
 
@@ -895,7 +895,7 @@ export default function WhatsAppPage() {
             {visibleInstances.map(inst => {
               const isOpen = inst.connectionStatus === 'open';
               const phone = inst.ownerJid?.replace('@s.whatsapp.net', '');
-              const assignedUser = MOCK_USERS.find(u => getInstanceForUser(u.id) === inst.name);
+              const assignedUser = inst.assignedUserEmail ? MOCK_USERS.find(u => u.email?.toLowerCase() === inst.assignedUserEmail?.toLowerCase()) : undefined;
               const isActive = activeInstance?.name === inst.name;
               return (
                 <button

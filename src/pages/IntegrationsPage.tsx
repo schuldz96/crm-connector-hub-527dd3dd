@@ -14,7 +14,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { getInstanceForUser, setInstanceForUser } from '@/hooks/useEvolutionInstances';
+import { assignInstanceToUser, getInstanceForUserFromList, type EvolutionInstance } from '@/hooks/useEvolutionInstances';
 import { loadAllowedUsers } from '@/lib/accessControl';
 import { supabase } from '@/integrations/supabase/client';
 import { getSaasEmpresaId } from '@/lib/saas';
@@ -443,12 +443,6 @@ function EvolutionPanel() {
           status: 'active' as const,
         }));
         setRealUsers(mapped);
-        const map: Record<string, string> = {};
-        mapped.forEach(u => {
-          const inst = getInstanceForUser(u.id);
-          if (inst) map[inst] = u.id;
-        });
-        setInstanceUserMap(map);
       } catch (e: any) {
         toast({ variant: 'destructive', title: 'Erro ao carregar usuários', description: e?.message || 'Tente novamente.' });
       }
@@ -466,19 +460,41 @@ function EvolutionPanel() {
         const { data: dbData } = await supabase
           .schema('saas')
           .from('instancias_whatsapp')
-          .select('id,nome,telefone,status,owner_jid')
+          .select('id,nome,telefone,status,owner_jid,usuario_id')
           .eq('empresa_id', empresaId)
           .order('nome', { ascending: true });
 
         if (dbData && dbData.length > 0) {
+          // Resolve usuario_id UUIDs to emails for user mapping
+          const uuids = [...new Set(dbData.map((r: any) => r.usuario_id).filter(Boolean))];
+          let uuidToEmail: Record<string, string> = {};
+          if (uuids.length > 0) {
+            const { data: usrs } = await (supabase as any)
+              .schema('saas').from('usuarios').select('id, email')
+              .eq('empresa_id', empresaId).in('id', uuids);
+            for (const u of (usrs || [])) uuidToEmail[u.id] = u.email;
+          }
+
           const statusMap: Record<string, string> = { conectada: 'open', desconectada: 'close', conectando: 'connecting' };
-          setInstances(dbData.map(r => ({
+          const dbInstances: EvolutionInstance[] = dbData.map((r: any) => ({
             id: r.id,
             name: r.nome,
             connectionStatus: statusMap[r.status] || 'close',
             ownerJid: r.owner_jid || undefined,
             profileName: r.nome,
-          })));
+            assignedUserEmail: r.usuario_id ? uuidToEmail[r.usuario_id] : undefined,
+          }));
+          setInstances(dbInstances);
+
+          // Build instanceUserMap from DB assignments
+          const map: Record<string, string> = {};
+          dbInstances.forEach(inst => {
+            if (inst.assignedUserEmail) {
+              const uid = `user_${inst.assignedUserEmail.toLowerCase()}`;
+              map[inst.name] = uid;
+            }
+          });
+          setInstanceUserMap(map);
         }
       } catch { /* DB read failed, will try API */ }
 
@@ -514,19 +530,23 @@ function EvolutionPanel() {
   };
 
   const handleAssignUser = (instanceName: string, userId: string) => {
-    realUsers.forEach(u => {
-      if (getInstanceForUser(u.id) === instanceName) setInstanceForUser(u.id, '');
-    });
-    if (userId) setInstanceForUser(userId, instanceName);
+    // Update local state immediately
     setInstanceUserMap(m => {
       const next = { ...m };
       Object.keys(next).forEach(k => { if (next[k] === instanceName) delete next[k]; });
       if (userId) next[instanceName] = userId;
       return next;
     });
+    // Persist to DB in background
+    assignInstanceToUser(instanceName, userId).catch((e) => {
+      console.warn('[assign] Falha ao salvar atribuição no banco:', e);
+    });
   };
 
-  const myInstance = instances.find(i => getInstanceForUser(currentUser?.id || '') === i.name);
+  const myInstance = instances.find(i => {
+    const email = currentUser?.email?.toLowerCase() || '';
+    return i.assignedUserEmail?.toLowerCase() === email;
+  });
 
   return (
     <div className="space-y-4">
