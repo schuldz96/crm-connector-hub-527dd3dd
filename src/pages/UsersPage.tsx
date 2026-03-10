@@ -26,6 +26,7 @@ import {
   removeAllowedUser,
   type AllowedUser,
 } from '@/lib/accessControl';
+import { loadAllUserIntegrations } from '@/lib/integrationsService';
 
 const ROLE_CONFIG: Record<UserRole, { label: string; class: string }> = {
   admin:       { label: 'Admin',        class: 'bg-destructive/10 text-destructive border-destructive/20' },
@@ -372,12 +373,22 @@ export default function UsersPage() {
   const [confirmTarget, setConfirmTarget] = useState<{ user: User; action: 'deactivate' | 'activate' | 'delete' } | null>(null);
   const [roleTarget, setRoleTarget] = useState<User | null>(null);
   const [profileTarget, setProfileTarget] = useState<User | null>(null);
+  const [googleConnectedEmails, setGoogleConnectedEmails] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const run = async () => {
       try {
-        const allowed = await loadAllowedUsers();
+        const [allowed, integrations] = await Promise.all([
+          loadAllowedUsers(),
+          loadAllUserIntegrations(),
+        ]);
         setUsers(mapAllowedUsersToUsers(allowed));
+        const googleEmails = new Set(
+          integrations
+            .filter(i => i.tipo === 'google_calendar' && i.status === 'conectada')
+            .map(i => i.email.toLowerCase())
+        );
+        setGoogleConnectedEmails(googleEmails);
       } catch (e: any) {
         toast({ variant: 'destructive', title: 'Erro ao carregar usuários', description: e?.message || 'Tente novamente.' });
       }
@@ -495,7 +506,7 @@ export default function UsersPage() {
               const instName = getInstanceForUser(u.id);
               const assignedInst = instances.find(i => i.name === instName);
               const isInstOpen = assignedInst?.connectionStatus === 'open';
-              const googleConnected = false;
+              const googleConnected = googleConnectedEmails.has(u.email.toLowerCase());
               return (
                 <tr key={u.id} className={cn(u.status === 'inactive' && 'opacity-60')}>
                   <td>

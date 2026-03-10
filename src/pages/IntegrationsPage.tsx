@@ -18,6 +18,7 @@ import { getInstanceForUser, setInstanceForUser } from '@/hooks/useEvolutionInst
 import { loadAllowedUsers } from '@/lib/accessControl';
 import { supabase } from '@/integrations/supabase/client';
 import { getSaasEmpresaId } from '@/lib/saas';
+import { upsertUserIntegration } from '@/lib/integrationsService';
 
 import { CONFIG } from '@/lib/config';
 
@@ -179,6 +180,13 @@ function GooglePanel() {
 
         saveGoogleSession(userId, newSession);
         setSession(newSession);
+
+        // Persist to DB
+        if (user?.email) {
+          upsertUserIntegration(user.email, 'google_calendar', info.name || info.email, 'conectada').catch(() => {});
+          upsertUserIntegration(user.email, 'google_meet', info.name || info.email, 'conectada').catch(() => {});
+        }
+
         toast({
           title: 'Google conectado com sucesso!',
           description: `${info.name} — Calendar, Meet e Drive sincronizados.`,
@@ -216,6 +224,13 @@ function GooglePanel() {
   const handleDisconnect = () => {
     clearGoogleSession(userId);
     setSession(null);
+
+    // Persist to DB
+    if (user?.email) {
+      upsertUserIntegration(user.email, 'google_calendar', '', 'desconectada').catch(() => {});
+      upsertUserIntegration(user.email, 'google_meet', '', 'desconectada').catch(() => {});
+    }
+
     toast({ title: 'Google desconectado', description: 'Sua conta Google foi removida.' });
   };
 
@@ -275,7 +290,7 @@ function GooglePanel() {
           ) : (
             <Button
               size="sm"
-              className="bg-white text-foreground border border-border hover:bg-muted text-xs h-9 font-medium shadow-sm"
+              className="bg-white text-gray-800 border border-border hover:bg-gray-100 text-xs h-9 font-medium shadow-sm"
               onClick={handleConnect}
               disabled={connecting}
             >
