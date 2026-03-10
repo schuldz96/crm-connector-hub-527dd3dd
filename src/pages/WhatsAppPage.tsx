@@ -1232,20 +1232,20 @@ export default function WhatsAppPage() {
         );
         const list: any[] = data?.participants || (Array.isArray(data) ? data : []);
         const map = new Map<string, string>();
-        console.log('[Group] Participants raw:', JSON.stringify(list.slice(0, 5)));
         for (const p of list) {
-          const jid: string = p.id || '';
-          const phone = jid.replace(/@.*/, '');
-          // Store both the full JID key and just the number part as keys
-          if (jid) map.set(jid, phone);
-          // Also map lid if present (lid is the internal WhatsApp ID)
-          if (p.lid) {
-            const lidClean = (p.lid as string).replace(/@.*/, '');
-            map.set(p.lid, phone);
-            map.set(lidClean, phone);
+          // API returns: id = LID ("23585...@Lid"), phoneNumber = real ("5551...@s.whatsapp.net"), name = push name
+          const lid: string = p.id || '';
+          const phoneJid: string = p.phoneNumber || '';
+          const phone = phoneJid.replace(/@.*/, '');
+          const lidClean = lid.replace(/@.*/, '');
+          const pName = p.name || '';
+          if (phone && lid) {
+            // Store as "name|phone" so we can split later, or just phone if no name
+            const val = pName ? `${pName}|${phone}` : phone;
+            map.set(lid, val);
+            map.set(lidClean, val);
           }
         }
-        console.log('[Group] Participant map entries:', Array.from(map.entries()).slice(0, 10));
         setGroupParticipants(map);
       } catch {
         setGroupParticipants(new Map());
@@ -1795,16 +1795,19 @@ export default function WhatsAppPage() {
                 ) : (
                   messages.map(msg => {
                     const isGroup = activeChat?.remoteJid?.includes('@g.us');
-                    // Resolve LID to real phone number using group participants map
-                    const resolvedPhone = (() => {
-                      if (!isGroup || !msg.senderPhone) return msg.senderPhone;
-                      // Try resolving from participants map (LID → phone)
-                      const fromMap = groupParticipants.get(msg.senderPhone) ||
-                        groupParticipants.get(msg.senderPhone + '@lid') ||
-                        groupParticipants.get(msg.senderPhone + '@s.whatsapp.net');
-                      if (fromMap) return fromMap;
-                      // If still looks like a LID (not a clean phone number), show as-is
-                      return msg.senderPhone;
+                    // Resolve LID to real name + phone using group participants map
+                    const { senderDisplayName, senderDisplayPhone } = (() => {
+                      if (!isGroup || !msg.senderPhone) return { senderDisplayName: msg.senderName, senderDisplayPhone: msg.senderPhone };
+                      // Lookup in participants map (stores "name|phone" or just "phone")
+                      const mapped = groupParticipants.get(msg.senderPhone) ||
+                        groupParticipants.get(msg.senderPhone + '@Lid') ||
+                        groupParticipants.get(msg.senderPhone + '@lid');
+                      if (mapped) {
+                        const parts = mapped.split('|');
+                        if (parts.length === 2) return { senderDisplayName: parts[0], senderDisplayPhone: parts[1] };
+                        return { senderDisplayName: msg.senderName, senderDisplayPhone: parts[0] };
+                      }
+                      return { senderDisplayName: msg.senderName, senderDisplayPhone: msg.senderPhone };
                     })();
                     return (
                     <div key={msg.id} className={cn('flex', msg.fromMe ? 'justify-end' : 'justify-start')}>
@@ -1815,11 +1818,11 @@ export default function WhatsAppPage() {
                           : 'bg-card text-foreground rounded-bl-sm border border-border/60'
                       )}>
                         {/* ── Group sender label ── */}
-                        {isGroup && !msg.fromMe && (resolvedPhone || msg.senderName) && (
+                        {isGroup && !msg.fromMe && (senderDisplayName || senderDisplayPhone) && (
                           <p className="px-3 pt-2 pb-0.5 text-[10px] font-semibold truncate">
-                            <span className="text-accent">{msg.senderName || resolvedPhone}</span>
-                            {msg.senderName && resolvedPhone && (
-                              <span className="text-muted-foreground font-normal ml-1">· {resolvedPhone}</span>
+                            <span className="text-accent">{senderDisplayName || senderDisplayPhone}</span>
+                            {senderDisplayName && senderDisplayPhone && (
+                              <span className="text-muted-foreground font-normal ml-1">· {senderDisplayPhone}</span>
                             )}
                           </p>
                         )}
