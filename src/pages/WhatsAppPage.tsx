@@ -1218,6 +1218,37 @@ export default function WhatsAppPage() {
     return () => clearInterval(t);
   }, [activeChat?.id, activeInstance?.name]);
 
+  // ── Group participants: map LID → phone number ──────────────────────────
+  const [groupParticipants, setGroupParticipants] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    if (!activeChat || !activeInstance) { setGroupParticipants(new Map()); return; }
+    const isGroup = activeChat.remoteJid?.includes('@g.us');
+    if (!isGroup) { setGroupParticipants(new Map()); return; }
+    const fetchParticipants = async () => {
+      try {
+        const data = await evoFetch(
+          `/group/participants/${activeInstance.name}?groupJid=${encodeURIComponent(activeChat.remoteJid)}`,
+          { method: 'GET' },
+        );
+        const list: any[] = data?.participants || (Array.isArray(data) ? data : []);
+        const map = new Map<string, string>();
+        for (const p of list) {
+          const jid: string = p.id || '';
+          const phone = jid.replace(/@.*/, '');
+          // Store both the full JID key and just the number part as keys
+          if (jid) map.set(jid, phone);
+          // Also map lid if present
+          if (p.lid) map.set(p.lid, phone);
+          if (p.lid) map.set(p.lid.replace(/@.*/, ''), phone);
+        }
+        setGroupParticipants(map);
+      } catch {
+        setGroupParticipants(new Map());
+      }
+    };
+    fetchParticipants();
+  }, [activeChat?.id, activeInstance?.name]);
+
 
   // Auto-scroll only when user is near bottom or on initial load / chat switch
   const msgContainerRef = useRef<HTMLDivElement>(null);
@@ -1759,6 +1790,17 @@ export default function WhatsAppPage() {
                 ) : (
                   messages.map(msg => {
                     const isGroup = activeChat?.remoteJid?.includes('@g.us');
+                    // Resolve LID to real phone number using group participants map
+                    const resolvedPhone = (() => {
+                      if (!isGroup || !msg.senderPhone) return msg.senderPhone;
+                      // Try direct lookup (already a phone number)
+                      if (/^\d+$/.test(msg.senderPhone) && msg.senderPhone.length > 8) return msg.senderPhone;
+                      // Try resolving from participants map (LID → phone)
+                      const fromMap = groupParticipants.get(msg.senderPhone) ||
+                        groupParticipants.get(msg.senderPhone + '@lid') ||
+                        groupParticipants.get(msg.senderPhone + '@s.whatsapp.net');
+                      return fromMap || msg.senderPhone;
+                    })();
                     return (
                     <div key={msg.id} className={cn('flex', msg.fromMe ? 'justify-end' : 'justify-start')}>
                       <div className={cn(
@@ -1768,9 +1810,9 @@ export default function WhatsAppPage() {
                           : 'bg-card text-foreground rounded-bl-sm border border-border/60'
                       )}>
                         {/* ── Group sender label ── */}
-                        {isGroup && !msg.fromMe && (msg.senderPhone || msg.senderName) && (
+                        {isGroup && !msg.fromMe && (resolvedPhone || msg.senderName) && (
                           <p className="px-3 pt-2 pb-0 text-[10px] font-semibold text-accent truncate">
-                            {msg.senderName ? `${msg.senderName}` : ''}{msg.senderPhone ? (msg.senderName ? ` · ${msg.senderPhone}` : msg.senderPhone) : ''}
+                            {msg.senderName || ''}{resolvedPhone ? (msg.senderName ? ` · ${resolvedPhone}` : resolvedPhone) : ''}
                           </p>
                         )}
                         {/* ── Media content ── */}
