@@ -929,23 +929,35 @@ export default function WhatsAppPage() {
       const sorted = Array.from(phoneMap.values()).sort((a, b) => b.lastMessageTs - a.lastMessageTs);
 
       if (silent) {
-        // On silent poll: detect new incoming messages by comparing timestamps
+        // On silent poll: preserve unread badges until user opens the chat
         setChats(prev => {
           const prevMap = new Map(prev.map(c => [c.id, c]));
           return sorted.map(newChat => {
             const isOpen = activeChatRef.current?.id === newChat.id;
             if (isOpen) return { ...newChat, unread: 0 };
             const old = prevMap.get(newChat.id);
-            // New message arrived and it's from the contact (not from me) → increment unread
-            if (old && newChat.lastMessageTs > old.lastMessageTs && !newChat.lastMessageFromMe) {
+            if (!old) return newChat; // brand new chat, use API unread
+
+            // New message arrived from contact → increment local unread
+            if (newChat.lastMessageTs > old.lastMessageTs && !newChat.lastMessageFromMe) {
               return { ...newChat, unread: old.unread + 1 };
             }
-            // Keep existing unread count (don't reset it based on API null)
-            return { ...newChat, unread: old ? old.unread : newChat.unread };
+            // Never decrease unread from poll — only user click resets it
+            const bestUnread = Math.max(old.unread, newChat.unread);
+            return { ...newChat, unread: bestUnread };
           });
         });
       } else {
-        setChats(sorted.slice(0, 200));
+        // Initial load: also merge with any existing local unread counts
+        setChats(prev => {
+          if (prev.length === 0) return sorted.slice(0, 200);
+          const prevMap = new Map(prev.map(c => [c.id, c]));
+          return sorted.slice(0, 200).map(newChat => {
+            const old = prevMap.get(newChat.id);
+            if (!old) return newChat;
+            return { ...newChat, unread: Math.max(old.unread, newChat.unread) };
+          });
+        });
       }
     } catch {
       if (!silent) setChats([]);
