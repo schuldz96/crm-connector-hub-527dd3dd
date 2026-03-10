@@ -62,6 +62,9 @@ interface Message {
   rawMsgKey?: { id: string; remoteJid: string; fromMe: boolean };
   // full raw message for getBase64FromMediaMessage API (needs complete message object)
   rawMessage?: any;
+  // Group message sender info
+  senderPhone?: string;
+  senderName?: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -843,6 +846,11 @@ export default function WhatsAppPage() {
     const mediaUrl = extractMediaUrl(m);
     const docMsg = msg.documentMessage || msg.documentWithCaptionMessage?.message?.documentMessage;
 
+    // Group sender info: participant field contains the sender's JID in group chats
+    const participant = m.key?.participant || m.participant || '';
+    const senderPhone = participant ? participant.replace(/@.*/, '') : undefined;
+    const senderName = m.pushName || undefined;
+
     return {
       id: m.key?.id || m.id || '',
       fromMe: m.key?.fromMe === true,
@@ -860,6 +868,8 @@ export default function WhatsAppPage() {
       longitude: msg.locationMessage?.degreesLongitude || msg.liveLocationMessage?.degreesLongitude,
       rawMsgKey: m.key ? { id: m.key.id, remoteJid: m.key.remoteJid, fromMe: m.key.fromMe === true } : undefined,
       rawMessage: m,
+      senderPhone,
+      senderName,
     };
   };
 
@@ -880,7 +890,7 @@ export default function WhatsAppPage() {
       console.log('[Media] API response keys:', data ? Object.keys(data) : 'null', 'hasBase64:', !!data?.base64, 'b64len:', data?.base64?.length || 0);
       return data?.base64 || null;
     } catch (err) {
-      console.error('[Media] Falha ao carregar base64:', msgKey.id, err);
+      console.error('[Media] Falha ao carregar base64:', rawMessage?.key?.id, err);
       return null;
     }
   };
@@ -1209,10 +1219,23 @@ export default function WhatsAppPage() {
   }, [activeChat?.id, activeInstance?.name]);
 
 
-  // Auto-scroll
+  // Auto-scroll only when user is near bottom or on initial load / chat switch
+  const msgContainerRef = useRef<HTMLDivElement>(null);
+  const prevChatIdRef = useRef<string | null>(null);
+  const isNearBottom = useCallback(() => {
+    const el = msgContainerRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  }, []);
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    const chatChanged = activeChat?.id !== prevChatIdRef.current;
+    prevChatIdRef.current = activeChat?.id ?? null;
+    // Always scroll on chat switch; on poll updates only if already near bottom
+    if (chatChanged || isNearBottom()) {
+      messagesEndRef.current?.scrollIntoView({ behavior: chatChanged ? 'auto' : 'smooth' });
+    }
+  }, [messages, activeChat?.id]);
 
   const handleSend = async () => {
     const text = inputText.trim();
@@ -1723,7 +1746,7 @@ export default function WhatsAppPage() {
               </div>
 
               {/* Messages area */}
-              <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1.5">
+              <div ref={msgContainerRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-1.5">
                 {loadingMsgs ? (
                   <div className="flex justify-center py-10">
                     <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -1734,7 +1757,9 @@ export default function WhatsAppPage() {
                     <p className="text-xs">Nenhuma mensagem nesta conversa</p>
                   </div>
                 ) : (
-                  messages.map(msg => (
+                  messages.map(msg => {
+                    const isGroup = activeChat?.remoteJid?.includes('@g.us');
+                    return (
                     <div key={msg.id} className={cn('flex', msg.fromMe ? 'justify-end' : 'justify-start')}>
                       <div className={cn(
                         'max-w-[68%] rounded-2xl text-xs shadow-sm overflow-hidden',
@@ -1742,6 +1767,12 @@ export default function WhatsAppPage() {
                           ? 'bg-primary text-primary-foreground rounded-br-sm'
                           : 'bg-card text-foreground rounded-bl-sm border border-border/60'
                       )}>
+                        {/* ── Group sender label ── */}
+                        {isGroup && !msg.fromMe && (msg.senderPhone || msg.senderName) && (
+                          <p className="px-3 pt-2 pb-0 text-[10px] font-semibold text-accent truncate">
+                            {msg.senderName ? `${msg.senderName}` : ''}{msg.senderPhone ? (msg.senderName ? ` · ${msg.senderPhone}` : msg.senderPhone) : ''}
+                          </p>
+                        )}
                         {/* ── Media content ── */}
                         <MessageContent msg={msg} instanceName={activeInstance!.name} fetchBase64={fetchMediaBase64} />
                         {/* ── Timestamp ── */}
@@ -1754,7 +1785,8 @@ export default function WhatsAppPage() {
                         </p>
                       </div>
                     </div>
-                  ))
+                    );
+                  })
                 )}
                 <div ref={messagesEndRef} />
               </div>
