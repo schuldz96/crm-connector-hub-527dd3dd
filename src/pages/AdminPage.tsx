@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { CONFIG } from '@/lib/config';
+import { callOpenAI } from '@/lib/openaiProxy';
 import { MOCK_USERS, MOCK_TEAMS, MOCK_AREAS } from '@/data/mockData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -101,6 +102,8 @@ const SCOPE_ICONS: Record<string, string> = {
 export default function AdminPage() {
   const [section, setSection] = useState('roles');
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
+  const [tokenTest, setTokenTest] = useState<Record<string, 'idle' | 'testing' | 'ok' | 'error'>>({});
+  const [tokenTestMsg, setTokenTestMsg] = useState<Record<string, string>>({});
   const [moduleTarget, setModuleTarget] = useState<'global' | string>('global');
   const [selectedRole, setSelectedRole] = useState<UserRole>('ceo');
   const [expandedRole, setExpandedRole] = useState<UserRole | null>('ceo');
@@ -709,6 +712,29 @@ export default function AdminPage() {
                   const val = tokens[f.key] || '';
                   const visible = showKey[f.key] ?? false;
                   const masked = val ? `sk-proj***${val.slice(-6)}` : '';
+                  const testStatus = tokenTest[f.key] || 'idle';
+                  const testMsg = tokenTestMsg[f.key] || '';
+                  const handleTest = async () => {
+                    if (!val) return;
+                    setTokenTest(prev => ({ ...prev, [f.key]: 'testing' }));
+                    setTokenTestMsg(prev => ({ ...prev, [f.key]: '' }));
+                    try {
+                      const data = await callOpenAI(val, {
+                        model: 'gpt-4o-mini',
+                        messages: [{ role: 'user', content: 'Responda apenas "ok"' }],
+                        max_tokens: 5,
+                      });
+                      if (data?.choices?.[0]?.message?.content) {
+                        setTokenTest(prev => ({ ...prev, [f.key]: 'ok' }));
+                        setTokenTestMsg(prev => ({ ...prev, [f.key]: 'Token válido e funcional!' }));
+                      } else {
+                        throw new Error('Resposta inesperada da API');
+                      }
+                    } catch (err: any) {
+                      setTokenTest(prev => ({ ...prev, [f.key]: 'error' }));
+                      setTokenTestMsg(prev => ({ ...prev, [f.key]: err?.message || 'Erro desconhecido' }));
+                    }
+                  };
                   return (
                     <div key={f.key} className="p-4 rounded-xl bg-muted/30 border border-border/50 space-y-2">
                       <div className="flex items-center gap-2">
@@ -717,9 +743,20 @@ export default function AdminPage() {
                           <p className="text-sm font-medium">{f.label}</p>
                           <p className="text-[11px] text-muted-foreground">{f.desc}</p>
                         </div>
-                        {val && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/10 text-success border border-success/20">
-                            Configurado
+                        {val ? (
+                          <span className={cn(
+                            'text-[10px] px-2 py-0.5 rounded-full border',
+                            testStatus === 'ok'
+                              ? 'bg-success/10 text-success border-success/20'
+                              : testStatus === 'error'
+                              ? 'bg-destructive/10 text-destructive border-destructive/20'
+                              : 'bg-success/10 text-success border-success/20'
+                          )}>
+                            {testStatus === 'ok' ? 'Funcional ✓' : testStatus === 'error' ? 'Erro ✗' : 'Configurado'}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-warning/10 text-warning border border-warning/20">
+                            Não configurado
                           </span>
                         )}
                       </div>
@@ -728,7 +765,10 @@ export default function AdminPage() {
                           <input
                             type={visible ? 'text' : 'password'}
                             value={val}
-                            onChange={e => setToken(f.key, e.target.value.trim())}
+                            onChange={e => {
+                              setToken(f.key, e.target.value.trim());
+                              setTokenTest(prev => ({ ...prev, [f.key]: 'idle' }));
+                            }}
                             placeholder="sk-proj-..."
                             className="w-full text-xs px-3 py-2 rounded-lg bg-background border border-border focus:border-primary/50 focus:ring-1 focus:ring-primary/20 outline-none font-mono"
                           />
@@ -745,7 +785,27 @@ export default function AdminPage() {
                         >
                           {visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                         </button>
+                        <button
+                          onClick={handleTest}
+                          disabled={!val || testStatus === 'testing'}
+                          className={cn(
+                            'px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors',
+                            testStatus === 'testing'
+                              ? 'border-border text-muted-foreground'
+                              : 'border-primary/30 text-primary hover:bg-primary/10'
+                          )}
+                        >
+                          {testStatus === 'testing' ? 'Testando...' : 'Testar'}
+                        </button>
                       </div>
+                      {testMsg && (
+                        <p className={cn(
+                          'text-[11px] px-2',
+                          testStatus === 'ok' ? 'text-success' : 'text-destructive'
+                        )}>
+                          {testMsg}
+                        </p>
+                      )}
                     </div>
                   );
                 })}

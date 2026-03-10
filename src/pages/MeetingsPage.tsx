@@ -5,10 +5,11 @@ import {
   Video, Search, Brain, Clock, Calendar,
   User, Building2, ExternalLink, Sparkles, X,
   TrendingUp, TrendingDown, Lightbulb, AlertTriangle,
-  CheckCircle2, Target, MessageSquare, RefreshCw, Loader2, Users
+  CheckCircle2, Target, MessageSquare, RefreshCw, Loader2, Users, Key
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useToast } from '@/hooks/use-toast';
 import { loadMeetingsFromDb, type DbMeeting } from '@/lib/meetingsService';
 
@@ -62,6 +63,7 @@ function ScoreBar({ value, label, icon, tip }: { value: number; label: string; i
 
 export default function MeetingsPage() {
   const { user } = useAuth();
+  const { tokens } = useAppConfig();
   const { toast } = useToast();
 
   const [meetings, setMeetings] = useState<DbMeeting[]>([]);
@@ -106,15 +108,26 @@ export default function MeetingsPage() {
                 {loading ? 'Carregando...' : `${filtered.length} reuniões encontradas`}
               </p>
             </div>
-            <Button
-              size="sm"
-              onClick={loadMeetings}
-              disabled={loading}
-              className="text-xs h-8 bg-gradient-primary"
-            >
-              {loading ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
-              Atualizar
-            </Button>
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                'flex items-center gap-1.5 text-xs border rounded-lg px-3 py-1.5',
+                tokens.meetings?.startsWith('sk-')
+                  ? 'border-success/30 text-success bg-success/5'
+                  : 'border-warning/30 text-warning bg-warning/5'
+              )}>
+                <Key className="w-3 h-3" />
+                {tokens.meetings?.startsWith('sk-') ? 'Token Reuniões ✓' : 'Sem token — Admin → Tokens OpenAI'}
+              </span>
+              <Button
+                size="sm"
+                onClick={loadMeetings}
+                disabled={loading}
+                className="text-xs h-8 bg-gradient-primary"
+              >
+                {loading ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
+                Atualizar
+              </Button>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 mb-4">

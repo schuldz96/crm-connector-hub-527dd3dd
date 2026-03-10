@@ -8,7 +8,7 @@ import {
   Smartphone, RefreshCw, Plus, CheckCheck, Send,
   ArrowUpDown, ArrowDownAZ, SortAsc, SortDesc,
   Brain, Sparkles, AlertTriangle, ChevronRight, Star,
-  Paperclip, Mic, MicOff, Image as ImageIcon, FileText, Play, Download, MapPin, Volume2, Trash2,
+  Paperclip, Mic, MicOff, Image as ImageIcon, FileText, Play, Download, MapPin, Volume2, Trash2, Key,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -1442,6 +1442,15 @@ export default function WhatsAppPage() {
           <p className="text-sm text-muted-foreground">{onlineCount} online · {visibleInstances.length} total</p>
         </div>
         <div className="flex items-center gap-2">
+          <span className={cn(
+            'flex items-center gap-1.5 text-xs border rounded-lg px-3 py-1.5',
+            tokens.whatsapp?.startsWith('sk-')
+              ? 'border-success/30 text-success bg-success/5'
+              : 'border-warning/30 text-warning bg-warning/5'
+          )}>
+            <Key className="w-3 h-3" />
+            {tokens.whatsapp?.startsWith('sk-') ? 'Token WhatsApp ✓' : 'Sem token — Admin → Tokens OpenAI'}
+          </span>
           {isAdmin && (
             <Button size="sm" variant="outline" className="text-xs h-8 border-border gap-1" onClick={() => setShowCreateInst(true)}>
               <Plus className="w-3.5 h-3.5" /> Nova Instância

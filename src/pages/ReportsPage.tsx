@@ -5,9 +5,12 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, Radar
 } from 'recharts';
-import { Download, Calendar } from 'lucide-react';
+import { Download, Calendar, Key } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useAppConfig } from '@/contexts/AppConfigContext';
 
 export default function ReportsPage() {
+  const { tokens } = useAppConfig();
   const sellerPerf = useMemo(() => {
     const bySeller = new Map<string, { name: string; meetings: number; scoreSum: number; scoreCount: number; conversions: number }>();
     for (const m of MOCK_MEETINGS) {
@@ -48,7 +51,16 @@ export default function ReportsPage() {
           <h1 className="text-2xl font-display font-bold">Relatórios</h1>
           <p className="text-sm text-muted-foreground">Análises detalhadas de performance</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <span className={cn(
+            'flex items-center gap-1.5 text-xs border rounded-lg px-3 py-1.5',
+            tokens.reports?.startsWith('sk-')
+              ? 'border-success/30 text-success bg-success/5'
+              : 'border-warning/30 text-warning bg-warning/5'
+          )}>
+            <Key className="w-3 h-3" />
+            {tokens.reports?.startsWith('sk-') ? 'Token Relatórios ✓' : 'Sem token — Admin → Tokens OpenAI'}
+          </span>
           <Button variant="outline" size="sm" className="text-xs h-8 border-border">
             <Calendar className="w-3.5 h-3.5 mr-1.5" />
             Mar 2026
