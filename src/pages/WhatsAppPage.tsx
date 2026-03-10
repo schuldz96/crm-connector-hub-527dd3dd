@@ -745,6 +745,17 @@ export default function WhatsAppPage() {
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
   const [chatSortKey, setChatSortKey] = useState<ChatSortKey>('recent');
 
+  // ── Local "last seen" tracking (independent of WhatsApp read receipts) ────
+  const SEEN_KEY = 'appmax_chat_seen';
+  const getSeenMap = useCallback((): Record<string, number> => {
+    try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '{}'); } catch { return {}; }
+  }, []);
+  const markChatSeen = useCallback((chatId: string, ts: number) => {
+    const map = getSeenMap();
+    map[chatId] = ts;
+    localStorage.setItem(SEEN_KEY, JSON.stringify(map));
+  }, [getSeenMap]);
+
   // ── Message parsing with full media support ────────────────────────────────
   const parseBodyText = (m: any): string => {
     const msg = m.message || {};
@@ -883,6 +894,12 @@ export default function WhatsAppPage() {
 
         const existing = phoneMap.get(key);
 
+        // Calculate unread using local "last seen" tracking
+        const seenMap = getSeenMap();
+        const seenTs = seenMap[jid] || 0;
+        // Unread if: last message is from contact (not me), AND timestamp > last time I opened this chat
+        const localUnread = (!fromMe && ts > seenTs) ? Math.max(c.unreadCount || 0, 1) : 0;
+
         if (!existing) {
           phoneMap.set(key, {
             id: jid,
@@ -893,7 +910,7 @@ export default function WhatsAppPage() {
             lastMessage: lastMsg,
             lastMessageTs: ts,
             lastMessageFromMe: fromMe,
-            unread: c.unreadCount || 0,
+            unread: localUnread,
           });
         } else {
           // Merge — always prefer @lid as primary (has received msgs), phone JID as alt (has sent msgs)
@@ -910,7 +927,7 @@ export default function WhatsAppPage() {
             lastMessage: betterMsg,
             lastMessageTs: betterTs,
             lastMessageFromMe: betterFromMe,
-            unread: Math.max(c.unreadCount || 0, existing.unread),
+            unread: Math.max(localUnread, existing.unread),
             phone: realPhone || existing.phone,
           };
 
@@ -934,7 +951,10 @@ export default function WhatsAppPage() {
           const prevMap = new Map(prev.map(c => [c.id, c]));
           return sorted.map(newChat => {
             const isOpen = activeChatRef.current?.id === newChat.id;
-            if (isOpen) return { ...newChat, unread: 0 };
+            if (isOpen) {
+              markChatSeen(newChat.id, newChat.lastMessageTs || Math.floor(Date.now() / 1000));
+              return { ...newChat, unread: 0 };
+            }
             const old = prevMap.get(newChat.id);
             if (!old) return newChat; // brand new chat, use API unread
 
@@ -942,6 +962,7 @@ export default function WhatsAppPage() {
 
             // Someone replied from phone/app (fromMe) → conversation handled, clear badge
             if (isNewMsg && newChat.lastMessageFromMe) {
+              markChatSeen(newChat.id, newChat.lastMessageTs);
               return { ...newChat, unread: 0 };
             }
             // New message from contact → increment local unread
@@ -1476,6 +1497,7 @@ export default function WhatsAppPage() {
                 key={chat.id}
                 onClick={() => {
                   setActiveChat(chat);
+                  markChatSeen(chat.id, chat.lastMessageTs || Math.floor(Date.now() / 1000));
                   setChats(prev => prev.map(c => c.id === chat.id ? { ...c, unread: 0 } : c));
                 }}
                 className={cn(
