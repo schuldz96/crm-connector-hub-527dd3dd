@@ -62,21 +62,28 @@ interface Message {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-async function evoFetch(path: string, options: RequestInit = {}) {
-  const res = await fetch(`${EVOLUTION_API_URL}${path}`, {
-    ...options,
-    headers: {
-      apikey: EVOLUTION_API_TOKEN,
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    },
-  });
-  if (!res.ok) {
-    const errBody = await res.text().catch(() => '');
-    console.error('[evoFetch] HTTP', res.status, path, errBody.slice(0, 500));
-    throw new Error(`HTTP ${res.status}: ${errBody.slice(0, 200)}`);
+async function evoFetch(path: string, options: RequestInit = {}, timeoutMs = 30000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${EVOLUTION_API_URL}${path}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        apikey: EVOLUTION_API_TOKEN,
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      },
+    });
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      console.error('[evoFetch] HTTP', res.status, path, errBody.slice(0, 500));
+      throw new Error(`HTTP ${res.status}: ${errBody.slice(0, 200)}`);
+    }
+    return res.json();
+  } finally {
+    clearTimeout(timer);
   }
-  return res.json();
 }
 
 // ─── QR Code Modal ────────────────────────────────────────────────────────────
@@ -501,10 +508,10 @@ function MessageContent({
     setLoadingMedia(false);
   };
 
-  // Auto-load all media types via getBase64FromMediaMessage (Baileys URLs are encrypted)
+  // Auto-load only images/stickers (small, visual). Audio/video/docs load on click.
   useEffect(() => {
-    const mediaTypes: MsgType[] = ['audio', 'ptt', 'image', 'video', 'sticker', 'document'];
-    if (mediaTypes.includes(msg.type) && !mediaData && msg.rawMessage) {
+    const autoLoadTypes: MsgType[] = ['image', 'sticker'];
+    if (autoLoadTypes.includes(msg.type) && !mediaData && msg.rawMessage) {
       loadMedia();
     }
   }, [msg.id]);
