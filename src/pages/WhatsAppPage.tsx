@@ -775,6 +775,7 @@ export default function WhatsAppPage() {
 
   const detectMsgType = (m: any): MsgType => {
     const msg = m.message || {};
+    // Check nested message object first
     if (msg.imageMessage) return 'image';
     if (msg.videoMessage) return 'video';
     if (msg.audioMessage) return msg.audioMessage.ptt ? 'ptt' : 'audio';
@@ -783,6 +784,16 @@ export default function WhatsAppPage() {
     if (msg.locationMessage || msg.liveLocationMessage) return 'location';
     if (msg.contactMessage || msg.contactsArrayMessage) return 'contact';
     if (msg.conversation || msg.extendedTextMessage) return 'text';
+    // Fallback: Evolution API messageType field (flat structure for sent messages)
+    const mt = (m.messageType || '').toLowerCase();
+    if (mt === 'imagemessage' || mt === 'image') return 'image';
+    if (mt === 'videomessage' || mt === 'video') return 'video';
+    if (mt === 'audiomessage' || mt === 'audio' || mt === 'pttmessage') return mt.includes('ptt') ? 'ptt' : 'audio';
+    if (mt === 'documentmessage' || mt === 'document' || mt === 'documentwithcaptionmessage') return 'document';
+    if (mt === 'stickermessage' || mt === 'sticker') return 'sticker';
+    if (mt === 'locationmessage' || mt === 'location') return 'location';
+    if (mt === 'contactmessage' || mt === 'contact') return 'contact';
+    if (mt === 'conversation' || mt === 'extendedtextmessage') return 'text';
     return 'unknown';
   };
 
@@ -1049,6 +1060,8 @@ export default function WhatsAppPage() {
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingFilePreview, setPendingFilePreview] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const cancelledRef = useRef(false);
@@ -1094,7 +1107,12 @@ export default function WhatsAppPage() {
           const msgId = m.key?.id || m.id;
           if (!msgId || seen.has(msgId)) continue;
           seen.add(msgId);
-          parsed.push(parseFullMessage(m));
+          const pm = parseFullMessage(m);
+          // Debug: log media messages to understand structure
+          if (pm.type !== 'text' && pm.type !== 'unknown') {
+            console.log('[msg]', pm.type, pm.fromMe ? 'sent' : 'recv', 'hasKey:', !!pm.rawMsgKey, 'mime:', pm.mimetype, 'raw:', JSON.stringify(m).slice(0, 300));
+          }
+          parsed.push(pm);
         }
       }
 
@@ -1182,9 +1200,31 @@ export default function WhatsAppPage() {
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) handleSendMedia(file);
-    // Reset so same file can be selected again
+    if (file) {
+      setPendingFile(file);
+      // Generate preview for images
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = () => setPendingFilePreview(reader.result as string);
+        reader.readAsDataURL(file);
+      } else {
+        setPendingFilePreview(null);
+      }
+    }
     e.target.value = '';
+  };
+
+  const confirmSendFile = () => {
+    if (pendingFile) {
+      handleSendMedia(pendingFile);
+      setPendingFile(null);
+      setPendingFilePreview(null);
+    }
+  };
+
+  const cancelSendFile = () => {
+    setPendingFile(null);
+    setPendingFilePreview(null);
   };
 
   // ── Audio recording ────────────────────────────────────────────────────────
@@ -1643,6 +1683,31 @@ export default function WhatsAppPage() {
 
               {/* Input */}
               <div className="px-4 py-3 border-t border-border flex-shrink-0 bg-card">
+                {/* File preview banner */}
+                {pendingFile && (
+                  <div className="flex items-center gap-3 px-4 py-2 bg-secondary/80 border-t border-border">
+                    {pendingFilePreview ? (
+                      <img src={pendingFilePreview} alt="preview" className="w-14 h-14 rounded-lg object-cover border border-border" />
+                    ) : (
+                      <div className="w-14 h-14 rounded-lg bg-muted flex items-center justify-center border border-border">
+                        <FileText className="w-6 h-6 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{pendingFile.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{(pendingFile.size / 1024).toFixed(0)} KB · {pendingFile.type || 'arquivo'}</p>
+                    </div>
+                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={cancelSendFile} title="Cancelar">
+                      <X className="w-4 h-4" />
+                    </Button>
+                    <Button size="sm" className="h-8 px-3 text-xs bg-success hover:bg-success/90"
+                      onClick={confirmSendFile} disabled={sending}>
+                      {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5 mr-1" />}
+                      Enviar
+                    </Button>
+                  </div>
+                )}
                 {isConnected ? (
                   <div className="flex items-center gap-1.5">
                     {/* Hidden file input */}
