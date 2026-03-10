@@ -482,15 +482,16 @@ function MessageContent({
     setLoadingMedia(false);
   };
 
-  // Auto-load for audio/ptt (users expect instant playback)
+  // Auto-load all media types via getBase64FromMediaMessage (Baileys URLs are encrypted)
   useEffect(() => {
-    if ((msg.type === 'audio' || msg.type === 'ptt') && !msg.mediaUrl && msg.rawMsgKeyId) {
+    const mediaTypes: MsgType[] = ['audio', 'ptt', 'image', 'video', 'sticker', 'document'];
+    if (mediaTypes.includes(msg.type) && !mediaData && msg.rawMsgKeyId) {
       loadMedia();
     }
   }, [msg.id]);
 
-  const audioSrc = msg.mediaUrl || mediaData;
-  const imgSrc = msg.mediaUrl || (msg.thumbnailB64 ? `data:image/jpeg;base64,${msg.thumbnailB64}` : null);
+  const audioSrc = mediaData;
+  const imgSrc = mediaData || (msg.thumbnailB64 ? `data:image/jpeg;base64,${msg.thumbnailB64}` : null);
 
   switch (msg.type) {
     case 'image':
@@ -498,14 +499,15 @@ function MessageContent({
         <div>
           {imgSrc ? (
             <img
-              src={msg.mediaUrl || mediaData || `data:image/jpeg;base64,${msg.thumbnailB64}`}
+              src={imgSrc}
               alt="imagem"
-              className="max-w-full max-h-72 object-contain cursor-pointer"
-              onClick={() => {
-                if (msg.mediaUrl) window.open(msg.mediaUrl, '_blank');
-                else if (!mediaData) loadMedia();
-              }}
+              className={cn('max-w-full max-h-72 object-contain', !mediaData && 'opacity-60 blur-sm')}
             />
+          ) : loadingMedia ? (
+            <div className="flex items-center gap-2 px-3 py-4">
+              <Loader2 className="w-5 h-5 animate-spin" />
+              <span className="text-xs">Carregando imagem...</span>
+            </div>
           ) : (
             <button
               onClick={loadMedia}
@@ -525,9 +527,9 @@ function MessageContent({
     case 'video':
       return (
         <div>
-          {msg.mediaUrl || mediaData ? (
+          {mediaData ? (
             <video
-              src={msg.mediaUrl || mediaData || undefined}
+              src={mediaData}
               controls
               className="max-w-full max-h-72 rounded-lg"
               preload="metadata"
@@ -600,8 +602,8 @@ function MessageContent({
               <p className="text-xs font-medium truncate">{msg.fileName || msg.body || 'Documento'}</p>
               <p className="text-[10px] opacity-60">{msg.mimetype || 'documento'}</p>
             </div>
-            {msg.mediaUrl ? (
-              <a href={msg.mediaUrl} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
+            {mediaData ? (
+              <a href={mediaData} download={msg.fileName || 'documento'} className="flex-shrink-0">
                 <Download className="w-4 h-4 opacity-70 hover:opacity-100" />
               </a>
             ) : (
@@ -618,7 +620,7 @@ function MessageContent({
         <div className="p-1">
           {imgSrc ? (
             <img
-              src={msg.mediaUrl || mediaData || `data:image/jpeg;base64,${msg.thumbnailB64}`}
+              src={imgSrc!}
               alt="sticker"
               className="w-28 h-28 object-contain"
             />
@@ -773,13 +775,10 @@ export default function WhatsAppPage() {
     return 'unknown';
   };
 
-  const extractMediaUrl = (m: any): string | undefined => {
-    const msg = m.message || {};
-    // Evolution API often provides URL directly on media message objects
-    return msg.imageMessage?.url || msg.videoMessage?.url ||
-      msg.audioMessage?.url || msg.documentMessage?.url ||
-      msg.documentWithCaptionMessage?.message?.documentMessage?.url ||
-      msg.stickerMessage?.url || undefined;
+  const extractMediaUrl = (_m: any): string | undefined => {
+    // Baileys/Evolution returns encrypted media URLs that are NOT browser-accessible.
+    // All media must be fetched via getBase64FromMediaMessage API instead.
+    return undefined;
   };
 
   const parseFullMessage = (m: any): Message => {
