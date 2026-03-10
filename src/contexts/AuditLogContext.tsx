@@ -120,8 +120,23 @@ export function AuditLogProvider({ children }: { children: React.ReactNode }) {
       void (async () => {
         try {
           const empresaId = await getSaasEmpresaId();
+
+          // Resolve email → UUID for usuario_id column
+          let usuarioId: string | null = null;
+          if (entry.userEmail) {
+            const { data: usr } = await supabase
+              .schema('saas')
+              .from('usuarios')
+              .select('id')
+              .eq('empresa_id', empresaId)
+              .eq('email', entry.userEmail.trim().toLowerCase())
+              .maybeSingle();
+            usuarioId = usr?.id ?? null;
+          }
+
           await supabase.schema('saas').from('logs_auditoria').insert({
             empresa_id: empresaId,
+            usuario_id: usuarioId,
             tipo_evento: entry.type,
             pagina: entry.page || null,
             pagina_label: entry.pageLabel || null,
