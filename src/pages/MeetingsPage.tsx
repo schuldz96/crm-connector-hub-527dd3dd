@@ -80,6 +80,7 @@ export default function MeetingsPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState('');
+  const [syncResult, setSyncResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedMeeting, setSelectedMeeting] = useState<DbMeeting | null>(null);
@@ -113,6 +114,7 @@ export default function MeetingsPage() {
 
     setSyncing(true);
     setSyncProgress('Iniciando sincronização...');
+    setSyncResult(null);
 
     try {
       const result: SyncResult = await syncGoogleMeetTranscripts(
@@ -123,24 +125,22 @@ export default function MeetingsPage() {
       );
 
       if (result.errors.length > 0) {
-        toast({
-          variant: 'destructive',
-          title: `Sincronização com ${result.errors.length} erro(s)`,
-          description: result.errors[0],
+        setSyncResult({
+          type: 'error',
+          message: `Concluída com ${result.errors.length} erro(s). ${result.synced} importada(s), ${result.skipped} já existente(s). Erro: ${result.errors[0]}`,
         });
       } else {
-        toast({
-          title: 'Sincronização concluída',
-          description: `${result.synced} nova(s) reunião(ões), ${result.skipped} já existente(s).`,
+        setSyncResult({
+          type: 'success',
+          message: `Sincronização concluída — ${result.synced} nova(s) reunião(ões) importada(s), ${result.skipped} já existente(s), ${result.total} encontrada(s) no total.`,
         });
       }
 
       await loadMeetings();
     } catch (err: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Erro na sincronização',
-        description: err.message || 'Erro desconhecido',
+      setSyncResult({
+        type: 'error',
+        message: `Erro na sincronização: ${err.message || 'Erro desconhecido'}`,
       });
     } finally {
       setSyncing(false);
@@ -185,6 +185,25 @@ export default function MeetingsPage() {
             <div className="mb-4 p-3 rounded-lg bg-primary/5 border border-primary/20 text-xs text-primary flex items-center gap-2">
               <Loader2 className="w-3.5 h-3.5 animate-spin flex-shrink-0" />
               {syncProgress}
+            </div>
+          )}
+
+          {!syncing && syncResult && (
+            <div className={cn(
+              'mb-4 p-3 rounded-lg text-xs flex items-center justify-between gap-2',
+              syncResult.type === 'success'
+                ? 'bg-success/10 border border-success/20 text-success'
+                : 'bg-destructive/10 border border-destructive/20 text-destructive'
+            )}>
+              <div className="flex items-center gap-2">
+                {syncResult.type === 'success'
+                  ? <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+                  : <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />}
+                {syncResult.message}
+              </div>
+              <button onClick={() => setSyncResult(null)} className="flex-shrink-0 hover:opacity-70">
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
           )}
 
