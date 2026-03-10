@@ -61,12 +61,15 @@ function TeamModal({
             <Input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Equipe Gamma" className="h-9 text-xs bg-secondary border-border" />
           </div>
           <div>
-            <label className="text-xs font-medium block mb-1.5">Supervisor responsável</label>
-            <Select value={supervisorId} onValueChange={setSupervisorId}>
+            <label className="text-xs font-medium block mb-1.5">Supervisor responsável <span className="text-muted-foreground font-normal">(opcional)</span></label>
+            <Select value={supervisorId || '__none__'} onValueChange={v => setSupervisorId(v === '__none__' ? '' : v)}>
               <SelectTrigger className="h-9 text-xs bg-secondary border-border">
                 <SelectValue placeholder="Selecione um supervisor..." />
               </SelectTrigger>
               <SelectContent className="bg-card border-border">
+                <SelectItem value="__none__" className="text-xs text-muted-foreground">
+                  Nenhum (atribuir depois)
+                </SelectItem>
                 {supervisors.map(u => (
                   <SelectItem key={`user_${u.email}`} value={`user_${u.email}`} className="text-xs">
                     <div className="flex items-center gap-2">
@@ -278,7 +281,11 @@ export default function TeamsPage() {
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-semibold truncate">{t.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{sup?.name ?? '—'}</p>
+                      {sup ? (
+                        <p className="text-xs text-muted-foreground truncate">{sup.name}</p>
+                      ) : (
+                        <p className="text-xs text-amber-500 truncate">Sem supervisor</p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0 ml-1">
@@ -338,9 +345,9 @@ export default function TeamsPage() {
               </div>
             </div>
 
-            {team.supervisorId && findUser(team.supervisorId) && (
-              <div className="glass-card p-5">
-                <h3 className="section-title mb-4">Supervisor</h3>
+            <div className="glass-card p-5">
+              <h3 className="section-title mb-4">Supervisor</h3>
+              {team.supervisorId && findUser(team.supervisorId) ? (
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-primary/15 text-primary font-bold flex items-center justify-center text-sm">
                     {findUser(team.supervisorId)!.name[0]?.toUpperCase()}
@@ -353,8 +360,18 @@ export default function TeamsPage() {
                     {roleLabels[findUser(team.supervisorId)!.role] || findUser(team.supervisorId)!.role}
                   </Badge>
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                  <div className="w-10 h-10 rounded-full bg-amber-500/15 text-amber-500 font-bold flex items-center justify-center text-sm">
+                    ?
+                  </div>
+                  <div>
+                    <p className="font-semibold text-amber-600 dark:text-amber-400">Sem supervisor atribuído</p>
+                    <p className="text-xs text-muted-foreground">Clique em "Editar" para atribuir um responsável</p>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div className="glass-card p-5">
               <div className="flex items-center justify-between mb-4">

@@ -2,6 +2,35 @@ import { supabase } from '@/integrations/supabase/client';
 import { getSaasEmpresaId } from '@/lib/saas';
 import type { Team } from '@/types';
 
+// ─── Helper: extract email from frontend ID format ──────────────────────────
+function emailFromFrontendId(frontendId: string): string {
+  return frontendId.replace(/^(user_|google_)/, '');
+}
+
+// ─── Helper: resolve email → UUID from saas.usuarios ────────────────────────
+async function resolveEmailToUuid(email: string, empresaId: string): Promise<string | null> {
+  const { data } = await (supabase as any)
+    .schema('saas')
+    .from('usuarios')
+    .select('id')
+    .eq('empresa_id', empresaId)
+    .eq('email', email)
+    .maybeSingle();
+  return data?.id ?? null;
+}
+
+// ─── Helper: resolve UUID → frontend ID (user_email) from saas.usuarios ─────
+async function resolveUuidToFrontendId(uuid: string, empresaId: string): Promise<string> {
+  const { data } = await (supabase as any)
+    .schema('saas')
+    .from('usuarios')
+    .select('email')
+    .eq('id', uuid)
+    .eq('empresa_id', empresaId)
+    .maybeSingle();
+  return data?.email ? `user_${data.email}` : '';
+}
+
 // ─── Load all teams from saas.times ──────────────────────────────────────────
 export async function loadTeams(): Promise<Team[]> {
   const empresaId = await getSaasEmpresaId();
@@ -25,7 +54,7 @@ export async function loadTeams(): Promise<Team[]> {
     const { data: users } = await (supabase as any)
       .schema('saas')
       .from('usuarios')
-      .select('id, time_id')
+      .select('id, email, time_id')
       .eq('empresa_id', empresaId)
       .in('time_id', teamIds);
 
@@ -33,15 +62,23 @@ export async function loadTeams(): Promise<Team[]> {
       for (const u of users) {
         if (!u.time_id) continue;
         if (!memberMap[u.time_id]) memberMap[u.time_id] = [];
-        memberMap[u.time_id].push(u.id);
+        // Store as frontend ID format: user_email
+        memberMap[u.time_id].push(`user_${u.email}`);
       }
     }
+  }
+
+  // Resolve supervisor UUIDs to frontend IDs
+  const supervisorUuids = [...new Set((data || []).map((t: any) => t.supervisor_id).filter(Boolean))];
+  const supervisorMap: Record<string, string> = {};
+  for (const uuid of supervisorUuids) {
+    supervisorMap[uuid] = await resolveUuidToFrontendId(uuid, empresaId);
   }
 
   return (data || []).map((t: any) => ({
     id: t.id,
     name: t.nome,
-    supervisorId: t.supervisor_id || '',
+    supervisorId: t.supervisor_id ? (supervisorMap[t.supervisor_id] || '') : '',
     memberIds: memberMap[t.id] || [],
     companyId: empresaId,
     areaId: t.area_id || undefined,
@@ -54,13 +91,20 @@ export async function loadTeams(): Promise<Team[]> {
 export async function createTeam(data: Partial<Team>): Promise<Team> {
   const empresaId = await getSaasEmpresaId();
 
+  // Resolve supervisor frontend ID → UUID
+  let supervisorUuid: string | null = null;
+  if (data.supervisorId) {
+    const email = emailFromFrontendId(data.supervisorId);
+    supervisorUuid = await resolveEmailToUuid(email, empresaId);
+  }
+
   const { data: row, error } = await (supabase as any)
     .schema('saas')
     .from('times')
     .insert({
       empresa_id: empresaId,
       nome: data.name,
-      supervisor_id: data.supervisorId || null,
+      supervisor_id: supervisorUuid,
       meta: data.goal ?? 40,
       area_id: data.areaId || null,
     })
@@ -77,7 +121,7 @@ export async function createTeam(data: Partial<Team>): Promise<Team> {
   return {
     id: row.id,
     name: row.nome,
-    supervisorId: row.supervisor_id || '',
+    supervisorId: data.supervisorId || '',
     memberIds: data.memberIds || [],
     companyId: empresaId,
     areaId: row.area_id || undefined,
@@ -92,9 +136,18 @@ export async function updateTeam(teamId: string, data: Partial<Team>): Promise<v
   const updates: Record<string, any> = { atualizado_em: new Date().toISOString() };
 
   if (data.name !== undefined) updates.nome = data.name;
-  if (data.supervisorId !== undefined) updates.supervisor_id = data.supervisorId || null;
   if (data.goal !== undefined) updates.meta = data.goal;
   if (data.areaId !== undefined) updates.area_id = data.areaId || null;
+
+  // Resolve supervisor frontend ID → UUID
+  if (data.supervisorId !== undefined) {
+    if (data.supervisorId) {
+      const email = emailFromFrontendId(data.supervisorId);
+      updates.supervisor_id = await resolveEmailToUuid(email, empresaId);
+    } else {
+      updates.supervisor_id = null;
+    }
+  }
 
   const { error } = await (supabase as any)
     .schema('saas')
@@ -141,14 +194,15 @@ async function assignMembers(teamId: string, memberIds: string[], empresaId: str
     .eq('empresa_id', empresaId)
     .eq('time_id', teamId);
 
-  // Assign new members
+  // Assign new members (resolve frontend IDs → emails, then match by email)
   if (memberIds.length > 0) {
-    for (const userId of memberIds) {
+    for (const frontendId of memberIds) {
+      const email = emailFromFrontendId(frontendId);
       await (supabase as any)
         .schema('saas')
         .from('usuarios')
         .update({ time_id: teamId })
-        .eq('id', userId)
+        .eq('email', email)
         .eq('empresa_id', empresaId);
     }
   }
