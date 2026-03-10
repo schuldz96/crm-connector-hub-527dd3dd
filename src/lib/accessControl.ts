@@ -126,6 +126,18 @@ export async function upsertAllowedUser(user: AllowedUser): Promise<void> {
   }
 }
 
+export async function updateUserRole(email: string, role: UserRole): Promise<void> {
+  const empresaId = await getSaasEmpresaId();
+  const { error } = await supabase
+    .schema('saas')
+    .from('usuarios')
+    .update({ papel: roleToDb(role) })
+    .eq('empresa_id', empresaId)
+    .eq('email', norm(email));
+
+  if (error) throw error;
+}
+
 export async function removeAllowedUser(email: string): Promise<boolean> {
   const key = norm(email);
   const defaults = new Set(DEFAULT_ALLOWED_USERS.map(u => norm(u.email)));

@@ -22,6 +22,7 @@ import { useEvolutionInstances, getInstanceForUser, setInstanceForUser } from '@
 import {
   loadAllowedUsers,
   upsertAllowedUser,
+  updateUserRole,
   removeAllowedUser,
   type AllowedUser,
 } from '@/lib/accessControl';
@@ -424,7 +425,7 @@ export default function UsersPage() {
 
   const handleRoleSave = async (role: UserRole) => {
     if (!roleTarget) return;
-    await upsertAllowedUser({ email: roleTarget.email, name: roleTarget.name, role });
+    await updateUserRole(roleTarget.email, role);
     const allowed = await loadAllowedUsers();
     setUsers(mapAllowedUsersToUsers(allowed));
     toast({ title: 'Perfil atualizado', description: `${roleTarget.name} agora é ${ROLE_CONFIG[role].label}.` });
