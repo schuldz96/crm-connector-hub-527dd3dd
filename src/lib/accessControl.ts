@@ -71,15 +71,17 @@ export async function upsertAllowedUser(user: AllowedUser): Promise<void> {
   const empresaId = await getSaasEmpresaId();
   const email = norm(user.email);
 
-  const payload = {
+  const payload: Record<string, any> = {
     empresa_id: empresaId,
     email,
     nome: user.name,
     papel: roleToDb(user.role),
     status: 'ativo',
-    senha_hash: user.password || null,
-    avatar_url: user.avatar || null,
   };
+
+  // Only update password/avatar if explicitly provided (avoid clearing on role-only updates)
+  if (user.password !== undefined) payload.senha_hash = user.password || null;
+  if (user.avatar !== undefined) payload.avatar_url = user.avatar || null;
 
   const { error } = await supabase
     .schema('saas')
