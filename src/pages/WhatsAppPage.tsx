@@ -469,15 +469,28 @@ function MessageContent({
 }) {
   const [mediaData, setMediaData] = useState<string | null>(null);
   const [loadingMedia, setLoadingMedia] = useState(false);
+  const [mediaError, setMediaError] = useState(false);
   const isFromMe = msg.fromMe;
 
   const loadMedia = async () => {
-    if (mediaData || loadingMedia || !msg.rawMsgKey) return;
+    if (mediaData || loadingMedia) return;
+    if (!msg.rawMsgKey) {
+      console.warn('[Media] Sem rawMsgKey para msg:', msg.id, msg.type);
+      setMediaError(true);
+      return;
+    }
     setLoadingMedia(true);
+    setMediaError(false);
     const b64 = await fetchBase64(instanceName, msg.rawMsgKey, msg.type === 'video');
     if (b64) {
-      const mime = msg.mimetype || 'application/octet-stream';
+      // For audio, default to ogg if no mimetype
+      const defaultMime = (msg.type === 'audio' || msg.type === 'ptt') ? 'audio/ogg; codecs=opus' : 'application/octet-stream';
+      const mime = msg.mimetype || defaultMime;
       setMediaData(`data:${mime};base64,${b64}`);
+      console.log('[Media] Loaded', msg.type, msg.id, 'mime:', mime, 'b64len:', b64.length);
+    } else {
+      console.warn('[Media] Falha ao carregar:', msg.id, msg.type, msg.rawMsgKey);
+      setMediaError(true);
     }
     setLoadingMedia(false);
   };
@@ -566,8 +579,9 @@ function MessageContent({
       return (
         <div className="px-3 py-2">
           {audioSrc ? (
-            <audio controls className="max-w-[240px] h-8" preload="auto">
-              <source src={audioSrc} type={msg.mimetype || 'audio/ogg'} />
+            <audio controls className="max-w-[240px] h-8" preload="auto" autoPlay={false}>
+              <source src={audioSrc} type={msg.mimetype || 'audio/ogg; codecs=opus'} />
+              Seu navegador não suporta áudio.
             </audio>
           ) : (
             <button
@@ -580,11 +594,15 @@ function MessageContent({
             >
               {loadingMedia ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
+              ) : mediaError ? (
+                <AlertCircle className="w-4 h-4 text-destructive" />
               ) : (
                 <Volume2 className="w-4 h-4" />
               )}
               <span>{msg.type === 'ptt' ? 'Mensagem de voz' : 'Áudio'}</span>
-              <span className="text-[10px] opacity-60">toque para ouvir</span>
+              <span className="text-[10px] opacity-60">
+                {loadingMedia ? 'carregando...' : mediaError ? 'erro · toque para tentar novamente' : 'toque para ouvir'}
+              </span>
             </button>
           )}
         </div>
@@ -835,13 +853,15 @@ export default function WhatsAppPage() {
     convertToMp4 = false,
   ): Promise<string | null> => {
     try {
+      console.log('[Media] Requesting base64 for:', msgKey.id, 'fromMe:', msgKey.fromMe, 'jid:', msgKey.remoteJid);
       const data = await evoFetch(`/chat/getBase64FromMediaMessage/${instanceName}`, {
         method: 'POST',
         body: JSON.stringify({ message: { key: msgKey }, convertToMp4 }),
       });
+      console.log('[Media] API response keys:', data ? Object.keys(data) : 'null', 'hasBase64:', !!data?.base64, 'b64len:', data?.base64?.length || 0);
       return data?.base64 || null;
     } catch (err) {
-      console.warn('[Media] Falha ao carregar base64:', msgKey.id, err);
+      console.error('[Media] Falha ao carregar base64:', msgKey.id, err);
       return null;
     }
   };
