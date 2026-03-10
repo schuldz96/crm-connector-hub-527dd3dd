@@ -237,11 +237,15 @@ function AIAnalysisPanel({
   messages,
   apiToken,
   aiModel,
+  instanceName,
+  fetchBase64,
 }: {
   chat: { id: string; name: string; phone: string };
-  messages: { fromMe: boolean; body: string; timestamp: number }[];
+  messages: Message[];
   apiToken: string;
   aiModel: string;
+  instanceName?: string;
+  fetchBase64?: (instanceName: string, rawMessage: any, convertToMp4?: boolean) => Promise<string | null>;
 }) {
   const { toast } = useToast();
   const [result, setResult] = useState<AIAnalysisResult | null>(() => {
@@ -251,6 +255,7 @@ function AIAnalysisPanel({
     } catch { return null; }
   });
   const [loading, setLoading] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState('');
 
   // Load cached result when chat changes
   useEffect(() => {
@@ -288,6 +293,30 @@ function AIAnalysisPanel({
     } catch { return 'Você é um especialista em vendas digitais e atendimento via WhatsApp.'; }
   };
 
+  // Build a media-aware description for a message
+  const describeMedia = (m: Message): string => {
+    const sender = m.fromMe ? 'VENDEDOR' : 'LEAD';
+    switch (m.type) {
+      case 'image':
+        return `[${sender}] [IMAGEM enviada${m.body ? ': legenda "' + m.body + '"' : ''}]`;
+      case 'video':
+        return `[${sender}] [VÍDEO enviado${m.body ? ': legenda "' + m.body + '"' : ''}]`;
+      case 'audio':
+      case 'ptt':
+        return `[${sender}] [ÁUDIO/VOZ enviado]`;
+      case 'document':
+        return `[${sender}] [DOCUMENTO enviado: ${m.fileName || 'arquivo'}${m.body ? ' - "' + m.body + '"' : ''}]`;
+      case 'sticker':
+        return `[${sender}] [FIGURINHA enviada]`;
+      case 'location':
+        return `[${sender}] [LOCALIZAÇÃO compartilhada${m.latitude ? `: ${m.latitude},${m.longitude}` : ''}]`;
+      case 'contact':
+        return `[${sender}] [CONTATO compartilhado${m.body ? ': ' + m.body : ''}]`;
+      default:
+        return `[${sender}] ${m.body || '[mensagem sem texto]'}`;
+    }
+  };
+
   const analyze = async () => {
     if (!apiToken) {
       toast({ variant: 'destructive', title: 'Token OpenAI não configurado', description: 'Configure o token em Config. IA → Integrações.' });
@@ -301,15 +330,89 @@ function AIAnalysisPanel({
     try {
       const criteria = loadCriteria();
       const systemPrompt = loadPrompt();
-      const transcript = messages.map(m =>
-        `[${m.fromMe ? 'VENDEDOR' : 'LEAD'}] ${m.body}`
-      ).join('\n');
+
+      // ── Collect images for GPT-4o vision (max 5 to avoid token limits) ──
+      const imageMessages = messages.filter(m => m.type === 'image' && m.rawMessage && instanceName && fetchBase64);
+      const imageB64List: { sender: string; base64: string; mimetype: string; caption: string }[] = [];
+      if (imageMessages.length > 0 && instanceName && fetchBase64) {
+        setLoadingStatus('Processando imagens...');
+        const imagesToProcess = imageMessages.slice(-5); // last 5
+        for (const img of imagesToProcess) {
+          try {
+            const b64 = await fetchBase64(instanceName, img.rawMessage);
+            if (b64) {
+              imageB64List.push({
+                sender: img.fromMe ? 'VENDEDOR' : 'LEAD',
+                base64: b64,
+                mimetype: img.mimetype || 'image/jpeg',
+                caption: img.body || '',
+              });
+            }
+          } catch { /* skip failed images */ }
+        }
+      }
+
+      // ── Transcribe audio messages via Whisper (max 3) ──
+      const audioMessages = messages.filter(m => (m.type === 'audio' || m.type === 'ptt') && m.rawMessage && instanceName && fetchBase64);
+      const audioTranscripts: { sender: string; text: string }[] = [];
+      if (audioMessages.length > 0 && instanceName && fetchBase64) {
+        setLoadingStatus('Transcrevendo áudios...');
+        const audiosToProcess = audioMessages.slice(-3); // last 3
+        for (const aud of audiosToProcess) {
+          try {
+            const b64 = await fetchBase64(instanceName, aud.rawMessage);
+            if (b64) {
+              // Call Whisper via direct API (small audio, acceptable)
+              const audioBlob = await fetch(`data:${aud.mimetype || 'audio/ogg'};base64,${b64}`).then(r => r.blob());
+              const formData = new FormData();
+              formData.append('file', audioBlob, 'audio.ogg');
+              formData.append('model', 'whisper-1');
+              formData.append('language', 'pt');
+              const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${apiToken}` },
+                body: formData,
+              });
+              if (resp.ok) {
+                const whisperData = await resp.json();
+                if (whisperData.text) {
+                  audioTranscripts.push({ sender: aud.fromMe ? 'VENDEDOR' : 'LEAD', text: whisperData.text });
+                }
+              }
+            }
+          } catch { /* skip failed audios */ }
+        }
+      }
+
+      setLoadingStatus('Analisando conversa...');
+
+      // ── Build transcript with media annotations ──
+      const transcript = messages.map((m, idx) => {
+        // If we have a transcription for this audio, use it
+        if ((m.type === 'audio' || m.type === 'ptt') && audioTranscripts.length > 0) {
+          const audioIdx = audioMessages.indexOf(m);
+          const processedOffset = audioMessages.length - Math.min(3, audioMessages.length);
+          const transcriptIdx = audioIdx - processedOffset;
+          if (transcriptIdx >= 0 && transcriptIdx < audioTranscripts.length) {
+            const t = audioTranscripts[transcriptIdx];
+            return `[${t.sender}] [ÁUDIO TRANSCRITO]: "${t.text}"`;
+          }
+        }
+        if (m.type === 'text' || !m.type) {
+          return `[${m.fromMe ? 'VENDEDOR' : 'LEAD'}] ${m.body}`;
+        }
+        return describeMedia(m);
+      }).join('\n');
 
       const criteriaText = criteria.map((c: any) =>
         `- ${c.label} (peso ${c.weight}%): ${c.description}. Sinais positivos: ${c.positiveSignals?.join(', ') || 'N/A'}. Sinais negativos: ${c.negativeSignals?.join(', ') || 'N/A'}.`
       ).join('\n');
 
-      const userPrompt = `Analise a seguinte conversa de WhatsApp entre um vendedor e um lead.
+      // ── Build multimodal message content ──
+      const userTextPrompt = `Analise a seguinte conversa de WhatsApp entre um vendedor e um lead.
+A conversa inclui texto, emojis, e anotações de mídia (imagens, áudios transcritos, vídeos, documentos, figurinhas, localizações).
+${imageB64List.length > 0 ? `\nALGUMAS IMAGENS DA CONVERSA ESTÃO INCLUÍDAS ABAIXO. Analise o conteúdo visual das imagens para avaliar a qualidade do atendimento (ex: prints de produtos, catálogos, propostas, etc).` : ''}
+${audioTranscripts.length > 0 ? `\n${audioTranscripts.length} ÁUDIOS FORAM TRANSCRITOS e incluídos na conversa com a marcação [ÁUDIO TRANSCRITO].` : ''}
 
 CRITÉRIOS DE AVALIAÇÃO:
 ${criteriaText}
@@ -328,14 +431,29 @@ Responda APENAS com JSON válido no seguinte formato (sem markdown, sem explica�
   ]
 }`;
 
+      // Build content array for multimodal (images + text)
+      const userContent: any[] = [{ type: 'text', text: userTextPrompt }];
+      for (const img of imageB64List) {
+        userContent.push({
+          type: 'image_url',
+          image_url: { url: `data:${img.mimetype};base64,${img.base64}`, detail: 'low' },
+        });
+        if (img.caption) {
+          userContent.push({ type: 'text', text: `(Legenda da imagem acima, enviada pelo ${img.sender}: "${img.caption}")` });
+        }
+      }
+
+      // Use vision-capable model if we have images
+      const model = imageB64List.length > 0 ? 'gpt-4o' : (aiModel || 'gpt-4o-mini');
+
       const data = await callOpenAI(apiToken, {
-        model: aiModel || 'gpt-4o-mini',
+        model,
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
+          { role: 'user', content: imageB64List.length > 0 ? userContent : userTextPrompt },
         ],
         temperature: 0.3,
-        max_tokens: 1500,
+        max_tokens: 2000,
       });
       const raw = data.choices?.[0]?.message?.content || '';
       // Strip possible markdown fences
@@ -343,7 +461,11 @@ Responda APENAS com JSON válido no seguinte formato (sem markdown, sem explica�
       const parsed: AIAnalysisResult = { ...JSON.parse(jsonStr), analyzedAt: new Date().toISOString() };
       setResult(parsed);
       localStorage.setItem(`appmax_ai_analysis_${chat.id}`, JSON.stringify(parsed));
-      toast({ title: '✓ Análise concluída!', description: `Score: ${parsed.totalScore}/100` });
+      const mediaInfo = [
+        imageB64List.length > 0 ? `${imageB64List.length} img` : '',
+        audioTranscripts.length > 0 ? `${audioTranscripts.length} áudio` : '',
+      ].filter(Boolean).join(', ');
+      toast({ title: '✓ Análise concluída!', description: `Score: ${parsed.totalScore}/100${mediaInfo ? ` (${mediaInfo})` : ''}` });
     } catch (e: any) {
       const msg = e.message === 'Failed to fetch'
         ? 'Não foi possível conectar à API OpenAI. Verifique o token e a conexão de internet.'
@@ -351,6 +473,7 @@ Responda APENAS com JSON válido no seguinte formato (sem markdown, sem explica�
       toast({ variant: 'destructive', title: 'Erro na análise', description: msg });
     } finally {
       setLoading(false);
+      setLoadingStatus('');
     }
   };
 
@@ -373,7 +496,7 @@ Responda APENAS com JSON válido no seguinte formato (sem markdown, sem explica�
           onClick={analyze}
           disabled={loading}>
           {loading
-            ? <><Loader2 className="w-3 h-3 animate-spin" /> Analisando...</>
+            ? <><Loader2 className="w-3 h-3 animate-spin" /> {loadingStatus || 'Analisando...'}</>
             : <><Sparkles className="w-3 h-3" /> {result ? 'Re-analisar' : 'Analisar'}</>}
         </Button>
       </div>
@@ -1965,6 +2088,8 @@ export default function WhatsAppPage() {
             messages={messages}
             apiToken={tokens.whatsapp}
             aiModel={models.whatsapp || 'gpt-4o-mini'}
+            instanceName={activeInstance?.name}
+            fetchBase64={fetchMediaBase64}
           />
         )}
 
