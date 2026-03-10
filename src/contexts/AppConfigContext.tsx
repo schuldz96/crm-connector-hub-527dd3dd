@@ -156,7 +156,10 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
           const nextModels = { ...DEFAULT_MODELS };
           for (const row of tokensRes.data) {
             if (row.modulo_codigo in nextTokens) {
-              (nextTokens as any)[row.modulo_codigo] = row.token_criptografado || '';
+              // Only override if DB has a non-empty token (don't clear .env defaults)
+              if (row.token_criptografado) {
+                (nextTokens as any)[row.modulo_codigo] = row.token_criptografado;
+              }
               if (row.modelo) (nextModels as any)[row.modulo_codigo] = row.modelo;
             }
           }
