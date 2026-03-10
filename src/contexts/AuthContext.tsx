@@ -8,6 +8,7 @@ import {
   getAllowedUserByEmail,
   updateAllowedUserProfile,
   hashPasswordForLogin,
+  recordLastLogin,
 } from '@/lib/accessControl';
 import { CONFIG } from '@/lib/config';
 
@@ -129,6 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(u);
       saveSession(u);
       recordLogin(u);
+      recordLastLogin(normalized).catch(() => {});
     } finally {
       setIsLoading(false);
     }
@@ -163,6 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(u);
     saveSession(u);
     recordLogin(u);
+    recordLastLogin(normalized).catch(() => {});
   };
 
   const logout = () => {

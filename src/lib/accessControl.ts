@@ -347,3 +347,13 @@ export async function updateAllowedUserProfile(params: { email: string; name?: s
 
   if (error) throw error;
 }
+
+export async function recordLastLogin(email: string): Promise<void> {
+  const empresaId = await getSaasEmpresaId();
+  await supabase
+    .schema('saas')
+    .from('usuarios')
+    .update({ ultimo_login_em: new Date().toISOString() })
+    .eq('empresa_id', empresaId)
+    .eq('email', norm(email));
+}
