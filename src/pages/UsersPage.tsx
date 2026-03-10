@@ -384,11 +384,13 @@ export default function UsersPage() {
     run();
   }, [toast]);
 
+  const ROLE_ORDER: Record<string, number> = { admin: 0, ceo: 1, director: 2, manager: 3, coordinator: 4, supervisor: 5, member: 6 };
+
   const filtered = users.filter(u => {
     const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase());
     const matchRole = roleFilter === 'all' || u.role === roleFilter;
     return matchSearch && matchRole;
-  });
+  }).sort((a, b) => (ROLE_ORDER[a.role] ?? 99) - (ROLE_ORDER[b.role] ?? 99));
 
   const handleDelete = (u: User) => {
     if (u.id === currentUser?.id) {
