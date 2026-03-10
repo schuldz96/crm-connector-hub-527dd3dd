@@ -57,6 +57,8 @@ interface Message {
   longitude?: number;
   // raw message key object for getBase64 API
   rawMsgKey?: { id: string; remoteJid: string; fromMe: boolean };
+  // full raw message for getBase64FromMediaMessage API (needs complete message object)
+  rawMessage?: any;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -69,7 +71,11 @@ async function evoFetch(path: string, options: RequestInit = {}) {
       ...(options.headers || {}),
     },
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => '');
+    console.error('[evoFetch] HTTP', res.status, path, errBody.slice(0, 500));
+    throw new Error(`HTTP ${res.status}: ${errBody.slice(0, 200)}`);
+  }
   return res.json();
 }
 
@@ -465,7 +471,7 @@ function MessageContent({
 }: {
   msg: Message;
   instanceName: string;
-  fetchBase64: (inst: string, key: { id: string; remoteJid: string; fromMe: boolean }, mp4?: boolean) => Promise<string | null>;
+  fetchBase64: (inst: string, rawMessage: any, mp4?: boolean) => Promise<string | null>;
 }) {
   const [mediaData, setMediaData] = useState<string | null>(null);
   const [loadingMedia, setLoadingMedia] = useState(false);
@@ -474,14 +480,14 @@ function MessageContent({
 
   const loadMedia = async () => {
     if (mediaData || loadingMedia) return;
-    if (!msg.rawMsgKey) {
-      console.warn('[Media] Sem rawMsgKey para msg:', msg.id, msg.type);
+    if (!msg.rawMessage) {
+      console.warn('[Media] Sem rawMessage para msg:', msg.id, msg.type);
       setMediaError(true);
       return;
     }
     setLoadingMedia(true);
     setMediaError(false);
-    const b64 = await fetchBase64(instanceName, msg.rawMsgKey, msg.type === 'video');
+    const b64 = await fetchBase64(instanceName, msg.rawMessage, msg.type === 'video');
     if (b64) {
       // For audio, default to ogg if no mimetype
       const defaultMime = (msg.type === 'audio' || msg.type === 'ptt') ? 'audio/ogg; codecs=opus' : 'application/octet-stream';
@@ -489,7 +495,7 @@ function MessageContent({
       setMediaData(`data:${mime};base64,${b64}`);
       console.log('[Media] Loaded', msg.type, msg.id, 'mime:', mime, 'b64len:', b64.length);
     } else {
-      console.warn('[Media] Falha ao carregar:', msg.id, msg.type, msg.rawMsgKey);
+      console.warn('[Media] Falha ao carregar:', msg.id, msg.type);
       setMediaError(true);
     }
     setLoadingMedia(false);
@@ -498,7 +504,7 @@ function MessageContent({
   // Auto-load all media types via getBase64FromMediaMessage (Baileys URLs are encrypted)
   useEffect(() => {
     const mediaTypes: MsgType[] = ['audio', 'ptt', 'image', 'video', 'sticker', 'document'];
-    if (mediaTypes.includes(msg.type) && !mediaData && msg.rawMsgKey) {
+    if (mediaTypes.includes(msg.type) && !mediaData && msg.rawMessage) {
       loadMedia();
     }
   }, [msg.id]);
@@ -843,20 +849,23 @@ export default function WhatsAppPage() {
       latitude: msg.locationMessage?.degreesLatitude || msg.liveLocationMessage?.degreesLatitude,
       longitude: msg.locationMessage?.degreesLongitude || msg.liveLocationMessage?.degreesLongitude,
       rawMsgKey: m.key ? { id: m.key.id, remoteJid: m.key.remoteJid, fromMe: m.key.fromMe === true } : undefined,
+      rawMessage: m,
     };
   };
 
   /** Fetch base64 for a media message from Evolution API */
   const fetchMediaBase64 = async (
     instanceName: string,
-    msgKey: { id: string; remoteJid: string; fromMe: boolean },
+    rawMessage: any,
     convertToMp4 = false,
   ): Promise<string | null> => {
     try {
+      const msgKey = rawMessage.key || rawMessage;
       console.log('[Media] Requesting base64 for:', msgKey.id, 'fromMe:', msgKey.fromMe, 'jid:', msgKey.remoteJid);
+      // Evolution API needs the full raw message object, not just the key
       const data = await evoFetch(`/chat/getBase64FromMediaMessage/${instanceName}`, {
         method: 'POST',
-        body: JSON.stringify({ message: { key: msgKey }, convertToMp4 }),
+        body: JSON.stringify({ message: rawMessage, convertToMp4 }),
       });
       console.log('[Media] API response keys:', data ? Object.keys(data) : 'null', 'hasBase64:', !!data?.base64, 'b64len:', data?.base64?.length || 0);
       return data?.base64 || null;
