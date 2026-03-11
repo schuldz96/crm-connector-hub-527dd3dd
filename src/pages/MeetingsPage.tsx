@@ -160,7 +160,8 @@ export default function MeetingsPage() {
       if (cancelEvalRef.current) break;
       setEvalProgress({ current: ok + fail + 1, total: pending.length });
       try {
-        await evaluateMeeting(token, 'gpt-4o-mini', m.id, m.titulo, m.transcricao!, m.vendedor_id || null);
+        const emails = m.participantes?.map(p => p.email) || [];
+        await evaluateMeeting(token, 'gpt-4o-mini', m.id, m.titulo, m.transcricao!, m.vendedor_id || null, emails);
         ok++;
       } catch (err) {
         console.warn(`[eval] Failed ${m.id}:`, err);
@@ -187,7 +188,8 @@ export default function MeetingsPage() {
     if (!token?.startsWith('sk-') || !meeting.transcricao) return;
     setReEvaluating(true);
     try {
-      const result = await evaluateMeeting(token, 'gpt-4o-mini', meeting.id, meeting.titulo, meeting.transcricao, meeting.vendedor_id || null);
+      const emails = meeting.participantes?.map(p => p.email) || [];
+      const result = await evaluateMeeting(token, 'gpt-4o-mini', meeting.id, meeting.titulo, meeting.transcricao, meeting.vendedor_id || null, emails);
       const score = result ? Math.round(result.totalScore) : null;
       await loadMeetings();
       const evalData = await loadEvaluationByEntity(meeting.id);
@@ -640,20 +642,33 @@ export default function MeetingsPage() {
                 {/* ─ Participants tab ─ */}
                 {detailTab === 'participants' && (() => {
                   // Get participation from IA evaluation payload
-                  const iaParticipation: { name: string; percent: number }[] = meetingEval?.payload?.participation || [];
+                  const iaParticipation: { email?: string; name: string; percent: number }[] = meetingEval?.payload?.participation || [];
+                  // Sort participants by participation % (highest first)
+                  const participantsWithPct = selectedMeeting.participantes.map(p => {
+                    const displayName = p.name || p.email.split('@')[0];
+                    // Match by email first, then fallback to fuzzy name match
+                    const match = iaParticipation.find(ip =>
+                      ip.email?.toLowerCase() === p.email.toLowerCase()
+                    ) || iaParticipation.find(ip => {
+                      const ipParts = ip.name.toLowerCase().split(/[\s.]+/);
+                      const dpParts = displayName.toLowerCase().split(/[\s.]+/);
+                      return ipParts[0] === dpParts[0] || ip.name.toLowerCase().includes(dpParts[0]) || displayName.toLowerCase().includes(ipParts[0]);
+                    });
+                    return { ...p, displayName, pct: match?.percent || 0 };
+                  }).sort((a, b) => b.pct - a.pct);
+                  const totalPct = participantsWithPct.reduce((sum, p) => sum + p.pct, 0);
                   return (
                     <div className="space-y-2">
-                      {selectedMeeting.participantes.length > 0 ? (
-                        selectedMeeting.participantes.map((p, i) => {
+                      {totalPct > 0 && (
+                        <div className="flex items-center justify-between text-[10px] text-muted-foreground px-1">
+                          <span>Participação calculada pela IA</span>
+                          <span className={cn('font-bold', totalPct === 100 ? 'text-success' : 'text-warning')}>Total: {totalPct}%</span>
+                        </div>
+                      )}
+                      {participantsWithPct.length > 0 ? (
+                        participantsWithPct.map((p, i) => {
                           const isExternal = !p.email.endsWith('@appmax.com.br');
-                          const displayName = p.name || p.email.split('@')[0];
-                          // Match participation from IA by fuzzy first-name match
-                          const match = iaParticipation.find(ip => {
-                            const ipFirst = ip.name.toLowerCase().split(' ')[0];
-                            const dpFirst = displayName.toLowerCase().split(/[.\s]/)[0];
-                            return ipFirst === dpFirst || ip.name.toLowerCase().includes(dpFirst) || displayName.toLowerCase().includes(ipFirst);
-                          });
-                          const pct = match?.percent || 0;
+                          const pct = p.pct;
                           return (
                             <div
                               key={i}
@@ -667,7 +682,7 @@ export default function MeetingsPage() {
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <p className="text-xs font-medium truncate">{displayName}</p>
+                                  <p className="text-xs font-medium truncate">{p.displayName}</p>
                                   {pct > 0 && (
                                     <span className={cn(
                                       'text-[10px] font-bold',

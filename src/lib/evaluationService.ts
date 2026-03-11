@@ -132,6 +132,7 @@ export async function evaluateMeeting(
   titulo: string,
   transcricao: string,
   vendedorId: string | null,
+  participantEmails?: string[],
 ): Promise<EvaluationResult | null> {
   if (!apiToken || !transcricao) return null;
 
@@ -143,9 +144,14 @@ export async function evaluateMeeting(
     `- ${c.label} (peso ${c.weight}%): ${c.description}. Sinais positivos: ${(c.positiveSignals || []).join(', ') || 'N/A'}. Sinais negativos: ${(c.negativeSignals || []).join(', ') || 'N/A'}.`
   ).join('\n');
 
+  const participantsList = participantEmails?.length
+    ? `\nPARTICIPANTES (emails): ${participantEmails.join(', ')}`
+    : '';
+
   const userPrompt = `Analise a seguinte transcrição de reunião de vendas.
 
 REUNIÃO: ${titulo}
+${participantsList}
 
 CRITÉRIOS DE AVALIAÇÃO:
 ${criteriaText}
@@ -163,11 +169,16 @@ Responda APENAS com JSON válido (sem markdown):
     { "id": "<id>", "label": "<nome>", "weight": <peso>, "score": <0-100>, "feedback": "<feedback>" }
   ],
   "participation": [
-    { "name": "<nome do participante como aparece na transcrição>", "percent": <0-100> }
+    { "email": "<email do participante da lista acima>", "name": "<nome como aparece na transcrição>", "percent": <0-100> }
   ]
 }
 
-IMPORTANTE sobre participation: Liste TODOS os participantes que falaram na transcrição com a porcentagem de participação de cada um. A soma de todos os percent DEVE ser exatamente 100%. Calcule baseado no volume de fala de cada pessoa.`;
+IMPORTANTE sobre participation:
+- Associe cada pessoa da transcrição com o email mais provável da lista de PARTICIPANTES acima (use o nome/sobrenome para fazer a correspondência).
+- Liste TODOS os participantes que falaram na transcrição.
+- A soma de todos os percent DEVE ser exatamente 100%.
+- Calcule baseado no volume de fala de cada pessoa.
+- Se um participante da lista não falou, inclua com percent: 0.`;
 
   const data = await callOpenAI(apiToken, {
     model: aiModel || 'gpt-4o-mini',
