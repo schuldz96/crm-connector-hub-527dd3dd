@@ -623,6 +623,8 @@ function CanvasTreeNode({
   addingChildFor,
   setAddingChildFor,
   onAddAgent,
+  depth = 0,
+  isLast = true,
 }: {
   agent: AgentNode;
   agents: AgentNode[];
@@ -632,84 +634,90 @@ function CanvasTreeNode({
   addingChildFor: string | null;
   setAddingChildFor: (id: string | null) => void;
   onAddAgent: (parentId: string, tipo: AgentTipo) => void;
+  depth?: number;
+  isLast?: boolean;
 }) {
   const children = getChildren(agent.id);
-  const allItems = children.length + 1; // children + add button
   const addableTypes: { tipo: AgentTipo; label: string; icon: any; color: string }[] = [
     { tipo: 'classificador', label: 'Classificador', icon: GitBranch, color: 'text-orange-400' },
     { tipo: 'avaliador', label: 'Avaliador', icon: Users, color: 'text-blue-400' },
     { tipo: 'sentimental', label: 'Sentimental', icon: Heart, color: 'text-purple-400' },
   ];
 
+  const connectorColor = 'border-border/50';
+
   return (
-    <div className="flex flex-col items-center">
-      {/* This node */}
-      <div data-agent-node>
-        <AgentNode_ agent={agent} onClick={() => onClickAgent(agent.id)} onToggle={() => onToggleAgent(agent)} />
+    <div className="flex flex-col">
+      {/* This node row: connector line + card */}
+      <div className="flex items-center">
+        {depth > 0 && (
+          <div className={cn('w-8 h-0 border-t-2 border-dashed', connectorColor)} />
+        )}
+        <div data-agent-node>
+          <AgentNode_ agent={agent} onClick={() => onClickAgent(agent.id)} onToggle={() => onToggleAgent(agent)} />
+        </div>
       </div>
 
-      {/* Connector + children */}
-      {(children.length > 0 || agent.tipo !== 'sentimental') && (
-        <>
-          <div className="w-0.5 h-8 bg-border/60 rounded-full" />
-          <div className="relative">
-            {/* Horizontal connector across children */}
-            {allItems > 2 && (
-              <div
-                className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 bg-border/60 rounded-full"
-                style={{ width: `${Math.max(50, (allItems - 1) * 210)}px` }}
-              />
+      {/* Children: rendered vertically below this node, indented */}
+      <div className="flex flex-col" style={{ marginLeft: depth > 0 ? 0 : 0 }}>
+        {/* Vertical connector line from parent to children */}
+        <div className="flex">
+          {/* Left gutter with vertical line */}
+          <div className="flex flex-col items-center" style={{ width: depth > 0 ? 32 : 24, minWidth: depth > 0 ? 32 : 24 }}>
+            {(children.length > 0) && (
+              <div className={cn('w-0 flex-1 border-l-2 border-dashed', connectorColor)} style={{ marginLeft: depth > 0 ? 0 : 85 }} />
             )}
-            <div className="flex items-start gap-5">
-              {children.map(child => (
-                <div key={child.id} className="flex flex-col items-center">
-                  {allItems > 1 && <div className="w-0.5 h-6 bg-border/60 rounded-full" />}
-                  <CanvasTreeNode
-                    agent={child}
-                    agents={agents}
-                    getChildren={getChildren}
-                    onClickAgent={onClickAgent}
-                    onToggleAgent={onToggleAgent}
-                    addingChildFor={addingChildFor}
-                    setAddingChildFor={setAddingChildFor}
-                    onAddAgent={onAddAgent}
-                  />
-                </div>
-              ))}
-              {/* Add child button */}
-              <div className="flex flex-col items-center relative" data-agent-node>
-                {children.length > 0 && <div className="w-0.5 h-6 bg-transparent" />}
-                <button
-                  onClick={(e) => { e.stopPropagation(); setAddingChildFor(addingChildFor === agent.id ? null : agent.id); }}
-                  className="px-4 py-3 rounded-2xl border-2 border-dashed border-border/50 hover:border-primary/40 hover:bg-primary/5 transition-all flex flex-col items-center gap-1 min-w-[150px]"
-                >
-                  <div className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center">
-                    <Plus className="w-4 h-4 text-muted-foreground" />
-                  </div>
-                  <span className="text-[10px] text-muted-foreground font-medium">Adicionar Agente</span>
-                </button>
-                {/* Type selection dropdown */}
-                {addingChildFor === agent.id && (
-                  <div className="absolute top-full mt-2 z-50 bg-background border border-border rounded-xl shadow-xl p-1.5 min-w-[180px]"
-                    onClick={e => e.stopPropagation()}>
-                    <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-semibold px-2.5 py-1.5">Tipo do Agente</p>
-                    {addableTypes.map(t => (
-                      <button
-                        key={t.tipo}
-                        onClick={() => onAddAgent(agent.id, t.tipo)}
-                        className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-muted transition-colors text-left"
-                      >
-                        <t.icon className={cn('w-4 h-4', t.color)} />
-                        <span className="text-xs font-medium">{t.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+          </div>
+          <div className="flex flex-col" style={{ marginLeft: depth > 0 ? 0 : 61 }}>
+            {children.map((child, i) => (
+              <div key={child.id} className="mt-3">
+                <CanvasTreeNode
+                  agent={child}
+                  agents={agents}
+                  getChildren={getChildren}
+                  onClickAgent={onClickAgent}
+                  onToggleAgent={onToggleAgent}
+                  addingChildFor={addingChildFor}
+                  setAddingChildFor={setAddingChildFor}
+                  onAddAgent={onAddAgent}
+                  depth={depth + 1}
+                  isLast={i === children.length - 1}
+                />
               </div>
+            ))}
+            {/* Add child button */}
+            <div className="mt-3 flex items-center relative" data-agent-node>
+              <div className={cn('w-8 h-0 border-t-2 border-dashed', connectorColor)} />
+              <button
+                onClick={(e) => { e.stopPropagation(); setAddingChildFor(addingChildFor === agent.id ? null : agent.id); }}
+                className="px-4 py-2.5 rounded-xl border-2 border-dashed border-border/40 hover:border-primary/40 hover:bg-primary/5 transition-all flex items-center gap-2"
+              >
+                <div className="w-6 h-6 rounded-lg bg-muted flex items-center justify-center">
+                  <Plus className="w-3.5 h-3.5 text-muted-foreground" />
+                </div>
+                <span className="text-[10px] text-muted-foreground font-medium whitespace-nowrap">Adicionar Agente</span>
+              </button>
+              {/* Type selection dropdown */}
+              {addingChildFor === agent.id && (
+                <div className="absolute left-10 top-full mt-1 z-50 bg-background border border-border rounded-xl shadow-xl p-1.5 min-w-[180px]"
+                  onClick={e => e.stopPropagation()}>
+                  <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-semibold px-2.5 py-1.5">Tipo do Agente</p>
+                  {addableTypes.map(t => (
+                    <button
+                      key={t.tipo}
+                      onClick={() => onAddAgent(agent.id, t.tipo)}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-muted transition-colors text-left"
+                    >
+                      <t.icon className={cn('w-4 h-4', t.color)} />
+                      <span className="text-xs font-medium">{t.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
-        </>
-      )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1095,7 +1103,7 @@ export default function AIConfigPage() {
               >
                 {/* Zoomable/pannable content */}
                 <div
-                  className="absolute inset-0 flex items-start justify-center pt-12 transition-transform duration-75"
+                  className="absolute inset-0 flex items-start justify-start pl-16 pt-12 transition-transform duration-75"
                   style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: 'top center' }}
                 >
                   {/* Recursive tree rendering */}
