@@ -12,7 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useToast } from '@/hooks/use-toast';
 import {
-  loadMeetingsFromDb, syncMeetConferences, clearAllMeetings, fetchTranscriptionsForAll, pullTranscriptions,
+  loadMeetingsFromDb, syncMeetConferences, clearAllMeetings, dispararTranscricoes, pullTranscriptions,
   ensureAppmaxParticipantsRegistered, fetchTranscriptInfo,
   type DbMeeting, type TranscriptInfo
 } from '@/lib/meetingsService';
@@ -142,18 +142,20 @@ export default function MeetingsPage() {
       const freshMeetings = await loadMeetingsFromDb();
       setMeetings(freshMeetings);
 
-      // Step 3: Process meetings without transcript_copied_file_id
-      setSyncProgress({ current: 0, total: 0, phase: 'Verificando transcrições...' });
-      toast({ title: 'Processando...', description: 'Verificando quais reuniões precisam de transcrição.' });
-      const fetchResult = await fetchTranscriptionsForAll(freshMeetings, (current, total, key) => {
-        setSyncProgress({ current, total, phase: `Processando transcrição ${current}/${total}...` });
-      });
-      console.log(`[meetings] Transcription: triggered=${fetchResult.triggered}, skipped=${fetchResult.skipped}, noTranscript=${fetchResult.noTranscript}, failed=${fetchResult.failed}`);
-      if (fetchResult.errors.length > 0) {
-        console.error('[meetings] Errors:', fetchResult.errors);
+      // Step 3: Dispatch transcription POSTs via pg_net (server-side, no CORS)
+      setSyncProgress({ current: 0, total: 0, phase: 'Disparando transcrições (server-side)...' });
+      toast({ title: 'Processando...', description: 'Enviando requisições de transcrição via servidor.' });
+      const dispatchResult = await dispararTranscricoes();
+      console.log(`[meetings] Dispatched: ${dispatchResult.dispatched}, Skipped: ${dispatchResult.skipped}, Keys:`, dispatchResult.keys);
+
+      // Step 4: Wait for webhooks to process, then pull transcript_text
+      if (dispatchResult.dispatched > 0) {
+        setSyncProgress({ current: 0, total: 0, phase: `Aguardando ${dispatchResult.dispatched} transcrições...` });
+        // Wait proportionally: ~3s per dispatched request (they run in parallel on the server)
+        const waitTime = Math.min(dispatchResult.dispatched * 3000, 30000);
+        await new Promise(r => setTimeout(r, waitTime));
       }
 
-      // Step 4: Pull transcript_text from meet_conferences into reunioes
       setSyncProgress({ current: 0, total: 0, phase: 'Importando transcrições...' });
       const transcriptCount = await pullTranscriptions();
 
@@ -161,26 +163,14 @@ export default function MeetingsPage() {
       await loadMeetings();
 
       const parts = [`${syncResult.inserted} novas, ${syncResult.updated} atualizadas`];
-      if (fetchResult.triggered > 0) parts.push(`${fetchResult.triggered} transcrições processadas`);
-      if (fetchResult.noTranscript > 0) parts.push(`${fetchResult.noTranscript} sem transcrição`);
-      if (fetchResult.failed > 0) parts.push(`${fetchResult.failed} com erro`);
-      if (fetchResult.skipped > 0) parts.push(`${fetchResult.skipped} já processadas`);
+      if (dispatchResult.dispatched > 0) parts.push(`${dispatchResult.dispatched} transcrições disparadas`);
+      if (dispatchResult.skipped > 0) parts.push(`${dispatchResult.skipped} já processadas`);
       if (transcriptCount > 0) parts.push(`${transcriptCount} transcrições importadas`);
 
       toast({
-        title: fetchResult.failed > 0 ? 'Sincronização com erros' : 'Sincronização concluída',
-        variant: fetchResult.failed > 0 ? 'destructive' : 'default',
+        title: 'Sincronização concluída',
         description: parts.join('. ') + '.',
       });
-
-      // Show first error in separate toast if any
-      if (fetchResult.errors.length > 0) {
-        toast({
-          variant: 'destructive',
-          title: 'Erro na transcrição',
-          description: fetchResult.errors[0],
-        });
-      }
     } catch (err: any) {
       console.error('[meetings] Sync error:', err);
       toast({ variant: 'destructive', title: 'Erro na sincronização', description: err.message });

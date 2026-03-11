@@ -35,9 +35,6 @@ export interface TranscriptInfo {
   status?: string;
 }
 
-// ─── Transcription API config ────────────────────────────────────────────────
-const TRANSCRIPT_API_URL = 'https://n8nouvidoria.contato-lojavirtual.com/meet/run-conference';
-const TRANSCRIPT_API_TOKEN = 'api-meet-comercial';
 
 /**
  * Step 1: Sync appmax.meet_conferences → saas.reunioes via RPC
@@ -79,53 +76,6 @@ export async function clearAllMeetings(): Promise<void> {
 }
 
 /**
- * Trigger the transcription API for a single conference_key.
- * Returns the result on 200 (with transcript_copied_file_id).
- * Returns null on 404 (no transcription found / ERROR status).
- */
-export async function triggerTranscriptionForKey(conferenceKey: string): Promise<{
-  ok: boolean;
-  conference_key: string;
-  status: string;
-  transcript_copied_file_id?: string;
-} | null> {
-  const body = new URLSearchParams();
-  body.append('conference_key', conferenceKey);
-
-  const res = await fetch(TRANSCRIPT_API_URL, {
-    method: 'POST',
-    headers: {
-      'x-webhook-token': TRANSCRIPT_API_TOKEN,
-    },
-    body,
-  });
-
-  if (res.status === 404) {
-    // No transcription found — meeting has ERROR status, skip
-    console.log(`[meetings] No transcription for ${conferenceKey} (404)`);
-    return null;
-  }
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Transcription API error ${res.status}: ${text}`);
-  }
-
-  // 200 response: array with result e.g. [{ ok: true, result: { ... } }]
-  const json = await res.json();
-  const item = Array.isArray(json) ? json[0] : json;
-  if (item?.ok && item?.result) {
-    return {
-      ok: true,
-      conference_key: item.result.conference_key,
-      status: item.result.status,
-      transcript_copied_file_id: item.result.transcript_copied_file_id,
-    };
-  }
-  return null;
-}
-
-/**
  * Fetch transcript info from appmax.meet_conferences via RPC.
  */
 export async function fetchTranscriptInfo(conferenceKey: string): Promise<TranscriptInfo> {
@@ -136,75 +86,28 @@ export async function fetchTranscriptInfo(conferenceKey: string): Promise<Transc
 }
 
 /**
- * Process meetings that don't have transcript_copied_file_id yet.
- * 1. Check all meetings via RPC in parallel to see which need processing
- * 2. For each one without transcript_copied_file_id, POST and WAIT for response
+ * Dispatch transcription POSTs via pg_net (server-side, no CORS).
+ * Calls the RPC disparar_transcricoes which loops through all conferences
+ * without transcript_copied_file_id and fires HTTP POSTs from the database.
  */
-export async function fetchTranscriptionsForAll(
-  meetings: DbMeeting[],
-  onProgress?: (current: number, total: number, key?: string) => void,
-): Promise<{ triggered: number; failed: number; skipped: number; noTranscript: number; errors: string[] }> {
-  const withKey = meetings.filter(m => m.google_event_id);
-  if (withKey.length === 0) return { triggered: 0, failed: 0, skipped: 0, noTranscript: 0, errors: [] };
+export async function dispararTranscricoes(): Promise<{ dispatched: number; skipped: number; keys: string[] }> {
+  const empresaId = await getSaasEmpresaId();
 
-  // Step 1: Check transcript_copied_file_id of all meetings in parallel
-  onProgress?.(0, withKey.length, 'Verificando...');
-  console.log(`[meetings] Checking ${withKey.length} meetings for transcript_copied_file_id...`);
-  const statusResults = await Promise.allSettled(
-    withKey.map(m => fetchTranscriptInfo(m.google_event_id!))
-  );
+  const { data, error } = await (supabase as any)
+    .schema('saas')
+    .rpc('disparar_transcricoes', { p_empresa_id: empresaId });
 
-  // Filter: only process meetings WITHOUT transcript_copied_file_id
-  const toProcess: string[] = [];
-  let skipped = 0;
-  for (let i = 0; i < withKey.length; i++) {
-    const result = statusResults[i];
-    if (result.status === 'fulfilled') {
-      const info = result.value;
-      console.log(`[meetings] ${withKey[i].google_event_id}: status=${info.status}, file_id=${info.transcript_copied_file_id || 'EMPTY'}`);
-      if (info.transcript_copied_file_id) {
-        skipped++;
-      } else {
-        toProcess.push(withKey[i].google_event_id!);
-      }
-    } else {
-      console.error(`[meetings] RPC failed for ${withKey[i].google_event_id}:`, result.reason);
-      toProcess.push(withKey[i].google_event_id!);
-    }
+  if (error) {
+    console.error('[meetings] disparar_transcricoes error:', error);
+    throw new Error(`Erro ao disparar transcrições: ${error.message}`);
   }
 
-  console.log(`[meetings] To process: ${toProcess.length}, Skipped (already have file): ${skipped}`);
-
-  if (toProcess.length === 0) return { triggered: 0, failed: 0, skipped, noTranscript: 0, errors: [] };
-
-  // Step 2: Process one by one, waiting for each webhook response
-  let triggered = 0;
-  let failed = 0;
-  let noTranscript = 0;
-  const errors: string[] = [];
-  for (let i = 0; i < toProcess.length; i++) {
-    const key = toProcess[i];
-    onProgress?.(i + 1, toProcess.length, key);
-    console.log(`[meetings] POST ${i + 1}/${toProcess.length}: ${key}...`);
-    try {
-      const result = await triggerTranscriptionForKey(key);
-      if (result?.ok && result.transcript_copied_file_id) {
-        console.log(`[meetings] ✓ TRANSCRIPT_DONE for ${key}: ${result.transcript_copied_file_id}`);
-        triggered++;
-      } else {
-        console.log(`[meetings] ✗ No transcript for ${key} (404 or ERROR)`);
-        noTranscript++;
-      }
-    } catch (e: any) {
-      const errMsg = e?.message || String(e);
-      console.error(`[meetings] ✗ FAILED ${key}: ${errMsg}`);
-      errors.push(`${key}: ${errMsg}`);
-      failed++;
-    }
-  }
-
-  console.log(`[meetings] Done: ${triggered} ok, ${noTranscript} sem transcrição, ${failed} erros`);
-  return { triggered, failed, skipped, noTranscript, errors };
+  console.log('[meetings] disparar_transcricoes result:', data);
+  return {
+    dispatched: data?.dispatched || 0,
+    skipped: data?.skipped || 0,
+    keys: data?.keys || [],
+  };
 }
 
 /**
