@@ -11,7 +11,10 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useToast } from '@/hooks/use-toast';
-import { loadMeetingsFromDb, type DbMeeting } from '@/lib/meetingsService';
+import {
+  loadMeetingsFromDb, syncMeetConferences, triggerTranscriptionFetch, pullTranscriptions,
+  type DbMeeting
+} from '@/lib/meetingsService';
 
 const STATUS_CONFIG: Record<string, { label: string; class: string }> = {
   concluida: { label: 'Concluída', class: 'score-good' },
@@ -68,6 +71,7 @@ export default function MeetingsPage() {
 
   const [meetings, setMeetings] = useState<DbMeeting[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedMeeting, setSelectedMeeting] = useState<DbMeeting | null>(null);
@@ -85,6 +89,39 @@ export default function MeetingsPage() {
   }, []);
 
   useEffect(() => { loadMeetings(); }, [loadMeetings]);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      // Step 1: Sync meet_conferences → saas.reunioes
+      toast({ title: 'Sincronizando reuniões...', description: 'Importando dados do Google Meet.' });
+      const syncResult = await syncMeetConferences();
+
+      // Step 2: Trigger transcription fetcher API (since Feb 26)
+      toast({ title: 'Buscando transcrições...', description: 'Solicitando arquivos de transcrição.' });
+      try {
+        await triggerTranscriptionFetch('2026-02-26T00:00:00Z');
+      } catch (err) {
+        console.warn('[meetings] Transcription API may be offline:', err);
+      }
+
+      // Step 3: Pull transcription text from Google Drive into DB
+      const transcriptCount = await pullTranscriptions();
+
+      // Reload meetings
+      await loadMeetings();
+
+      toast({
+        title: 'Sincronização concluída',
+        description: `${syncResult.inserted} novas reuniões, ${syncResult.updated} atualizadas, ${transcriptCount} transcrições importadas.`,
+      });
+    } catch (err: any) {
+      console.error('[meetings] Sync error:', err);
+      toast({ variant: 'destructive', title: 'Erro na sincronização', description: err.message });
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const filtered = meetings.filter(m => {
     const s = search.toLowerCase();
@@ -120,12 +157,12 @@ export default function MeetingsPage() {
               </span>
               <Button
                 size="sm"
-                onClick={loadMeetings}
-                disabled={loading}
+                onClick={handleSync}
+                disabled={syncing || loading}
                 className="text-xs h-8 bg-gradient-primary"
               >
-                {loading ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
-                Atualizar
+                {syncing ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
+                {syncing ? 'Sincronizando...' : 'Sincronizar'}
               </Button>
             </div>
           </div>
@@ -168,7 +205,7 @@ export default function MeetingsPage() {
               <Video className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
               <p className="text-sm text-muted-foreground mb-1">Nenhuma reunião encontrada.</p>
               <p className="text-xs text-muted-foreground">
-                Clique em "Sincronizar Google Meet" para importar reuniões com participantes externos.
+                Clique em "Sincronizar" para importar reuniões do Google Meet.
               </p>
             </div>
           ) : (
