@@ -15,6 +15,7 @@ import {
   loadMeetingsFromDb, syncMeetConferences, triggerTranscriptionFetch, pullTranscriptions,
   type DbMeeting
 } from '@/lib/meetingsService';
+import { evaluateMeeting } from '@/lib/evaluationService';
 
 const STATUS_CONFIG: Record<string, { label: string; class: string }> = {
   concluida: { label: 'Concluída', class: 'score-good' },
@@ -72,6 +73,7 @@ export default function MeetingsPage() {
   const [meetings, setMeetings] = useState<DbMeeting[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [evaluating, setEvaluating] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedMeeting, setSelectedMeeting] = useState<DbMeeting | null>(null);
@@ -123,6 +125,33 @@ export default function MeetingsPage() {
     }
   };
 
+  const handleEvaluateAll = async () => {
+    const token = tokens.meetings;
+    if (!token?.startsWith('sk-')) {
+      toast({ variant: 'destructive', title: 'Token não configurado', description: 'Configure o token de Reuniões em Admin → Tokens OpenAI.' });
+      return;
+    }
+    const pending = meetings.filter(m => !m.analisada_por_ia && m.transcricao && m.status === 'concluida');
+    if (pending.length === 0) {
+      toast({ title: 'Nada para avaliar', description: 'Todas as reuniões com transcrição já foram avaliadas.' });
+      return;
+    }
+    setEvaluating(true);
+    let ok = 0, fail = 0;
+    for (const m of pending) {
+      try {
+        await evaluateMeeting(token, 'gpt-4o-mini', m.id, m.titulo, m.transcricao!, m.vendedor_id || null);
+        ok++;
+      } catch (err) {
+        console.warn(`[eval] Failed ${m.id}:`, err);
+        fail++;
+      }
+    }
+    await loadMeetings();
+    setEvaluating(false);
+    toast({ title: 'Avaliação concluída', description: `${ok} avaliadas, ${fail} falharam de ${pending.length} pendentes.` });
+  };
+
   const filtered = meetings.filter(m => {
     const s = search.toLowerCase();
     const matchSearch =
@@ -155,6 +184,16 @@ export default function MeetingsPage() {
                 <Key className="w-3 h-3" />
                 {tokens.meetings?.startsWith('sk-') ? 'Token Reuniões ✓' : 'Sem token — Admin → Tokens OpenAI'}
               </span>
+              <Button
+                size="sm"
+                onClick={handleEvaluateAll}
+                disabled={evaluating || syncing || loading}
+                className="text-xs h-8"
+                variant="outline"
+              >
+                {evaluating ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Brain className="w-3.5 h-3.5 mr-1.5" />}
+                {evaluating ? 'Avaliando...' : 'Avaliar IA'}
+              </Button>
               <Button
                 size="sm"
                 onClick={handleSync}

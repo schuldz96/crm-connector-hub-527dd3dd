@@ -17,6 +17,7 @@ export interface DbMeeting {
   analisada_por_ia: boolean;
   participantes: { email: string; name?: string }[];
   transcricao: string | null;
+  vendedor_id?: string | null;
   vendedor_nome?: string;
   vendedor_email?: string;
   google_event_id?: string;
@@ -154,6 +155,7 @@ export async function loadMeetingsFromDb(): Promise<DbMeeting[]> {
     analisada_por_ia: r.analisada_por_ia || false,
     participantes: Array.isArray(r.participantes) ? r.participantes : [],
     transcricao: r.transcricao || null,
+    vendedor_id: r.vendedor_id || null,
     vendedor_nome: vendedorMap[r.vendedor_id]?.nome,
     vendedor_email: vendedorMap[r.vendedor_id]?.email,
     google_event_id: r.google_event_id,
