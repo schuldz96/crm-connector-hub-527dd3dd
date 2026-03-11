@@ -105,6 +105,7 @@ export default function MeetingsPage() {
   const [selectedMeeting, setSelectedMeeting] = useState<DbMeeting | null>(null);
   const [detailTab, setDetailTab] = useState<'info' | 'transcript' | 'participants'>('info');
   const [meetingEval, setMeetingEval] = useState<(StoredEvaluation & { payload?: any }) | null>(null);
+  const [reEvaluating, setReEvaluating] = useState(false);
 
   const loadMeetings = useCallback(async () => {
     try {
@@ -202,6 +203,25 @@ export default function MeetingsPage() {
   const handleCancelEval = () => {
     cancelEvalRef.current = true;
     setEvalCancelled(true);
+  };
+
+  const handleReEvaluate = async (meeting: DbMeeting) => {
+    const token = tokens.meetings;
+    if (!token?.startsWith('sk-') || !meeting.transcricao) return;
+    setReEvaluating(true);
+    try {
+      await evaluateMeeting(token, 'gpt-4o-mini', meeting.id, meeting.titulo, meeting.transcricao, meeting.vendedor_id || null);
+      await loadMeetings();
+      const evalData = await loadEvaluationByEntity(meeting.id);
+      setMeetingEval(evalData);
+      // Update the selected meeting reference
+      setSelectedMeeting(prev => prev ? { ...prev, analisada_por_ia: true, score: evalData?.score ?? prev.score } : null);
+      toast({ title: 'Reavaliação concluída', description: `Score: ${evalData?.score ?? '—'}` });
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Erro na reavaliação', description: err.message });
+    } finally {
+      setReEvaluating(false);
+    }
   };
 
   const filtered = meetings.filter(m => {
@@ -580,10 +600,38 @@ export default function MeetingsPage() {
                       </div>
                     )}
 
+                    {/* Re-evaluate button for already evaluated meetings */}
+                    {selectedMeeting.analisada_por_ia && selectedMeeting.transcricao && (
+                      <div className="pt-3 border-t border-border">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full text-xs h-8 gap-1.5"
+                          disabled={reEvaluating}
+                          onClick={() => handleReEvaluate(selectedMeeting)}
+                        >
+                          {reEvaluating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                          {reEvaluating ? 'Reavaliando...' : 'Reavaliar com IA'}
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Not yet evaluated */}
                     {!selectedMeeting.analisada_por_ia && selectedMeeting.status === 'concluida' && (
                       <div className="pt-3 border-t border-border flex flex-col items-center gap-3 text-muted-foreground">
                         <Brain className="w-10 h-10 opacity-20" />
                         <p className="text-xs text-center">Esta reunião ainda não foi avaliada pela IA.</p>
+                        {selectedMeeting.transcricao && (
+                          <Button
+                            size="sm"
+                            className="text-xs h-8 bg-gradient-primary gap-1.5"
+                            disabled={reEvaluating}
+                            onClick={() => handleReEvaluate(selectedMeeting)}
+                          >
+                            {reEvaluating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Brain className="w-3.5 h-3.5" />}
+                            {reEvaluating ? 'Avaliando...' : 'Avaliar com IA'}
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>
