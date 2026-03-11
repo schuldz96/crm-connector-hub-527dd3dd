@@ -80,16 +80,18 @@ export async function clearAllMeetings(): Promise<void> {
 
 /**
  * Trigger the transcription fetcher API for a single conference_key.
- * POST /run-conference { "conference_key": "meet:xxx" }
+ * Sends as form-urlencoded (same format as n8n HTTP Request node).
  */
 export async function triggerTranscriptionForKey(conferenceKey: string): Promise<void> {
+  const body = new URLSearchParams();
+  body.append('conference_key', conferenceKey);
+
   const res = await fetch(TRANSCRIPT_API_URL, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
       'x-webhook-token': TRANSCRIPT_API_TOKEN,
     },
-    body: JSON.stringify({ conference_key: conferenceKey }),
+    body,
   });
 
   if (!res.ok) {
