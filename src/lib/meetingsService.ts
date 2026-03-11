@@ -27,7 +27,7 @@ export interface DbMeeting {
 }
 
 // ─── Transcription API config ────────────────────────────────────────────────
-const TRANSCRIPT_API_URL = 'https://trustee-appendix-collecting-transcription.trycloudflare.com/run-conference';
+const TRANSCRIPT_API_URL = 'https://n8nouvidoria.contato-lojavirtual.com/meet/run-conference';
 const TRANSCRIPT_API_TOKEN = 'api-meet-comercial';
 
 /**
