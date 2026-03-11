@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import {
   Plus, Search, Mail, MoreHorizontal, Trash2, UserX, UserCheck,
   UserPlus, Eye, EyeOff, Shield, SlidersHorizontal, AlertTriangle,
-  Smartphone, Wifi, WifiOff, Loader2
+  Smartphone, Wifi, WifiOff, Loader2, KeyRound
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -24,6 +24,7 @@ import {
   upsertAllowedUser,
   updateUserRole,
   removeAllowedUser,
+  resetUserPassword,
   type AllowedUser,
 } from '@/lib/accessControl';
 
@@ -150,6 +151,63 @@ function ChangeRoleModal({ user, onClose, onSave }: { user: User; onClose: () =>
           <div className="flex gap-2">
             <Button size="sm" className="flex-1 bg-gradient-primary text-xs h-9" onClick={() => { onSave(role); onClose(); }}>
               <Shield className="w-3.5 h-3.5 mr-1.5" /> Confirmar
+            </Button>
+            <Button size="sm" variant="outline" className="text-xs border-border h-9" onClick={onClose}>Cancelar</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Reset password modal ─────────────────────────────────────────────────────
+function ResetPasswordModal({ user, onClose, onReset }: { user: User; onClose: () => void; onReset: (password: string) => Promise<void> }) {
+  const [showPass, setShowPass] = useState(false);
+  const [password, setPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    if (password.trim().length < 8) return;
+    setSaving(true);
+    try {
+      await onReset(password.trim());
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="bg-card border-border max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="text-sm font-semibold flex items-center gap-2">
+            <KeyRound className="w-4 h-4 text-primary" /> Redefinir Senha
+          </DialogTitle>
+        </DialogHeader>
+        <div className="py-2 space-y-4">
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border">
+            <img src={user.avatar} alt={user.name} className="w-9 h-9 rounded-full border border-border" />
+            <div>
+              <p className="text-xs font-semibold">{user.name}</p>
+              <p className="text-[11px] text-muted-foreground">{user.email}</p>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium block mb-1.5">Nova senha</label>
+            <div className="relative">
+              <Input value={password} onChange={e => setPassword(e.target.value)} type={showPass ? 'text' : 'password'} placeholder="Mínimo 8 caracteres" className="h-9 text-xs bg-secondary border-border pr-9" />
+              <button onClick={() => setShowPass(s => !s)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground">
+                {showPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          </div>
+          <div className="p-3 rounded-lg bg-warning/5 border border-warning/20">
+            <p className="text-[11px] text-muted-foreground">A nova senha será criptografada em MD5 e salva imediatamente. O usuário deverá usar esta senha no próximo login.</p>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" className="flex-1 bg-gradient-primary text-xs h-9" onClick={submit} disabled={saving || password.trim().length < 8}>
+              <KeyRound className="w-3.5 h-3.5 mr-1.5" /> {saving ? 'Salvando...' : 'Redefinir Senha'}
             </Button>
             <Button size="sm" variant="outline" className="text-xs border-border h-9" onClick={onClose}>Cancelar</Button>
           </div>
@@ -372,6 +430,7 @@ export default function UsersPage() {
   const [confirmTarget, setConfirmTarget] = useState<{ user: User; action: 'deactivate' | 'activate' | 'delete' } | null>(null);
   const [roleTarget, setRoleTarget] = useState<User | null>(null);
   const [profileTarget, setProfileTarget] = useState<User | null>(null);
+  const [resetPassTarget, setResetPassTarget] = useState<User | null>(null);
   useEffect(() => {
     const run = async () => {
       try {
@@ -430,6 +489,12 @@ export default function UsersPage() {
     const allowed = await loadAllowedUsers();
     setUsers(mapAllowedUsersToUsers(allowed));
     toast({ title: 'Perfil atualizado', description: `${roleTarget.name} agora é ${ROLE_CONFIG[role].label}.` });
+  };
+
+  const handleResetPassword = async (password: string) => {
+    if (!resetPassTarget) return;
+    await resetUserPassword(resetPassTarget.email, password);
+    toast({ title: 'Senha redefinida', description: `A senha de ${resetPassTarget.name} foi atualizada com sucesso.` });
   };
 
   const handleCreateUser = async (payload: { name: string; email: string; role: UserRole; password: string }) => {
@@ -552,6 +617,9 @@ export default function UsersPage() {
                         <DropdownMenuItem className="gap-2 cursor-pointer text-xs" onClick={() => setRoleTarget(u)}>
                           <Shield className="w-3.5 h-3.5 text-accent" /> Alterar perfil
                         </DropdownMenuItem>
+                        <DropdownMenuItem className="gap-2 cursor-pointer text-xs" onClick={() => setResetPassTarget(u)}>
+                          <KeyRound className="w-3.5 h-3.5 text-warning" /> Redefinir senha
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator className="bg-border" />
                         <DropdownMenuItem
                           className={cn('gap-2 cursor-pointer text-xs text-destructive focus:text-destructive focus:bg-destructive/10', isSelf && 'opacity-40 cursor-not-allowed')}
@@ -569,6 +637,7 @@ export default function UsersPage() {
         </table>
       </div>
 
+      {resetPassTarget && <ResetPasswordModal user={resetPassTarget} onClose={() => setResetPassTarget(null)} onReset={handleResetPassword} />}
       {roleTarget    && <ChangeRoleModal user={roleTarget} onClose={() => setRoleTarget(null)} onSave={handleRoleSave} />}
       {profileTarget && <UserProfileModal user={profileTarget} onClose={() => setProfileTarget(null)} />}
       {showCreate && <CreateUserModal onClose={() => setShowCreate(false)} onCreate={handleCreateUser} />}

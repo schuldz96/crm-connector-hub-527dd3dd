@@ -2,7 +2,8 @@
  * Service for loading and syncing meetings from the database.
  */
 import { supabase } from '@/integrations/supabase/client';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getSaasEmpresaId, normalizeEmail } from '@/lib/saas';
+import { autoCreateAppmaxUser } from '@/lib/accessControl';
 
 export interface DbMeeting {
   id: string;
@@ -160,5 +161,54 @@ export async function loadMeetingsFromDb(): Promise<DbMeeting[]> {
     vendedor_nome: vendedorMap[r.vendedor_id]?.nome,
     vendedor_email: vendedorMap[r.vendedor_id]?.email,
     google_event_id: r.google_event_id,
+    sentimento: r.sentimento || null,
   }));
+}
+
+/**
+ * Ensure all @appmax participants across meetings are registered users.
+ * Creates missing users with random MD5-hashed passwords.
+ * Returns the list of newly created emails.
+ */
+export async function ensureAppmaxParticipantsRegistered(meetings: DbMeeting[]): Promise<string[]> {
+  // Collect all unique @appmax emails from participants
+  const appmaxEmails = new Set<string>();
+  for (const m of meetings) {
+    for (const p of m.participantes) {
+      if (p.email && p.email.toLowerCase().endsWith('@appmax.com.br')) {
+        appmaxEmails.add(normalizeEmail(p.email));
+      }
+    }
+    // Also include vendedor email if present
+    if (m.vendedor_email && m.vendedor_email.toLowerCase().endsWith('@appmax.com.br')) {
+      appmaxEmails.add(normalizeEmail(m.vendedor_email));
+    }
+  }
+
+  if (appmaxEmails.size === 0) return [];
+
+  // Check which already exist
+  const empresaId = await getSaasEmpresaId();
+  const { data: existing } = await (supabase as any)
+    .schema('saas')
+    .from('usuarios')
+    .select('email')
+    .eq('empresa_id', empresaId)
+    .in('email', Array.from(appmaxEmails));
+
+  const existingSet = new Set((existing || []).map((u: any) => normalizeEmail(u.email)));
+  const missing = Array.from(appmaxEmails).filter(e => !existingSet.has(e));
+
+  // Auto-create missing users
+  const created: string[] = [];
+  for (const email of missing) {
+    try {
+      await autoCreateAppmaxUser(email);
+      created.push(email);
+    } catch (e) {
+      console.warn(`[meetings] Failed to auto-create user ${email}:`, e);
+    }
+  }
+
+  return created;
 }

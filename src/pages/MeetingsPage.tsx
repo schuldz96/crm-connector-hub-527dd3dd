@@ -13,6 +13,7 @@ import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useToast } from '@/hooks/use-toast';
 import {
   loadMeetingsFromDb, syncMeetConferences, triggerTranscriptionFetch, pullTranscriptions,
+  ensureAppmaxParticipantsRegistered,
   type DbMeeting
 } from '@/lib/meetingsService';
 import { evaluateMeeting, loadEvaluationByEntity, type StoredEvaluation } from '@/lib/evaluationService';
@@ -80,7 +81,7 @@ export default function MeetingsPage() {
   const [evalProgress, setEvalProgress] = useState({ current: 0, total: 0 });
   const [evalCancelled, setEvalCancelled] = useState(false);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [transcFilter, setTranscFilter] = useState('all');
   const [selectedMeeting, setSelectedMeeting] = useState<DbMeeting | null>(null);
   const [detailTab, setDetailTab] = useState<'info' | 'transcript' | 'participants'>('info');
   const [meetingEval, setMeetingEval] = useState<(StoredEvaluation & { payload?: any }) | null>(null);
@@ -90,6 +91,12 @@ export default function MeetingsPage() {
     try {
       const data = await loadMeetingsFromDb();
       setMeetings(data);
+      // Auto-create missing @appmax users in background
+      ensureAppmaxParticipantsRegistered(data).then(created => {
+        if (created.length > 0) {
+          console.log(`[meetings] Auto-created ${created.length} @appmax users:`, created);
+        }
+      }).catch(e => console.warn('[meetings] Auto-create check failed:', e));
     } catch (err) {
       console.error('Failed to load meetings:', err);
     } finally {
@@ -221,8 +228,10 @@ export default function MeetingsPage() {
       m.titulo.toLowerCase().includes(s) ||
       (m.cliente_nome || '').toLowerCase().includes(s) ||
       (m.vendedor_nome || '').toLowerCase().includes(s);
-    const matchStatus = statusFilter === 'all' || m.status === statusFilter;
-    return matchSearch && matchStatus;
+    const matchTransc = transcFilter === 'all'
+      || (transcFilter === 'com' && !!m.transcricao)
+      || (transcFilter === 'sem' && !m.transcricao);
+    return matchSearch && matchTransc;
   });
 
   return (
@@ -289,25 +298,25 @@ export default function MeetingsPage() {
             <div className="relative flex-1 min-w-48">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <Input
-                placeholder="Buscar por título, cliente, vendedor..."
+                placeholder="Buscar por título, cliente, owner..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 className="pl-9 h-8 text-xs bg-secondary border-border"
               />
             </div>
             <div className="flex gap-1.5 flex-wrap">
-              {['all', 'concluida', 'agendada', 'no_show'].map(s => (
+              {['all', 'com', 'sem'].map(s => (
                 <button
                   key={s}
-                  onClick={() => setStatusFilter(s)}
+                  onClick={() => setTranscFilter(s)}
                   className={cn(
                     'text-xs px-3 py-1.5 rounded-lg border transition-all',
-                    statusFilter === s
+                    transcFilter === s
                       ? 'bg-primary/15 border-primary/30 text-primary font-medium'
                       : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
                   )}
                 >
-                  {{ all: 'Todas', concluida: 'Concluídas', agendada: 'Agendadas', no_show: 'No-show' }[s]}
+                  {{ all: 'Todas', com: 'Com transcrição', sem: 'Sem transcrição' }[s]}
                 </button>
               ))}
             </div>
@@ -332,7 +341,7 @@ export default function MeetingsPage() {
                 <thead>
                   <tr>
                     <th className="text-left">Reunião</th>
-                    <th className="text-left hidden md:table-cell">Vendedor</th>
+                    <th className="text-left hidden md:table-cell">Owner</th>
                     <th className="text-left hidden lg:table-cell">Data</th>
                     <th className="text-center">Score</th>
                     <th className="text-center">Status</th>
@@ -516,7 +525,7 @@ export default function MeetingsPage() {
                     )}
                     {selectedMeeting.vendedor_email && (
                       <div className="flex items-center gap-2 text-xs">
-                        <span className="text-muted-foreground">Vendedor:</span>
+                        <span className="text-muted-foreground">Owner:</span>
                         <span className="font-medium">{selectedMeeting.vendedor_email}</span>
                       </div>
                     )}
