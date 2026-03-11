@@ -208,6 +208,19 @@ Responda APENAS com JSON válido (sem markdown):
   return result;
 }
 
+// ─── Load a single evaluation by entity ──────────────────────────────────────
+export async function loadEvaluationByEntity(entidadeId: string): Promise<StoredEvaluation | null> {
+  const empresaId = await getSaasEmpresaId();
+  const { data } = await (supabase as any)
+    .schema('saas')
+    .from('analises_ia')
+    .select('id,tipo_contexto,vendedor_id,score,criterios,resumo,payload,instancia_nome,contato_telefone,periodo_ref,entidade_id,criado_em')
+    .eq('empresa_id', empresaId)
+    .eq('entidade_id', entidadeId)
+    .maybeSingle();
+  return data || null;
+}
+
 // ─── Load stored evaluations ─────────────────────────────────────────────────
 export async function loadEvaluations(opts?: {
   tipoContexto?: 'whatsapp' | 'reuniao';

@@ -15,7 +15,7 @@ import {
   loadMeetingsFromDb, syncMeetConferences, triggerTranscriptionFetch, pullTranscriptions,
   type DbMeeting
 } from '@/lib/meetingsService';
-import { evaluateMeeting } from '@/lib/evaluationService';
+import { evaluateMeeting, loadEvaluationByEntity, type StoredEvaluation } from '@/lib/evaluationService';
 
 const STATUS_CONFIG: Record<string, { label: string; class: string }> = {
   concluida: { label: 'Concluída', class: 'score-good' },
@@ -78,6 +78,7 @@ export default function MeetingsPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedMeeting, setSelectedMeeting] = useState<DbMeeting | null>(null);
   const [detailTab, setDetailTab] = useState<'info' | 'transcript' | 'participants'>('info');
+  const [meetingEval, setMeetingEval] = useState<(StoredEvaluation & { payload?: any }) | null>(null);
 
   const loadMeetings = useCallback(async () => {
     try {
@@ -91,6 +92,15 @@ export default function MeetingsPage() {
   }, []);
 
   useEffect(() => { loadMeetings(); }, [loadMeetings]);
+
+  // Load evaluation when meeting is selected
+  useEffect(() => {
+    if (selectedMeeting?.analisada_por_ia) {
+      loadEvaluationByEntity(selectedMeeting.id).then(setMeetingEval).catch(() => setMeetingEval(null));
+    } else {
+      setMeetingEval(null);
+    }
+  }, [selectedMeeting?.id, selectedMeeting?.analisada_por_ia]);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -442,6 +452,75 @@ export default function MeetingsPage() {
                         {selectedMeeting.transcricao ? 'Disponível' : 'Não disponível'}
                       </span>
                     </div>
+
+                    {/* AI Evaluation results */}
+                    {selectedMeeting.analisada_por_ia && meetingEval && (
+                      <div className="pt-3 border-t border-border space-y-3">
+                        {/* Summary */}
+                        {meetingEval.resumo && (
+                          <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                            <p className="text-[10px] font-semibold text-muted-foreground mb-1 uppercase tracking-wide">Resumo</p>
+                            <p className="text-xs leading-relaxed">{meetingEval.resumo}</p>
+                          </div>
+                        )}
+
+                        {/* Insights */}
+                        {meetingEval.payload?.insights && (
+                          <div className="p-3 rounded-lg bg-accent/5 border border-accent/15">
+                            <p className="text-[10px] font-semibold text-accent mb-1 uppercase tracking-wide flex items-center gap-1">
+                              <Sparkles className="w-3 h-3" /> Insights
+                            </p>
+                            <p className="text-xs leading-relaxed">{meetingEval.payload.insights}</p>
+                          </div>
+                        )}
+
+                        {/* Critical Alerts */}
+                        {meetingEval.payload?.criticalAlerts?.length > 0 && (
+                          <div className="p-3 rounded-lg bg-destructive/5 border border-destructive/15">
+                            <p className="text-[10px] font-semibold text-destructive mb-1 uppercase tracking-wide flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3" /> Alertas Críticos
+                            </p>
+                            <ul className="space-y-1">
+                              {meetingEval.payload.criticalAlerts.map((a: string, i: number) => (
+                                <li key={i} className="text-xs flex items-start gap-1.5">
+                                  <span className="text-destructive mt-0.5">›</span> {a}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* Criteria breakdown */}
+                        {meetingEval.criterios?.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Critérios</p>
+                            {meetingEval.criterios.map((c: any) => (
+                              <div key={c.id || c.label} className="space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-medium">{c.label}</span>
+                                  <span className={cn(
+                                    'text-xs font-bold',
+                                    c.score >= 80 ? 'text-success' : c.score >= 60 ? 'text-primary' : 'text-warning'
+                                  )}>{c.score}</span>
+                                </div>
+                                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full transition-all duration-500"
+                                    style={{
+                                      width: `${c.score}%`,
+                                      background: c.score >= 80 ? 'hsl(168 80% 42%)' : c.score >= 60 ? 'hsl(210 100% 56%)' : 'hsl(38 92% 50%)',
+                                    }}
+                                  />
+                                </div>
+                                {c.feedback && (
+                                  <p className="text-[10px] text-muted-foreground leading-snug">{c.feedback}</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {!selectedMeeting.analisada_por_ia && selectedMeeting.status === 'concluida' && (
                       <div className="pt-3 border-t border-border flex flex-col items-center gap-3 text-muted-foreground">
