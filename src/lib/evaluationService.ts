@@ -161,8 +161,13 @@ Responda APENAS com JSON válido (sem markdown):
   "criticalAlerts": ["<alerta se houver>"],
   "criteriaScores": [
     { "id": "<id>", "label": "<nome>", "weight": <peso>, "score": <0-100>, "feedback": "<feedback>" }
+  ],
+  "participation": [
+    { "name": "<nome do participante como aparece na transcrição>", "percent": <0-100> }
   ]
-}`;
+}
+
+IMPORTANTE sobre participation: Liste TODOS os participantes que falaram na transcrição com a porcentagem de participação de cada um. A soma de todos os percent DEVE ser exatamente 100%. Calcule baseado no volume de fala de cada pessoa.`;
 
   const data = await callOpenAI(apiToken, {
     model: aiModel || 'gpt-4o-mini',
@@ -171,38 +176,54 @@ Responda APENAS com JSON válido (sem markdown):
       { role: 'user', content: userPrompt },
     ],
     temperature: 0.3,
-    max_tokens: 1500,
+    max_tokens: 2000,
   });
 
   const raw = data.choices?.[0]?.message?.content || '';
   const jsonStr = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
   const result: EvaluationResult = JSON.parse(jsonStr);
 
-  // Persist to DB
+  // Persist to DB - delete first then insert to avoid upsert issues
   const empresaId = await getSaasEmpresaId();
+  const scoreVal = Math.round(result.totalScore);
 
+  // Delete existing evaluation
   await (supabase as any)
     .schema('saas')
     .from('analises_ia')
-    .upsert(
-      {
-        empresa_id: empresaId,
-        tipo_contexto: 'reuniao',
-        entidade_id: reuniaoId,
-        vendedor_id: vendedorId,
-        score: Math.round(result.totalScore),
-        criterios: result.criteriaScores,
-        resumo: result.summary,
-        payload: { insights: result.insights, criticalAlerts: result.criticalAlerts, titulo },
+    .delete()
+    .eq('tipo_contexto', 'reuniao')
+    .eq('entidade_id', reuniaoId);
+
+  // Insert new evaluation
+  const { error: insertErr } = await (supabase as any)
+    .schema('saas')
+    .from('analises_ia')
+    .insert({
+      empresa_id: empresaId,
+      tipo_contexto: 'reuniao',
+      entidade_id: reuniaoId,
+      vendedor_id: vendedorId,
+      score: scoreVal,
+      criterios: result.criteriaScores,
+      resumo: result.summary,
+      payload: {
+        insights: result.insights,
+        criticalAlerts: result.criticalAlerts,
+        titulo,
+        participation: (result as any).participation || [],
       },
-      { onConflict: 'tipo_contexto,entidade_id' },
-    );
+    });
+
+  if (insertErr) {
+    console.error('[eval] Insert analises_ia failed:', insertErr);
+  }
 
   // Also update reunioes table
   await (supabase as any)
     .schema('saas')
     .from('reunioes')
-    .update({ score: Math.round(result.totalScore), analisada_por_ia: true })
+    .update({ score: scoreVal, analisada_por_ia: true })
     .eq('id', reuniaoId);
 
   return result;

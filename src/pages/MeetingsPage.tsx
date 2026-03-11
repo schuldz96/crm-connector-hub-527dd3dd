@@ -32,29 +32,6 @@ const SCORE_CRITERIA = [
   { key: 'nextSteps', label: 'Próximos Passos', icon: '📅', tip: 'Clareza e comprometimento do fechamento' },
 ];
 
-/** Calculate speaking participation % from transcript text */
-function calcParticipation(transcript: string | null): Record<string, number> {
-  if (!transcript) return {};
-  const counts: Record<string, number> = {};
-  let total = 0;
-  // Match lines like "Name Name: text"
-  const lines = transcript.split('\n');
-  for (const line of lines) {
-    const match = line.match(/^([A-Za-zÀ-ÿ][\w\sÀ-ÿ.'-]{1,40}):\s/);
-    if (match) {
-      const name = match[1].trim();
-      const charCount = line.length - match[0].length;
-      counts[name] = (counts[name] || 0) + charCount;
-      total += charCount;
-    }
-  }
-  if (total === 0) return {};
-  const pct: Record<string, number> = {};
-  for (const [name, chars] of Object.entries(counts)) {
-    pct[name] = Math.round((chars / total) * 100);
-  }
-  return pct;
-}
 
 function ScoreBar({ value, label, icon, tip }: { value: number; label: string; icon: string; tip: string }) {
   const color = value >= 85
@@ -210,15 +187,15 @@ export default function MeetingsPage() {
     if (!token?.startsWith('sk-') || !meeting.transcricao) return;
     setReEvaluating(true);
     try {
-      await evaluateMeeting(token, 'gpt-4o-mini', meeting.id, meeting.titulo, meeting.transcricao, meeting.vendedor_id || null);
+      const result = await evaluateMeeting(token, 'gpt-4o-mini', meeting.id, meeting.titulo, meeting.transcricao, meeting.vendedor_id || null);
+      const score = result ? Math.round(result.totalScore) : null;
       await loadMeetings();
       const evalData = await loadEvaluationByEntity(meeting.id);
       setMeetingEval(evalData);
-      // Update the selected meeting reference
-      setSelectedMeeting(prev => prev ? { ...prev, analisada_por_ia: true, score: evalData?.score ?? prev.score } : null);
-      toast({ title: 'Reavaliação concluída', description: `Score: ${evalData?.score ?? '—'}` });
+      setSelectedMeeting(prev => prev ? { ...prev, analisada_por_ia: true, score: score ?? prev.score } : null);
+      toast({ title: 'Avaliação concluída', description: `Score: ${score ?? '—'}/100` });
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Erro na reavaliação', description: err.message });
+      toast({ variant: 'destructive', title: 'Erro na avaliação', description: err.message });
     } finally {
       setReEvaluating(false);
     }
@@ -662,19 +639,21 @@ export default function MeetingsPage() {
 
                 {/* ─ Participants tab ─ */}
                 {detailTab === 'participants' && (() => {
-                  const participation = calcParticipation(selectedMeeting.transcricao);
+                  // Get participation from IA evaluation payload
+                  const iaParticipation: { name: string; percent: number }[] = meetingEval?.payload?.participation || [];
                   return (
                     <div className="space-y-2">
                       {selectedMeeting.participantes.length > 0 ? (
                         selectedMeeting.participantes.map((p, i) => {
                           const isExternal = !p.email.endsWith('@appmax.com.br');
                           const displayName = p.name || p.email.split('@')[0];
-                          // Match participation by name (fuzzy: first name match)
-                          const pctEntry = Object.entries(participation).find(([k]) =>
-                            k.toLowerCase().includes(displayName.toLowerCase().split(' ')[0]) ||
-                            displayName.toLowerCase().includes(k.toLowerCase().split(' ')[0])
-                          );
-                          const pct = pctEntry ? pctEntry[1] : 0;
+                          // Match participation from IA by fuzzy first-name match
+                          const match = iaParticipation.find(ip => {
+                            const ipFirst = ip.name.toLowerCase().split(' ')[0];
+                            const dpFirst = displayName.toLowerCase().split(/[.\s]/)[0];
+                            return ipFirst === dpFirst || ip.name.toLowerCase().includes(dpFirst) || displayName.toLowerCase().includes(ipFirst);
+                          });
+                          const pct = match?.percent || 0;
                           return (
                             <div
                               key={i}
@@ -720,6 +699,11 @@ export default function MeetingsPage() {
                           <Users className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
                           <p className="text-xs text-muted-foreground">Nenhum participante registrado.</p>
                         </div>
+                      )}
+                      {iaParticipation.length === 0 && selectedMeeting.transcricao && (
+                        <p className="text-[10px] text-muted-foreground text-center pt-2">
+                          Avalie com IA para ver a % de participação de cada pessoa.
+                        </p>
                       )}
                     </div>
                   );
