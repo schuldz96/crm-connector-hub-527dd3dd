@@ -5,7 +5,7 @@ import {
   Video, Search, Brain, Clock, Calendar,
   User, Building2, ExternalLink, Sparkles, X,
   TrendingUp, TrendingDown, Lightbulb, AlertTriangle,
-  CheckCircle2, Target, MessageSquare, RefreshCw, Loader2, Users, Key, Heart
+  CheckCircle2, Target, MessageSquare, RefreshCw, Loader2, Users, Key, Heart, Trash2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -120,14 +120,9 @@ export default function MeetingsPage() {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      // Step 1: Clear all existing meetings and AI analyses
-      setSyncProgress({ current: 0, total: 0, phase: 'Limpando reuniões...' });
-      toast({ title: 'Limpando...', description: 'Removendo reuniões antigas.' });
-      await clearAllMeetings();
-
-      // Step 2: Re-import from meet_conferences (call_interna=false only)
+      // Step 1: Import new meetings from meet_conferences (call_interna=false only)
       setSyncProgress({ current: 0, total: 0, phase: 'Importando reuniões...' });
-      toast({ title: 'Importando...', description: 'Buscando reuniões do Google Meet.' });
+      toast({ title: 'Sincronizando...', description: 'Buscando novas reuniões do Google Meet.' });
       const syncResult = await syncMeetConferences();
 
       // Step 2: Reload to get fresh list with google_event_ids
@@ -171,6 +166,21 @@ export default function MeetingsPage() {
     } finally {
       setSyncing(false);
       setSyncProgress({ current: 0, total: 0, phase: '' });
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (!confirm('Tem certeza que deseja apagar TODAS as reuniões e análises IA? Essa ação não pode ser desfeita.')) return;
+    setSyncing(true);
+    try {
+      await clearAllMeetings();
+      setMeetings([]);
+      setSelectedMeeting(null);
+      toast({ title: 'Reuniões removidas', description: 'Todas as reuniões e análises foram apagadas.' });
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Erro ao limpar', description: err.message });
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -324,6 +334,17 @@ export default function MeetingsPage() {
                   </div>
                 </div>
               ) : (
+                <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleClearAll}
+                  disabled={syncing || loading || meetings.length === 0}
+                  className="text-xs h-8 border-destructive/50 text-destructive hover:bg-destructive/10"
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                  Limpar tudo
+                </Button>
                 <Button
                   size="sm"
                   onClick={handleSync}
@@ -333,6 +354,7 @@ export default function MeetingsPage() {
                   {syncing ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
                   {syncing ? 'Sincronizando...' : 'Sincronizar'}
                 </Button>
+                </>
               )}
             </div>
           </div>
