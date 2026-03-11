@@ -79,21 +79,31 @@ export async function clearAllMeetings(): Promise<void> {
 }
 
 /**
- * Trigger the transcription fetcher API for a single conference_key.
- * Fire-and-forget: dispatches the POST but does NOT wait for the response.
- * The API processes asynchronously and updates meet_conferences when done.
+ * Trigger the transcription API for a single conference_key.
+ * Waits for the response — the API processes and returns the result.
  */
-export function triggerTranscriptionForKey(conferenceKey: string): void {
+export async function triggerTranscriptionForKey(conferenceKey: string): Promise<any> {
   const body = new URLSearchParams();
   body.append('conference_key', conferenceKey);
 
-  fetch(TRANSCRIPT_API_URL, {
+  const res = await fetch(TRANSCRIPT_API_URL, {
     method: 'POST',
     headers: {
       'x-webhook-token': TRANSCRIPT_API_TOKEN,
     },
     body,
-  }).catch(e => console.warn(`[meetings] POST failed for ${conferenceKey}:`, e));
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Transcription API error ${res.status}: ${text}`);
+  }
+
+  try {
+    return await res.json();
+  } catch {
+    return await res.text();
+  }
 }
 
 /**
@@ -107,51 +117,59 @@ export async function fetchTranscriptInfo(conferenceKey: string): Promise<Transc
 }
 
 /**
- * Process meetings with status "NEW" in appmax.meet_conferences.
- * 1. Check status of all meetings via RPC (parallel, batched)
- * 2. Fire POST to transcription API for all NEW ones in parallel (don't wait for processing)
+ * Process meetings that don't have transcript_copied_file_id yet.
+ * 1. Check all meetings via RPC in parallel to see which need processing
+ * 2. For each one without transcript_copied_file_id, POST and WAIT for response
  */
 export async function fetchTranscriptionsForAll(
   meetings: DbMeeting[],
-  onProgress?: (current: number, total: number) => void,
+  onProgress?: (current: number, total: number, key?: string) => void,
 ): Promise<{ triggered: number; failed: number; skipped: number }> {
   const withKey = meetings.filter(m => m.google_event_id);
   if (withKey.length === 0) return { triggered: 0, failed: 0, skipped: 0 };
 
-  // Step 1: Check status of all meetings in parallel
-  onProgress?.(0, withKey.length);
+  // Step 1: Check transcript_copied_file_id of all meetings in parallel
+  onProgress?.(0, withKey.length, 'Verificando...');
   const statusResults = await Promise.allSettled(
     withKey.map(m => fetchTranscriptInfo(m.google_event_id!))
   );
 
-  // Filter only NEW ones
-  const newMeetings: string[] = [];
+  // Filter: only process meetings WITHOUT transcript_copied_file_id
+  const toProccess: string[] = [];
   let skipped = 0;
   for (let i = 0; i < withKey.length; i++) {
     const result = statusResults[i];
     if (result.status === 'fulfilled') {
       const info = result.value;
-      if (!info.status || info.status.toLowerCase() === 'new') {
-        newMeetings.push(withKey[i].google_event_id!);
-      } else {
+      if (info.transcript_copied_file_id) {
+        // Already has file — skip
         skipped++;
+      } else {
+        toProccess.push(withKey[i].google_event_id!);
       }
     } else {
       // RPC failed — try to process anyway
-      newMeetings.push(withKey[i].google_event_id!);
+      toProccess.push(withKey[i].google_event_id!);
     }
   }
 
-  onProgress?.(withKey.length, withKey.length);
+  if (toProccess.length === 0) return { triggered: 0, failed: 0, skipped };
 
-  if (newMeetings.length === 0) return { triggered: 0, failed: 0, skipped };
-
-  // Step 2: Fire all POST requests (fire-and-forget, no await)
-  for (const key of newMeetings) {
-    triggerTranscriptionForKey(key);
+  // Step 2: Process one by one, waiting for each response
+  let triggered = 0;
+  let failed = 0;
+  for (let i = 0; i < toProccess.length; i++) {
+    const key = toProccess[i];
+    onProgress?.(i + 1, toProccess.length, key);
+    try {
+      const result = await triggerTranscriptionForKey(key);
+      console.log(`[meetings] Processed ${key}:`, result);
+      triggered++;
+    } catch (e) {
+      console.warn(`[meetings] Failed to process ${key}:`, e);
+      failed++;
+    }
   }
-  const triggered = newMeetings.length;
-  const failed = 0;
 
   return { triggered, failed, skipped };
 }
