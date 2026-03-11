@@ -33,9 +33,9 @@ const TRANSCRIPT_API_TOKEN = 'api-meet-comercial';
 export async function syncMeetConferences(): Promise<{ inserted: number; updated: number }> {
   const empresaId = await getSaasEmpresaId();
 
-  const { data, error } = await (supabase as any).rpc('sincronizar_reunioes', {
-    p_empresa_id: empresaId,
-  });
+  const { data, error } = await (supabase as any)
+    .schema('saas')
+    .rpc('sincronizar_reunioes', { p_empresa_id: empresaId });
 
   if (error) throw new Error(`Sync error: ${error.message}`);
   return data || { inserted: 0, updated: 0 };
@@ -85,9 +85,9 @@ export async function pullTranscriptions(): Promise<number> {
     if (!m.google_event_id) continue;
 
     // Query appmax.meet_conferences for transcript file IDs via RPC
-    const { data: fileData } = await (supabase as any).rpc('buscar_transcript_file', {
-      p_conference_key: m.google_event_id,
-    });
+    const { data: fileData } = await (supabase as any)
+      .schema('saas')
+      .rpc('buscar_transcript_file', { p_conference_key: m.google_event_id });
 
     const fileId = fileData?.transcript_copied_file_id;
     if (!fileId) continue;

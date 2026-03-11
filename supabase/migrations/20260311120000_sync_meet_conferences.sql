@@ -31,6 +31,11 @@ BEGIN
       mc.call_interna
     FROM appmax.meet_conferences mc
     WHERE mc.call_interna = false
+      -- Must have at least one non-appmax participant
+      AND EXISTS (
+        SELECT 1 FROM jsonb_array_elements_text(mc.participants) p
+        WHERE p NOT LIKE '%@appmax.com.br'
+      )
   LOOP
     -- Resolve vendedor_id from organizer_email
     DECLARE
