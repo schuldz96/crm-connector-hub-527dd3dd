@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -7,7 +7,7 @@ import {
   Video, MessageSquare, Trash2, GripVertical,
   CheckCircle2, Star, Target, AlertTriangle, Loader2,
   Crown, GitBranch, Users, FileText, Upload, ChevronDown, ChevronRight,
-  Power, PowerOff, Copy, Pencil
+  Power, PowerOff, Copy, Pencil, ZoomIn, ZoomOut, Maximize2, Minus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -346,52 +346,63 @@ function loadFromStorage<T>(key: string, fallback: T): T {
 const DEFAULT_MEETING_PROMPT = 'Você é um avaliador especialista em vendas consultivas. Analise a transcrição da reunião e avalie cada critério com base nos sinais identificados. Seja específico e construtivo nos feedbacks.';
 const DEFAULT_WHATSAPP_PROMPT = 'Você é um especialista em vendas digitais e atendimento via WhatsApp. Avalie as conversas com foco em efetividade comercial, qualificação de leads e conversão.';
 
-// ─── Agent Organogram Card ───────────────────────────────────────────────────
-function AgentCard({
+// ─── Agent Node (canvas card) ────────────────────────────────────────────────
+function AgentNode_({
   agent,
-  isSelected,
-  onSelect,
+  onClick,
   onToggle,
 }: {
   agent: AgentNode;
-  isSelected: boolean;
-  onSelect: () => void;
+  onClick: () => void;
   onToggle: () => void;
 }) {
   const iconByType = { gerente: Crown, classificador: GitBranch, avaliador: Users };
   const colorByType = {
-    gerente: 'border-red-500/40 bg-red-500/5',
-    classificador: 'border-orange-500/40 bg-orange-500/5',
-    avaliador: 'border-blue-500/40 bg-blue-500/5',
+    gerente: 'border-red-500/50 bg-gradient-to-br from-red-500/10 to-red-900/5 shadow-red-500/10',
+    classificador: 'border-orange-500/50 bg-gradient-to-br from-orange-500/10 to-orange-900/5 shadow-orange-500/10',
+    avaliador: 'border-blue-500/50 bg-gradient-to-br from-blue-500/10 to-blue-900/5 shadow-blue-500/10',
   };
   const Icon = iconByType[agent.tipo];
 
   return (
     <div
-      onClick={onSelect}
+      onClick={onClick}
       className={cn(
-        'relative p-3 rounded-xl border-2 cursor-pointer transition-all min-w-[140px] max-w-[180px]',
+        'relative px-5 py-4 rounded-2xl border-2 cursor-pointer transition-all shadow-lg hover:shadow-xl hover:scale-[1.03] select-none',
         colorByType[agent.tipo],
-        isSelected ? 'ring-2 ring-primary shadow-lg scale-105' : 'hover:shadow-md hover:scale-[1.02]',
-        !agent.ativo && 'opacity-40'
+        !agent.ativo && 'opacity-30 grayscale'
       )}
+      style={{ minWidth: 170, maxWidth: 220 }}
     >
-      <div className="flex items-center gap-2 mb-1">
-        <Icon className="w-3.5 h-3.5 flex-shrink-0" />
-        <span className="text-[11px] font-semibold truncate">{agent.nome}</span>
+      <div className="flex items-center gap-2.5 mb-1.5">
+        <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center',
+          agent.tipo === 'gerente' ? 'bg-red-500/20' : agent.tipo === 'classificador' ? 'bg-orange-500/20' : 'bg-blue-500/20'
+        )}>
+          <Icon className="w-4 h-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <span className="text-xs font-bold truncate block">{agent.nome}</span>
+          <span className="text-[9px] text-muted-foreground uppercase tracking-wider">{agent.tipo}</span>
+        </div>
       </div>
-      <p className="text-[9px] text-muted-foreground line-clamp-2">{agent.descricao || agent.tipo}</p>
+      {agent.descricao && (
+        <p className="text-[10px] text-muted-foreground line-clamp-2 leading-snug">{agent.descricao}</p>
+      )}
       {agent.tipo === 'avaliador' && (
-        <div className="flex items-center gap-1 mt-1.5">
-          <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+        <div className="flex items-center gap-1.5 mt-2">
+          <span className="text-[9px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium">
             {(agent.criterios || []).length} critérios
+          </span>
+          <span className="text-[9px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+            {agent.modelo_ia || 'gpt-4o-mini'}
           </span>
         </div>
       )}
       <button
         onClick={e => { e.stopPropagation(); onToggle(); }}
-        className={cn('absolute top-2 right-2 p-0.5 rounded', agent.ativo ? 'text-success' : 'text-muted-foreground')}
-        title={agent.ativo ? 'Ativo' : 'Inativo'}
+        className={cn('absolute top-2.5 right-2.5 w-5 h-5 rounded-full flex items-center justify-center transition-colors',
+          agent.ativo ? 'bg-success/20 text-success hover:bg-success/30' : 'bg-muted text-muted-foreground hover:bg-muted/80')}
+        title={agent.ativo ? 'Ativo — clique para desativar' : 'Inativo — clique para ativar'}
       >
         {agent.ativo ? <Power className="w-3 h-3" /> : <PowerOff className="w-3 h-3" />}
       </button>
@@ -399,11 +410,12 @@ function AgentCard({
   );
 }
 
-// ─── Agent Config Panel (right side) ─────────────────────────────────────────
-function AgentConfigPanel({
+// ─── Agent Config Modal (popup) ──────────────────────────────────────────────
+function AgentConfigModal({
   agent,
   onSave,
   onDelete,
+  onClose,
   files,
   onUploadFile,
   onDeleteFile,
@@ -412,6 +424,7 @@ function AgentConfigPanel({
   agent: AgentNode;
   onSave: (a: AgentNode) => void;
   onDelete: (id: string) => void;
+  onClose: () => void;
   files: AgentFile[];
   onUploadFile: (file: File) => void;
   onDeleteFile: (f: AgentFile) => void;
@@ -444,132 +457,141 @@ function AgentConfigPanel({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className={cn('text-[9px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider',
-            form.tipo === 'gerente' ? 'bg-red-500/10 text-red-400' :
-            form.tipo === 'classificador' ? 'bg-orange-500/10 text-orange-400' :
-            'bg-blue-500/10 text-blue-400'
-          )}>{form.tipo}</span>
-          <h3 className="text-sm font-semibold">{form.nome}</h3>
+    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="w-full max-w-2xl glass-card rounded-2xl max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+        {/* Modal header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div className="flex items-center gap-3">
+            <span className={cn('text-[10px] px-2 py-1 rounded-lg font-bold uppercase tracking-wider',
+              form.tipo === 'gerente' ? 'bg-red-500/10 text-red-400' :
+              form.tipo === 'classificador' ? 'bg-orange-500/10 text-orange-400' :
+              'bg-blue-500/10 text-blue-400'
+            )}>{form.tipo}</span>
+            <h3 className="text-base font-semibold">{form.nome}</h3>
+          </div>
+          <div className="flex items-center gap-2">
+            {dirty && (
+              <Button size="sm" className="h-8 text-xs bg-gradient-primary" onClick={() => { onSave(form); setDirty(false); }}>
+                <Save className="w-3.5 h-3.5 mr-1.5" /> Salvar
+              </Button>
+            )}
+            {form.tipo === 'avaliador' && (
+              <Button size="sm" variant="outline" className="h-8 text-xs border-destructive/30 text-destructive hover:bg-destructive/10"
+                onClick={() => { onDelete(form.id); onClose(); }}>
+                <Trash2 className="w-3.5 h-3.5" />
+              </Button>
+            )}
+            <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-muted">
+              <X className="w-4 h-4 text-muted-foreground" />
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          {dirty && (
-            <Button size="sm" className="h-7 text-xs bg-gradient-primary" onClick={() => { onSave(form); setDirty(false); }}>
-              <Save className="w-3 h-3 mr-1" /> Salvar
-            </Button>
-          )}
-          {form.tipo === 'avaliador' && (
-            <Button size="sm" variant="outline" className="h-7 text-xs border-destructive/30 text-destructive hover:bg-destructive/10"
-              onClick={() => onDelete(form.id)}>
-              <Trash2 className="w-3 h-3" />
-            </Button>
-          )}
-        </div>
-      </div>
 
-      {/* Name + Description */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="text-[10px] font-medium block mb-1">Nome</label>
-          <Input value={form.nome} onChange={e => update({ nome: e.target.value })}
-            className="h-8 text-xs bg-secondary border-border" />
-        </div>
-        <div>
-          <label className="text-[10px] font-medium block mb-1">Modelo IA</label>
-          <select value={form.modelo_ia || 'gpt-4o-mini'}
-            onChange={e => update({ modelo_ia: e.target.value })}
-            className="w-full h-8 text-xs bg-secondary border border-border rounded-md px-2">
-            <option value="gpt-4o-mini">GPT-4o Mini</option>
-            <option value="gpt-4o">GPT-4o</option>
-            <option value="gpt-4-turbo">GPT-4 Turbo</option>
-          </select>
-        </div>
-      </div>
-
-      <div>
-        <label className="text-[10px] font-medium block mb-1">Descrição</label>
-        <Input value={form.descricao || ''} onChange={e => update({ descricao: e.target.value })}
-          className="h-8 text-xs bg-secondary border-border" placeholder="Ex: Avalia reuniões de closer inbound" />
-      </div>
-
-      {/* System Prompt */}
-      <div>
-        <label className="text-[10px] font-medium block mb-1">
-          <Brain className="w-3 h-3 inline mr-1" />Prompt do Sistema
-        </label>
-        <Textarea value={form.prompt_sistema} onChange={e => update({ prompt_sistema: e.target.value })}
-          className="text-xs bg-secondary border-border min-h-[100px] resize-none" />
-      </div>
-
-      {/* Criteria (avaliador only) */}
-      {form.tipo === 'avaliador' && (
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <label className="text-[10px] font-semibold">Critérios de Avaliação</label>
-              <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full border font-semibold',
-                totalWeight === 100 ? 'bg-success/10 text-success border-success/20' :
-                'bg-warning/10 text-warning border-warning/20')}>
-                {totalWeight}%
-              </span>
+        {/* Modal body - scrollable */}
+        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
+          {/* Name + Model */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-medium block mb-1.5">Nome</label>
+              <Input value={form.nome} onChange={e => update({ nome: e.target.value })}
+                className="h-9 text-sm bg-secondary border-border" />
             </div>
-            <Button size="sm" variant="outline" className="h-6 text-[10px] border-border"
-              disabled={remainingWeight <= 0} onClick={() => setAddingCrit(true)}>
-              <Plus className="w-3 h-3 mr-0.5" /> Critério
-            </Button>
+            <div>
+              <label className="text-xs font-medium block mb-1.5">Modelo IA</label>
+              <select value={form.modelo_ia || 'gpt-4o-mini'}
+                onChange={e => update({ modelo_ia: e.target.value })}
+                className="w-full h-9 text-sm bg-secondary border border-border rounded-md px-3">
+                <option value="gpt-4o-mini">GPT-4o Mini</option>
+                <option value="gpt-4o">GPT-4o</option>
+                <option value="gpt-4-turbo">GPT-4 Turbo</option>
+              </select>
+            </div>
           </div>
-          <div className="space-y-2">
-            {(form.criterios || []).map(c => (
-              <CriteriaCard key={c.id} criteria={c} onEdit={setEditingCrit} onDelete={handleDeleteCrit} />
-            ))}
-          </div>
-        </div>
-      )}
 
-      {/* Reference Files (avaliador only) */}
-      {form.tipo === 'avaliador' && (
-        <div>
-          <label className="text-[10px] font-semibold block mb-2">
-            <FileText className="w-3 h-3 inline mr-1" />Arquivos de Referência
-          </label>
-          <p className="text-[9px] text-muted-foreground mb-2">
-            PDFs, DOCX ou CSVs que o agente deve usar como base para avaliar (ex: ebooks de vendas)
-          </p>
-          <div className="space-y-1.5 mb-2">
-            {files.map(f => (
-              <div key={f.id} className="flex items-center justify-between p-2 rounded-lg bg-secondary border border-border">
-                <div className="flex items-center gap-2 min-w-0">
-                  <FileText className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                  <span className="text-[10px] truncate">{f.nome}</span>
-                  <span className="text-[9px] text-muted-foreground flex-shrink-0">
-                    {(f.tamanho / 1024).toFixed(0)}KB
+          <div>
+            <label className="text-xs font-medium block mb-1.5">Descrição</label>
+            <Input value={form.descricao || ''} onChange={e => update({ descricao: e.target.value })}
+              className="h-9 text-sm bg-secondary border-border" placeholder="Ex: Avalia reuniões de closer inbound" />
+          </div>
+
+          {/* System Prompt */}
+          <div>
+            <label className="text-xs font-medium block mb-1.5">
+              <Brain className="w-3.5 h-3.5 inline mr-1.5" />Prompt do Sistema
+            </label>
+            <Textarea value={form.prompt_sistema} onChange={e => update({ prompt_sistema: e.target.value })}
+              className="text-sm bg-secondary border-border min-h-[120px] resize-none" />
+          </div>
+
+          {/* Criteria (avaliador only) */}
+          {form.tipo === 'avaliador' && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-semibold">Critérios de Avaliação</label>
+                  <span className={cn('text-[10px] px-2 py-0.5 rounded-full border font-semibold',
+                    totalWeight === 100 ? 'bg-success/10 text-success border-success/20' :
+                    'bg-warning/10 text-warning border-warning/20')}>
+                    {totalWeight}%
                   </span>
                 </div>
-                <button onClick={() => onDeleteFile(f)} className="p-1 rounded hover:bg-destructive/10">
-                  <Trash2 className="w-3 h-3 text-muted-foreground hover:text-destructive" />
-                </button>
+                <Button size="sm" variant="outline" className="h-7 text-xs border-border"
+                  disabled={remainingWeight <= 0} onClick={() => setAddingCrit(true)}>
+                  <Plus className="w-3 h-3 mr-1" /> Critério
+                </Button>
               </div>
-            ))}
-          </div>
-          <label className={cn(
-            'flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed cursor-pointer transition-colors',
-            uploadingFile ? 'border-primary/50 bg-primary/5' : 'border-border hover:border-primary/30 hover:bg-primary/5'
-          )}>
-            {uploadingFile ? (
-              <><Loader2 className="w-4 h-4 animate-spin text-primary" /><span className="text-xs text-primary">Enviando...</span></>
-            ) : (
-              <><Upload className="w-4 h-4 text-muted-foreground" /><span className="text-xs text-muted-foreground">Enviar arquivo</span></>
-            )}
-            <input type="file" className="hidden" accept=".pdf,.csv,.docx,.odt,.txt"
-              onChange={e => { const f = e.target.files?.[0]; if (f) onUploadFile(f); e.target.value = ''; }}
-              disabled={uploadingFile} />
-          </label>
-        </div>
-      )}
+              <div className="space-y-2">
+                {(form.criterios || []).map(c => (
+                  <CriteriaCard key={c.id} criteria={c} onEdit={setEditingCrit} onDelete={handleDeleteCrit} />
+                ))}
+              </div>
+            </div>
+          )}
 
-      {/* Criteria modals */}
+          {/* Reference Files (avaliador only) */}
+          {form.tipo === 'avaliador' && (
+            <div>
+              <label className="text-xs font-semibold block mb-2">
+                <FileText className="w-3.5 h-3.5 inline mr-1.5" />Arquivos de Referência
+              </label>
+              <p className="text-[10px] text-muted-foreground mb-3">
+                PDFs, DOCX ou CSVs que o agente deve usar como base (ex: ebooks de vendas)
+              </p>
+              <div className="space-y-1.5 mb-3">
+                {files.map(f => (
+                  <div key={f.id} className="flex items-center justify-between p-2.5 rounded-lg bg-secondary border border-border">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                      <span className="text-xs truncate">{f.nome}</span>
+                      <span className="text-[10px] text-muted-foreground flex-shrink-0">
+                        {(f.tamanho / 1024).toFixed(0)}KB
+                      </span>
+                    </div>
+                    <button onClick={() => onDeleteFile(f)} className="p-1.5 rounded hover:bg-destructive/10">
+                      <Trash2 className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <label className={cn(
+                'flex items-center justify-center gap-2 p-4 rounded-xl border-2 border-dashed cursor-pointer transition-colors',
+                uploadingFile ? 'border-primary/50 bg-primary/5' : 'border-border hover:border-primary/30 hover:bg-primary/5'
+              )}>
+                {uploadingFile ? (
+                  <><Loader2 className="w-4 h-4 animate-spin text-primary" /><span className="text-sm text-primary">Enviando...</span></>
+                ) : (
+                  <><Upload className="w-4 h-4 text-muted-foreground" /><span className="text-sm text-muted-foreground">Enviar arquivo</span></>
+                )}
+                <input type="file" className="hidden" accept=".pdf,.csv,.docx,.odt,.txt"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) onUploadFile(f); e.target.value = ''; }}
+                  disabled={uploadingFile} />
+              </label>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Criteria modals (above the agent modal) */}
       {editingCrit && (
         <CriteriaModal criteria={editingCrit} maxWeight={remainingWeight + editingCrit.weight}
           onClose={() => setEditingCrit(null)} onSave={handleSaveCrit} />
@@ -595,34 +617,60 @@ export default function AIConfigPage() {
 
   // Multi-agent state
   const [agents, setAgents] = useState<AgentNode[]>([]);
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [editingAgentId, setEditingAgentId] = useState<string | null>(null);
   const [agentFiles, setAgentFiles] = useState<AgentFile[]>([]);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [initializingAgents, setInitializingAgents] = useState(false);
 
+  // Canvas zoom/pan
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panStart = useRef({ x: 0, y: 0 });
+  const canvasRef = useRef<HTMLDivElement>(null);
+
   const { gerente, classificador, avaliadores } = buildAgentTree(agents);
-  const selectedAgent = agents.find(a => a.id === selectedAgentId) || null;
+  const editingAgent = agents.find(a => a.id === editingAgentId) || null;
   const hasMultiAgent = agents.length > 0;
+
+  const handleZoomIn = () => setZoom(z => Math.min(2, z + 0.15));
+  const handleZoomOut = () => setZoom(z => Math.max(0.3, z - 0.15));
+  const handleZoomReset = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
+
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.08 : 0.08;
+    setZoom(z => Math.min(2, Math.max(0.3, z + delta)));
+  }, []);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    // Only start panning if clicking on the canvas bg (not on nodes)
+    if ((e.target as HTMLElement).closest('[data-agent-node]')) return;
+    setIsPanning(true);
+    panStart.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
+  }, [pan]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!isPanning) return;
+    setPan({ x: e.clientX - panStart.current.x, y: e.clientY - panStart.current.y });
+  }, [isPanning]);
+
+  const handleMouseUp = useCallback(() => setIsPanning(false), []);
 
   // Load agents on mount
   useEffect(() => {
-    loadAgentTree().then(data => {
-      setAgents(data);
-      if (data.length > 0 && !selectedAgentId) {
-        const firstAvaliador = data.find(a => a.tipo === 'avaliador');
-        setSelectedAgentId(firstAvaliador?.id || data[0]?.id || null);
-      }
-    });
+    loadAgentTree().then(setAgents);
   }, []);
 
-  // Load files when selected agent changes
+  // Load files when editing agent changes
   useEffect(() => {
-    if (selectedAgentId) {
-      loadAgentFiles(selectedAgentId).then(setAgentFiles);
+    if (editingAgentId) {
+      loadAgentFiles(editingAgentId).then(setAgentFiles);
     } else {
       setAgentFiles([]);
     }
-  }, [selectedAgentId]);
+  }, [editingAgentId]);
 
   const handleInitAgents = async () => {
     setInitializingAgents(true);
@@ -849,11 +897,10 @@ export default function AIConfigPage() {
         ))}
       </div>
 
-      {/* ═══ MEETINGS TAB: Multi-Agent Organogram ═══ */}
+      {/* ═══ MEETINGS TAB: Zoomable Canvas ═══ */}
       {activeType === 'meetings' && (
         <>
           {!hasMultiAgent ? (
-            /* Activation banner */
             <div className="glass-card p-8 rounded-xl text-center space-y-4">
               <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto">
                 <Crown className="w-8 h-8 text-primary" />
@@ -862,8 +909,7 @@ export default function AIConfigPage() {
                 <h2 className="text-lg font-semibold mb-1">Sistema Multi-Agente</h2>
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
                   Ative a hierarquia de agentes para avaliar reuniões de forma especializada.
-                  O Gerente orquestra, o Classificador identifica o tipo, e cada Avaliador
-                  tem seus próprios critérios e materiais de referência.
+                  Cada tipo de reunião pode ter critérios e ebooks de referência próprios.
                 </p>
               </div>
               <Button className="bg-gradient-primary" onClick={handleInitAgents} disabled={initializingAgents}>
@@ -873,107 +919,116 @@ export default function AIConfigPage() {
               </Button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-              {/* Left: Organogram */}
-              <div className="lg:col-span-2 space-y-4">
-                <h2 className="text-sm font-semibold flex items-center gap-2">
-                  <GitBranch className="w-4 h-4" /> Hierarquia de Agentes
-                </h2>
-
-                {/* Organogram tree */}
-                <div className="flex flex-col items-center gap-0">
-                  {/* Gerente */}
-                  {gerente && (
-                    <>
-                      <AgentCard agent={gerente} isSelected={selectedAgentId === gerente.id}
-                        onSelect={() => setSelectedAgentId(gerente.id)}
-                        onToggle={() => handleToggleAgent(gerente)} />
-                      <div className="w-px h-6 bg-border" />
-                    </>
-                  )}
-
-                  {/* Classificador */}
-                  {classificador && (
-                    <>
-                      <AgentCard agent={classificador} isSelected={selectedAgentId === classificador.id}
-                        onSelect={() => setSelectedAgentId(classificador.id)}
-                        onToggle={() => handleToggleAgent(classificador)} />
-                      <div className="w-px h-6 bg-border" />
-                    </>
-                  )}
-
-                  {/* Avaliadores row */}
-                  <div className="relative w-full">
-                    {/* Horizontal connector line */}
-                    {avaliadores.length > 1 && (
-                      <div className="absolute top-0 left-1/2 -translate-x-1/2 h-px bg-border"
-                        style={{ width: `${Math.min(90, avaliadores.length * 30)}%` }} />
-                    )}
-                    <div className="flex flex-wrap justify-center gap-3 pt-2">
-                      {avaliadores.map(a => (
-                        <div key={a.id} className="flex flex-col items-center">
-                          <div className="w-px h-4 bg-border" />
-                          <AgentCard agent={a} isSelected={selectedAgentId === a.id}
-                            onSelect={() => setSelectedAgentId(a.id)}
-                            onToggle={() => handleToggleAgent(a)} />
+            <div className="relative">
+              {/* Canvas container */}
+              <div
+                ref={canvasRef}
+                className="relative w-full rounded-2xl border border-border overflow-hidden bg-[radial-gradient(circle_at_1px_1px,hsl(var(--border)/0.3)_1px,transparent_0)] bg-[length:24px_24px]"
+                style={{ height: 'calc(100vh - 220px)', minHeight: 400, cursor: isPanning ? 'grabbing' : 'grab' }}
+                onWheel={handleWheel}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+              >
+                {/* Zoomable/pannable content */}
+                <div
+                  className="absolute inset-0 flex items-start justify-center pt-12 transition-transform duration-75"
+                  style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: 'top center' }}
+                >
+                  <div className="flex flex-col items-center gap-0">
+                    {/* Gerente */}
+                    {gerente && (
+                      <>
+                        <div data-agent-node>
+                          <AgentNode_ agent={gerente} onClick={() => setEditingAgentId(gerente.id)} onToggle={() => handleToggleAgent(gerente)} />
                         </div>
-                      ))}
-                      {/* Add avaliador button */}
-                      <div className="flex flex-col items-center">
-                        <div className="w-px h-4 bg-transparent" />
-                        <button
-                          onClick={handleAddAvaliador}
-                          className="w-[140px] p-3 rounded-xl border-2 border-dashed border-border hover:border-primary/40 hover:bg-primary/5 transition-colors flex flex-col items-center gap-1"
-                        >
-                          <Plus className="w-5 h-5 text-muted-foreground" />
-                          <span className="text-[10px] text-muted-foreground">Novo Avaliador</span>
-                        </button>
+                        <div className="w-0.5 h-10 bg-border/60 rounded-full" />
+                      </>
+                    )}
+
+                    {/* Classificador */}
+                    {classificador && (
+                      <>
+                        <div data-agent-node>
+                          <AgentNode_ agent={classificador} onClick={() => setEditingAgentId(classificador.id)} onToggle={() => handleToggleAgent(classificador)} />
+                        </div>
+                        <div className="w-0.5 h-10 bg-border/60 rounded-full" />
+                      </>
+                    )}
+
+                    {/* Avaliadores row with connectors */}
+                    <div className="relative">
+                      {/* Top horizontal line */}
+                      {avaliadores.length > 1 && (
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 bg-border/60 rounded-full"
+                          style={{ width: `${Math.max(50, (avaliadores.length - 1) * 210)}px` }} />
+                      )}
+                      <div className="flex items-start gap-6 pt-1">
+                        {avaliadores.map(a => (
+                          <div key={a.id} className="flex flex-col items-center" data-agent-node>
+                            <div className="w-0.5 h-6 bg-border/60 rounded-full" />
+                            <AgentNode_ agent={a} onClick={() => setEditingAgentId(a.id)} onToggle={() => handleToggleAgent(a)} />
+                          </div>
+                        ))}
+                        {/* Add button */}
+                        <div className="flex flex-col items-center" data-agent-node>
+                          <div className="w-0.5 h-6 bg-transparent" />
+                          <button
+                            onClick={handleAddAvaliador}
+                            className="px-5 py-4 rounded-2xl border-2 border-dashed border-border/50 hover:border-primary/40 hover:bg-primary/5 transition-all flex flex-col items-center gap-1.5 min-w-[170px]"
+                          >
+                            <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
+                              <Plus className="w-5 h-5 text-muted-foreground" />
+                            </div>
+                            <span className="text-xs text-muted-foreground font-medium">Novo Avaliador</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Legend */}
-                <div className="glass-card p-3 rounded-xl">
-                  <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Como funciona</p>
-                  <div className="space-y-1.5">
-                    <div className="flex items-start gap-2">
-                      <Crown className="w-3 h-3 text-red-400 mt-0.5 flex-shrink-0" />
-                      <p className="text-[10px] text-muted-foreground"><strong>Gerente</strong> — Orquestra a avaliação</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <GitBranch className="w-3 h-3 text-orange-400 mt-0.5 flex-shrink-0" />
-                      <p className="text-[10px] text-muted-foreground"><strong>Classificador</strong> — Identifica o tipo da reunião</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <Users className="w-3 h-3 text-blue-400 mt-0.5 flex-shrink-0" />
-                      <p className="text-[10px] text-muted-foreground"><strong>Avaliadores</strong> — Cada um avalia um tipo específico com seus critérios e ebooks</p>
-                    </div>
+                {/* Zoom controls — bottom-right */}
+                <div className="absolute bottom-4 right-4 flex items-center gap-1 bg-background/90 backdrop-blur-sm rounded-xl border border-border p-1 shadow-lg">
+                  <button onClick={handleZoomOut} className="w-8 h-8 rounded-lg hover:bg-muted flex items-center justify-center" title="Zoom out">
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="text-xs font-mono font-medium w-12 text-center text-muted-foreground">
+                    {Math.round(zoom * 100)}%
+                  </span>
+                  <button onClick={handleZoomIn} className="w-8 h-8 rounded-lg hover:bg-muted flex items-center justify-center" title="Zoom in">
+                    <Plus className="w-4 h-4" />
+                  </button>
+                  <div className="w-px h-5 bg-border mx-0.5" />
+                  <button onClick={handleZoomReset} className="w-8 h-8 rounded-lg hover:bg-muted flex items-center justify-center" title="Reset zoom">
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Legend — bottom-left */}
+                <div className="absolute bottom-4 left-4 bg-background/90 backdrop-blur-sm rounded-xl border border-border px-3 py-2 shadow-lg">
+                  <div className="flex items-center gap-4 text-[10px]">
+                    <span className="flex items-center gap-1"><Crown className="w-3 h-3 text-red-400" /> Gerente</span>
+                    <span className="flex items-center gap-1"><GitBranch className="w-3 h-3 text-orange-400" /> Classificador</span>
+                    <span className="flex items-center gap-1"><Users className="w-3 h-3 text-blue-400" /> Avaliadores</span>
                   </div>
                 </div>
               </div>
 
-              {/* Right: Agent config panel */}
-              <div className="lg:col-span-3">
-                {selectedAgent ? (
-                  <div className="glass-card p-5 rounded-xl">
-                    <AgentConfigPanel
-                      agent={selectedAgent}
-                      onSave={handleSaveAgent}
-                      onDelete={handleDeleteAgent}
-                      files={agentFiles}
-                      onUploadFile={handleUploadFile}
-                      onDeleteFile={handleDeleteFile}
-                      uploadingFile={uploadingFile}
-                    />
-                  </div>
-                ) : (
-                  <div className="glass-card p-8 rounded-xl text-center text-muted-foreground">
-                    <Brain className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                    <p className="text-sm">Selecione um agente para configurar</p>
-                  </div>
-                )}
-              </div>
+              {/* Agent config modal */}
+              {editingAgent && (
+                <AgentConfigModal
+                  agent={editingAgent}
+                  onSave={handleSaveAgent}
+                  onDelete={handleDeleteAgent}
+                  onClose={() => setEditingAgentId(null)}
+                  files={agentFiles}
+                  onUploadFile={handleUploadFile}
+                  onDeleteFile={handleDeleteFile}
+                  uploadingFile={uploadingFile}
+                />
+              )}
             </div>
           )}
         </>
