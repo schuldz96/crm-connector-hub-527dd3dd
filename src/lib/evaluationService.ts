@@ -173,12 +173,13 @@ Responda APENAS com JSON válido (sem markdown):
   ]
 }
 
-IMPORTANTE sobre participation:
-- Associe cada pessoa da transcrição com o email mais provável da lista de PARTICIPANTES acima (use o nome/sobrenome para fazer a correspondência).
-- Liste TODOS os participantes que falaram na transcrição.
-- A soma de todos os percent DEVE ser exatamente 100%.
-- Calcule baseado no volume de fala de cada pessoa.
-- Se um participante da lista não falou, inclua com percent: 0.`;
+REGRAS OBRIGATÓRIAS sobre participation:
+- Inclua TODOS os participantes da lista de PARTICIPANTES acima, sem exceção.
+- Associe cada pessoa da transcrição com o email correspondente (use nome/sobrenome para match).
+- A soma de TODOS os percent DEVE ser EXATAMENTE 100%. Verifique a soma antes de responder.
+- Calcule baseado no volume de fala (quantidade de texto/palavras) de cada pessoa.
+- Se um participante não falou na transcrição, inclua com percent: 0.
+- Exemplo: se há 4 participantes e um falou 60%, outro 25%, outro 10% e outro 5%, a soma é 100%. SEMPRE garanta isso.`;
 
   const data = await callOpenAI(apiToken, {
     model: aiModel || 'gpt-4o-mini',
