@@ -7,8 +7,10 @@ import {
   Video, MessageSquare, Trash2, GripVertical,
   CheckCircle2, Star, Target, AlertTriangle, Loader2,
   Crown, GitBranch, Users, FileText, Upload, ChevronDown, ChevronRight,
-  Power, PowerOff, Copy, Pencil, ZoomIn, ZoomOut, Maximize2, Minus
+  Power, PowerOff, Copy, Pencil, ZoomIn, ZoomOut, Maximize2, Minus,
+  Heart, Clock, History, ChevronUp
 } from 'lucide-react';
+import { loadRecentChainLogs } from '@/lib/evaluationService';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { loadAIConfig, saveAIConfig } from '@/lib/aiConfigService';
@@ -356,13 +358,15 @@ function AgentNode_({
   onClick: () => void;
   onToggle: () => void;
 }) {
-  const iconByType = { gerente: Crown, classificador: GitBranch, avaliador: Users };
-  const colorByType = {
+  const iconByType: Record<string, any> = { gerente: Crown, classificador: GitBranch, avaliador: Users, sentimental: Heart };
+  const colorByType: Record<string, string> = {
     gerente: 'border-red-500/50 bg-gradient-to-br from-red-500/10 to-red-900/5 shadow-red-500/10',
     classificador: 'border-orange-500/50 bg-gradient-to-br from-orange-500/10 to-orange-900/5 shadow-orange-500/10',
     avaliador: 'border-blue-500/50 bg-gradient-to-br from-blue-500/10 to-blue-900/5 shadow-blue-500/10',
+    sentimental: 'border-purple-500/50 bg-gradient-to-br from-purple-500/10 to-purple-900/5 shadow-purple-500/10',
   };
-  const Icon = iconByType[agent.tipo];
+  const iconBgByType: Record<string, string> = { gerente: 'bg-red-500/20', classificador: 'bg-orange-500/20', avaliador: 'bg-blue-500/20', sentimental: 'bg-purple-500/20' };
+  const Icon = iconByType[agent.tipo] || Brain;
 
   return (
     <div
@@ -376,7 +380,7 @@ function AgentNode_({
     >
       <div className="flex items-center gap-2.5 mb-1.5">
         <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center',
-          agent.tipo === 'gerente' ? 'bg-red-500/20' : agent.tipo === 'classificador' ? 'bg-orange-500/20' : 'bg-blue-500/20'
+          iconBgByType[agent.tipo] || 'bg-muted'
         )}>
           <Icon className="w-4 h-4" />
         </div>
@@ -388,11 +392,15 @@ function AgentNode_({
       {agent.descricao && (
         <p className="text-[10px] text-muted-foreground line-clamp-2 leading-snug">{agent.descricao}</p>
       )}
-      {agent.tipo === 'avaliador' && (
+      {(agent.tipo === 'avaliador' || agent.tipo === 'sentimental') && (
         <div className="flex items-center gap-1.5 mt-2">
-          <span className="text-[9px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium">
-            {(agent.criterios || []).length} critérios
-          </span>
+          {(agent.criterios || []).length > 0 && (
+            <span className={cn('text-[9px] px-2 py-0.5 rounded-full border font-medium',
+              agent.tipo === 'sentimental' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+            )}>
+              {(agent.criterios || []).length} critérios
+            </span>
+          )}
           <span className="text-[9px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
             {agent.modelo_ia || 'gpt-4o-mini'}
           </span>
@@ -465,6 +473,7 @@ function AgentConfigModal({
             <span className={cn('text-[10px] px-2 py-1 rounded-lg font-bold uppercase tracking-wider',
               form.tipo === 'gerente' ? 'bg-red-500/10 text-red-400' :
               form.tipo === 'classificador' ? 'bg-orange-500/10 text-orange-400' :
+              form.tipo === 'sentimental' ? 'bg-purple-500/10 text-purple-400' :
               'bg-blue-500/10 text-blue-400'
             )}>{form.tipo}</span>
             <h3 className="text-base font-semibold">{form.nome}</h3>
@@ -475,7 +484,7 @@ function AgentConfigModal({
                 <Save className="w-3.5 h-3.5 mr-1.5" /> Salvar
               </Button>
             )}
-            {form.tipo === 'avaliador' && (
+            {form.tipo !== 'gerente' && (
               <Button size="sm" variant="outline" className="h-8 text-xs border-destructive/30 text-destructive hover:bg-destructive/10"
                 onClick={() => { onDelete(form.id); onClose(); }}>
                 <Trash2 className="w-3.5 h-3.5" />
@@ -523,8 +532,8 @@ function AgentConfigModal({
               className="text-sm bg-secondary border-border min-h-[120px] resize-none" />
           </div>
 
-          {/* Criteria (avaliador only) */}
-          {form.tipo === 'avaliador' && (
+          {/* Criteria (avaliador + sentimental) */}
+          {(form.tipo === 'avaliador' || form.tipo === 'sentimental') && (
             <div>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
@@ -548,8 +557,8 @@ function AgentConfigModal({
             </div>
           )}
 
-          {/* Reference Files (avaliador only) */}
-          {form.tipo === 'avaliador' && (
+          {/* Reference Files (avaliador + sentimental) */}
+          {(form.tipo === 'avaliador' || form.tipo === 'sentimental') && (
             <div>
               <label className="text-xs font-semibold block mb-2">
                 <FileText className="w-3.5 h-3.5 inline mr-1.5" />Arquivos de Referência
@@ -604,6 +613,107 @@ function AgentConfigModal({
   );
 }
 
+// ─── Recursive Canvas Tree Node ──────────────────────────────────────────────
+function CanvasTreeNode({
+  agent,
+  agents,
+  getChildren,
+  onClickAgent,
+  onToggleAgent,
+  addingChildFor,
+  setAddingChildFor,
+  onAddAgent,
+}: {
+  agent: AgentNode;
+  agents: AgentNode[];
+  getChildren: (parentId: string) => AgentNode[];
+  onClickAgent: (id: string) => void;
+  onToggleAgent: (a: AgentNode) => void;
+  addingChildFor: string | null;
+  setAddingChildFor: (id: string | null) => void;
+  onAddAgent: (parentId: string, tipo: AgentTipo) => void;
+}) {
+  const children = getChildren(agent.id);
+  const allItems = children.length + 1; // children + add button
+  const addableTypes: { tipo: AgentTipo; label: string; icon: any; color: string }[] = [
+    { tipo: 'classificador', label: 'Classificador', icon: GitBranch, color: 'text-orange-400' },
+    { tipo: 'avaliador', label: 'Avaliador', icon: Users, color: 'text-blue-400' },
+    { tipo: 'sentimental', label: 'Sentimental', icon: Heart, color: 'text-purple-400' },
+  ];
+
+  return (
+    <div className="flex flex-col items-center">
+      {/* This node */}
+      <div data-agent-node>
+        <AgentNode_ agent={agent} onClick={() => onClickAgent(agent.id)} onToggle={() => onToggleAgent(agent)} />
+      </div>
+
+      {/* Connector + children */}
+      {(children.length > 0 || agent.tipo !== 'sentimental') && (
+        <>
+          <div className="w-0.5 h-8 bg-border/60 rounded-full" />
+          <div className="relative">
+            {/* Horizontal connector across children */}
+            {allItems > 2 && (
+              <div
+                className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 bg-border/60 rounded-full"
+                style={{ width: `${Math.max(50, (allItems - 1) * 210)}px` }}
+              />
+            )}
+            <div className="flex items-start gap-5">
+              {children.map(child => (
+                <div key={child.id} className="flex flex-col items-center">
+                  {allItems > 1 && <div className="w-0.5 h-6 bg-border/60 rounded-full" />}
+                  <CanvasTreeNode
+                    agent={child}
+                    agents={agents}
+                    getChildren={getChildren}
+                    onClickAgent={onClickAgent}
+                    onToggleAgent={onToggleAgent}
+                    addingChildFor={addingChildFor}
+                    setAddingChildFor={setAddingChildFor}
+                    onAddAgent={onAddAgent}
+                  />
+                </div>
+              ))}
+              {/* Add child button */}
+              <div className="flex flex-col items-center relative" data-agent-node>
+                {children.length > 0 && <div className="w-0.5 h-6 bg-transparent" />}
+                <button
+                  onClick={(e) => { e.stopPropagation(); setAddingChildFor(addingChildFor === agent.id ? null : agent.id); }}
+                  className="px-4 py-3 rounded-2xl border-2 border-dashed border-border/50 hover:border-primary/40 hover:bg-primary/5 transition-all flex flex-col items-center gap-1 min-w-[150px]"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center">
+                    <Plus className="w-4 h-4 text-muted-foreground" />
+                  </div>
+                  <span className="text-[10px] text-muted-foreground font-medium">Adicionar Agente</span>
+                </button>
+                {/* Type selection dropdown */}
+                {addingChildFor === agent.id && (
+                  <div className="absolute top-full mt-2 z-50 bg-background border border-border rounded-xl shadow-xl p-1.5 min-w-[180px]"
+                    onClick={e => e.stopPropagation()}>
+                    <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-semibold px-2.5 py-1.5">Tipo do Agente</p>
+                    {addableTypes.map(t => (
+                      <button
+                        key={t.tipo}
+                        onClick={() => onAddAgent(agent.id, t.tipo)}
+                        className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-muted transition-colors text-left"
+                      >
+                        <t.icon className={cn('w-4 h-4', t.color)} />
+                        <span className="text-xs font-medium">{t.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function AIConfigPage() {
   const { toast } = useToast();
   const { tokens, models } = useAppConfig();
@@ -629,9 +739,20 @@ export default function AIConfigPage() {
   const panStart = useRef({ x: 0, y: 0 });
   const canvasRef = useRef<HTMLDivElement>(null);
 
-  const { gerente, classificador, avaliadores } = buildAgentTree(agents);
+  // Add agent dropdown
+  const [addingChildFor, setAddingChildFor] = useState<string | null>(null);
+
+  // Execution history
+  const [showHistory, setShowHistory] = useState(false);
+  const [executionHistory, setExecutionHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  const rootAgent = agents.find(a => a.tipo === 'gerente') || null;
   const editingAgent = agents.find(a => a.id === editingAgentId) || null;
   const hasMultiAgent = agents.length > 0;
+
+  const getChildren = (parentId: string) =>
+    agents.filter(a => a.parent_id === parentId).sort((a, b) => a.ordem - b.ordem);
 
   const handleZoomIn = () => setZoom(z => Math.min(2, z + 0.15));
   const handleZoomOut = () => setZoom(z => Math.max(0.3, z - 0.15));
@@ -677,8 +798,6 @@ export default function AIConfigPage() {
     try {
       const tree = await initializeAgentTree();
       setAgents(tree);
-      const firstAvaliador = tree.find(a => a.tipo === 'avaliador');
-      setSelectedAgentId(firstAvaliador?.id || tree[0]?.id || null);
       toast({ title: 'Multi-agente ativado!', description: 'Hierarquia criada: Gerente → Classificador → Avaliador' });
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Erro', description: e.message });
@@ -696,29 +815,52 @@ export default function AIConfigPage() {
   };
 
   const handleDeleteAgent = async (id: string) => {
+    // Also remove children
+    const childIds = agents.filter(a => a.parent_id === id).map(a => a.id);
     await deleteAgent(id);
-    setAgents(prev => prev.filter(a => a.id !== id));
-    if (selectedAgentId === id) setSelectedAgentId(null);
+    setAgents(prev => prev.filter(a => a.id !== id && !childIds.includes(a.id)));
+    if (editingAgentId === id) setEditingAgentId(null);
     toast({ title: 'Agente removido' });
   };
 
-  const handleAddAvaliador = async () => {
-    if (!classificador) return;
+  const defaultAgentConfig: Record<string, { nome: string; descricao: string; prompt: string }> = {
+    classificador: {
+      nome: 'Classificador',
+      descricao: 'Identifica o tipo da reunião para direcionar ao avaliador correto',
+      prompt: 'Você é um classificador de reuniões. Analise o título e o início da transcrição para identificar o tipo da reunião. Retorne APENAS JSON: {"tipo": "<nome exato do tipo>", "confianca": <0-100>}',
+    },
+    avaliador: {
+      nome: `Novo Avaliador ${agents.filter(a => a.tipo === 'avaliador').length + 1}`,
+      descricao: 'Avalia reuniões com critérios específicos',
+      prompt: 'Você é um avaliador de reuniões. Analise a transcrição e avalie cada critério com base nos sinais identificados. Seja específico e construtivo nos feedbacks.',
+    },
+    sentimental: {
+      nome: 'Análise Sentimental',
+      descricao: 'Analisa o sentimento e tom emocional dos participantes da reunião',
+      prompt: 'Você é um especialista em análise de sentimentos. Analise a transcrição da reunião e identifique o tom emocional de cada participante, momentos de tensão, entusiasmo e frustração. Retorne APENAS JSON: {"sentimentoGeral": "<positivo|neutro|negativo>", "confianca": <0-100>, "momentos": [{"timestamp": "<momento>", "sentimento": "<tipo>", "descricao": "<detalhe>"}]}',
+    },
+  };
+
+  const handleAddAgent = async (parentId: string, tipo: AgentTipo) => {
+    const config = defaultAgentConfig[tipo];
+    if (!config) return;
+    const siblings = agents.filter(a => a.parent_id === parentId);
     const saved = await saveAgent({
-      parent_id: classificador.id,
-      tipo: 'avaliador',
-      nome: `Novo Avaliador ${avaliadores.length + 1}`,
-      descricao: '',
-      prompt_sistema: 'Você é um avaliador de reuniões. Analise a transcrição e avalie cada critério.',
+      parent_id: parentId,
+      tipo,
+      nome: config.nome,
+      descricao: config.descricao,
+      prompt_sistema: config.prompt,
       criterios: [],
       modelo_ia: 'gpt-4o-mini',
       temperatura: 0,
-      ordem: avaliadores.length,
+      ordem: siblings.length,
       ativo: true,
     });
     if (saved) {
       setAgents(prev => [...prev, saved]);
-      setSelectedAgentId(saved.id);
+      setEditingAgentId(saved.id);
+      setAddingChildFor(null);
     }
   };
 
@@ -729,24 +871,37 @@ export default function AIConfigPage() {
   };
 
   const handleUploadFile = async (file: File) => {
-    if (!selectedAgentId) return;
+    if (!editingAgentId) return;
     setUploadingFile(true);
     try {
-      // Extract text client-side for txt/csv
       let text = '';
       if (file.type === 'text/plain' || file.type === 'text/csv' || file.name.endsWith('.csv') || file.name.endsWith('.txt')) {
         text = await file.text();
       } else {
-        // For PDF/DOCX, store empty for now (can be enhanced with pdf.js/mammoth later)
         text = `[Arquivo: ${file.name}] — extração automática pendente`;
       }
-      const saved = await saveAgentFile(selectedAgentId, file, text);
+      const saved = await saveAgentFile(editingAgentId, file, text);
       if (saved) setAgentFiles(prev => [saved, ...prev]);
       toast({ title: 'Arquivo enviado!' });
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Erro no upload', description: e.message });
     } finally {
       setUploadingFile(false);
+    }
+  };
+
+  const handleLoadHistory = async () => {
+    setShowHistory(true);
+    if (executionHistory.length === 0) {
+      setLoadingHistory(true);
+      try {
+        const logs = await loadRecentChainLogs(20);
+        setExecutionHistory(logs);
+      } catch (e) {
+        console.error('Failed to load history:', e);
+      } finally {
+        setLoadingHistory(false);
+      }
     }
   };
 
@@ -920,11 +1075,18 @@ export default function AIConfigPage() {
             </div>
           ) : (
             <div className="relative">
+              {/* History button — top right */}
+              <div className="absolute top-0 right-0 z-10 mb-3">
+                <Button size="sm" variant="outline" className="h-8 text-xs border-border gap-1.5" onClick={handleLoadHistory}>
+                  <History className="w-3.5 h-3.5" /> Histórico de Execuções
+                </Button>
+              </div>
+
               {/* Canvas container */}
               <div
                 ref={canvasRef}
-                className="relative w-full rounded-2xl border border-border overflow-hidden bg-[radial-gradient(circle_at_1px_1px,hsl(var(--border)/0.3)_1px,transparent_0)] bg-[length:24px_24px]"
-                style={{ height: 'calc(100vh - 220px)', minHeight: 400, cursor: isPanning ? 'grabbing' : 'grab' }}
+                className="relative w-full rounded-2xl border border-border overflow-hidden bg-[radial-gradient(circle_at_1px_1px,hsl(var(--border)/0.3)_1px,transparent_0)] bg-[length:24px_24px] mt-10"
+                style={{ height: 'calc(100vh - 260px)', minHeight: 400, cursor: isPanning ? 'grabbing' : 'grab' }}
                 onWheel={handleWheel}
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
@@ -936,57 +1098,19 @@ export default function AIConfigPage() {
                   className="absolute inset-0 flex items-start justify-center pt-12 transition-transform duration-75"
                   style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: 'top center' }}
                 >
-                  <div className="flex flex-col items-center gap-0">
-                    {/* Gerente */}
-                    {gerente && (
-                      <>
-                        <div data-agent-node>
-                          <AgentNode_ agent={gerente} onClick={() => setEditingAgentId(gerente.id)} onToggle={() => handleToggleAgent(gerente)} />
-                        </div>
-                        <div className="w-0.5 h-10 bg-border/60 rounded-full" />
-                      </>
-                    )}
-
-                    {/* Classificador */}
-                    {classificador && (
-                      <>
-                        <div data-agent-node>
-                          <AgentNode_ agent={classificador} onClick={() => setEditingAgentId(classificador.id)} onToggle={() => handleToggleAgent(classificador)} />
-                        </div>
-                        <div className="w-0.5 h-10 bg-border/60 rounded-full" />
-                      </>
-                    )}
-
-                    {/* Avaliadores row with connectors */}
-                    <div className="relative">
-                      {/* Top horizontal line */}
-                      {avaliadores.length > 1 && (
-                        <div className="absolute top-0 left-1/2 -translate-x-1/2 h-0.5 bg-border/60 rounded-full"
-                          style={{ width: `${Math.max(50, (avaliadores.length - 1) * 210)}px` }} />
-                      )}
-                      <div className="flex items-start gap-6 pt-1">
-                        {avaliadores.map(a => (
-                          <div key={a.id} className="flex flex-col items-center" data-agent-node>
-                            <div className="w-0.5 h-6 bg-border/60 rounded-full" />
-                            <AgentNode_ agent={a} onClick={() => setEditingAgentId(a.id)} onToggle={() => handleToggleAgent(a)} />
-                          </div>
-                        ))}
-                        {/* Add button */}
-                        <div className="flex flex-col items-center" data-agent-node>
-                          <div className="w-0.5 h-6 bg-transparent" />
-                          <button
-                            onClick={handleAddAvaliador}
-                            className="px-5 py-4 rounded-2xl border-2 border-dashed border-border/50 hover:border-primary/40 hover:bg-primary/5 transition-all flex flex-col items-center gap-1.5 min-w-[170px]"
-                          >
-                            <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
-                              <Plus className="w-5 h-5 text-muted-foreground" />
-                            </div>
-                            <span className="text-xs text-muted-foreground font-medium">Novo Avaliador</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  {/* Recursive tree rendering */}
+                  {rootAgent && (
+                    <CanvasTreeNode
+                      agent={rootAgent}
+                      agents={agents}
+                      getChildren={getChildren}
+                      onClickAgent={setEditingAgentId}
+                      onToggleAgent={handleToggleAgent}
+                      addingChildFor={addingChildFor}
+                      setAddingChildFor={setAddingChildFor}
+                      onAddAgent={handleAddAgent}
+                    />
+                  )}
                 </div>
 
                 {/* Zoom controls — bottom-right */}
@@ -1011,7 +1135,8 @@ export default function AIConfigPage() {
                   <div className="flex items-center gap-4 text-[10px]">
                     <span className="flex items-center gap-1"><Crown className="w-3 h-3 text-red-400" /> Gerente</span>
                     <span className="flex items-center gap-1"><GitBranch className="w-3 h-3 text-orange-400" /> Classificador</span>
-                    <span className="flex items-center gap-1"><Users className="w-3 h-3 text-blue-400" /> Avaliadores</span>
+                    <span className="flex items-center gap-1"><Users className="w-3 h-3 text-blue-400" /> Avaliador</span>
+                    <span className="flex items-center gap-1"><Heart className="w-3 h-3 text-purple-400" /> Sentimental</span>
                   </div>
                 </div>
               </div>
@@ -1028,6 +1153,91 @@ export default function AIConfigPage() {
                   onDeleteFile={handleDeleteFile}
                   uploadingFile={uploadingFile}
                 />
+              )}
+
+              {/* ═══ Execution History Drawer ═══ */}
+              {showHistory && (
+                <div className="fixed inset-y-0 right-0 w-[440px] bg-background border-l border-border z-40 flex flex-col shadow-2xl animate-fade-in">
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                    <div className="flex items-center gap-2">
+                      <History className="w-4 h-4 text-primary" />
+                      <h3 className="text-sm font-semibold">Histórico de Execuções</h3>
+                    </div>
+                    <button onClick={() => setShowHistory(false)} className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-muted">
+                      <X className="w-4 h-4 text-muted-foreground" />
+                    </button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                    {loadingHistory && (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                      </div>
+                    )}
+                    {!loadingHistory && executionHistory.length === 0 && (
+                      <div className="text-center py-12">
+                        <Clock className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+                        <p className="text-sm text-muted-foreground">Nenhuma execução encontrada</p>
+                        <p className="text-[10px] text-muted-foreground/60 mt-1">As execuções aparecerão aqui após avaliar reuniões</p>
+                      </div>
+                    )}
+                    {executionHistory.map(exec => (
+                      <div key={exec.id} className="glass-card p-4 rounded-xl border border-border">
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-semibold truncate flex-1 mr-2">
+                            {exec.payload?.titulo || 'Reunião'}
+                          </span>
+                          <span className={cn('text-sm font-bold font-mono',
+                            exec.score >= 85 ? 'text-success' : exec.score >= 70 ? 'text-primary' : exec.score >= 50 ? 'text-warning' : 'text-destructive'
+                          )}>{exec.score}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mb-3">
+                          {exec.tipo_reuniao_detectado && (
+                            <span className="text-[9px] px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20 font-medium">
+                              {exec.tipo_reuniao_detectado}
+                            </span>
+                          )}
+                          <span className="text-[9px] text-muted-foreground">
+                            {new Date(exec.criado_em).toLocaleDateString('pt-BR')} {new Date(exec.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        {/* Chain timeline */}
+                        <div className="space-y-0">
+                          {(exec.chain_log || []).map((step: any, i: number) => (
+                            <div key={i} className="flex gap-3">
+                              <div className="flex flex-col items-center">
+                                <div className={cn('w-2.5 h-2.5 rounded-full border-2 flex-shrink-0',
+                                  step.tipo === 'fallback' ? 'bg-warning border-warning/30' : 'bg-success border-success/30'
+                                )} />
+                                {i < (exec.chain_log || []).length - 1 && (
+                                  <div className="w-0.5 flex-1 min-h-[20px] bg-border/60" />
+                                )}
+                              </div>
+                              <div className="pb-3 min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <p className="text-[11px] font-semibold">{step.agente}</p>
+                                  <span className={cn('text-[8px] px-1.5 py-0.5 rounded-full font-medium uppercase',
+                                    step.tipo === 'classificador' ? 'bg-orange-500/10 text-orange-400' :
+                                    step.tipo === 'avaliador' ? 'bg-blue-500/10 text-blue-400' :
+                                    step.tipo === 'fallback' ? 'bg-warning/10 text-warning' :
+                                    'bg-muted text-muted-foreground'
+                                  )}>{step.tipo}</span>
+                                </div>
+                                <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">{step.output_resumo}</p>
+                                {step.duracao_ms > 0 && (
+                                  <span className="text-[9px] text-muted-foreground/50">{step.duracao_ms}ms</span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        {exec.resumo && (
+                          <p className="text-[10px] text-muted-foreground mt-2 pt-2 border-t border-border/50 leading-snug line-clamp-2">{exec.resumo}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           )}

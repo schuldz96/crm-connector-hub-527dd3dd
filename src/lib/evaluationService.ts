@@ -382,3 +382,33 @@ export async function loadTeamsForPerformance(): Promise<any[]> {
   }
   return data || [];
 }
+
+// ─── Load recent evaluations with chain_log (for execution history) ─────────
+export async function loadRecentChainLogs(limit = 20): Promise<{
+  id: string;
+  entidade_id: string;
+  score: number;
+  resumo: string;
+  chain_log: { agente: string; tipo: string; input_resumo: string; output_resumo: string; duracao_ms: number }[];
+  tipo_reuniao_detectado: string | null;
+  agente_avaliador_id: string | null;
+  criado_em: string;
+  payload: any;
+}[]> {
+  const empresaId = await getSaasEmpresaId();
+  const { data, error } = await (supabase as any)
+    .schema('saas')
+    .from('analises_ia')
+    .select('id,entidade_id,score,resumo,chain_log,tipo_reuniao_detectado,agente_avaliador_id,criado_em,payload')
+    .eq('empresa_id', empresaId)
+    .eq('tipo_contexto', 'reuniao')
+    .not('chain_log', 'is', null)
+    .order('criado_em', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error('[Evaluation] Load chain logs error:', error);
+    return [];
+  }
+  return (data || []) as any[];
+}
