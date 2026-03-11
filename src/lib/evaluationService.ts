@@ -314,7 +314,7 @@ export async function loadEvaluationByEntity(entidadeId: string): Promise<Stored
   const { data } = await (supabase as any)
     .schema('saas')
     .from('analises_ia')
-    .select('id,tipo_contexto,vendedor_id,score,criterios,resumo,payload,instancia_nome,contato_telefone,periodo_ref,entidade_id,criado_em')
+    .select('id,tipo_contexto,vendedor_id,score,criterios,resumo,payload,instancia_nome,contato_telefone,periodo_ref,entidade_id,criado_em,agente_avaliador_id,tipo_reuniao_detectado,chain_log')
     .eq('empresa_id', empresaId)
     .eq('entidade_id', entidadeId)
     .maybeSingle();

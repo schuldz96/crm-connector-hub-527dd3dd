@@ -162,13 +162,29 @@ export async function evaluateMeetingMultiAgent(
       duracao_ms: Date.now() - t0,
     });
 
-    // Find matching avaliador (fuzzy match by name)
-    selectedAvaliador = activeAvaliadores.find(a =>
+    // Find matching avaliador (exact → fuzzy → fallback)
+    const exactMatch = activeAvaliadores.find(a =>
       a.nome.toLowerCase() === tipoReuniao.toLowerCase()
-    ) || activeAvaliadores.find(a =>
+    );
+    const fuzzyMatch = !exactMatch ? activeAvaliadores.find(a =>
       tipoReuniao.toLowerCase().includes(a.nome.toLowerCase()) ||
       a.nome.toLowerCase().includes(tipoReuniao.toLowerCase())
+    ) : null;
+    // Fallback: agent named "Fallback" or "Padrão" or the first one
+    const fallbackAgent = activeAvaliadores.find(a =>
+      /fallback|padr[aã]o|default|geral/i.test(a.nome)
     ) || activeAvaliadores[0];
+
+    selectedAvaliador = exactMatch || fuzzyMatch || fallbackAgent;
+
+    if (!exactMatch && !fuzzyMatch) {
+      chainLog.push({
+        agente: 'Fallback', tipo: 'fallback',
+        input_resumo: `Classificação "${tipoReuniao}" não encontrou avaliador correspondente`,
+        output_resumo: `Usando fallback: ${selectedAvaliador.nome}`,
+        duracao_ms: 0,
+      });
+    }
   }
 
   // Step 2: Load reference files for the selected avaliador

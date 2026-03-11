@@ -525,6 +525,49 @@ export default function MeetingsPage() {
                     {/* AI Evaluation results */}
                     {selectedMeeting.analisada_por_ia && meetingEval && (
                       <div className="pt-3 border-t border-border space-y-3">
+                        {/* Meeting type + Agent chain */}
+                        {(meetingEval as any).tipo_reuniao_detectado && (
+                          <div className="p-3 rounded-lg bg-primary/5 border border-primary/15">
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="text-[10px] font-semibold text-primary uppercase tracking-wide flex items-center gap-1">
+                                <Target className="w-3 h-3" /> Tipo da Reunião
+                              </p>
+                              <span className="text-xs font-bold text-primary px-2 py-0.5 rounded-full bg-primary/10">
+                                {(meetingEval as any).tipo_reuniao_detectado}
+                              </span>
+                            </div>
+                            {(meetingEval as any).chain_log?.length > 0 && (
+                              <div className="space-y-1 mt-2">
+                                <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wide">Pipeline de agentes</p>
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  {((meetingEval as any).chain_log as any[]).map((step: any, i: number) => (
+                                    <div key={i} className="flex items-center gap-1">
+                                      {i > 0 && <span className="text-muted-foreground text-[10px]">→</span>}
+                                      <span className={cn(
+                                        'text-[10px] px-2 py-0.5 rounded-full border font-medium',
+                                        step.tipo === 'classificador' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
+                                        step.tipo === 'avaliador' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                                        step.tipo === 'fallback' ? 'bg-warning/10 text-warning border-warning/20' :
+                                        'bg-muted text-muted-foreground border-border'
+                                      )}>
+                                        {step.agente}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="mt-1.5 space-y-0.5">
+                                  {((meetingEval as any).chain_log as any[]).map((step: any, i: number) => (
+                                    <p key={i} className="text-[9px] text-muted-foreground">
+                                      <strong>{step.agente}:</strong> {step.output_resumo}
+                                      {step.duracao_ms > 0 && <span className="ml-1 opacity-50">({(step.duracao_ms / 1000).toFixed(1)}s)</span>}
+                                    </p>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {/* Summary */}
                         {meetingEval.resumo && (
                           <div className="p-3 rounded-lg bg-muted/50 border border-border">
