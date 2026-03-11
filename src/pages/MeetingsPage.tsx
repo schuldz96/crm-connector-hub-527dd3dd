@@ -16,6 +16,8 @@ import {
   type DbMeeting
 } from '@/lib/meetingsService';
 import { evaluateMeeting, loadEvaluationByEntity, type StoredEvaluation } from '@/lib/evaluationService';
+import { loadAgentTree } from '@/lib/agentService';
+import { evaluateMeetingMultiAgent } from '@/lib/multiAgentEvaluation';
 
 const STATUS_CONFIG: Record<string, { label: string; class: string }> = {
   concluida: { label: 'Concluída', class: 'score-good' },
@@ -161,7 +163,13 @@ export default function MeetingsPage() {
       setEvalProgress({ current: ok + fail + 1, total: pending.length });
       try {
         const emails = m.participantes?.map(p => p.email) || [];
-        await evaluateMeeting(token, 'gpt-4o-mini', m.id, m.titulo, m.transcricao!, m.vendedor_id || null, emails);
+        // Use multi-agent if available, fallback to single agent
+        const agentTree = await loadAgentTree();
+        if (agentTree.length > 0) {
+          await evaluateMeetingMultiAgent(token, m.id, m.titulo, m.transcricao!, m.vendedor_id || null, emails);
+        } else {
+          await evaluateMeeting(token, 'gpt-4o-mini', m.id, m.titulo, m.transcricao!, m.vendedor_id || null, emails);
+        }
         ok++;
       } catch (err) {
         console.warn(`[eval] Failed ${m.id}:`, err);
@@ -189,7 +197,11 @@ export default function MeetingsPage() {
     setReEvaluating(true);
     try {
       const emails = meeting.participantes?.map(p => p.email) || [];
-      const result = await evaluateMeeting(token, 'gpt-4o-mini', meeting.id, meeting.titulo, meeting.transcricao, meeting.vendedor_id || null, emails);
+      // Use multi-agent if available
+      const agentTree = await loadAgentTree();
+      const result = agentTree.length > 0
+        ? await evaluateMeetingMultiAgent(token, meeting.id, meeting.titulo, meeting.transcricao, meeting.vendedor_id || null, emails)
+        : await evaluateMeeting(token, 'gpt-4o-mini', meeting.id, meeting.titulo, meeting.transcricao, meeting.vendedor_id || null, emails);
       const score = result ? Math.round(result.totalScore) : null;
       await loadMeetings();
       const evalData = await loadEvaluationByEntity(meeting.id);
