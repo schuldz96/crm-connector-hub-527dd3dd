@@ -60,30 +60,22 @@ function WebhookRow({
   const [expanded, setExpanded] = useState(false);
   const Icon = ICON_MAP[cfg.icon] || Zap;
 
+  const isActive = cfg.enabled || cfg.internalAlert;
+
   return (
     <div className={cn(
       'glass-card overflow-hidden transition-all',
-      cfg.enabled ? 'border-border' : 'opacity-60',
+      isActive ? 'border-border' : 'opacity-60',
     )}>
       {/* ── Header row ── */}
       <div className="flex items-center gap-3 p-3">
-        {/* Toggle */}
-        <button
-          onClick={() => onChange({ ...cfg, enabled: !cfg.enabled })}
-          className="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-          title={cfg.enabled ? 'Desativar' : 'Ativar'}>
-          {cfg.enabled
-            ? <ToggleRight className="w-5 h-5 text-success" />
-            : <ToggleLeft className="w-5 h-5" />}
-        </button>
-
         {/* Icon + text */}
         <button
           className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
           onClick={() => setExpanded(e => !e)}>
           <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0',
-            cfg.enabled ? 'bg-primary/10' : 'bg-secondary')}>
-            <Icon className={cn('w-3.5 h-3.5', cfg.enabled ? 'text-primary' : 'text-muted-foreground')} />
+            isActive ? 'bg-primary/10' : 'bg-secondary')}>
+            <Icon className={cn('w-3.5 h-3.5', isActive ? 'text-primary' : 'text-muted-foreground')} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
@@ -96,14 +88,14 @@ function WebhookRow({
                   <Bell className="w-2.5 h-2.5" /> Alerta
                 </span>
               )}
-              {cfg.delayUnit !== 'immediate' && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20 flex items-center gap-1">
-                  <Timer className="w-2.5 h-2.5" /> {cfg.delayValue} {cfg.delayUnit === 'seconds' ? 's' : cfg.delayUnit === 'minutes' ? 'min' : cfg.delayUnit === 'hours' ? 'h' : 'd'}
+              {cfg.enabled && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-success/10 text-success border border-success/20 flex items-center gap-1">
+                  <Globe className="w-2.5 h-2.5" /> Webhook
                 </span>
               )}
             </div>
             <p className="text-[10px] text-muted-foreground truncate mt-0.5">
-              {cfg.url || <span className="italic">URL não configurada</span>}
+              {cfg.url || <span className="italic">Nenhuma ação configurada</span>}
             </p>
           </div>
           {expanded
@@ -136,45 +128,80 @@ function WebhookRow({
         <div className="px-3 pb-3 border-t border-border/50 space-y-3 pt-3">
           <p className="text-xs text-muted-foreground">{cfg.description}</p>
 
-          {/* URL input */}
-          <div>
-            <label className="text-[11px] font-medium block mb-1 text-muted-foreground uppercase tracking-wide">
-              URL do Webhook
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="url"
-                value={cfg.url}
-                onChange={e => onChange({ ...cfg, url: e.target.value })}
-                placeholder="https://n8n.meudominio.com/webhook/..."
-                className="flex-1 text-xs bg-secondary border border-border rounded-lg px-3 h-8 text-foreground outline-none focus:border-primary/50 font-mono"
-              />
-              {cfg.url && (
-                <a href={cfg.url} target="_blank" rel="noopener noreferrer"
-                  className="w-8 h-8 rounded-lg border border-border bg-secondary flex items-center justify-center hover:bg-muted transition-colors">
-                  <ExternalLink className="w-3 h-3 text-muted-foreground" />
-                </a>
-              )}
-            </div>
-          </div>
-
-          {/* Internal alert toggle */}
-          <div className="flex items-center justify-between">
-            <div>
-              <label className="text-[11px] font-medium block text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                <Bell className="w-3 h-3" /> Alerta Interno
-              </label>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Criar notificação no sino quando o evento ocorrer</p>
-            </div>
+          {/* Two toggles side by side */}
+          <div className="grid grid-cols-2 gap-3">
+            {/* Internal Alert toggle */}
             <button
               onClick={() => onChange({ ...cfg, internalAlert: !cfg.internalAlert })}
-              className="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-              title={cfg.internalAlert ? 'Desativar alerta interno' : 'Ativar alerta interno'}>
+              className={cn(
+                'flex items-center gap-2 p-2.5 rounded-lg border transition-all text-left',
+                cfg.internalAlert
+                  ? 'border-primary/40 bg-primary/5'
+                  : 'border-border bg-secondary hover:bg-muted',
+              )}>
+              <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0',
+                cfg.internalAlert ? 'bg-primary/10' : 'bg-muted')}>
+                <Bell className={cn('w-3.5 h-3.5', cfg.internalAlert ? 'text-primary' : 'text-muted-foreground')} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={cn('text-[11px] font-semibold', cfg.internalAlert ? 'text-primary' : 'text-muted-foreground')}>
+                  Alerta Interno
+                </p>
+                <p className="text-[9px] text-muted-foreground">Notificação no sino</p>
+              </div>
               {cfg.internalAlert
-                ? <ToggleRight className="w-5 h-5 text-primary" />
-                : <ToggleLeft className="w-5 h-5" />}
+                ? <ToggleRight className="w-5 h-5 text-primary flex-shrink-0" />
+                : <ToggleLeft className="w-5 h-5 text-muted-foreground flex-shrink-0" />}
+            </button>
+
+            {/* Webhook toggle */}
+            <button
+              onClick={() => onChange({ ...cfg, enabled: !cfg.enabled })}
+              className={cn(
+                'flex items-center gap-2 p-2.5 rounded-lg border transition-all text-left',
+                cfg.enabled
+                  ? 'border-success/40 bg-success/5'
+                  : 'border-border bg-secondary hover:bg-muted',
+              )}>
+              <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0',
+                cfg.enabled ? 'bg-success/10' : 'bg-muted')}>
+                <Globe className={cn('w-3.5 h-3.5', cfg.enabled ? 'text-success' : 'text-muted-foreground')} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={cn('text-[11px] font-semibold', cfg.enabled ? 'text-success' : 'text-muted-foreground')}>
+                  Webhook
+                </p>
+                <p className="text-[9px] text-muted-foreground">POST para URL</p>
+              </div>
+              {cfg.enabled
+                ? <ToggleRight className="w-5 h-5 text-success flex-shrink-0" />
+                : <ToggleLeft className="w-5 h-5 text-muted-foreground flex-shrink-0" />}
             </button>
           </div>
+
+          {/* URL input (only when webhook enabled) */}
+          {cfg.enabled && (
+            <div>
+              <label className="text-[11px] font-medium block mb-1 text-muted-foreground uppercase tracking-wide">
+                URL do Webhook
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={cfg.url}
+                  onChange={e => onChange({ ...cfg, url: e.target.value })}
+                  placeholder="https://n8n.meudominio.com/webhook/..."
+                  className="flex-1 text-xs bg-secondary border border-border rounded-lg px-3 h-8 text-foreground outline-none focus:border-primary/50 font-mono"
+                />
+                {cfg.url && (
+                  <a href={cfg.url} target="_blank" rel="noopener noreferrer"
+                    className="w-8 h-8 rounded-lg border border-border bg-secondary flex items-center justify-center hover:bg-muted transition-colors">
+                    <ExternalLink className="w-3 h-3 text-muted-foreground" />
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Delay config */}
           <div>
@@ -237,7 +264,7 @@ function WebhookRow({
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function AutomationsPage() {
   const { toast } = useToast();
-  const { refresh: refreshNotifications } = useNotifications();
+  const { refresh: refreshNotifications, addNotification } = useNotifications();
   const [configs, setConfigs] = useState<WebhookConfig[]>(() => loadWebhookConfigs());
   const [testingId, setTestingId] = useState<WebhookEventId | null>(null);
   const [activeCategory, setActiveCategory] = useState<string>('all');
@@ -261,21 +288,29 @@ export default function AutomationsPage() {
 
     // Test internal alert
     if (cfg.internalAlert) {
+      const categoryToType: Record<string, 'meeting' | 'whatsapp' | 'system' | 'performance'> = {
+        whatsapp: 'whatsapp', meetings: 'meeting', analytics: 'performance', users: 'system', training: 'system',
+      };
+      const alertType = categoryToType[cfg.category] || 'system';
       try {
         const { createInternalAlert } = await import('@/lib/notificationsService');
-        const categoryToType: Record<string, 'meeting' | 'whatsapp' | 'system' | 'performance'> = {
-          whatsapp: 'whatsapp', meetings: 'meeting', analytics: 'performance', users: 'system', training: 'system',
-        };
         await createInternalAlert({
-          type: categoryToType[cfg.category] || 'system',
+          type: alertType,
           title: `[Teste] ${cfg.label}`,
           description: `Alerta de teste disparado manualmente.`,
         });
-        results.push('Alerta interno criado');
-        refreshNotifications();
+        results.push('Alerta interno criado no banco');
       } catch (err: any) {
-        results.push(`Erro no alerta: ${err.message}`);
+        console.error('[automations] createInternalAlert failed:', err);
+        results.push(`Erro no banco: ${err.message}`);
       }
+      // Also add locally for immediate UI feedback
+      addNotification({
+        type: alertType,
+        title: `[Teste] ${cfg.label}`,
+        description: `Alerta de teste disparado manualmente.`,
+      });
+      results.push('Notificação adicionada ao sino');
     }
 
     // Test webhook URL
@@ -297,7 +332,8 @@ export default function AutomationsPage() {
     toast({ title: 'Configurações resetadas', description: 'Todos os eventos voltaram ao padrão.' });
   };
 
-  const enabledCount = configs.filter(c => c.enabled).length;
+  const webhookCount = configs.filter(c => c.enabled).length;
+  const alertCount = configs.filter(c => c.internalAlert).length;
   const totalFired = configs.reduce((sum, c) => sum + c.totalFired, 0);
 
   const categories = ['all', ...Array.from(new Set(configs.map(c => c.category)))];
@@ -331,8 +367,8 @@ export default function AutomationsPage() {
       {/* ── Stats strip ── */}
       <div className="grid grid-cols-3 gap-3 mb-6">
         {[
-          { label: 'Webhooks Ativos', value: enabledCount, icon: Zap, color: 'text-success' },
-          { label: 'Total de Eventos', value: configs.length, icon: Workflow, color: 'text-primary' },
+          { label: 'Alertas Internos', value: alertCount, icon: Bell, color: 'text-primary' },
+          { label: 'Webhooks Ativos', value: webhookCount, icon: Globe, color: 'text-success' },
           { label: 'Disparos Totais', value: totalFired, icon: Activity, color: 'text-accent' },
         ].map(stat => (
           <div key={stat.label} className="glass-card p-3 flex items-center gap-3">
