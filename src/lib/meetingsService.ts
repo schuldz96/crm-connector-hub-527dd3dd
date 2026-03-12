@@ -115,10 +115,34 @@ export async function dispararTranscricoes(): Promise<{ dispatched: number; skip
  * The transcription text is populated by the external service (Cloudflare worker)
  * that reads Google Docs and saves the content into meet_conferences.transcript_text.
  */
-export async function pullTranscriptions(): Promise<number> {
+/**
+ * Pull transcriptions from appmax.meet_conferences → saas.reunioes via server-side RPC.
+ * Looks for meetings where status=TRANSCRIPT_DONE in meet_conferences and copies
+ * transcript_text + transcript_copied_file_id into reunioes.
+ */
+export async function pullTranscriptions(): Promise<{ updated: number; pending: number; total: number }> {
   const empresaId = await getSaasEmpresaId();
 
-  // Get meetings that have no transcription yet
+  const { data, error } = await (supabase as any)
+    .schema('saas')
+    .rpc('pull_transcricoes', { p_empresa_id: empresaId });
+
+  if (error) {
+    console.error('[meetings] pull_transcricoes error:', error);
+    // Fallback to old N+1 approach if RPC doesn't exist yet
+    return await pullTranscriptionsFallback(empresaId);
+  }
+
+  console.log('[meetings] pull_transcricoes result:', data);
+  return {
+    updated: data?.updated || 0,
+    pending: data?.pending || 0,
+    total: data?.total || 0,
+  };
+}
+
+/** Fallback for when the RPC hasn't been deployed yet */
+async function pullTranscriptionsFallback(empresaId: string): Promise<{ updated: number; pending: number; total: number }> {
   const { data: meetings } = await (supabase as any)
     .schema('saas')
     .from('reunioes')
@@ -126,37 +150,41 @@ export async function pullTranscriptions(): Promise<number> {
     .eq('empresa_id', empresaId)
     .is('transcricao', null);
 
-  if (!meetings || meetings.length === 0) return 0;
+  if (!meetings || meetings.length === 0) return { updated: 0, pending: 0, total: 0 };
 
-  let count = 0;
+  let updated = 0;
+  let pending = 0;
   for (const m of meetings) {
     if (!m.google_event_id) continue;
 
-    // Query appmax.meet_conferences for transcript text via RPC
     const { data: fileData } = await (supabase as any)
       .schema('saas')
       .rpc('buscar_transcript_file', { p_conference_key: m.google_event_id });
 
+    const status = fileData?.status;
     const transcriptText = fileData?.transcript_text;
     const fileId = fileData?.transcript_copied_file_id;
-    if (!transcriptText || transcriptText.trim().length < 10) continue;
 
-    try {
-      await (supabase as any)
-        .schema('saas')
-        .from('reunioes')
-        .update({
-          transcricao: transcriptText,
-          transcript_file_id: fileId || null,
-        })
-        .eq('id', m.id);
-      count++;
-    } catch (err) {
-      console.warn(`[meetings] Failed to save transcript for ${m.id}:`, err);
+    if (status === 'TRANSCRIPT_DONE' || (fileId && fileId.length > 0)) {
+      const text = (transcriptText && transcriptText.trim().length > 10)
+        ? transcriptText
+        : `[Transcrição no Drive: ${fileId}]`;
+      try {
+        await (supabase as any)
+          .schema('saas')
+          .from('reunioes')
+          .update({ transcricao: text, transcript_file_id: fileId || null })
+          .eq('id', m.id);
+        updated++;
+      } catch (err) {
+        console.warn(`[meetings] Failed to save transcript for ${m.id}:`, err);
+      }
+    } else if (status === 'NEW' || !status) {
+      pending++;
     }
   }
 
-  return count;
+  return { updated, pending, total: meetings.length };
 }
 
 export async function loadMeetingsFromDb(): Promise<DbMeeting[]> {

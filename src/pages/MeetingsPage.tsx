@@ -130,6 +130,18 @@ export default function MeetingsPage() {
 
   const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0, phase: '' });
 
+  // Persist last sync info for F5 resilience
+  const SYNC_KEY = 'meetings_last_sync';
+  const [lastSync, setLastSync] = useState<{ time: string; result: string } | null>(() => {
+    try { return JSON.parse(localStorage.getItem(SYNC_KEY) || 'null'); } catch { return null; }
+  });
+
+  const saveSyncStatus = (result: string) => {
+    const info = { time: new Date().toISOString(), result };
+    localStorage.setItem(SYNC_KEY, JSON.stringify(info));
+    setLastSync(info);
+  };
+
   const handleSync = async () => {
     setSyncing(true);
     try {
@@ -142,45 +154,49 @@ export default function MeetingsPage() {
       const freshMeetings = await loadMeetingsFromDb();
       setMeetings(freshMeetings);
 
-      // Step 3: Dispatch transcription POSTs via pg_net (server-side, no CORS)
-      setSyncProgress({ current: 0, total: 0, phase: 'Disparando transcrições (server-side)...' });
+      // Step 3: Dispatch transcription POSTs via pg_net for NEW conferences
+      setSyncProgress({ current: 0, total: 0, phase: 'Disparando transcrições para NEW...' });
       const dispatchResult = await dispararTranscricoes();
-      console.log(`[meetings] Dispatched: ${dispatchResult.dispatched}, Skipped: ${dispatchResult.skipped}, Keys:`, dispatchResult.keys);
+      console.log(`[meetings] Dispatched: ${dispatchResult.dispatched}, Skipped: ${dispatchResult.skipped}`);
 
-      // Step 4: Poll for transcriptions with retries (webhook takes 10-60s per meet)
-      let transcriptCount = 0;
-      if (dispatchResult.dispatched > 0) {
-        const maxAttempts = 12; // 12 * 10s = 2 minutes max
+      // Step 4: Pull TRANSCRIPT_DONE transcriptions immediately (already ready in appmax)
+      setSyncProgress({ current: 0, total: 0, phase: 'Puxando transcrições prontas (TRANSCRIPT_DONE)...' });
+      const pullResult = await pullTranscriptions();
+      console.log('[meetings] pullTranscriptions result:', pullResult);
+
+      // Step 5: If there are dispatched NEW ones, poll for them
+      let extraPulled = 0;
+      if (dispatchResult.dispatched > 0 && pullResult.pending > 0) {
+        const maxAttempts = 12;
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-          setSyncProgress({ current: attempt, total: maxAttempts, phase: `Aguardando transcrições... (tentativa ${attempt}/${maxAttempts})` });
-          await new Promise(r => setTimeout(r, 10000)); // wait 10s between polls
-          const pulled = await pullTranscriptions();
-          transcriptCount += pulled;
-          console.log(`[meetings] Poll attempt ${attempt}: pulled ${pulled} transcripts (total: ${transcriptCount})`);
-          if (transcriptCount >= dispatchResult.dispatched) {
-            console.log('[meetings] All dispatched transcripts received');
-            break;
-          }
+          setSyncProgress({
+            current: attempt,
+            total: maxAttempts,
+            phase: `Aguardando ${pullResult.pending} transcrições pendentes... (${attempt}/${maxAttempts})`
+          });
+          await new Promise(r => setTimeout(r, 10000));
+          const poll = await pullTranscriptions();
+          extraPulled += poll.updated;
+          console.log(`[meetings] Poll ${attempt}: +${poll.updated} transcripts, ${poll.pending} still pending`);
+          if (poll.pending === 0) break;
         }
-      } else {
-        // No new dispatches, just try pulling any pending
-        transcriptCount = await pullTranscriptions();
       }
 
       // Final reload
       await loadMeetings();
 
+      const totalTranscripts = pullResult.updated + extraPulled;
       const parts = [`${syncResult.inserted} novas, ${syncResult.updated} atualizadas`];
+      if (totalTranscripts > 0) parts.push(`${totalTranscripts} transcrições importadas`);
       if (dispatchResult.dispatched > 0) parts.push(`${dispatchResult.dispatched} transcrições disparadas`);
       if (dispatchResult.skipped > 0) parts.push(`${dispatchResult.skipped} já processadas`);
-      if (transcriptCount > 0) parts.push(`${transcriptCount} transcrições importadas`);
 
-      toast({
-        title: 'Sincronização concluída',
-        description: parts.join('. ') + '.',
-      });
+      const resultText = parts.join('. ') + '.';
+      saveSyncStatus(resultText);
+      toast({ title: 'Sincronização concluída', description: resultText });
     } catch (err: any) {
       console.error('[meetings] Sync error:', err);
+      saveSyncStatus(`Erro: ${err.message}`);
       toast({ variant: 'destructive', title: 'Erro na sincronização', description: err.message });
     } finally {
       setSyncing(false);
@@ -377,6 +393,26 @@ export default function MeetingsPage() {
               )}
             </div>
           </div>
+
+          {/* Sync progress / last sync info */}
+          {(syncing && syncProgress.phase) && (
+            <div className="flex items-center gap-2 mb-3 p-2.5 rounded-lg bg-primary/5 border border-primary/20">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-primary flex-shrink-0" />
+              <span className="text-xs text-primary">{syncProgress.phase}</span>
+              {syncProgress.total > 0 && (
+                <span className="text-[10px] text-muted-foreground ml-auto">
+                  {syncProgress.current}/{syncProgress.total}
+                </span>
+              )}
+            </div>
+          )}
+          {!syncing && lastSync && (
+            <div className="flex items-center gap-2 mb-3 text-[10px] text-muted-foreground">
+              <span>Última sync: {new Date(lastSync.time).toLocaleString('pt-BR')}</span>
+              <span className="opacity-50">|</span>
+              <span>{lastSync.result}</span>
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-3 mb-4">
             <div className="relative flex-1 min-w-48">
