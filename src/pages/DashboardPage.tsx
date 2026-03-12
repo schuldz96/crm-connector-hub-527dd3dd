@@ -6,12 +6,11 @@ import { Progress } from '@/components/ui/progress';
 import { loadMeetingsFromDb, type DbMeeting } from '@/lib/meetingsService';
 import { useEvolutionInstances } from '@/hooks/useEvolutionInstances';
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, LineChart, Line
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer
 } from 'recharts';
 import {
-  Video, MessageSquare, TrendingUp, Star, ArrowUp, ArrowDown,
-  Calendar, Clock, Zap, Brain, Wifi, WifiOff, Loader2
+  Video, MessageSquare, Star, Calendar, Clock, Zap, Brain, Wifi, WifiOff, Loader2
 } from 'lucide-react';
 
 const colorMap: Record<string, string> = {
@@ -22,18 +21,6 @@ const colorMap: Record<string, string> = {
   graphite: 'hsl(255 8% 63%)',
 };
 
-const statusStyle: Record<string, string> = {
-  concluida: 'score-good',
-  agendada: 'score-excellent',
-  cancelada: 'score-poor',
-  no_show: 'score-average',
-};
-const statusLabel: Record<string, string> = {
-  concluida: 'Concluída',
-  agendada: 'Agendada',
-  cancelada: 'Cancelada',
-  no_show: 'No-show',
-};
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -67,14 +54,8 @@ export default function DashboardPage() {
     return Number((withScore.reduce((sum, m) => sum + (m.score || 0), 0) / withScore.length).toFixed(1));
   }, [meetings]);
 
-  const avgScore = avgScoreMeet;
-
   const instancesConnected = useMemo(() =>
     instances.filter(i => i.connectionStatus === 'open').length,
-  [instances]);
-
-  const totalChats = useMemo(() =>
-    instances.reduce((sum, i) => sum + (i._count?.Chat || 0), 0),
   [instances]);
 
   // ── Chart: Reuniões por mês (últimos 6 meses) ──────────────────────
@@ -141,9 +122,9 @@ export default function DashboardPage() {
 
   const kpiCards = [
     { label: 'Reuniões este mês', value: String(meetingsThisMonth), icon: Video, color: 'violet', unit: '' },
-    { label: 'Score médio', value: avgScore ? String(avgScore) : '—', icon: Star, color: 'lavender', unit: avgScore ? 'pts' : '' },
+    { label: 'Score Meets', value: avgScoreMeet ? String(avgScoreMeet) : '—', icon: Star, color: 'lavender', unit: avgScoreMeet ? 'pts' : '' },
+    { label: 'Score WhatsApp', value: '—', icon: MessageSquare, color: 'purple', unit: '' },
     { label: 'WhatsApp conectados', value: String(instancesConnected), icon: Wifi, color: 'green', unit: `/ ${instances.length}` },
-    { label: 'Total de reuniões', value: String(meetings.length), icon: TrendingUp, color: 'purple', unit: '' },
   ];
 
   return (
