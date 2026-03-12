@@ -246,7 +246,7 @@ export default function DashboardPage() {
               Ver todas
             </Button>
           </div>
-          <div className="space-y-3 mt-2">
+          <div className="space-y-3 mt-2 max-h-[220px] overflow-y-auto pr-1">
             {instancesSummary.length > 0 ? instancesSummary.map((inst) => (
               <div key={inst.name} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors">
                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
