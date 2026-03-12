@@ -201,7 +201,9 @@ export function parseTranscriptParticipation(
     sorted[0].percent += (100 - sum);
   }
 
-  return rawResults.map(r => ({ email: r.email, name: r.name, percent: r.percent }));
+  return rawResults
+    .filter((r) => r.percent > 0)
+    .map((r) => ({ email: r.email, name: r.name, percent: r.percent }));
 }
 
 // ─── Evaluate a meeting ──────────────────────────────────────────────────────

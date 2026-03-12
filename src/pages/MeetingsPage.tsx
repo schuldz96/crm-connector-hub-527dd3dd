@@ -42,6 +42,53 @@ function isTranscriptPlaceholder(text: string | null | undefined): boolean {
 }
 
 
+function normalizeName(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractTranscriptParticipantNames(transcricao: string | null | undefined): string[] {
+  if (!transcricao) return [];
+
+  const match = transcricao.match(/(?:^|\n)\s*Participantes\s*\n([^\n]+)/i);
+  if (!match?.[1]) return [];
+
+  const names = match[1]
+    .split(/[;,]/)
+    .map((name) => name.trim())
+    .filter(Boolean);
+
+  return Array.from(new Set(names));
+}
+
+function findEmailByParticipantName(
+  participantName: string,
+  participants: { email: string; name?: string }[],
+): string | null {
+  const target = normalizeName(participantName);
+  if (!target) return null;
+
+  const targetTokens = target.split(' ').filter((t) => t.length >= 3);
+
+  for (const participant of participants) {
+    const candidateName = normalizeName(participant.name || participant.email.split('@')[0].replace(/[._-]/g, ' '));
+    const candidateTokens = candidateName.split(' ').filter((t) => t.length >= 3);
+
+    const tokenMatch = targetTokens.some((token) => candidateTokens.includes(token));
+    if (candidateName === target || tokenMatch) {
+      return participant.email;
+    }
+  }
+
+  return null;
+}
+
+
 function ScoreBar({ value, label, icon, tip }: { value: number; label: string; icon: string; tip: string }) {
   const color = value >= 85
     ? 'hsl(168 80% 42%)'
@@ -965,24 +1012,48 @@ export default function MeetingsPage() {
 
                 {/* ─ Participants tab ─ */}
                 {detailTab === 'participants' && (() => {
-                  // Get participation from IA evaluation payload
                   const iaParticipation: { email?: string; name: string; percent: number }[] = meetingEval?.payload?.participation || [];
-                  // Sort participants by participation % (highest first)
-                  const participantsWithPct = selectedMeeting.participantes.map(p => {
-                    const displayName = p.name || p.email.split('@')[0];
-                    // Match by email first, then fallback to fuzzy name match
-                    const match = iaParticipation.find(ip =>
-                      ip.email?.toLowerCase() === p.email.toLowerCase()
-                    ) || iaParticipation.find(ip => {
-                      const ipParts = ip.name.toLowerCase().split(/[\s.]+/);
-                      const dpParts = displayName.toLowerCase().split(/[\s.]+/);
-                      return ipParts[0] === dpParts[0] || ip.name.toLowerCase().includes(dpParts[0]) || displayName.toLowerCase().includes(ipParts[0]);
-                    });
-                    return { ...p, displayName, pct: match?.percent || 0 };
+
+                  const transcriptNames = extractTranscriptParticipantNames(selectedMeeting.transcricao);
+                  const baseParticipants = transcriptNames.length > 0
+                    ? transcriptNames.map((name) => ({
+                        name,
+                        email: findEmailByParticipantName(name, selectedMeeting.participantes) || null,
+                      }))
+                    : selectedMeeting.participantes.map((p) => ({
+                        name: p.name || p.email.split('@')[0],
+                        email: p.email,
+                      }));
+
+                  const participantsWithPct = baseParticipants.map((p) => {
+                    const displayName = p.name;
+                    const normalizedDisplayName = normalizeName(displayName);
+
+                    const match = (p.email
+                      ? iaParticipation.find((ip) => ip.email?.toLowerCase() === p.email?.toLowerCase())
+                      : undefined)
+                      || iaParticipation.find((ip) => normalizeName(ip.name) === normalizedDisplayName)
+                      || iaParticipation.find((ip) => {
+                        const ipTokens = normalizeName(ip.name).split(' ').filter((t) => t.length >= 3);
+                        const displayTokens = normalizedDisplayName.split(' ').filter((t) => t.length >= 3);
+                        return displayTokens.some((token) => ipTokens.includes(token));
+                      });
+
+                    return {
+                      ...p,
+                      pct: match?.percent || 0,
+                    };
                   }).sort((a, b) => b.pct - a.pct);
+
                   const totalPct = participantsWithPct.reduce((sum, p) => sum + p.pct, 0);
+
                   return (
                     <div className="space-y-2">
+                      {transcriptNames.length > 0 && (
+                        <div className="text-[10px] text-muted-foreground px-1">
+                          Participantes extraídos da transcrição.
+                        </div>
+                      )}
                       {totalPct > 0 && (
                         <div className="flex items-center justify-between text-[10px] text-muted-foreground px-1">
                           <span>Participação calculada pela IA</span>
@@ -991,7 +1062,7 @@ export default function MeetingsPage() {
                       )}
                       {participantsWithPct.length > 0 ? (
                         participantsWithPct.map((p, i) => {
-                          const isExternal = !p.email.endsWith('@appmax.com.br');
+                          const isExternal = p.email ? !p.email.endsWith('@appmax.com.br') : false;
                           const pct = p.pct;
                           return (
                             <div
@@ -1002,11 +1073,11 @@ export default function MeetingsPage() {
                               )}
                             >
                               <div className="w-7 h-7 rounded-full bg-secondary border border-border flex items-center justify-center text-[10px] font-bold flex-shrink-0">
-                                {(p.name || p.email)[0].toUpperCase()}
+                                {(p.name || '?')[0].toUpperCase()}
                               </div>
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <p className="text-xs font-medium truncate">{p.displayName}</p>
+                                  <p className="text-xs font-medium truncate">{p.name}</p>
                                   {pct > 0 && (
                                     <span className={cn(
                                       'text-[10px] font-bold',
@@ -1014,7 +1085,11 @@ export default function MeetingsPage() {
                                     )}>{pct}%</span>
                                   )}
                                 </div>
-                                <p className="text-[10px] text-muted-foreground truncate">{p.email}</p>
+                                {p.email ? (
+                                  <p className="text-[10px] text-muted-foreground truncate">{p.email}</p>
+                                ) : (
+                                  <p className="text-[10px] text-muted-foreground/70 truncate">Email não identificado</p>
+                                )}
                                 {pct > 0 && (
                                   <div className="h-1 bg-muted rounded-full overflow-hidden mt-1">
                                     <div
