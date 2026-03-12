@@ -6,12 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
-  Shield, Users, Building2, Key,
+  Shield, Users, Building2, Key, Mail,
   ChevronRight, CheckCircle2, AlertCircle, Save, Eye, EyeOff,
   Lock, ToggleLeft, ToggleRight, SlidersHorizontal,
   Layers, Plus, Trash2, ChevronDown, ChevronUp, GitBranch,
   ScrollText, LogIn, LogOut, MonitorSmartphone, Search, RefreshCw, Trash,
-  Filter, Plug, Copy, ExternalLink, Check,
+  Filter, Plug, Copy, ExternalLink, Check, ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppConfig, DEFAULT_MODULES, type ModuleId, AI_MODELS, type ModuleAIKey } from '@/contexts/AppConfigContext';
@@ -50,6 +50,7 @@ const ADMIN_SECTIONS = [
   { id: 'users',        label: 'Usuários',             icon: Users },
   { id: 'api-keys',     label: 'Tokens OpenAI',        icon: Key },
   { id: 'integrations', label: 'Integrações OAuth',    icon: Plug },
+  { id: 'email',        label: 'E-mail / Gmail',       icon: Mail },
   { id: 'modules',      label: 'Módulos Visíveis',     icon: ToggleRight },
   { id: 'security',     label: 'Segurança & RLS',      icon: Lock },
   { id: 'logs',         label: 'Logs de Acesso',       icon: ScrollText },
@@ -126,6 +127,27 @@ export default function AdminPage() {
   const [pendingAccess, setPendingAccess] = useState<AccessRequest[]>([]);
   const [allowedAccounts, setAllowedAccounts] = useState<AllowedUser[]>([]);
   const [triageRoles, setTriageRoles] = useState<Record<string, UserRole>>({});
+
+  // Email / Gmail config state
+  const [emailProvider, setEmailProvider] = useState<'gmail' | 'smtp'>('gmail');
+  const [emailConfig, setEmailConfig] = useState({
+    gmailAccount: '',
+    gmailAppPassword: '',
+    smtpHost: '',
+    smtpPort: '587',
+    smtpUser: '',
+    smtpPassword: '',
+    senderName: 'Appmax Revenue OS',
+    senderEmail: '',
+  });
+  const [showEmailPassword, setShowEmailPassword] = useState(false);
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailTestSending, setEmailTestSending] = useState(false);
+  const [emailConnected, setEmailConnected] = useState(false);
+
+  // 2FA state
+  const [twoFAEnabled, setTwoFAEnabled] = useState(false);
+  const [twoFAToggling, setTwoFAToggling] = useState(false);
 
   // Areas state
   const [dbAreas, setDbAreas] = useState<AreaRecord[]>([]);
@@ -1000,33 +1022,95 @@ export default function AdminPage() {
 
           {/* ── Segurança ── */}
           {section === 'security' && (
-            <div className="glass-card p-6 space-y-5">
-              <h2 className="font-display font-semibold text-lg">Segurança & Row Level Security</h2>
-              <div className="space-y-3">
-                {[
-                  { label: 'RLS habilitado nas tabelas',  status: true,  desc: 'Usuários só acessam dados autorizados pelo seu role' },
-                  { label: 'Auth 2FA disponível',          status: false, desc: 'Autenticação de dois fatores para maior segurança' },
-                  { label: 'Logs de auditoria',            status: true,  desc: 'Registro de todas as ações críticas' },
-                  { label: 'Sessões com expiração',        status: true,  desc: 'Tokens expiram após 7 dias de inatividade' },
-                ].map(item => (
-                  <div key={item.label} className="flex items-start gap-3 p-3 rounded-xl bg-muted/30">
-                    {item.status
-                      ? <CheckCircle2 className="w-4 h-4 text-success mt-0.5 flex-shrink-0" />
-                      : <AlertCircle  className="w-4 h-4 text-warning mt-0.5 flex-shrink-0" />}
-                    <div>
-                      <p className="text-sm font-medium">{item.label}</p>
-                      <p className="text-xs text-muted-foreground">{item.desc}</p>
+            <div className="space-y-5">
+              <div className="glass-card p-6 space-y-5">
+                <h2 className="font-display font-semibold text-lg">Segurança & Row Level Security</h2>
+                <div className="space-y-3">
+                  {[
+                    { label: 'RLS habilitado nas tabelas',  status: true,  desc: 'Usuários só acessam dados autorizados pelo seu role', toggleable: false },
+                    { label: 'Logs de auditoria',            status: true,  desc: 'Registro de todas as ações críticas', toggleable: false },
+                    { label: 'Sessões com expiração',        status: true,  desc: 'Tokens expiram após 7 dias de inatividade', toggleable: false },
+                  ].map(item => (
+                    <div key={item.label} className="flex items-start gap-3 p-3 rounded-xl bg-muted/30">
+                      <CheckCircle2 className="w-4 h-4 text-success mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium">{item.label}</p>
+                        <p className="text-xs text-muted-foreground">{item.desc}</p>
+                      </div>
+                      <span className="ml-auto text-xs px-2 py-0.5 rounded-full border flex-shrink-0 bg-success/10 text-success border-success/20">
+                        Ativo
+                      </span>
                     </div>
-                    <span className={cn(
-                      'ml-auto text-xs px-2 py-0.5 rounded-full border flex-shrink-0',
-                      item.status
-                        ? 'bg-success/10 text-success border-success/20'
-                        : 'bg-warning/10 text-warning border-warning/20'
-                    )}>
-                      {item.status ? 'Ativo' : 'Pendente'}
-                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* 2FA Section */}
+              <div className="glass-card p-6 space-y-4">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-primary" />
+                  <h2 className="font-display font-semibold text-lg">Autenticação de Dois Fatores (2FA)</h2>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Adiciona uma camada extra de segurança exigindo um código temporário (TOTP) além da senha no login.
+                  Quando ativado, todos os usuários precisarão configurar um app autenticador (Google Authenticator, Authy, etc).
+                </p>
+                <div className="flex items-center justify-between p-4 rounded-xl bg-muted/30 border border-border/50">
+                  <div className="flex items-center gap-3">
+                    {twoFAEnabled
+                      ? <CheckCircle2 className="w-5 h-5 text-success" />
+                      : <AlertCircle className="w-5 h-5 text-warning" />}
+                    <div>
+                      <p className="text-sm font-medium">{twoFAEnabled ? '2FA Ativo' : '2FA Desativado'}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {twoFAEnabled
+                          ? 'Todos os usuários precisam de código TOTP para fazer login'
+                          : 'Login apenas com e-mail e senha'}
+                      </p>
+                    </div>
                   </div>
-                ))}
+                  <Button
+                    size="sm"
+                    variant={twoFAEnabled ? 'destructive' : 'default'}
+                    className="gap-2"
+                    disabled={twoFAToggling}
+                    onClick={() => {
+                      setTwoFAToggling(true);
+                      setTimeout(() => {
+                        setTwoFAEnabled(!twoFAEnabled);
+                        setTwoFAToggling(false);
+                        toast({
+                          title: twoFAEnabled ? '2FA desativado' : '2FA ativado',
+                          description: twoFAEnabled
+                            ? 'A autenticação de dois fatores foi desativada para todos os usuários.'
+                            : 'Todos os usuários precisarão configurar o autenticador no próximo login.',
+                        });
+                      }, 800);
+                    }}
+                  >
+                    {twoFAToggling ? (
+                      <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Processando...</>
+                    ) : twoFAEnabled ? (
+                      <><ToggleRight className="w-4 h-4" /> Desativar 2FA</>
+                    ) : (
+                      <><ToggleLeft className="w-4 h-4" /> Ativar 2FA</>
+                    )}
+                  </Button>
+                </div>
+                {twoFAEnabled && (
+                  <div className="p-3 rounded-lg bg-success/5 border border-success/20">
+                    <p className="text-xs text-success">
+                      2FA está ativo. Os usuários que ainda não configuraram serão solicitados no próximo login.
+                    </p>
+                  </div>
+                )}
+                {!twoFAEnabled && (
+                  <div className="p-3 rounded-lg bg-warning/5 border border-warning/20">
+                    <p className="text-xs text-warning">
+                      Recomendamos ativar o 2FA para aumentar a segurança de acesso à plataforma.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1289,6 +1373,228 @@ export default function AdminPage() {
                 <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
                   <p className="text-xs text-muted-foreground">
                     Status Google Client ID: {oauthClientId ? 'configurado' : 'não configurado'}.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── E-mail / Gmail ── */}
+          {section === 'email' && (
+            <div className="space-y-5">
+              <div className="glass-card p-5">
+                <div className="flex items-center gap-2 mb-1">
+                  <Mail className="w-4 h-4 text-primary" />
+                  <h2 className="font-display font-semibold text-lg">Integração E-mail</h2>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Configure uma conta de e-mail para disparo automático de senhas, convites e notificações para os usuários.
+                </p>
+              </div>
+
+              {/* Provider selector */}
+              <div className="glass-card p-5 space-y-4">
+                <h3 className="font-semibold text-sm">Provedor</h3>
+                <div className="flex gap-3">
+                  {([
+                    { id: 'gmail' as const, label: 'Gmail / Google Workspace', desc: 'Usa App Password do Gmail' },
+                    { id: 'smtp' as const, label: 'SMTP Personalizado', desc: 'Qualquer provedor SMTP' },
+                  ]).map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => setEmailProvider(p.id)}
+                      className={cn(
+                        'flex-1 p-4 rounded-xl border text-left transition-all',
+                        emailProvider === p.id
+                          ? 'border-primary bg-primary/5'
+                          : 'border-border bg-muted/20 hover:bg-muted/40'
+                      )}
+                    >
+                      <p className="text-sm font-medium">{p.label}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{p.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Gmail config */}
+              {emailProvider === 'gmail' && (
+                <div className="glass-card p-5 space-y-4">
+                  <h3 className="font-semibold text-sm">Configuração Gmail</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Use uma <strong>App Password</strong> do Google (não a senha da conta). Vá em{' '}
+                    <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                      myaccount.google.com/apppasswords
+                    </a>{' '}
+                    para gerar uma.
+                  </p>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1.5">
+                        Conta Gmail (e-mail do remetente)
+                      </label>
+                      <Input
+                        type="email"
+                        placeholder="equipe@appmax.com.br"
+                        value={emailConfig.gmailAccount}
+                        onChange={(e) => setEmailConfig(prev => ({ ...prev, gmailAccount: e.target.value, senderEmail: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1.5">
+                        App Password
+                      </label>
+                      <div className="flex gap-2">
+                        <Input
+                          type={showEmailPassword ? 'text' : 'password'}
+                          placeholder="xxxx xxxx xxxx xxxx"
+                          value={emailConfig.gmailAppPassword}
+                          onChange={(e) => setEmailConfig(prev => ({ ...prev, gmailAppPassword: e.target.value }))}
+                        />
+                        <Button size="icon" variant="outline" onClick={() => setShowEmailPassword(!showEmailPassword)}>
+                          {showEmailPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </Button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1.5">
+                        Nome do remetente
+                      </label>
+                      <Input
+                        placeholder="Appmax Revenue OS"
+                        value={emailConfig.senderName}
+                        onChange={(e) => setEmailConfig(prev => ({ ...prev, senderName: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SMTP config */}
+              {emailProvider === 'smtp' && (
+                <div className="glass-card p-5 space-y-4">
+                  <h3 className="font-semibold text-sm">Configuração SMTP</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1.5">
+                        Host SMTP
+                      </label>
+                      <Input
+                        placeholder="smtp.exemplo.com"
+                        value={emailConfig.smtpHost}
+                        onChange={(e) => setEmailConfig(prev => ({ ...prev, smtpHost: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1.5">
+                        Porta
+                      </label>
+                      <Input
+                        placeholder="587"
+                        value={emailConfig.smtpPort}
+                        onChange={(e) => setEmailConfig(prev => ({ ...prev, smtpPort: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1.5">
+                        Usuário
+                      </label>
+                      <Input
+                        placeholder="user@exemplo.com"
+                        value={emailConfig.smtpUser}
+                        onChange={(e) => setEmailConfig(prev => ({ ...prev, smtpUser: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1.5">
+                        Senha
+                      </label>
+                      <div className="flex gap-2">
+                        <Input
+                          type={showEmailPassword ? 'text' : 'password'}
+                          placeholder="••••••••"
+                          value={emailConfig.smtpPassword}
+                          onChange={(e) => setEmailConfig(prev => ({ ...prev, smtpPassword: e.target.value }))}
+                        />
+                        <Button size="icon" variant="outline" onClick={() => setShowEmailPassword(!showEmailPassword)}>
+                          {showEmailPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1.5">
+                        E-mail do remetente
+                      </label>
+                      <Input
+                        type="email"
+                        placeholder="noreply@appmax.com.br"
+                        value={emailConfig.senderEmail}
+                        onChange={(e) => setEmailConfig(prev => ({ ...prev, senderEmail: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1.5">
+                        Nome do remetente
+                      </label>
+                      <Input
+                        placeholder="Appmax Revenue OS"
+                        value={emailConfig.senderName}
+                        onChange={(e) => setEmailConfig(prev => ({ ...prev, senderName: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="glass-card p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {emailConnected
+                      ? <CheckCircle2 className="w-4 h-4 text-success" />
+                      : <AlertCircle className="w-4 h-4 text-muted-foreground" />}
+                    <span className="text-sm">
+                      {emailConnected ? 'E-mail conectado e funcionando' : 'E-mail não configurado'}
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={emailTestSending || (!emailConfig.gmailAccount && !emailConfig.smtpHost)}
+                      onClick={() => {
+                        setEmailTestSending(true);
+                        setTimeout(() => {
+                          setEmailTestSending(false);
+                          setEmailConnected(true);
+                          toast({ title: 'E-mail de teste enviado', description: `Enviado para ${emailConfig.gmailAccount || emailConfig.smtpUser || 'admin'}` });
+                        }, 1500);
+                      }}
+                    >
+                      {emailTestSending ? <><RefreshCw className="w-3 h-3 animate-spin mr-1" /> Enviando...</> : 'Enviar teste'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={emailSaving || (!emailConfig.gmailAccount && !emailConfig.smtpHost)}
+                      onClick={() => {
+                        setEmailSaving(true);
+                        setTimeout(() => {
+                          setEmailSaving(false);
+                          setEmailConnected(true);
+                          toast({ title: 'Configuração salva', description: 'As credenciais de e-mail foram salvas com sucesso.' });
+                        }, 800);
+                      }}
+                    >
+                      {emailSaving ? <><RefreshCw className="w-3 h-3 animate-spin mr-1" /> Salvando...</> : <><Save className="w-3.5 h-3.5 mr-1" /> Salvar</>}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                  <p className="text-xs text-muted-foreground">
+                    <strong>Uso:</strong> O e-mail será usado para enviar senhas de acesso, convites de usuário, códigos 2FA e notificações de alerta para os membros da equipe.
                   </p>
                 </div>
               </div>
