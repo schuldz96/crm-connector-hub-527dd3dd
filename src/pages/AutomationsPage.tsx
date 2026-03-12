@@ -223,7 +223,7 @@ function WebhookRow({
               variant="outline"
               className="text-xs h-7 border-primary/30 text-primary px-2 gap-1"
               onClick={() => onTest(cfg)}
-              disabled={!cfg.url.trim()}>
+              disabled={!cfg.url.trim() && !cfg.internalAlert}>
               <TestTube2 className="w-3 h-3" /> Testar
             </Button>
           </div>
@@ -253,15 +253,38 @@ export default function AutomationsPage() {
   };
 
   const handleTest = async (cfg: WebhookConfig) => {
-    if (!cfg.url.trim()) return;
     setTestingId(cfg.id);
-    const result = await testWebhook(cfg);
+
+    const results: string[] = [];
+
+    // Test internal alert
+    if (cfg.internalAlert) {
+      try {
+        const { createInternalAlert } = await import('@/lib/notificationsService');
+        const categoryToType: Record<string, 'meeting' | 'whatsapp' | 'system' | 'performance'> = {
+          whatsapp: 'whatsapp', meetings: 'meeting', analytics: 'performance', users: 'system', training: 'system',
+        };
+        await createInternalAlert({
+          type: categoryToType[cfg.category] || 'system',
+          title: `[Teste] ${cfg.label}`,
+          description: `Alerta de teste disparado manualmente.`,
+        });
+        results.push('Alerta interno criado');
+      } catch (err: any) {
+        results.push(`Erro no alerta: ${err.message}`);
+      }
+    }
+
+    // Test webhook URL
+    if (cfg.url.trim()) {
+      const result = await testWebhook(cfg);
+      results.push(result === 'success' ? `Webhook enviado para ${cfg.url}` : 'Webhook disparado (CORS pode mascarar resposta)');
+    }
+
     setTestingId(null);
     toast({
-      title: result === 'success' ? '✓ Webhook enviado!' : '⚠ Webhook disparado',
-      description: result === 'success'
-        ? `Payload de teste enviado para ${cfg.url}`
-        : 'Requisição enviada. Verifique seu endpoint (CORS pode mascarar a resposta).',
+      title: '✓ Teste concluído',
+      description: results.join(' · ') || 'Nenhuma ação configurada.',
     });
   };
 
