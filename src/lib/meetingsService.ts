@@ -187,6 +187,30 @@ async function pullTranscriptionsFallback(empresaId: string): Promise<{ updated:
   return { updated, pending, total: meetings.length };
 }
 
+/**
+ * Fetch actual transcript content from Google Drive via Edge Function.
+ * Reads Google Docs using the service account and stores the text in reunioes.
+ */
+export async function fetchTranscriptsFromDrive(): Promise<{ fetched: number; errors: number; total: number }> {
+  const empresaId = await getSaasEmpresaId();
+
+  const { data, error } = await supabase.functions.invoke('fetch-transcripts', {
+    body: { empresa_id: empresaId },
+  });
+
+  if (error) {
+    console.error('[meetings] fetch-transcripts error:', error);
+    throw new Error(`Erro ao buscar transcrições do Drive: ${error.message}`);
+  }
+
+  console.log('[meetings] fetch-transcripts result:', data);
+  return {
+    fetched: data?.fetched || 0,
+    errors: data?.errors || 0,
+    total: data?.total || 0,
+  };
+}
+
 export async function loadMeetingsFromDb(): Promise<DbMeeting[]> {
   const empresaId = await getSaasEmpresaId();
 

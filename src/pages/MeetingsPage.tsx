@@ -13,7 +13,7 @@ import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useToast } from '@/hooks/use-toast';
 import {
   loadMeetingsFromDb, syncMeetConferences, clearAllMeetings, dispararTranscricoes, pullTranscriptions,
-  ensureAppmaxParticipantsRegistered, fetchTranscriptInfo,
+  fetchTranscriptsFromDrive, ensureAppmaxParticipantsRegistered, fetchTranscriptInfo,
   type DbMeeting, type TranscriptInfo
 } from '@/lib/meetingsService';
 import { evaluateMeeting, loadEvaluationByEntity, type StoredEvaluation } from '@/lib/evaluationService';
@@ -164,7 +164,18 @@ export default function MeetingsPage() {
       const pullResult = await pullTranscriptions();
       console.log('[meetings] pullTranscriptions result:', pullResult);
 
-      // Step 5: If there are dispatched NEW ones, poll for them
+      // Step 5: Fetch actual transcript text from Google Drive (Edge Function)
+      setSyncProgress({ current: 0, total: 0, phase: 'Buscando conteúdo das transcrições no Google Drive...' });
+      let driveFetched = 0;
+      try {
+        const driveResult = await fetchTranscriptsFromDrive();
+        driveFetched = driveResult.fetched;
+        console.log('[meetings] fetchTranscriptsFromDrive result:', driveResult);
+      } catch (e) {
+        console.warn('[meetings] fetchTranscriptsFromDrive failed (Edge Function may not be deployed):', e);
+      }
+
+      // Step 6: If there are dispatched NEW ones, poll for them
       let extraPulled = 0;
       if (dispatchResult.dispatched > 0 && pullResult.pending > 0) {
         const maxAttempts = 12;
@@ -188,6 +199,7 @@ export default function MeetingsPage() {
       const totalTranscripts = pullResult.updated + extraPulled;
       const parts = [`${syncResult.inserted} novas, ${syncResult.updated} atualizadas`];
       if (totalTranscripts > 0) parts.push(`${totalTranscripts} transcrições importadas`);
+      if (driveFetched > 0) parts.push(`${driveFetched} transcrições lidas do Drive`);
       if (dispatchResult.dispatched > 0) parts.push(`${dispatchResult.dispatched} transcrições disparadas`);
       if (dispatchResult.skipped > 0) parts.push(`${dispatchResult.skipped} já processadas`);
 
