@@ -1,87 +1,147 @@
-import { useMemo, type CSSProperties } from 'react';
+import { useState, useEffect, useMemo, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MOCK_MEETINGS, CHART_DATA } from '@/data/mockData';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { loadMeetingsFromDb, type DbMeeting } from '@/lib/meetingsService';
+import { useEvolutionInstances } from '@/hooks/useEvolutionInstances';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line
+  Tooltip, ResponsiveContainer, LineChart, Line
 } from 'recharts';
 import {
   Video, MessageSquare, TrendingUp, Star, ArrowUp, ArrowDown,
-  MoreHorizontal, Calendar, Clock, Users, Target, Zap, Brain
+  Calendar, Clock, Zap, Brain, Wifi, WifiOff, Loader2
 } from 'lucide-react';
 
 const colorMap: Record<string, string> = {
   violet: 'hsl(261 86% 68%)',
   lavender: 'hsl(258 55% 76%)',
   purple: 'hsl(270 76% 62%)',
+  green: 'hsl(142 71% 45%)',
   graphite: 'hsl(255 8% 63%)',
 };
 
 const statusStyle: Record<string, string> = {
-  completed: 'score-good',
-  scheduled: 'score-excellent',
-  cancelled: 'score-poor',
+  concluida: 'score-good',
+  agendada: 'score-excellent',
+  cancelada: 'score-poor',
   no_show: 'score-average',
 };
 const statusLabel: Record<string, string> = {
-  completed: 'Concluída',
-  scheduled: 'Agendada',
-  cancelled: 'Cancelada',
+  concluida: 'Concluída',
+  agendada: 'Agendada',
+  cancelada: 'Cancelada',
   no_show: 'No-show',
 };
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const meetingsThisMonth = useMemo(() => {
-    const now = new Date();
-    return MOCK_MEETINGS.filter(m => {
-      const d = new Date(m.date);
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    }).length;
+  const { instances } = useEvolutionInstances();
+  const [meetings, setMeetings] = useState<DbMeeting[]>([]);
+  const [loadingMeetings, setLoadingMeetings] = useState(true);
+
+  useEffect(() => {
+    loadMeetingsFromDb()
+      .then(setMeetings)
+      .catch(err => console.error('[dashboard] load meetings:', err))
+      .finally(() => setLoadingMeetings(false));
   }, []);
+
+  // ── KPIs ────────────────────────────────────────────────────────────
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+
+  const meetingsThisMonth = useMemo(() =>
+    meetings.filter(m => {
+      const d = new Date(m.data_reuniao);
+      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+    }).length,
+  [meetings, currentMonth, currentYear]);
+
   const avgScore = useMemo(() => {
-    const completedWithScore = MOCK_MEETINGS.filter(m => typeof m.score === 'number');
-    if (!completedWithScore.length) return 0;
-    return Number((completedWithScore.reduce((sum, m) => sum + (m.score || 0), 0) / completedWithScore.length).toFixed(1));
-  }, []);
-  const conversionRate = useMemo(() => {
-    const completed = MOCK_MEETINGS.filter(m => m.status === 'completed').length;
-    if (!MOCK_MEETINGS.length) return 0;
-    return Number(((completed / MOCK_MEETINGS.length) * 100).toFixed(1));
-  }, []);
-  const recentMeetings = useMemo(() => MOCK_MEETINGS.slice(0, 5), []);
+    const withScore = meetings.filter(m => typeof m.score === 'number' && m.score !== null);
+    if (!withScore.length) return 0;
+    return Number((withScore.reduce((sum, m) => sum + (m.score || 0), 0) / withScore.length).toFixed(1));
+  }, [meetings]);
+
+  const instancesConnected = useMemo(() =>
+    instances.filter(i => i.connectionStatus === 'open').length,
+  [instances]);
+
+  const totalChats = useMemo(() =>
+    instances.reduce((sum, i) => sum + (i._count?.Chat || 0), 0),
+  [instances]);
+
+  // ── Chart: Reuniões por mês (últimos 6 meses) ──────────────────────
+  const meetingsPerMonth = useMemo(() => {
+    const months: { month: string; reunioes: number; concluidas: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(currentYear, currentMonth - i, 1);
+      const label = d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+      const m = d.getMonth();
+      const y = d.getFullYear();
+      const inMonth = meetings.filter(mt => {
+        const md = new Date(mt.data_reuniao);
+        return md.getMonth() === m && md.getFullYear() === y;
+      });
+      months.push({
+        month: label.charAt(0).toUpperCase() + label.slice(1),
+        reunioes: inMonth.length,
+        concluidas: inMonth.filter(mt => mt.status === 'concluida').length,
+      });
+    }
+    return months;
+  }, [meetings, currentMonth, currentYear]);
+
+  // ── Top Sellers (vendedores com mais reuniões e score) ─────────────
   const topSellers = useMemo(() => {
     const bySeller = new Map<string, { name: string; meetings: number; scoreSum: number; scoreCount: number }>();
-    for (const m of MOCK_MEETINGS) {
-      const cur = bySeller.get(m.sellerId) || { name: m.sellerName, meetings: 0, scoreSum: 0, scoreCount: 0 };
+    for (const m of meetings) {
+      const key = m.vendedor_id || m.vendedor_email || 'unknown';
+      const name = m.vendedor_nome || m.vendedor_email || 'Sem vendedor';
+      const cur = bySeller.get(key) || { name, meetings: 0, scoreSum: 0, scoreCount: 0 };
       cur.meetings += 1;
-      if (typeof m.score === 'number') {
+      if (typeof m.score === 'number' && m.score !== null) {
         cur.scoreSum += m.score;
         cur.scoreCount += 1;
       }
-      bySeller.set(m.sellerId, cur);
+      bySeller.set(key, cur);
     }
     return Array.from(bySeller.values())
+      .filter(s => s.name !== 'Sem vendedor')
       .map(s => ({
         name: s.name,
         meetings: s.meetings,
         score: s.scoreCount ? Math.round(s.scoreSum / s.scoreCount) : 0,
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(s.name)}`,
-        trend: 'up' as const,
       }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 4);
-  }, []);
+      .sort((a, b) => b.score - a.score || b.meetings - a.meetings)
+      .slice(0, 6);
+  }, [meetings]);
+
+  // ── WhatsApp Instances summary ─────────────────────────────────────
+  const instancesSummary = useMemo(() => {
+    return instances.map(i => ({
+      name: i.name,
+      status: i.connectionStatus,
+      chats: i._count?.Chat || 0,
+      messages: i._count?.Message || 0,
+    }));
+  }, [instances]);
+
+  // ── Recent meetings ────────────────────────────────────────────────
+  const recentMeetings = useMemo(() => meetings.slice(0, 8), [meetings]);
+
+  const monthLabel = now.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).replace('.', '');
 
   const kpiCards = [
-    { label: 'Reuniões este mês', value: String(meetingsThisMonth), change: 0, icon: Video, color: 'violet', unit: '' },
-    { label: 'Score médio', value: String(avgScore || 0), change: 0, icon: Star, color: 'lavender', unit: 'pts' },
-    { label: 'Taxa de conversão', value: String(conversionRate || 0), change: 0, icon: TrendingUp, color: 'purple', unit: '%' },
-    { label: 'Conversas ativas', value: '0', change: 0, icon: MessageSquare, color: 'graphite', unit: '' },
+    { label: 'Reuniões este mês', value: String(meetingsThisMonth), icon: Video, color: 'violet', unit: '' },
+    { label: 'Score médio', value: avgScore ? String(avgScore) : '—', icon: Star, color: 'lavender', unit: avgScore ? 'pts' : '' },
+    { label: 'WhatsApp conectados', value: String(instancesConnected), icon: Wifi, color: 'green', unit: `/ ${instances.length}` },
+    { label: 'Total de reuniões', value: String(meetings.length), icon: TrendingUp, color: 'purple', unit: '' },
   ];
 
   return (
@@ -90,7 +150,7 @@ export default function DashboardPage() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-display font-bold">
-            Olá, {user?.name?.split(' ')[0]} 👋
+            Olá, {user?.name?.split(' ')[0] || 'Usuário'} 👋
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
             Aqui está o resumo de performance da sua equipe hoje.
@@ -99,7 +159,7 @@ export default function DashboardPage() {
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="text-xs h-8 border-border">
             <Calendar className="w-3.5 h-3.5 mr-1.5" />
-            Mar 2026
+            {monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1)}
           </Button>
           <Button size="sm" className="text-xs h-8 bg-gradient-primary" onClick={() => navigate('/reports')}>
             <Zap className="w-3.5 h-3.5 mr-1.5" />
@@ -107,7 +167,7 @@ export default function DashboardPage() {
           </Button>
         </div>
       </div>
-      
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpiCards.map((kpi) => (
@@ -119,10 +179,9 @@ export default function DashboardPage() {
               >
                 <kpi.icon className="w-4.5 h-4.5" style={{ color: colorMap[kpi.color], width: 18, height: 18 }} />
               </div>
-              <span className={`flex items-center gap-0.5 text-xs font-medium ${kpi.change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {kpi.change >= 0 ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
-                {Math.abs(kpi.change)}{kpi.unit === '%' ? 'pp' : '%'}
-              </span>
+              {loadingMeetings && (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+              )}
             </div>
             <div>
               <p className="text-2xl font-display font-bold">
@@ -141,56 +200,78 @@ export default function DashboardPage() {
         <div className="glass-card p-5 lg:col-span-2">
           <div className="section-header">
             <div>
-              <h3 className="section-title">Reuniões & Conversões</h3>
+              <h3 className="section-title">Reuniões por Mês</h3>
               <p className="text-xs text-muted-foreground">Últimos 6 meses</p>
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={CHART_DATA.meetingsPerMonth}>
-              <defs>
-                <linearGradient id="gradBlue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(261 86% 68%)" stopOpacity={0.34} />
-                  <stop offset="95%" stopColor="hsl(261 86% 68%)" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="gradGreen" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(258 55% 76%)" stopOpacity={0.34} />
-                  <stop offset="95%" stopColor="hsl(258 55% 76%)" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
-              <Tooltip
-                contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
-                labelStyle={{ color: 'hsl(var(--foreground))' }}
-              />
-              <Area type="monotone" dataKey="meetings" stroke="hsl(261 86% 68%)" fill="url(#gradBlue)" strokeWidth={2.2} name="Reuniões" />
-              <Area type="monotone" dataKey="conversions" stroke="hsl(258 55% 76%)" fill="url(#gradGreen)" strokeWidth={2.2} name="Conversões" />
-            </AreaChart>
-          </ResponsiveContainer>
+          {meetingsPerMonth.some(m => m.reunioes > 0) ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={meetingsPerMonth}>
+                <defs>
+                  <linearGradient id="gradReunions" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(261 86% 68%)" stopOpacity={0.34} />
+                    <stop offset="95%" stopColor="hsl(261 86% 68%)" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gradConcluidas" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(142 71% 45%)" stopOpacity={0.34} />
+                    <stop offset="95%" stopColor="hsl(142 71% 45%)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+                <Tooltip
+                  contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
+                  labelStyle={{ color: 'hsl(var(--foreground))' }}
+                />
+                <Area type="monotone" dataKey="reunioes" stroke="hsl(261 86% 68%)" fill="url(#gradReunions)" strokeWidth={2.2} name="Total" />
+                <Area type="monotone" dataKey="concluidas" stroke="hsl(142 71% 45%)" fill="url(#gradConcluidas)" strokeWidth={2.2} name="Concluídas" />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-[200px] text-sm text-muted-foreground">
+              Sem dados de reuniões ainda. Sincronize na página de Reuniões.
+            </div>
+          )}
         </div>
 
-        {/* Score Evolution */}
+        {/* WhatsApp Instances */}
         <div className="glass-card p-5">
           <div className="section-header">
             <div>
-              <h3 className="section-title">Score por Vendedor</h3>
-              <p className="text-xs text-muted-foreground">Últimas 4 semanas</p>
+              <h3 className="section-title">Instâncias WhatsApp</h3>
+              <p className="text-xs text-muted-foreground">{instances.length} instância{instances.length !== 1 ? 's' : ''}</p>
             </div>
+            <Button variant="ghost" size="sm" className="text-xs h-7 text-muted-foreground" onClick={() => navigate('/whatsapp')}>
+              Ver todas
+            </Button>
           </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <LineChart data={CHART_DATA.scoreEvolution}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="week" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} domain={[60, 100]} />
-              <Tooltip
-                contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
-              />
-              <Line type="monotone" dataKey="julia" stroke="hsl(261 86% 68%)" strokeWidth={2.2} dot={{ r: 3 }} name="Julia" />
-              <Line type="monotone" dataKey="diego" stroke="hsl(258 55% 76%)" strokeWidth={2.2} dot={{ r: 3 }} name="Diego" />
-              <Line type="monotone" dataKey="mariana" stroke="hsl(270 76% 62%)" strokeWidth={2.2} dot={{ r: 3 }} name="Mariana" />
-            </LineChart>
-          </ResponsiveContainer>
+          <div className="space-y-3 mt-2">
+            {instancesSummary.length > 0 ? instancesSummary.map((inst) => (
+              <div key={inst.name} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                  inst.status === 'open' ? 'bg-green-500/10' : 'bg-red-500/10'
+                }`}>
+                  {inst.status === 'open' ? (
+                    <Wifi className="w-4 h-4 text-green-400" />
+                  ) : (
+                    <WifiOff className="w-4 h-4 text-red-400" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{inst.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {inst.status === 'open' ? 'Conectada' : inst.status === 'connecting' ? 'Conectando...' : 'Desconectada'}
+                    {inst.chats > 0 && ` · ${inst.chats} chats`}
+                    {inst.messages > 0 && ` · ${inst.messages.toLocaleString()} msgs`}
+                  </p>
+                </div>
+                <span className={`w-2 h-2 rounded-full ${inst.status === 'open' ? 'bg-green-400' : 'bg-red-400'}`} />
+              </div>
+            )) : (
+              <p className="text-xs text-muted-foreground p-2">Nenhuma instância encontrada. Configure em WhatsApp.</p>
+            )}
+          </div>
         </div>
       </div>
 
@@ -199,7 +280,7 @@ export default function DashboardPage() {
         {/* Ranking */}
         <div className="glass-card p-5">
           <div className="section-header">
-            <h3 className="section-title">🏆 Ranking</h3>
+            <h3 className="section-title">Ranking Vendedores</h3>
             <Button variant="ghost" size="sm" className="text-xs h-7 text-muted-foreground" onClick={() => navigate('/performance')}>
               Ver todos
             </Button>
@@ -207,7 +288,7 @@ export default function DashboardPage() {
           <div className="space-y-3">
             {topSellers.map((seller, i) => (
               <div key={seller.name} className="flex items-center gap-3">
-                <span className={`text-sm font-bold w-5 text-center ${i === 0 ? 'text-yellow-400' : 'text-muted-foreground'}`}>
+                <span className={`text-sm font-bold w-5 text-center ${i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-amber-600' : 'text-muted-foreground'}`}>
                   {i + 1}
                 </span>
                 <img src={seller.avatar} alt={seller.name} className="w-8 h-8 rounded-full border border-border" />
@@ -215,12 +296,10 @@ export default function DashboardPage() {
                   <p className="text-sm font-medium truncate">{seller.name}</p>
                   <div className="flex items-center gap-2 mt-0.5">
                     <Progress value={seller.score} className="h-1 flex-1" />
-                    <span className="text-xs text-muted-foreground">{seller.score}</span>
+                    <span className="text-xs text-muted-foreground">{seller.score || '—'}</span>
                   </div>
                 </div>
-                <span className={`text-xs ${seller.trend === 'up' ? 'text-green-400' : 'text-red-400'}`}>
-                  {seller.trend === 'up' ? '↑' : '↓'}
-                </span>
+                <span className="text-xs text-muted-foreground">{seller.meetings} meet{seller.meetings !== 1 ? 's' : ''}</span>
               </div>
             ))}
             {topSellers.length === 0 && (
@@ -244,30 +323,41 @@ export default function DashboardPage() {
                   <Video className="w-4 h-4 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{m.title}</p>
+                  <p className="text-sm font-medium truncate">{m.titulo || 'Reunião'}</p>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-xs text-muted-foreground">{m.sellerName}</span>
-                    <span className="text-muted-foreground">·</span>
+                    {m.vendedor_nome && <span className="text-xs text-muted-foreground">{m.vendedor_nome}</span>}
+                    {m.vendedor_nome && <span className="text-muted-foreground">·</span>}
                     <span className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Clock className="w-3 h-3" />{m.duration}min
+                      <Clock className="w-3 h-3" />
+                      {m.duracao_minutos > 0 ? `${m.duracao_minutos}min` : new Date(m.data_reuniao).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
                     </span>
+                    {m.meeting_code && (
+                      <>
+                        <span className="text-muted-foreground">·</span>
+                        <span className="text-xs text-muted-foreground font-mono">{m.meeting_code}</span>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {m.score && (
+                  {m.score !== null && m.score !== undefined && (
                     <span className={m.score >= 85 ? 'score-excellent' : m.score >= 70 ? 'score-good' : 'score-average'}>
                       {m.score}
                     </span>
                   )}
-                  {m.aiAnalyzed && (
+                  {m.analisada_por_ia && (
                     <Brain className="w-3.5 h-3.5 text-accent" aria-label="Analisado por IA" />
                   )}
-                  <span className={statusStyle[m.status]}>{statusLabel[m.status]}</span>
+                  <span className={statusStyle[m.status] || 'score-average'}>
+                    {statusLabel[m.status] || m.status}
+                  </span>
                 </div>
               </div>
             ))}
             {recentMeetings.length === 0 && (
-              <p className="text-xs text-muted-foreground p-2">Sem reuniões cadastradas ainda.</p>
+              <p className="text-xs text-muted-foreground p-2">
+                {loadingMeetings ? 'Carregando reuniões...' : 'Sem reuniões cadastradas ainda. Sincronize na página de Reuniões.'}
+              </p>
             )}
           </div>
         </div>
