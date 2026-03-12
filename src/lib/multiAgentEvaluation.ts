@@ -20,7 +20,7 @@ export interface MultiAgentResult extends EvaluationResult {
   tipoReuniao: string;
   agenteAvaliadorId: string;
   chainLog: ChainStep[];
-  participation: { email: string; name: string; percent: number }[];
+  participation: { email?: string; name: string; percent: number }[];
   sentimento?: string;
   sentimentoConfianca?: number;
   sentimentoResumo?: string;

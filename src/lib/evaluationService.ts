@@ -127,57 +127,58 @@ Responda APENAS com JSON válido (sem markdown):
 // ─── Parse transcript to calculate participation % by character count ────────
 export function parseTranscriptParticipation(
   transcricao: string,
-  participantEmails: string[],
-): { email: string; name: string; percent: number }[] {
-  if (!transcricao || participantEmails.length === 0) return [];
+  participantEmails: string[] = [],
+): { email?: string; name: string; percent: number }[] {
+  if (!transcricao) return [];
 
-  // Google Meet transcripts format: "Speaker Name\nTimestamp\nText\n\n"
-  // or "Speaker Name\nText\n\n" — speaker name is on its own line before text
+  const normalize = (value: string) =>
+    value
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const displayNameFromEmail = (email: string) =>
+    email.split('@')[0].replace(/[._-]/g, ' ');
+
   const lines = transcricao.split('\n');
   const speakerCharCount: Record<string, number> = {};
   let currentSpeaker = '';
-
-  // Build a map of email → possible display names (first.last from email)
-  const emailNameMap: Record<string, string[]> = {};
-  for (const email of participantEmails) {
-    const local = email.split('@')[0].toLowerCase();
-    const parts = local.split(/[._-]/);
-    emailNameMap[email] = parts;
-  }
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
 
-    // Check if this line is a speaker name (short line, no punctuation at end,
-    // followed by text or timestamp)
-    const isTimestamp = /^\d{1,2}:\d{2}(:\d{2})?\s*(AM|PM)?$/i.test(line);
-    if (isTimestamp) continue;
+    if (/^participantes\s*:?$/i.test(line)) continue;
 
-    // A speaker line is typically short (<60 chars), doesn't end with common punctuation,
-    // and is followed by content
-    const looksLikeSpeaker = line.length < 60 &&
+    const isTimestampOnly = /^\d{1,2}:\d{2}(:\d{2})?\s*(AM|PM)?$/i.test(line);
+    if (isTimestampOnly) continue;
+
+    const inlineSpeakerMatch = line.match(/^(.*?)\s+\d{1,2}:\d{2}(:\d{2})?\s*(AM|PM)?$/i);
+    if (inlineSpeakerMatch && inlineSpeakerMatch[1]?.trim()) {
+      currentSpeaker = inlineSpeakerMatch[1].trim();
+      if (!speakerCharCount[currentSpeaker]) speakerCharCount[currentSpeaker] = 0;
+      continue;
+    }
+
+    const next = (lines[i + 1] || '').trim();
+    const nextIsTimestamp = /^\d{1,2}:\d{2}(:\d{2})?\s*(AM|PM)?$/i.test(next);
+
+    const looksLikeSpeaker =
+      line.length < 80 &&
       !/[.!?,;:]$/.test(line) &&
       !/^\d/.test(line) &&
       !line.includes('  ') &&
-      (i + 1 < lines.length);
+      nextIsTimestamp;
 
     if (looksLikeSpeaker) {
-      // Check if this matches any participant name
-      const lineLower = line.toLowerCase();
-      const matched = participantEmails.find(email => {
-        const parts = emailNameMap[email];
-        // Match if the line contains the first name or last name from email
-        return parts.some(p => p.length >= 3 && lineLower.includes(p));
-      });
-      if (matched || (!currentSpeaker && line.length < 40)) {
-        currentSpeaker = matched || line;
-        if (!speakerCharCount[currentSpeaker]) speakerCharCount[currentSpeaker] = 0;
-        continue;
-      }
+      currentSpeaker = line;
+      if (!speakerCharCount[currentSpeaker]) speakerCharCount[currentSpeaker] = 0;
+      continue;
     }
 
-    // Count this line's characters for the current speaker
     if (currentSpeaker) {
       speakerCharCount[currentSpeaker] += line.length;
     }
@@ -186,17 +187,36 @@ export function parseTranscriptParticipation(
   const totalChars = Object.values(speakerCharCount).reduce((s, c) => s + c, 0);
   if (totalChars === 0) return [];
 
-  // Calculate raw percentages
-  const rawResults = participantEmails.map(email => {
-    const chars = speakerCharCount[email] || 0;
-    const name = email.split('@')[0].replace(/[._-]/g, ' ');
-    return { email, name, chars, percent: Math.round((chars / totalChars) * 100) };
-  });
+  const emailCandidates = participantEmails
+    .filter(Boolean)
+    .map((email) => ({
+      email,
+      normalized: normalize(displayNameFromEmail(email)),
+      tokens: normalize(displayNameFromEmail(email)).split(' ').filter((t) => t.length >= 3),
+    }));
 
-  // Adjust rounding so sum is exactly 100
+  const mapSpeakerToEmail = (speaker: string): string | undefined => {
+    if (emailCandidates.length === 0) return undefined;
+
+    const normalizedSpeaker = normalize(speaker);
+    const speakerTokens = normalizedSpeaker.split(' ').filter((t) => t.length >= 3);
+
+    const exact = emailCandidates.find((c) => c.normalized === normalizedSpeaker);
+    if (exact) return exact.email;
+
+    const byToken = emailCandidates.find((c) => speakerTokens.some((t) => c.tokens.includes(t)));
+    return byToken?.email;
+  };
+
+  const rawResults = Object.entries(speakerCharCount).map(([speaker, chars]) => ({
+    name: speaker,
+    email: mapSpeakerToEmail(speaker),
+    chars,
+    percent: Math.round((chars / totalChars) * 100),
+  }));
+
   const sum = rawResults.reduce((s, r) => s + r.percent, 0);
-  if (sum !== 100 && totalChars > 0) {
-    // Add/subtract difference from the largest participant
+  if (sum !== 100 && rawResults.length > 0) {
     const sorted = [...rawResults].sort((a, b) => b.chars - a.chars);
     sorted[0].percent += (100 - sum);
   }
