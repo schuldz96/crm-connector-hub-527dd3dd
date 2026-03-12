@@ -8,7 +8,7 @@ import { ROLE_LABELS } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import BrandLogo from '@/components/BrandLogo';
 import {
-  LayoutDashboard, Video, MessageSquare, Users,
+  LayoutDashboard, Video, MessageSquare, Users, Bell,
   BarChart3, Zap, ChevronLeft, ChevronRight,
   LogOut, ChevronDown, Building2, Shield, Plug2,
   GraduationCap, SlidersHorizontal, User, Target, Activity
@@ -33,7 +33,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/users',        label: 'Usuários',       icon: Users,           resource: 'users' },
   { path: '/reports',      label: 'Relatórios',     icon: BarChart3,       resource: 'reports' },
   { path: '/integrations', label: 'Integrações',    icon: Plug2,           resource: 'integrations' },
-  { path: '/automations',  label: 'Automações',     icon: Zap,             resource: 'automations' },
+  { path: '/automations',  label: 'Automações',     icon: Bell,            resource: 'automations' },
   { path: '/ai-config',    label: 'Config. IA',     icon: SlidersHorizontal, resource: 'ai-config' },
   { path: '/admin',        label: 'Admin',          icon: Shield,          resource: 'admin' },
 ];

@@ -20,7 +20,7 @@ const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
   '/users':        { title: 'Usuários',         subtitle: 'Gestão de acesso e permissões' },
   '/reports':      { title: 'Relatórios',       subtitle: 'Análises e exportações' },
   '/integrations': { title: 'Integrações',      subtitle: 'Conecte ferramentas externas' },
-  '/automations':  { title: 'Automações',       subtitle: 'Fluxos com N8N' },
+  '/automations':  { title: 'Alertas & Webhooks', subtitle: 'Configure alertas internos e integrações' },
   '/admin':        { title: 'Painel Admin',     subtitle: 'Configurações globais da plataforma' },
   '/performance':  { title: 'Desempenho',       subtitle: 'Acompanhe métricas de performance' },
   '/training':     { title: 'Treinamentos',     subtitle: 'Simulações e aprendizado' },

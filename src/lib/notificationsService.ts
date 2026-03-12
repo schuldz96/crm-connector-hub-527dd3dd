@@ -85,3 +85,47 @@ export async function deleteNotification(notificationId: string): Promise<void> 
     .update({ status: 'arquivada' })
     .eq('id', notificationId);
 }
+
+/**
+ * Create an internal alert/notification for all users of the empresa.
+ */
+export async function createInternalAlert(params: {
+  type: NotificationType;
+  title: string;
+  description: string;
+  link?: string;
+}): Promise<void> {
+  const empresaId = await getSaasEmpresaId();
+
+  // Get all active users of the empresa
+  const { data: users } = await (supabase as any)
+    .schema('saas')
+    .from('usuarios')
+    .select('id')
+    .eq('empresa_id', empresaId)
+    .eq('ativo', true);
+
+  if (!users || users.length === 0) return;
+
+  const tipo = tipoToDb[params.type] || 'sistema';
+
+  // Insert a notification for each user
+  const rows = users.map((u: any) => ({
+    empresa_id: empresaId,
+    usuario_id: u.id,
+    tipo,
+    titulo: params.title,
+    descricao: params.description,
+    link: params.link || null,
+    status: 'nao_lida',
+  }));
+
+  const { error } = await (supabase as any)
+    .schema('saas')
+    .from('notificacoes')
+    .insert(rows);
+
+  if (error) {
+    console.error('[notifications] createInternalAlert error:', error);
+  }
+}

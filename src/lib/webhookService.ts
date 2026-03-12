@@ -23,6 +23,7 @@ export interface WebhookConfig {
   category: 'whatsapp' | 'users' | 'training' | 'meetings' | 'analytics';
   icon: string;
   enabled: boolean;
+  internalAlert: boolean; // also create internal notification
   url: string;
   delayUnit: DelayUnit;
   delayValue: number; // ignored when unit = 'immediate'
@@ -47,6 +48,7 @@ export const DEFAULT_WEBHOOK_CONFIGS: WebhookConfig[] = [
     category: 'whatsapp',
     icon: 'MessageSquare',
     enabled: false,
+    internalAlert: false,
     url: '',
     delayUnit: 'immediate',
     delayValue: 0,
@@ -59,6 +61,7 @@ export const DEFAULT_WEBHOOK_CONFIGS: WebhookConfig[] = [
     category: 'whatsapp',
     icon: 'AlertTriangle',
     enabled: false,
+    internalAlert: false,
     url: '',
     delayUnit: 'immediate',
     delayValue: 0,
@@ -71,6 +74,7 @@ export const DEFAULT_WEBHOOK_CONFIGS: WebhookConfig[] = [
     category: 'whatsapp',
     icon: 'WifiOff',
     enabled: false,
+    internalAlert: false,
     url: '',
     delayUnit: 'immediate',
     delayValue: 0,
@@ -83,6 +87,7 @@ export const DEFAULT_WEBHOOK_CONFIGS: WebhookConfig[] = [
     category: 'users',
     icon: 'UserPlus',
     enabled: false,
+    internalAlert: false,
     url: '',
     delayUnit: 'immediate',
     delayValue: 0,
@@ -95,6 +100,7 @@ export const DEFAULT_WEBHOOK_CONFIGS: WebhookConfig[] = [
     category: 'training',
     icon: 'BookOpen',
     enabled: false,
+    internalAlert: false,
     url: '',
     delayUnit: 'immediate',
     delayValue: 0,
@@ -107,6 +113,7 @@ export const DEFAULT_WEBHOOK_CONFIGS: WebhookConfig[] = [
     category: 'training',
     icon: 'GraduationCap',
     enabled: false,
+    internalAlert: false,
     url: '',
     delayUnit: 'immediate',
     delayValue: 0,
@@ -119,6 +126,7 @@ export const DEFAULT_WEBHOOK_CONFIGS: WebhookConfig[] = [
     category: 'meetings',
     icon: 'CheckCircle2',
     enabled: false,
+    internalAlert: false,
     url: '',
     delayUnit: 'immediate',
     delayValue: 0,
@@ -131,6 +139,7 @@ export const DEFAULT_WEBHOOK_CONFIGS: WebhookConfig[] = [
     category: 'meetings',
     icon: 'UserX',
     enabled: false,
+    internalAlert: false,
     url: '',
     delayUnit: 'immediate',
     delayValue: 0,
@@ -143,6 +152,7 @@ export const DEFAULT_WEBHOOK_CONFIGS: WebhookConfig[] = [
     category: 'analytics',
     icon: 'Brain',
     enabled: false,
+    internalAlert: false,
     url: '',
     delayUnit: 'immediate',
     delayValue: 0,
@@ -155,6 +165,7 @@ export const DEFAULT_WEBHOOK_CONFIGS: WebhookConfig[] = [
     category: 'analytics',
     icon: 'TrendingUp',
     enabled: false,
+    internalAlert: false,
     url: '',
     delayUnit: 'immediate',
     delayValue: 0,
@@ -207,7 +218,28 @@ export function dispatchWebhook(
 ): void {
   const configs = loadWebhookConfigs();
   const cfg = configs.find(c => c.id === eventId);
-  if (!cfg || !cfg.enabled || !cfg.url.trim()) return;
+  if (!cfg) return;
+
+  // Fire internal alert if enabled (regardless of webhook URL)
+  if (cfg.internalAlert) {
+    import('@/lib/notificationsService').then(({ createInternalAlert }) => {
+      const categoryToType: Record<string, 'meeting' | 'whatsapp' | 'system' | 'performance'> = {
+        whatsapp: 'whatsapp',
+        meetings: 'meeting',
+        analytics: 'performance',
+        users: 'system',
+        training: 'system',
+      };
+      createInternalAlert({
+        type: categoryToType[cfg.category] || 'system',
+        title: cfg.label,
+        description: (data.message as string) || (data.description as string) || `Evento: ${eventId}`,
+        link: data.link as string | undefined,
+      }).catch(err => console.error('[webhook] internal alert error:', err));
+    });
+  }
+
+  if (!cfg.enabled || !cfg.url.trim()) return;
 
   const payload: WebhookPayload = {
     event: eventId,

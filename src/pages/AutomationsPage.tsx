@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import {
-  Zap, Brain, MessageSquare, TrendingUp,
+  Zap, Bell, Brain, MessageSquare, TrendingUp,
   Globe, WifiOff, UserPlus, BookOpen, GraduationCap, CheckCircle2,
   UserX, AlertTriangle, ChevronDown, ChevronRight, TestTube2, Save,
   ToggleLeft, ToggleRight, Activity, Workflow, Timer,
@@ -90,6 +90,11 @@ function WebhookRow({
               <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full border', CATEGORY_COLORS[cfg.category])}>
                 {CATEGORY_LABELS[cfg.category]}
               </span>
+              {cfg.internalAlert && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
+                  <Bell className="w-2.5 h-2.5" /> Alerta
+                </span>
+              )}
               {cfg.delayUnit !== 'immediate' && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20 flex items-center gap-1">
                   <Timer className="w-2.5 h-2.5" /> {cfg.delayValue} {cfg.delayUnit === 'seconds' ? 's' : cfg.delayUnit === 'minutes' ? 'min' : cfg.delayUnit === 'hours' ? 'h' : 'd'}
@@ -150,6 +155,24 @@ function WebhookRow({
                 </a>
               )}
             </div>
+          </div>
+
+          {/* Internal alert toggle */}
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="text-[11px] font-medium block text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                <Bell className="w-3 h-3" /> Alerta Interno
+              </label>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Criar notificação no sino quando o evento ocorrer</p>
+            </div>
+            <button
+              onClick={() => onChange({ ...cfg, internalAlert: !cfg.internalAlert })}
+              className="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+              title={cfg.internalAlert ? 'Desativar alerta interno' : 'Ativar alerta interno'}>
+              {cfg.internalAlert
+                ? <ToggleRight className="w-5 h-5 text-primary" />
+                : <ToggleLeft className="w-5 h-5" />}
+            </button>
           </div>
 
           {/* Delay config */}
