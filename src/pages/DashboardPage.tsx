@@ -61,11 +61,13 @@ export default function DashboardPage() {
     }).length,
   [meetings, currentMonth, currentYear]);
 
-  const avgScore = useMemo(() => {
+  const avgScoreMeet = useMemo(() => {
     const withScore = meetings.filter(m => typeof m.score === 'number' && m.score !== null);
     if (!withScore.length) return 0;
     return Number((withScore.reduce((sum, m) => sum + (m.score || 0), 0) / withScore.length).toFixed(1));
   }, [meetings]);
+
+  const avgScore = avgScoreMeet;
 
   const instancesConnected = useMemo(() =>
     instances.filter(i => i.connectionStatus === 'open').length,
@@ -340,17 +342,21 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {m.score !== null && m.score !== undefined && (
-                    <span className={m.score >= 85 ? 'score-excellent' : m.score >= 70 ? 'score-good' : 'score-average'}>
-                      {m.score}
+                  {m.vendedor_nome && (
+                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                      {m.vendedor_nome.split(' ')[0]}
                     </span>
+                  )}
+                  {m.score !== null && m.score !== undefined ? (
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded ${m.score >= 85 ? 'score-excellent' : m.score >= 70 ? 'score-good' : 'score-average'}`}>
+                      {m.score} pts
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
                   )}
                   {m.analisada_por_ia && (
                     <Brain className="w-3.5 h-3.5 text-accent" aria-label="Analisado por IA" />
                   )}
-                  <span className={statusStyle[m.status] || 'score-average'}>
-                    {statusLabel[m.status] || m.status}
-                  </span>
                 </div>
               </div>
             ))}
