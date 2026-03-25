@@ -19,6 +19,7 @@ components:
     - meddic.md
     - challenger.md
     - gap.md
+    - spiced.md
     # Tier 2 — Complementares
     - value-selling.md
     - command.md
@@ -37,6 +38,7 @@ components:
     - meddic-evaluate.md
     - challenger-evaluate.md
     - gap-evaluate.md
+    - spiced-evaluate.md
     - value-selling-evaluate.md
     - command-evaluate.md
     - miller-heiman-evaluate.md
@@ -81,3 +83,4 @@ tags:
   - spin
   - meddic
   - challenger
+  - spiced

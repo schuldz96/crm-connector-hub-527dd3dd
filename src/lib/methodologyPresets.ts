@@ -356,6 +356,76 @@ BÔNUS: +5pts para "não sabia que era tão grave", gap quantificado com número
   ],
 };
 
+// ─── SPICED (Winning by Design) ─────────────────────────────────────────────
+const spiced: MethodologyPreset = {
+  id: 'spiced',
+  name: 'SPICED',
+  icon: '🌶️',
+  creator: 'Winning by Design',
+  tier: 'core',
+  description: 'Framework de discovery e qualificação para SaaS B2B. SPICED = Situation, Pain, Impact, Critical Event, Decision. Foco em métricas de receita recorrente.',
+  bestFor: ['SaaS B2B', 'Receita recorrente', 'PLG + sales assist', 'Discovery estruturado'],
+  inputTypes: ['meetings', 'whatsapp', 'calls'],
+  systemPrompt: `Você é um avaliador especialista no framework SPICED (Winning by Design). Avalie a interação de vendas classificando cada elemento do acrônimo:
+
+S (Situation) — contexto atual: ferramentas, equipe, KPIs, processos existentes
+P (Pain) — problemas específicos, ineficiências, frustrações reais
+I (Impact) — impacto quantificado no negócio (receita, custo, tempo, churn)
+C (Critical Event) — evento gatilho que cria urgência (fim de contrato, ciclo orçamentário, mandato do board, expansão)
+D (Decision) — processo de decisão mapeado: critérios, timeline, stakeholders, procurement
+
+REGRA CHAVE: Impact é o multiplicador de urgência. Sem Impact quantificado, o deal fica em "nice to have". Critical Event transforma o deal de "vamos ver" em "precisamos agir agora".
+
+PENALIDADES: -10pts cada para Pain não identificado, zero Impact quantificado, sem Critical Event, apresentação antes do SPICED completo.
+BÔNUS: +5pts (max +15) para Impact com números do prospect, Critical Event com deadline hard, Decision process completo com procurement.
+
+Foque em métricas de receita recorrente (ARR, NRR, churn, LTV, CAC). Seja específico e construtivo.`,
+  criteria: [
+    {
+      id: 'spiced_situation', label: 'Situation (S)', weight: 10,
+      description: 'Contexto atual mapeado: ferramentas, equipe, KPIs, processos. Deve ser breve — pré-pesquisa esperada.',
+      examples: ['Qual CRM usam?', 'Quantos SDRs no time?', 'Qual ARR atual?'],
+      positiveSignals: ['Informações públicas já pesquisadas', 'Perguntas específicas ao contexto', 'Rápida transição para Pain'],
+      negativeSignals: ['Excesso de perguntas básicas', 'Informações disponíveis no LinkedIn não pesquisadas', 'Mais de 30% do tempo em Situation'],
+    },
+    {
+      id: 'spiced_pain', label: 'Pain (P)', weight: 25,
+      description: 'Problemas específicos identificados: ineficiências, frustrações, gaps no processo atual.',
+      examples: ['Taxa de conversão caiu 15%', 'SDRs perdem 2h/dia em tarefas manuais', 'Churn de 8% ao mês'],
+      positiveSignals: ['Múltiplos pains identificados', 'Pain específico e mensurável', 'Prospect confirma e detalha a dor'],
+      negativeSignals: ['Pain genérico "queremos melhorar"', 'Apenas 1 pain superficial', 'Vendedor assume pain sem confirmar'],
+    },
+    {
+      id: 'spiced_impact', label: 'Impact (I)', weight: 25,
+      description: 'Impacto quantificado no negócio — ELEMENTO MAIS IMPORTANTE. Transforma pain em urgência financeira.',
+      examples: ['Churn custa R$500K/ano em ARR', 'Produtividade +40% = 2 FTEs economizados', 'Pipeline velocity +30% = R$200K/quarter'],
+      positiveSignals: ['Impact com números do prospect', 'Métricas de receita recorrente usadas', 'Prospect verbaliza impacto espontaneamente', 'Múltiplos impacts conectados'],
+      negativeSignals: ['Zero quantificação', 'Impact genérico sem números', 'Vendedor assume impact sem validar'],
+    },
+    {
+      id: 'spiced_critical_event', label: 'Critical Event (C)', weight: 20,
+      description: 'Evento gatilho que cria deadline e urgência real. Diferencia deals de "vou pensar" de "preciso resolver até X".',
+      examples: ['Contrato atual vence em março', 'Board exige redução de churn Q2', 'Expansão para novo mercado em junho'],
+      positiveSignals: ['Critical Event com data específica', 'Urgência confirmada pelo prospect', 'Evento externo não negociável'],
+      negativeSignals: ['Sem Critical Event identificado', 'Urgência artificial criada pelo vendedor', '"Não temos pressa" aceito sem explorar'],
+    },
+    {
+      id: 'spiced_decision', label: 'Decision (D)', weight: 10,
+      description: 'Processo de decisão mapeado: quem decide, critérios, timeline, procurement, blockers.',
+      examples: ['CEO decide com input do VP Sales', 'Critérios: ROI, integração, suporte', 'Procurement precisa de 30 dias'],
+      positiveSignals: ['Decisores identificados por nome', 'Critérios de decisão listados', 'Timeline com datas', 'Procurement mapeado'],
+      negativeSignals: ['Não sabe quem decide', 'Sem critérios de decisão', 'Sem timeline'],
+    },
+    {
+      id: 'spiced_flow', label: 'SPICED Flow & Recurring Revenue', weight: 10,
+      description: 'Progressão natural S→P→I→C→D e mindset de receita recorrente (ARR, NRR, churn, LTV).',
+      examples: ['Transição suave entre elementos', 'Métricas SaaS usadas naturalmente', 'Impact conectado a Critical Event'],
+      positiveSignals: ['Progressão natural S→P→I→C→D', 'Métricas de receita recorrente', 'Impact e Critical Event conectados'],
+      negativeSignals: ['Sequência aleatória', 'Sem menção a métricas recorrentes', 'Elements desconectados entre si'],
+    },
+  ],
+};
+
 // ─── Value Selling Framework ─────────────────────────────────────────────────
 const valueSelling: MethodologyPreset = {
   id: 'value-selling',
@@ -689,6 +759,7 @@ export const METHODOLOGY_PRESETS: MethodologyPreset[] = [
   meddic,
   challenger,
   gap,
+  spiced,
   valueSelling,
   command,
   millerHeiman,
