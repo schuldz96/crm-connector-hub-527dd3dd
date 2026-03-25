@@ -1031,49 +1031,59 @@ function CanvasTreeNode({
   onInsertBetween: (parentId: string, tipo: AgentTipo) => void;
 }) {
   const children = getChildren(agent.id);
-  const lc = 'rgba(255,255,255,0.4)';
+  const border = '2px solid rgba(255,255,255,0.4)';
+
+  /*
+   * CSS org-chart connector pattern (no JS measurement needed):
+   *
+   * Each child column is split into left-half and right-half.
+   * - Left half gets border-top if NOT the first child  → draws line going left
+   * - Right half gets border-top if NOT the last child  → draws line going right
+   * - Both halves share a border at the center junction  → vertical drop
+   *
+   * This creates a perfect horizontal bar from first child center to last child center,
+   * with vertical drops at each child's center.
+   */
 
   return (
     <div className="flex flex-col items-center">
-      {/* Node card */}
       <div data-agent-node>
         <AgentNode_ agent={agent} onClick={() => onClickAgent(agent.id)} onToggle={() => onToggleAgent(agent)} />
       </div>
 
-      {/* Vertical connector with "+" */}
+      {/* "+" connector between parent and children */}
       <ConnectorWithAdd parentId={agent.id} onInsertBetween={onInsertBetween} height={40} />
 
-      {/* Children row */}
-      <div className="flex items-start">
-        {children.map((child, i) => (
-          <div key={child.id} className="flex flex-col items-center" style={{ minWidth: 230 }}>
-            {/* Top connector: left half border + right half border = horizontal line */}
-            <div className="flex self-stretch" style={{ height: 24 }}>
-              {/* Left half */}
-              <div className="flex-1" style={{
-                borderRight: `2px solid ${lc}`,
-                borderTop: i > 0 ? `2px solid ${lc}` : 'none',
-              }} />
-              {/* Right half */}
-              <div className="flex-1" style={{
-                borderLeft: 'none', // avoid double line at center
-                borderTop: i < children.length - 1 ? `2px solid ${lc}` : 'none',
-              }} />
+      {/* Children */}
+      <div className="flex items-stretch">
+        {children.map((child, i) => {
+          const isFirst = i === 0;
+          const isLast = i === children.length - 1;
+          return (
+            <div key={child.id} className="flex flex-col items-center" style={{ minWidth: 230 }}>
+              {/* Connector area: two halves side by side */}
+              <div className="flex self-stretch" style={{ height: 20 }}>
+                {/* Left half: border-top connects to sibling on the left */}
+                <div className="flex-1" style={{ borderTop: isFirst ? 'none' : border }} />
+                {/* Right half: border-top connects to sibling on the right */}
+                <div className="flex-1" style={{ borderTop: isLast ? 'none' : border }} />
+              </div>
+              {/* Vertical drop from the center junction down to the child card */}
+              <div style={{ width: 2, height: 16, background: 'rgba(255,255,255,0.4)' }} />
+              {/* Recurse */}
+              <CanvasTreeNode
+                agent={child}
+                agents={agents}
+                getChildren={getChildren}
+                onClickAgent={onClickAgent}
+                onToggleAgent={onToggleAgent}
+                onAddAgent={onAddAgent}
+                onInsertBetween={onInsertBetween}
+              />
             </div>
-
-            <CanvasTreeNode
-              agent={child}
-              agents={agents}
-              getChildren={getChildren}
-              onClickAgent={onClickAgent}
-              onToggleAgent={onToggleAgent}
-              onAddAgent={onAddAgent}
-              onInsertBetween={onInsertBetween}
-            />
-          </div>
-        ))}
-
-        {/* Add button */}
+          );
+        })}
+        {/* Add sibling */}
         <AddSiblingButton parentId={agent.id} onAddAgent={onAddAgent} />
       </div>
     </div>
