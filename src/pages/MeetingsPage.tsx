@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -123,7 +123,7 @@ function ScoreBar({ value, label, icon, tip }: { value: number; label: string; i
 }
 
 export default function MeetingsPage() {
-  const { user } = useAuth();
+  const { user, hasMinRole } = useAuth();
   const { tokens } = useAppConfig();
   const { toast } = useToast();
 
@@ -402,7 +402,31 @@ export default function MeetingsPage() {
     }
   };
 
-  const filtered = meetings.filter(m => {
+  // ── Role-based visibility ─────────────────────────────────────────────────
+  const visibleMeetings = useMemo(() => {
+    // admin, ceo, director → see all
+    if (hasMinRole('director')) return meetings;
+
+    const userEmail = user?.email?.toLowerCase() || '';
+    const role = user?.role;
+
+    // manager, coordinator → see meetings from their area
+    if (role === 'manager' || role === 'coordinator') {
+      if (!user?.areaId) return meetings.filter(m => m.vendedor_email?.toLowerCase() === userEmail);
+      return meetings.filter(m => m.area_id === user.areaId || m.vendedor_email?.toLowerCase() === userEmail);
+    }
+
+    // supervisor → see meetings from their team + own
+    if (role === 'supervisor') {
+      if (!user?.teamId) return meetings.filter(m => m.vendedor_email?.toLowerCase() === userEmail);
+      return meetings.filter(m => m.time_id === user.teamId || m.vendedor_email?.toLowerCase() === userEmail);
+    }
+
+    // member (vendedor) → see only own meetings
+    return meetings.filter(m => m.vendedor_email?.toLowerCase() === userEmail);
+  }, [meetings, user?.email, user?.role, user?.areaId, user?.teamId, hasMinRole]);
+
+  const filtered = visibleMeetings.filter(m => {
     const s = search.toLowerCase();
     const matchSearch =
       m.titulo.toLowerCase().includes(s) ||

@@ -21,6 +21,8 @@ export interface DbMeeting {
   vendedor_id?: string | null;
   vendedor_nome?: string;
   vendedor_email?: string;
+  area_id?: string | null;
+  time_id?: string | null;
   google_event_id?: string;
   transcript_file_id?: string | null;
   sentimento?: string | null;
@@ -381,6 +383,8 @@ export async function loadMeetingsFromDb(): Promise<DbMeeting[]> {
     vendedor_id: r.vendedor_id || null,
     vendedor_nome: vendedorMap[r.vendedor_id]?.nome,
     vendedor_email: vendedorMap[r.vendedor_id]?.email,
+    area_id: r.area_id || null,
+    time_id: r.time_id || null,
     google_event_id: r.google_event_id,
     transcript_file_id: r.transcript_file_id || null,
     sentimento: r.sentimento || null,

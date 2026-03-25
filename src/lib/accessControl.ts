@@ -106,6 +106,8 @@ export interface AllowedUser {
   password?: string;
   avatar?: string;
   createdAt?: string;
+  areaId?: string;
+  teamId?: string;
 }
 
 export interface AccessRequest {
@@ -406,7 +408,7 @@ export async function getAllowedUserByEmail(email: string): Promise<AllowedUser 
   const { data, error } = await supabase
     .schema('saas')
     .from('usuarios')
-    .select('email,nome,papel,senha_hash,avatar_url,status,criado_em')
+    .select('email,nome,papel,senha_hash,avatar_url,status,criado_em,area_id,time_id')
     .eq('empresa_id', empresaId)
     .eq('email', normalized)
     .eq('status', 'ativo')
@@ -422,6 +424,8 @@ export async function getAllowedUserByEmail(email: string): Promise<AllowedUser 
     password: data.senha_hash || undefined,
     avatar: data.avatar_url || undefined,
     createdAt: data.criado_em,
+    areaId: data.area_id || undefined,
+    teamId: data.time_id || undefined,
   };
 }
 

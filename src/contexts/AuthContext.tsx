@@ -40,6 +40,8 @@ function buildUser(
   name: string,
   role: UserRole = 'member',
   avatar?: string,
+  areaId?: string,
+  teamId?: string,
 ): User {
   return {
     id,
@@ -47,6 +49,8 @@ function buildUser(
     email,
     avatar: avatar ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(email)}`,
     role,
+    teamId,
+    areaId,
     company: 'Appmax',
     status: 'active',
     createdAt: new Date().toISOString().slice(0, 10),
@@ -125,7 +129,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         allowedMatch.email,
         allowedMatch.name,
         allowedMatch.role,
-        allowedMatch.avatar
+        allowedMatch.avatar,
+        allowedMatch.areaId,
+        allowedMatch.teamId,
       );
       setUser(u);
       saveSession(u);
@@ -160,6 +166,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       googleUser.name || match.name,
       match.role,
       googleUser.picture,
+      match.areaId,
+      match.teamId,
     );
 
     setUser(u);
