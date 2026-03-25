@@ -71,9 +71,16 @@ export default function DashboardPage() {
     return Number((withScore.reduce((sum, m) => sum + (m.score || 0), 0) / withScore.length).toFixed(1));
   }, [meetings]);
 
+  // ── WhatsApp Instances (role-based) ───────────────────────────────
+  const visibleInstances = useMemo(() => {
+    if (hasMinRole('director')) return instances;
+    const userEmail = user?.email?.toLowerCase() || '';
+    return instances.filter(i => i.assignedUserEmail?.toLowerCase() === userEmail);
+  }, [instances, user?.email, hasMinRole]);
+
   const instancesConnected = useMemo(() =>
-    instances.filter(i => i.connectionStatus === 'open').length,
-  [instances]);
+    visibleInstances.filter(i => i.connectionStatus === 'open').length,
+  [visibleInstances]);
 
   // ── Chart: Reuniões por mês (últimos 6 meses) ──────────────────────
   const meetingsPerMonth = useMemo(() => {
@@ -122,15 +129,14 @@ export default function DashboardPage() {
       .slice(0, 6);
   }, [meetings]);
 
-  // ── WhatsApp Instances summary ─────────────────────────────────────
   const instancesSummary = useMemo(() => {
-    return instances.map(i => ({
+    return visibleInstances.map(i => ({
       name: i.name,
       status: i.connectionStatus,
       chats: i._count?.Chat || 0,
       messages: i._count?.Message || 0,
     }));
-  }, [instances]);
+  }, [visibleInstances]);
 
   // ── Recent meetings ────────────────────────────────────────────────
   const recentMeetings = useMemo(() => meetings.slice(0, 8), [meetings]);
@@ -141,7 +147,7 @@ export default function DashboardPage() {
     { label: 'Reuniões este mês', value: String(meetingsThisMonth), icon: Video, color: 'violet', unit: '' },
     { label: 'Score Meets', value: avgScoreMeet ? String(avgScoreMeet) : '—', icon: Star, color: 'lavender', unit: avgScoreMeet ? 'pts' : '' },
     { label: 'Score WhatsApp', value: '—', icon: MessageSquare, color: 'purple', unit: '' },
-    { label: 'WhatsApp conectados', value: String(instancesConnected), icon: Wifi, color: 'green', unit: `/ ${instances.length}` },
+    { label: 'WhatsApp conectados', value: String(instancesConnected), icon: Wifi, color: 'green', unit: `/ ${visibleInstances.length}` },
   ];
 
   return (
