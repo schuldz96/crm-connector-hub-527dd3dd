@@ -973,6 +973,23 @@ function CanvasTreeNode({
     </div>
   );
 
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [hBar, setHBar] = useState<{ left: number; width: number } | null>(null);
+
+  // Measure horizontal bar position after render
+  useEffect(() => {
+    if (!rowRef.current || colCount <= 1) { setHBar(null); return; }
+    const row = rowRef.current;
+    const cols = row.querySelectorAll<HTMLElement>('[data-tree-col]');
+    if (cols.length < 2) { setHBar(null); return; }
+    const rowRect = row.getBoundingClientRect();
+    const first = cols[0].getBoundingClientRect();
+    const last = cols[cols.length - 1].getBoundingClientRect();
+    const left = (first.left + first.width / 2) - rowRect.left;
+    const right = (last.left + last.width / 2) - rowRect.left;
+    setHBar({ left, width: right - left });
+  }, [colCount, columns.length]);
+
   return (
     <div className="flex flex-col items-center">
       {/* This node card */}
@@ -981,26 +998,23 @@ function CanvasTreeNode({
       </div>
 
       {/* Vertical stem down from parent */}
-      <div className="w-px h-8 bg-border/50" />
+      <div className="h-8 bg-white/70 pointer-events-none" style={{ width: 1.5 }} />
 
       {/* Children row with horizontal connector */}
-      <div className="relative flex items-start gap-6">
-        {/* Horizontal connector bar spanning from center of first to center of last */}
-        {colCount > 1 && (
+      <div ref={rowRef} className="relative flex items-start gap-6">
+        {/* Horizontal connector bar — measured from actual child centers */}
+        {hBar && (
           <div
-            className="absolute top-0 h-px bg-border/50 pointer-events-none"
-            style={{
-              left: columns[0]?.child ? `calc(${100 / colCount / 2}%)` : '50%',
-              right: columns[colCount - 1]?.child ? `calc(${100 / colCount / 2}%)` : '50%',
-            }}
+            className="absolute top-0 bg-white/70 pointer-events-none"
+            style={{ left: hBar.left, width: hBar.width, height: 1.5 }}
           />
         )}
 
-        {/* Each column — fixed width, not flex */}
+        {/* Each column */}
         {columns.map((col) => (
-          <div key={col.child?.id ?? 'add'} className="flex flex-col items-center" style={{ minWidth: 230 }}>
+          <div key={col.child?.id ?? 'add'} data-tree-col className="flex flex-col items-center" style={{ minWidth: 230 }}>
             {/* Vertical drop from horizontal bar to child */}
-            <div className="w-px h-6 bg-border/50" />
+            <div className="h-6 bg-white/70 pointer-events-none" style={{ width: 1.5 }} />
 
             {col.type === 'child' && col.child ? (
               <CanvasTreeNode
