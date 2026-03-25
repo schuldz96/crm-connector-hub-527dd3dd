@@ -23,18 +23,35 @@ const colorMap: Record<string, string> = {
 
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, hasMinRole } = useAuth();
   const navigate = useNavigate();
   const { instances } = useEvolutionInstances();
-  const [meetings, setMeetings] = useState<DbMeeting[]>([]);
+  const [allMeetings, setAllMeetings] = useState<DbMeeting[]>([]);
   const [loadingMeetings, setLoadingMeetings] = useState(true);
 
   useEffect(() => {
     loadMeetingsFromDb()
-      .then(setMeetings)
+      .then(setAllMeetings)
       .catch(err => console.error('[dashboard] load meetings:', err))
       .finally(() => setLoadingMeetings(false));
   }, []);
+
+  // ── Role-based visibility ─────────────────────────────────────────
+  const meetings = useMemo(() => {
+    if (hasMinRole('director')) return allMeetings;
+    const userEmail = user?.email?.toLowerCase() || '';
+    const role = user?.role;
+
+    if (role === 'manager' || role === 'coordinator') {
+      if (!user?.areaId) return allMeetings.filter(m => m.vendedor_email?.toLowerCase() === userEmail);
+      return allMeetings.filter(m => m.area_id === user.areaId || m.vendedor_email?.toLowerCase() === userEmail);
+    }
+    if (role === 'supervisor') {
+      if (!user?.teamId) return allMeetings.filter(m => m.vendedor_email?.toLowerCase() === userEmail);
+      return allMeetings.filter(m => m.time_id === user.teamId || m.vendedor_email?.toLowerCase() === userEmail);
+    }
+    return allMeetings.filter(m => m.vendedor_email?.toLowerCase() === userEmail);
+  }, [allMeetings, user?.email, user?.role, user?.areaId, user?.teamId, hasMinRole]);
 
   // ── KPIs ────────────────────────────────────────────────────────────
   const now = new Date();
