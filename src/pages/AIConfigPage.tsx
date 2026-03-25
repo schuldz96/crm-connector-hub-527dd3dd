@@ -964,6 +964,54 @@ function ConnectorWithAdd({
   );
 }
 
+// ─── Add sibling button (dashed card at end of children row) ────────────────
+function AddSiblingButton({
+  parentId,
+  onAddAgent,
+}: {
+  parentId: string;
+  onAddAgent: (parentId: string, tipo: AgentTipo) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const types: { tipo: AgentTipo; label: string; icon: any; color: string }[] = [
+    { tipo: 'classificador', label: 'Classificador', icon: GitBranch, color: 'text-orange-400' },
+    { tipo: 'avaliador', label: 'Avaliador', icon: Users, color: 'text-blue-400' },
+    { tipo: 'sentimental', label: 'Sentimental', icon: Heart, color: 'text-purple-400' },
+  ];
+
+  return (
+    <div className="flex flex-col items-center relative" style={{ minWidth: 140 }}>
+      <div className="h-6 pointer-events-none" style={{ width: 2, background: 'rgba(255,255,255,0.5)' }} />
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen(v => !v); }}
+        className="px-4 py-3 rounded-2xl border-2 border-dashed border-border/40 hover:border-primary/40 hover:bg-primary/5 transition-all flex flex-col items-center gap-1.5"
+        data-agent-node
+      >
+        <div className="w-7 h-7 rounded-lg bg-muted/80 flex items-center justify-center">
+          <Plus className="w-3.5 h-3.5 text-muted-foreground" />
+        </div>
+        <span className="text-[9px] text-muted-foreground font-medium">Adicionar Agente</span>
+      </button>
+      {open && (
+        <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 z-50 bg-background border border-border rounded-xl shadow-2xl p-1.5 min-w-[170px]"
+          onClick={e => e.stopPropagation()}>
+          <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-semibold px-2.5 py-1">Tipo do Agente</p>
+          {types.map(t => (
+            <button
+              key={t.tipo}
+              onClick={() => { onAddAgent(parentId, t.tipo); setOpen(false); }}
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted transition-colors text-left"
+            >
+              <t.icon className={cn('w-3.5 h-3.5', t.color)} />
+              <span className="text-[11px] font-medium">{t.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Recursive Canvas Tree Node (org chart style) ───────────────────────────
 function CanvasTreeNode({
   agent,
@@ -983,18 +1031,28 @@ function CanvasTreeNode({
   onInsertBetween: (parentId: string, tipo: AgentTipo) => void;
 }) {
   const children = getChildren(agent.id);
-  const colCount = children.length + 1;
 
   const rowRef = useRef<HTMLDivElement>(null);
   const [hBar, setHBar] = useState<{ left: number; width: number } | null>(null);
 
+  // Measure bar only across real children (not the add button)
   useEffect(() => {
     const measure = () => {
-      if (!rowRef.current || colCount <= 1) { setHBar(null); return; }
-      const cols = rowRef.current.querySelectorAll<HTMLElement>('[data-tree-col]');
-      if (cols.length < 2) { setHBar(null); return; }
-      const first = cols[0];
-      const last = cols[cols.length - 1];
+      if (!rowRef.current || children.length === 0) { setHBar(null); return; }
+      const childCols = rowRef.current.querySelectorAll<HTMLElement>('[data-tree-child]');
+      if (childCols.length < 2) {
+        // Single child: bar is just a point (width 0), still need vertical drops
+        if (childCols.length === 1) {
+          const c = childCols[0];
+          const l = c.offsetLeft + c.offsetWidth / 2;
+          setHBar({ left: l, width: 0 });
+        } else {
+          setHBar(null);
+        }
+        return;
+      }
+      const first = childCols[0];
+      const last = childCols[childCols.length - 1];
       const l = first.offsetLeft + first.offsetWidth / 2;
       const r = last.offsetLeft + last.offsetWidth / 2;
       setHBar({ left: l, width: r - l });
@@ -1003,7 +1061,7 @@ function CanvasTreeNode({
     const ro = new ResizeObserver(measure);
     if (rowRef.current) ro.observe(rowRef.current);
     return () => ro.disconnect();
-  }, [colCount, children.length]);
+  }, [children.length]);
 
   return (
     <div className="flex flex-col items-center">
@@ -1017,17 +1075,17 @@ function CanvasTreeNode({
 
       {/* Children row with horizontal connector */}
       <div ref={rowRef} className="relative flex items-start gap-4">
-        {/* Horizontal bar */}
-        {hBar && (
+        {/* Horizontal bar — only spans real children, not the add button */}
+        {hBar && hBar.width > 0 && (
           <div
             className="absolute top-0 pointer-events-none"
-            style={{ left: hBar.left, width: Math.max(hBar.width, 1), height: 2, background: 'rgba(255,255,255,0.5)' }}
+            style={{ left: hBar.left, width: hBar.width, height: 2, background: 'rgba(255,255,255,0.5)' }}
           />
         )}
 
         {/* Each child column */}
         {children.map((child) => (
-          <div key={child.id} data-tree-col className="flex flex-col items-center" style={{ minWidth: 230 }}>
+          <div key={child.id} data-tree-child className="flex flex-col items-center" style={{ minWidth: 230 }}>
             {/* Vertical drop line */}
             <div className="h-6 pointer-events-none" style={{ width: 2, background: 'rgba(255,255,255,0.5)' }} />
             <CanvasTreeNode
@@ -1042,20 +1100,8 @@ function CanvasTreeNode({
           </div>
         ))}
 
-        {/* "+" add button at end */}
-        <div data-tree-col className="flex flex-col items-center" style={{ minWidth: 140 }}>
-          <div className="h-6 pointer-events-none" style={{ width: 2, background: 'rgba(255,255,255,0.5)' }} />
-          <button
-            onClick={(e) => { e.stopPropagation(); onAddAgent(agent.id, 'avaliador'); }}
-            className="px-4 py-3 rounded-2xl border-2 border-dashed border-border/40 hover:border-primary/40 hover:bg-primary/5 transition-all flex flex-col items-center gap-1.5"
-            data-agent-node
-          >
-            <div className="w-7 h-7 rounded-lg bg-muted/80 flex items-center justify-center">
-              <Plus className="w-3.5 h-3.5 text-muted-foreground" />
-            </div>
-            <span className="text-[9px] text-muted-foreground font-medium">Adicionar Agente</span>
-          </button>
-        </div>
+        {/* "+" add sibling button at end */}
+        <AddSiblingButton parentId={agent.id} onAddAgent={onAddAgent} />
       </div>
     </div>
   );
