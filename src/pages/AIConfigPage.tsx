@@ -8,7 +8,8 @@ import {
   CheckCircle2, Star, Target, AlertTriangle, Loader2,
   Crown, GitBranch, Users, FileText, Upload, ChevronDown, ChevronRight,
   Power, PowerOff, Copy, Pencil, ZoomIn, ZoomOut, Maximize2, Minus,
-  Heart, Clock, History, ChevronUp
+  Heart, Clock, History, ChevronUp,
+  BookOpen, Zap, Phone
 } from 'lucide-react';
 import { loadRecentChainLogs } from '@/lib/evaluationService';
 import { cn } from '@/lib/utils';
@@ -21,6 +22,7 @@ import {
   loadAgentFiles, saveAgentFile, deleteAgentFile, buildAgentTree,
   type AgentNode, type AgentFile, type AgentTipo,
 } from '@/lib/agentService';
+import { METHODOLOGY_PRESETS, type MethodologyPreset } from '@/lib/methodologyPresets';
 
 // ─── Storage keys (shared with WhatsApp analysis panel) ──────────────────────
 export const AI_CONFIG_STORAGE = {
@@ -334,6 +336,161 @@ function CriteriaModal({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Methodology Selector ────────────────────────────────────────────────────
+function MethodologySelector({
+  activeType,
+  onApply,
+}: {
+  activeType: 'meetings' | 'whatsapp';
+  onApply: (preset: MethodologyPreset) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [confirmPreset, setConfirmPreset] = useState<MethodologyPreset | null>(null);
+
+  const inputType = activeType === 'meetings' ? 'meetings' : 'whatsapp';
+  const presets = METHODOLOGY_PRESETS;
+
+  const tierLabel = (tier: string) => {
+    if (tier === 'core') return { text: 'Core', cls: 'bg-primary/10 text-primary border-primary/20' };
+    if (tier === 'complementary') return { text: 'Complementar', cls: 'bg-accent/10 text-accent border-accent/20' };
+    return { text: 'Opcional', cls: 'bg-muted text-muted-foreground border-border' };
+  };
+
+  const isRecommended = (p: MethodologyPreset) => p.inputTypes.includes(inputType as any);
+
+  return (
+    <div className="glass-card p-4 rounded-xl border border-border mb-6">
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className="w-full flex items-center justify-between"
+      >
+        <div className="flex items-center gap-2">
+          <BookOpen className="w-4 h-4 text-accent" />
+          <h3 className="text-sm font-semibold">Metodologias de Vendas</h3>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20 font-medium">
+            {presets.length} disponíveis
+          </span>
+        </div>
+        {expanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+      </button>
+
+      {expanded && (
+        <div className="mt-4 space-y-4">
+          <p className="text-[11px] text-muted-foreground">
+            Selecione uma metodologia para aplicar seus critérios e prompt como preset.
+            Isso <span className="text-warning font-semibold">substituirá</span> os critérios e prompt atuais.
+          </p>
+
+          {/* Tier sections */}
+          {(['core', 'complementary', 'optional'] as const).map(tier => {
+            const tierPresets = presets.filter(p => p.tier === tier);
+            const label = tier === 'core' ? 'Core — Essenciais' : tier === 'complementary' ? 'Complementares — Alto Valor' : 'Opcionais — Cobertura Completa';
+            return (
+              <div key={tier}>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">{label}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  {tierPresets.map(p => {
+                    const recommended = isRecommended(p);
+                    const tl = tierLabel(p.tier);
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => setConfirmPreset(p)}
+                        className={cn(
+                          'text-left p-3 rounded-lg border transition-all hover:shadow-sm',
+                          recommended
+                            ? 'border-primary/30 bg-primary/5 hover:border-primary/50'
+                            : 'border-border bg-secondary/50 hover:border-border/80'
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-1 mb-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-base">{p.icon}</span>
+                            <span className="text-xs font-semibold">{p.name}</span>
+                          </div>
+                          {recommended && (
+                            <span className="text-[8px] px-1 py-0.5 rounded bg-primary/15 text-primary font-semibold whitespace-nowrap flex-shrink-0">
+                              REC
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground line-clamp-2 mb-1.5">{p.description}</p>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <span className={cn('text-[8px] px-1 py-0.5 rounded-full border font-medium', tl.cls)}>{tl.text}</span>
+                          {p.inputTypes.includes('meetings') && <Video className="w-2.5 h-2.5 text-muted-foreground/50" />}
+                          {p.inputTypes.includes('whatsapp') && <MessageSquare className="w-2.5 h-2.5 text-muted-foreground/50" />}
+                          {p.inputTypes.includes('calls') && <Phone className="w-2.5 h-2.5 text-muted-foreground/50" />}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Confirmation modal */}
+      {confirmPreset && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setConfirmPreset(null)}>
+          <div className="w-full max-w-md glass-card p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-2xl">{confirmPreset.icon}</span>
+              <div>
+                <h3 className="font-semibold text-sm">{confirmPreset.name}</h3>
+                <p className="text-[10px] text-muted-foreground">{confirmPreset.creator}</p>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">{confirmPreset.description}</p>
+
+            <div className="mb-3">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1.5">Critérios que serão aplicados</p>
+              <div className="space-y-1">
+                {confirmPreset.criteria.map(c => (
+                  <div key={c.id} className="flex justify-between text-[11px] px-2 py-1 rounded bg-secondary/50">
+                    <span>{c.label}</span>
+                    <span className="font-semibold text-primary">{c.weight}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mb-3">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">Melhor para</p>
+              <div className="flex flex-wrap gap-1">
+                {confirmPreset.bestFor.map((b, i) => (
+                  <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-secondary border border-border text-muted-foreground">{b}</span>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-2 rounded-lg bg-warning/5 border border-warning/20 mb-3">
+              <p className="text-[10px] text-warning">
+                <AlertTriangle className="w-3 h-3 inline mr-1" />
+                Isso substituirá todos os critérios e o prompt do sistema atuais de <span className="font-semibold">{activeType === 'meetings' ? 'Reuniões' : 'WhatsApp'}</span>.
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                className="flex-1 bg-gradient-primary text-xs h-9"
+                onClick={() => { onApply(confirmPreset); setConfirmPreset(null); setExpanded(false); }}
+              >
+                <Zap className="w-3.5 h-3.5 mr-1.5" /> Aplicar Metodologia
+              </Button>
+              <Button size="sm" variant="outline" className="text-xs border-border h-9" onClick={() => setConfirmPreset(null)}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -978,6 +1135,15 @@ Avalie cada critério abaixo e retorne APENAS JSON válido (sem markdown):
   const totalWeight = criteria.reduce((a, c) => a + c.weight, 0);
   const remainingWeight = 100 - totalWeight;
 
+  const handleApplyMethodology = (preset: MethodologyPreset) => {
+    setCriteria(preset.criteria);
+    setSystemPrompt(preset.systemPrompt);
+    toast({
+      title: `${preset.icon} ${preset.name} aplicada!`,
+      description: `${preset.criteria.length} critérios e prompt do sistema atualizados. Salve para persistir.`,
+    });
+  };
+
   const handleSaveCriteria = (updated: EvalCriteria) => {
     setCriteria(prev => {
       const exists = prev.some(c => c.id === updated.id);
@@ -1282,6 +1448,9 @@ Avalie cada critério abaixo e retorne APENAS JSON válido (sem markdown):
       {/* ═══ WHATSAPP TAB: Original criteria view ═══ */}
       {activeType === 'whatsapp' && (
         <>
+          {/* Methodology presets */}
+          <MethodologySelector activeType={activeType} onApply={handleApplyMethodology} />
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Criteria list */}
             <div className="lg:col-span-2 space-y-4">
