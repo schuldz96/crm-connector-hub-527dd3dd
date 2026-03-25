@@ -1031,63 +1031,36 @@ function CanvasTreeNode({
   onInsertBetween: (parentId: string, tipo: AgentTipo) => void;
 }) {
   const children = getChildren(agent.id);
-
-  const rowRef = useRef<HTMLDivElement>(null);
-  const [hBar, setHBar] = useState<{ left: number; width: number } | null>(null);
-
-  // Measure bar only across real children (not the add button)
-  useEffect(() => {
-    const measure = () => {
-      if (!rowRef.current || children.length === 0) { setHBar(null); return; }
-      const childCols = rowRef.current.querySelectorAll<HTMLElement>('[data-tree-child]');
-      if (childCols.length < 2) {
-        // Single child: bar is just a point (width 0), still need vertical drops
-        if (childCols.length === 1) {
-          const c = childCols[0];
-          const l = c.offsetLeft + c.offsetWidth / 2;
-          setHBar({ left: l, width: 0 });
-        } else {
-          setHBar(null);
-        }
-        return;
-      }
-      const first = childCols[0];
-      const last = childCols[childCols.length - 1];
-      const l = first.offsetLeft + first.offsetWidth / 2;
-      const r = last.offsetLeft + last.offsetWidth / 2;
-      setHBar({ left: l, width: r - l });
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    if (rowRef.current) ro.observe(rowRef.current);
-    return () => ro.disconnect();
-  }, [children.length]);
+  const lc = 'rgba(255,255,255,0.4)';
 
   return (
     <div className="flex flex-col items-center">
-      {/* This node card */}
+      {/* Node card */}
       <div data-agent-node>
         <AgentNode_ agent={agent} onClick={() => onClickAgent(agent.id)} onToggle={() => onToggleAgent(agent)} />
       </div>
 
-      {/* Vertical connector with "+" button (HubSpot style) — inserts between */}
+      {/* Vertical connector with "+" */}
       <ConnectorWithAdd parentId={agent.id} onInsertBetween={onInsertBetween} height={40} />
 
-      {/* Children row with horizontal connector */}
-      <div ref={rowRef} className="relative flex items-start gap-4">
-        {/* Horizontal bar — only spans real children, not the add button */}
-        {hBar && hBar.width > 0 && (
-          <div
-            className="absolute top-0 pointer-events-none"
-            style={{ left: hBar.left, width: hBar.width, height: 2, background: 'rgba(255,255,255,0.5)' }}
-          />
-        )}
+      {/* Children row */}
+      <div className="flex items-start">
+        {children.map((child, i) => (
+          <div key={child.id} className="flex flex-col items-center" style={{ minWidth: 230 }}>
+            {/* Top connector: left half border + right half border = horizontal line */}
+            <div className="flex self-stretch" style={{ height: 24 }}>
+              {/* Left half */}
+              <div className="flex-1" style={{
+                borderRight: `2px solid ${lc}`,
+                borderTop: i > 0 ? `2px solid ${lc}` : 'none',
+              }} />
+              {/* Right half */}
+              <div className="flex-1" style={{
+                borderLeft: 'none', // avoid double line at center
+                borderTop: i < children.length - 1 ? `2px solid ${lc}` : 'none',
+              }} />
+            </div>
 
-        {/* Each child column */}
-        {children.map((child) => (
-          <div key={child.id} data-tree-child className="flex flex-col items-center" style={{ minWidth: 230 }}>
-            {/* Vertical drop line */}
-            <div className="h-6 pointer-events-none" style={{ width: 2, background: 'rgba(255,255,255,0.5)' }} />
             <CanvasTreeNode
               agent={child}
               agents={agents}
@@ -1100,7 +1073,7 @@ function CanvasTreeNode({
           </div>
         ))}
 
-        {/* "+" add sibling button at end */}
+        {/* Add button */}
         <AddSiblingButton parentId={agent.id} onAddAgent={onAddAgent} />
       </div>
     </div>
