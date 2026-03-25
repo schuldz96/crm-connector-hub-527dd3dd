@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -908,8 +908,8 @@ function AgentConfigModal({
   );
 }
 
-// ─── Inline add button (appears between siblings on hover) ──────────────────
-function InlineAddButton({
+// ─── Inline add button (between siblings — visible on hover of gap area) ────
+function InlineInsertButton({
   parentId,
   insertIndex,
   onAddAgent,
@@ -918,30 +918,37 @@ function InlineAddButton({
   insertIndex: number;
   onAddAgent: (parentId: string, tipo: AgentTipo, insertIndex: number) => void;
 }) {
-  const [showMenu, setShowMenu] = useState(false);
-  const addableTypes: { tipo: AgentTipo; label: string; icon: any; color: string }[] = [
+  const [open, setOpen] = useState(false);
+  const types: { tipo: AgentTipo; label: string; icon: any; color: string }[] = [
     { tipo: 'classificador', label: 'Classificador', icon: GitBranch, color: 'text-orange-400' },
     { tipo: 'avaliador', label: 'Avaliador', icon: Users, color: 'text-blue-400' },
     { tipo: 'sentimental', label: 'Sentimental', icon: Heart, color: 'text-purple-400' },
   ];
 
   return (
-    <div className="relative flex items-center justify-center group/insert" style={{ width: 24 }} data-agent-node>
-      <button
-        onClick={(e) => { e.stopPropagation(); setShowMenu(v => !v); }}
-        className="w-5 h-5 rounded-full bg-primary/80 text-primary-foreground flex items-center justify-center opacity-0 group-hover/insert:opacity-100 transition-all hover:scale-110 shadow-lg"
-        title="Inserir agente aqui"
-      >
-        <Plus className="w-3 h-3" />
-      </button>
-      {showMenu && (
-        <div className="absolute top-full mt-1 z-50 bg-background border border-border rounded-xl shadow-2xl p-1.5 min-w-[170px]"
+    <div className="relative flex items-center self-stretch group/gap" data-agent-node>
+      {/* Wide hover zone */}
+      <div className="w-8 flex items-center justify-center self-stretch">
+        <button
+          onClick={(e) => { e.stopPropagation(); setOpen(v => !v); }}
+          className={cn(
+            'w-6 h-6 rounded-full flex items-center justify-center transition-all shadow-md',
+            open
+              ? 'bg-primary text-primary-foreground scale-110'
+              : 'bg-primary/70 text-primary-foreground opacity-0 group-hover/gap:opacity-100 hover:scale-110'
+          )}
+        >
+          <Plus className="w-3.5 h-3.5" />
+        </button>
+      </div>
+      {open && (
+        <div className="absolute left-1/2 -translate-x-1/2 top-full mt-1 z-50 bg-background border border-border rounded-xl shadow-2xl p-1.5 min-w-[170px]"
           onClick={e => e.stopPropagation()}>
-          <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-semibold px-2.5 py-1">Inserir agente</p>
-          {addableTypes.map(t => (
+          <p className="text-[9px] text-muted-foreground uppercase tracking-wider font-semibold px-2.5 py-1">Inserir aqui</p>
+          {types.map(t => (
             <button
               key={t.tipo}
-              onClick={() => { onAddAgent(parentId, t.tipo, insertIndex); setShowMenu(false); }}
+              onClick={() => { onAddAgent(parentId, t.tipo, insertIndex); setOpen(false); }}
               className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-muted transition-colors text-left"
             >
               <t.icon className={cn('w-3.5 h-3.5', t.color)} />
@@ -964,9 +971,6 @@ function CanvasTreeNode({
   addingChildFor,
   setAddingChildFor,
   onAddAgent,
-  onMoveAgent,
-  dragState,
-  setDragState,
 }: {
   agent: AgentNode;
   agents: AgentNode[];
@@ -976,9 +980,6 @@ function CanvasTreeNode({
   addingChildFor: string | null;
   setAddingChildFor: (id: string | null) => void;
   onAddAgent: (parentId: string, tipo: AgentTipo, insertIndex?: number) => void;
-  onMoveAgent: (agentId: string, newParentId: string, newIndex: number) => void;
-  dragState: { agentId: string; parentId: string } | null;
-  setDragState: (s: { agentId: string; parentId: string } | null) => void;
 }) {
   const children = getChildren(agent.id);
   const addableTypes: { tipo: AgentTipo; label: string; icon: any; color: string }[] = [
@@ -987,15 +988,8 @@ function CanvasTreeNode({
     { tipo: 'sentimental', label: 'Sentimental', icon: Heart, color: 'text-purple-400' },
   ];
 
-  // Build interleaved array: [child, insertBtn, child, insertBtn, ..., addBtn]
-  const elements: { type: 'child' | 'insert' | 'add'; child?: AgentNode; insertIndex?: number }[] = [];
-  children.forEach((c, i) => {
-    if (i > 0) elements.push({ type: 'insert', insertIndex: i });
-    elements.push({ type: 'child', child: c });
-  });
-  elements.push({ type: 'add' });
-
-  const colCount = elements.filter(e => e.type !== 'insert').length;
+  // Columns: children interleaved with insert buttons, plus add-at-end button
+  const colCount = children.length + 1; // children + add button
 
   const addButton = (
     <div className="relative" data-agent-node>
@@ -1027,29 +1021,6 @@ function CanvasTreeNode({
     </div>
   );
 
-  // Drag & drop handlers
-  const handleDragStart = (e: React.DragEvent, child: AgentNode) => {
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', child.id);
-    setDragState({ agentId: child.id, parentId: agent.id });
-  };
-
-  const handleDragOver = (e: React.DragEvent, targetIndex: number) => {
-    if (!dragState) return;
-    // Only allow dropping siblings (same parent level) or reparenting
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-
-  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
-    e.preventDefault();
-    if (!dragState) return;
-    onMoveAgent(dragState.agentId, agent.id, targetIndex);
-    setDragState(null);
-  };
-
-  const handleDragEnd = () => setDragState(null);
-
   const rowRef = useRef<HTMLDivElement>(null);
   const [hBar, setHBar] = useState<{ left: number; width: number } | null>(null);
 
@@ -1068,19 +1039,16 @@ function CanvasTreeNode({
     const ro = new ResizeObserver(measure);
     if (rowRef.current) ro.observe(rowRef.current);
     return () => ro.disconnect();
-  }, [colCount, elements.length]);
+  }, [colCount, children.length]);
 
   return (
     <div className="flex flex-col items-center">
-      {/* This node card */}
       <div data-agent-node>
         <AgentNode_ agent={agent} onClick={() => onClickAgent(agent.id)} onToggle={() => onToggleAgent(agent)} />
       </div>
 
-      {/* Vertical stem down from parent */}
       <div className="h-8 pointer-events-none" style={{ width: 2, background: 'rgba(255,255,255,0.5)' }} />
 
-      {/* Children row with horizontal connector */}
       <div ref={rowRef} className="relative flex items-start">
         {hBar && (
           <div
@@ -1089,51 +1057,34 @@ function CanvasTreeNode({
           />
         )}
 
-        {elements.map((el, i) => {
-          if (el.type === 'insert') {
-            return (
-              <div key={`ins-${el.insertIndex}`} className="flex flex-col items-center justify-start pt-6">
-                <InlineAddButton parentId={agent.id} insertIndex={el.insertIndex!} onAddAgent={onAddAgent} />
-              </div>
-            );
-          }
-
-          const isDragging = dragState?.agentId === el.child?.id;
-
-          return (
-            <div
-              key={el.child?.id ?? 'add'}
-              data-tree-col
-              className={cn('flex flex-col items-center', isDragging && 'opacity-40')}
-              style={{ minWidth: 230, marginLeft: i > 0 && el.type !== 'insert' ? 0 : undefined }}
-              draggable={el.type === 'child' && el.child?.tipo !== 'gerente'}
-              onDragStart={el.child ? (e) => handleDragStart(e, el.child!) : undefined}
-              onDragEnd={handleDragEnd}
-              onDragOver={el.type === 'child' ? (e) => handleDragOver(e, children.indexOf(el.child!)) : undefined}
-              onDrop={el.type === 'child' ? (e) => handleDrop(e, children.indexOf(el.child!)) : undefined}
-            >
+        {/* Render children with insert buttons between them */}
+        {children.map((child, i) => (
+          <React.Fragment key={child.id}>
+            {/* Insert button between siblings */}
+            {i > 0 && (
+              <InlineInsertButton parentId={agent.id} insertIndex={i} onAddAgent={onAddAgent} />
+            )}
+            <div data-tree-col className="flex flex-col items-center" style={{ minWidth: 230 }}>
               <div className="h-6 pointer-events-none" style={{ width: 2, background: 'rgba(255,255,255,0.5)' }} />
-
-              {el.type === 'child' && el.child ? (
-                <CanvasTreeNode
-                  agent={el.child}
-                  agents={agents}
-                  getChildren={getChildren}
-                  onClickAgent={onClickAgent}
-                  onToggleAgent={onToggleAgent}
-                  addingChildFor={addingChildFor}
-                  setAddingChildFor={setAddingChildFor}
-                  onAddAgent={onAddAgent}
-                  onMoveAgent={onMoveAgent}
-                  dragState={dragState}
-                  setDragState={setDragState}
-                />
-              ) : (
-                addButton
-              )}
+              <CanvasTreeNode
+                agent={child}
+                agents={agents}
+                getChildren={getChildren}
+                onClickAgent={onClickAgent}
+                onToggleAgent={onToggleAgent}
+                addingChildFor={addingChildFor}
+                setAddingChildFor={setAddingChildFor}
+                onAddAgent={onAddAgent}
+              />
             </div>
-          );
-        })}
+          </React.Fragment>
+        ))}
+
+        {/* Add button at the end */}
+        <div data-tree-col className="flex flex-col items-center" style={{ minWidth: 160 }}>
+          <div className="h-6 pointer-events-none" style={{ width: 2, background: 'rgba(255,255,255,0.5)' }} />
+          {addButton}
+        </div>
       </div>
     </div>
   );
@@ -1172,8 +1123,6 @@ export default function AIConfigPage() {
 
   // Add agent dropdown
   const [addingChildFor, setAddingChildFor] = useState<string | null>(null);
-  // Drag & drop state
-  const [dragState, setDragState] = useState<{ agentId: string; parentId: string } | null>(null);
 
   // Execution history
   const [showHistory, setShowHistory] = useState(false);
@@ -1342,34 +1291,6 @@ Avalie cada critério abaixo e retorne APENAS JSON válido (sem markdown):
       setEditingAgentId(saved.id);
       setAddingChildFor(null);
     }
-  };
-
-  const handleMoveAgent = async (agentId: string, newParentId: string, newIndex: number) => {
-    const agent = currentAgents.find(a => a.id === agentId);
-    if (!agent) return;
-
-    // Don't allow moving gerente
-    if (agent.tipo === 'gerente') return;
-
-    const oldParentId = agent.parent_id;
-    const siblings = currentAgents
-      .filter(a => a.parent_id === newParentId && a.id !== agentId)
-      .sort((a, b) => a.ordem - b.ordem);
-
-    // Update the moved agent
-    await saveAgent({ ...agent, parent_id: newParentId, ordem: newIndex });
-
-    // Reorder remaining siblings
-    let idx = 0;
-    for (const sib of siblings) {
-      if (idx === newIndex) idx++;
-      await saveAgent({ ...sib, ordem: idx });
-      idx++;
-    }
-
-    // Reload tree
-    const tree = await loadAgentTree(activeType);
-    setCurrentAgents(tree);
   };
 
   const handleToggleAgent = async (agent: AgentNode) => {
@@ -1626,9 +1547,6 @@ Avalie cada critério abaixo e retorne APENAS JSON válido (sem markdown):
                       addingChildFor={addingChildFor}
                       setAddingChildFor={setAddingChildFor}
                       onAddAgent={handleAddAgent}
-                      onMoveAgent={handleMoveAgent}
-                      dragState={dragState}
-                      setDragState={setDragState}
                     />
                   )}
                 </div>
