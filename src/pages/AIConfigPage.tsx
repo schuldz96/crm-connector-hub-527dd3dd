@@ -1036,13 +1036,13 @@ function CanvasTreeNode({
   /*
    * CSS org-chart connector pattern (no JS measurement needed):
    *
-   * Each child column is split into left-half and right-half.
-   * - Left half gets border-top if NOT the first child  → draws line going left
-   * - Right half gets border-top if NOT the last child  → draws line going right
-   * - Both halves share a border at the center junction  → vertical drop
+   * Each child column is split into left-half and right-half (both flex:1).
+   * - Left half borderRight = vertical drop line (centered since both halves are equal width)
+   * - Left half borderTop  = horizontal line connecting to sibling on the left (skip for first child)
+   * - Right half borderTop = horizontal line connecting to sibling on the right (skip for last child)
    *
    * This creates a perfect horizontal bar from first child center to last child center,
-   * with vertical drops at each child's center.
+   * with vertical drops at each child's center — all via pure CSS borders.
    */
 
   return (
@@ -1055,21 +1055,27 @@ function CanvasTreeNode({
       <ConnectorWithAdd parentId={agent.id} onInsertBetween={onInsertBetween} height={40} />
 
       {/* Children */}
-      <div className="flex items-stretch">
+      <div className="flex items-start">
         {children.map((child, i) => {
           const isFirst = i === 0;
           const isLast = i === children.length - 1;
           return (
             <div key={child.id} className="flex flex-col items-center" style={{ minWidth: 230 }}>
-              {/* Connector area: two halves side by side */}
+              {/*
+               * Proven CSS org-chart connector: two flex halves.
+               * - borderRight on left-half = vertical drop (centered since both halves are flex:1)
+               * - borderTop on left-half  = horizontal line to left sibling
+               * - borderTop on right-half = horizontal line to right sibling
+               */}
               <div className="flex self-stretch" style={{ height: 20 }}>
-                {/* Left half: border-top connects to sibling on the left */}
-                <div className="flex-1" style={{ borderTop: isFirst ? 'none' : border }} />
-                {/* Right half: border-top connects to sibling on the right */}
-                <div className="flex-1" style={{ borderTop: isLast ? 'none' : border }} />
+                <div className="flex-1" style={{
+                  borderRight: border,
+                  borderTop: isFirst ? 'none' : border,
+                }} />
+                <div className="flex-1" style={{
+                  borderTop: isLast ? 'none' : border,
+                }} />
               </div>
-              {/* Vertical drop from the center junction down to the child card */}
-              <div style={{ width: 2, height: 16, background: 'rgba(255,255,255,0.4)' }} />
               {/* Recurse */}
               <CanvasTreeNode
                 agent={child}
@@ -1083,7 +1089,7 @@ function CanvasTreeNode({
             </div>
           );
         })}
-        {/* Add sibling */}
+        {/* Add sibling — no connector lines */}
         <AddSiblingButton parentId={agent.id} onAddAgent={onAddAgent} />
       </div>
     </div>
