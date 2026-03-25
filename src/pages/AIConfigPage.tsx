@@ -1029,19 +1029,33 @@ function CanvasTreeNode({
   onAddAgent: (parentId: string, tipo: AgentTipo, insertIndex?: number) => void;
 }) {
   const children = getChildren(agent.id);
-  const border = '2px solid rgba(255,255,255,0.4)';
+  const lc = 'rgba(255,255,255,0.4)';
 
-  /*
-   * CSS org-chart connector pattern (no JS measurement needed):
-   *
-   * Each child column is split into left-half and right-half (both flex:1).
-   * - Left half borderRight = vertical drop line (centered since both halves are equal width)
-   * - Left half borderTop  = horizontal line connecting to sibling on the left (skip for first child)
-   * - Right half borderTop = horizontal line connecting to sibling on the right (skip for last child)
-   *
-   * This creates a perfect horizontal bar from first child center to last child center,
-   * with vertical drops at each child's center — all via pure CSS borders.
-   */
+  // All items = children + add button (all get connectors)
+  const allItems = [...children.map(c => ({ type: 'child' as const, agent: c })), { type: 'add' as const, agent: null }];
+
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [hBar, setHBar] = useState<{ left: number; width: number } | null>(null);
+
+  // Measure horizontal bar across ALL columns (children + add)
+  useEffect(() => {
+    const measure = () => {
+      if (!rowRef.current || allItems.length <= 1) { setHBar(null); return; }
+      const cols = rowRef.current.querySelectorAll<HTMLElement>('[data-col]');
+      if (cols.length < 2) { setHBar(null); return; }
+      const first = cols[0];
+      const last = cols[cols.length - 1];
+      setHBar({
+        left: first.offsetLeft + first.offsetWidth / 2,
+        width: (last.offsetLeft + last.offsetWidth / 2) - (first.offsetLeft + first.offsetWidth / 2),
+      });
+    };
+    // Measure after render + on resize
+    const t = setTimeout(measure, 0);
+    const ro = new ResizeObserver(measure);
+    if (rowRef.current) ro.observe(rowRef.current);
+    return () => { clearTimeout(t); ro.disconnect(); };
+  });
 
   return (
     <div className="flex flex-col items-center">
@@ -1049,42 +1063,35 @@ function CanvasTreeNode({
         <AgentNode_ agent={agent} onClick={() => onClickAgent(agent.id)} onToggle={() => onToggleAgent(agent)} />
       </div>
 
-      {/* Vertical stem down from parent to children */}
-      <div style={{ width: 2, height: 32, background: 'rgba(255,255,255,0.4)' }} />
+      {/* Vertical stem */}
+      <div style={{ width: 2, height: 32, background: lc }} />
 
-      {/* Children row — each child has a two-half connector that forms the horizontal bar + vertical drops */}
-      <div className="flex items-start">
-        {children.map((child, i) => {
-          const isFirst = i === 0;
-          const isLast = i === children.length - 1;
-          const isOnly = children.length === 1;
-          return (
-            <div key={child.id} className="flex flex-col items-center" style={{ minWidth: 230 }}>
-              {/* Two halves form the connector:
-                  Left half:  borderRight = vertical drop (centered), borderTop = bar to left sibling
-                  Right half: borderTop = bar to right sibling */}
-              <div className="flex self-stretch" style={{ height: 24 }}>
-                <div className="flex-1" style={{
-                  borderRight: border,
-                  borderTop: (isFirst || isOnly) ? 'none' : border,
-                }} />
-                <div className="flex-1" style={{
-                  borderTop: (isLast || isOnly) ? 'none' : border,
-                }} />
-              </div>
+      {/* Children row */}
+      <div ref={rowRef} className="relative flex items-start gap-6">
+        {/* Horizontal bar */}
+        {hBar && hBar.width > 0 && (
+          <div className="absolute pointer-events-none" style={{ top: 0, left: hBar.left, width: hBar.width, height: 2, background: lc }} />
+        )}
+
+        {allItems.map((item) => (
+          <div key={item.agent?.id ?? 'add'} data-col className="flex flex-col items-center" style={{ minWidth: item.type === 'add' ? 140 : 230 }}>
+            {/* Vertical drop */}
+            <div style={{ width: 2, height: 24, background: lc }} />
+
+            {item.type === 'child' && item.agent ? (
               <CanvasTreeNode
-                agent={child}
+                agent={item.agent}
                 agents={agents}
                 getChildren={getChildren}
                 onClickAgent={onClickAgent}
                 onToggleAgent={onToggleAgent}
                 onAddAgent={onAddAgent}
               />
-            </div>
-          );
-        })}
-        {/* Add sibling */}
-        <AddSiblingButton parentId={agent.id} onAddAgent={onAddAgent} />
+            ) : (
+              <AddSiblingButton parentId={agent.id} onAddAgent={onAddAgent} />
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
