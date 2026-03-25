@@ -9,10 +9,13 @@ import type { EvalCriteria } from '@/pages/AIConfigPage';
 // ─── Types ───────────────────────────────────────────────────────────────────
 export type AgentTipo = 'gerente' | 'classificador' | 'avaliador' | 'sentimental';
 
+export type AgentModulo = 'meetings' | 'whatsapp';
+
 export interface AgentNode {
   id: string;
   empresa_id: string;
   parent_id: string | null;
+  modulo: AgentModulo;
   tipo: AgentTipo;
   nome: string;
   descricao: string;
@@ -37,14 +40,15 @@ export interface AgentFile {
   criado_em: string;
 }
 
-// ─── Load full agent tree for current empresa ────────────────────────────────
-export async function loadAgentTree(): Promise<AgentNode[]> {
+// ─── Load full agent tree for current empresa (filtered by modulo) ───────────
+export async function loadAgentTree(modulo: AgentModulo = 'meetings'): Promise<AgentNode[]> {
   const empresaId = await getSaasEmpresaId();
   const { data, error } = await (supabase as any)
     .schema('saas')
     .from('agentes_ia')
     .select('*')
     .eq('empresa_id', empresaId)
+    .eq('modulo', modulo)
     .order('ordem', { ascending: true });
 
   if (error) {
@@ -99,8 +103,22 @@ export async function deleteAgent(agentId: string): Promise<void> {
 }
 
 // ─── Initialize default agent tree ──────────────────────────────────────────
-export async function initializeAgentTree(): Promise<AgentNode[]> {
+export async function initializeAgentTree(modulo: AgentModulo = 'meetings'): Promise<AgentNode[]> {
   const empresaId = await getSaasEmpresaId();
+
+  const isMeetings = modulo === 'meetings';
+  const gerenteDesc = isMeetings
+    ? 'Agente orquestrador que coordena a avaliação das reuniões'
+    : 'Agente orquestrador que coordena a avaliação das conversas WhatsApp';
+  const gerentePrompt = isMeetings
+    ? 'Você é o gerente de avaliação de reuniões. Seu papel é coordenar os agentes especializados para avaliar cada reunião de forma precisa e consistente.'
+    : 'Você é o gerente de avaliação de conversas WhatsApp. Seu papel é coordenar os agentes especializados para avaliar cada conversa de forma precisa e consistente.';
+  const classDesc = isMeetings
+    ? 'Identifica o tipo da reunião para direcionar ao avaliador correto'
+    : 'Identifica o tipo da conversa para direcionar ao avaliador correto';
+  const classPrompt = isMeetings
+    ? 'Você é um classificador de reuniões. Analise o título e o início da transcrição para identificar o tipo da reunião. Retorne APENAS JSON: {"tipo": "<nome exato do tipo>", "confianca": <0-100>}'
+    : 'Você é um classificador de conversas WhatsApp. Analise as primeiras mensagens para identificar o tipo da conversa (prospecção, qualificação, follow-up, suporte, etc). Retorne APENAS JSON: {"tipo": "<nome exato do tipo>", "confianca": <0-100>}';
 
   // Create Gerente
   const { data: gerente } = await (supabase as any)
@@ -108,10 +126,11 @@ export async function initializeAgentTree(): Promise<AgentNode[]> {
     .from('agentes_ia')
     .insert({
       empresa_id: empresaId,
+      modulo,
       tipo: 'gerente',
       nome: 'Gerente',
-      descricao: 'Agente orquestrador que coordena a avaliação das reuniões',
-      prompt_sistema: 'Você é o gerente de avaliação de reuniões. Seu papel é coordenar os agentes especializados para avaliar cada reunião de forma precisa e consistente.',
+      descricao: gerenteDesc,
+      prompt_sistema: gerentePrompt,
       ordem: 0,
     })
     .select()
@@ -125,11 +144,12 @@ export async function initializeAgentTree(): Promise<AgentNode[]> {
     .from('agentes_ia')
     .insert({
       empresa_id: empresaId,
+      modulo,
       parent_id: gerente.id,
       tipo: 'classificador',
       nome: 'Classificador',
-      descricao: 'Identifica o tipo da reunião para direcionar ao avaliador correto',
-      prompt_sistema: 'Você é um classificador de reuniões. Analise o título e o início da transcrição para identificar o tipo da reunião. Retorne APENAS JSON: {"tipo": "<nome exato do tipo>", "confianca": <0-100>}',
+      descricao: classDesc,
+      prompt_sistema: classPrompt,
       ordem: 0,
     })
     .select()
@@ -138,17 +158,20 @@ export async function initializeAgentTree(): Promise<AgentNode[]> {
   if (!classificador) return [gerente];
 
   // Create one default avaliador
-  const { data: avaliador } = await (supabase as any)
-    .schema('saas')
-    .from('agentes_ia')
-    .insert({
-      empresa_id: empresaId,
-      parent_id: classificador.id,
-      tipo: 'avaliador',
-      nome: '[Closer In] Apresentação',
-      descricao: 'Avalia reuniões de apresentação de vendas (closer inbound)',
-      prompt_sistema: 'Você é um avaliador especialista em vendas consultivas. Analise a transcrição da reunião e avalie cada critério com base nos sinais identificados. Seja específico e construtivo nos feedbacks.',
-      criterios: JSON.parse(JSON.stringify([
+  const avaliadorConfig = isMeetings
+    ? {
+        nome: '[Closer In] Apresentação',
+        descricao: 'Avalia reuniões de apresentação de vendas (closer inbound)',
+        prompt: 'Você é um avaliador especialista em vendas consultivas. Analise a transcrição da reunião e avalie cada critério com base nos sinais identificados. Seja específico e construtivo nos feedbacks.',
+      }
+    : {
+        nome: '[WhatsApp] Atendimento Comercial',
+        descricao: 'Avalia conversas de prospecção e qualificação via WhatsApp',
+        prompt: 'Você é um especialista em vendas digitais e atendimento via WhatsApp. Avalie as conversas com foco em efetividade comercial, qualificação de leads e conversão. Seja específico e construtivo.',
+      };
+
+  const avaliadorCriteria = isMeetings
+    ? [
         {
           id: 'rapport', label: 'Rapport', weight: 20,
           description: 'Conexão emocional e abertura do cliente durante a conversa',
@@ -184,7 +207,57 @@ export async function initializeAgentTree(): Promise<AgentNode[]> {
           positiveSignals: ['Próxima reunião agendada na call'],
           negativeSignals: ['Sair sem data definida'],
         },
-      ])),
+      ]
+    : [
+        {
+          id: 'response_time', label: 'Tempo de Resposta', weight: 15,
+          description: 'Velocidade e consistência nas respostas ao lead',
+          examples: ['Responder em menos de 5 min', 'Manter cadência constante'],
+          positiveSignals: ['Respostas rápidas e relevantes'],
+          negativeSignals: ['Horas sem resposta', 'Lead precisou cobrar'],
+        },
+        {
+          id: 'engagement', label: 'Engajamento', weight: 25,
+          description: 'Capacidade de manter o lead engajado na conversa',
+          examples: ['Perguntas abertas', 'Conteúdo de valor', 'Personalização'],
+          positiveSignals: ['Lead responde com detalhes', 'Faz perguntas espontâneas'],
+          negativeSignals: ['Respostas monossilábicas', 'Lead some da conversa'],
+        },
+        {
+          id: 'qualification', label: 'Qualificação', weight: 25,
+          description: 'Identificação de perfil, budget, timing e autoridade',
+          examples: ['Perguntar sobre decisão', 'Mapear necessidade', 'Entender budget'],
+          positiveSignals: ['Lead compartilha informações de negócio'],
+          negativeSignals: ['Nenhuma pergunta de qualificação'],
+        },
+        {
+          id: 'cta', label: 'CTA e Next Steps', weight: 20,
+          description: 'Clareza nas chamadas para ação e próximos passos',
+          examples: ['Agendar call', 'Enviar proposta', 'Definir data'],
+          positiveSignals: ['Próximo passo definido com data'],
+          negativeSignals: ['Conversa morre sem CTA'],
+        },
+        {
+          id: 'tone', label: 'Tom e Linguagem', weight: 15,
+          description: 'Adequação do vocabulário, tom profissional e empatia',
+          examples: ['Tom consultivo', 'Sem erros gramaticais', 'Empático'],
+          positiveSignals: ['Lead elogia atendimento'],
+          negativeSignals: ['Tom robótico', 'Erros frequentes', 'Agressividade'],
+        },
+      ];
+
+  const { data: avaliador } = await (supabase as any)
+    .schema('saas')
+    .from('agentes_ia')
+    .insert({
+      empresa_id: empresaId,
+      modulo,
+      parent_id: classificador.id,
+      tipo: 'avaliador',
+      nome: avaliadorConfig.nome,
+      descricao: avaliadorConfig.descricao,
+      prompt_sistema: avaliadorConfig.prompt,
+      criterios: JSON.parse(JSON.stringify(avaliadorCriteria)),
       ordem: 0,
     })
     .select()

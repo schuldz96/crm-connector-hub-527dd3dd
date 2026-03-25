@@ -1031,8 +1031,14 @@ export default function AIConfigPage() {
   const [meetingPrompt, setMeetingPrompt] = useState<string>(DEFAULT_MEETING_PROMPT);
   const [whatsappPrompt, setWhatsappPrompt] = useState<string>(DEFAULT_WHATSAPP_PROMPT);
 
-  // Multi-agent state
+  // Multi-agent state (meetings)
   const [agents, setAgents] = useState<AgentNode[]>([]);
+  // Multi-agent state (whatsapp)
+  const [waAgents, setWaAgents] = useState<AgentNode[]>([]);
+
+  const currentAgents = activeType === 'meetings' ? agents : waAgents;
+  const setCurrentAgents = activeType === 'meetings' ? setAgents : setWaAgents;
+
   const [editingAgentId, setEditingAgentId] = useState<string | null>(null);
   const [agentFiles, setAgentFiles] = useState<AgentFile[]>([]);
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -1053,12 +1059,12 @@ export default function AIConfigPage() {
   const [executionHistory, setExecutionHistory] = useState<any[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
-  const rootAgent = agents.find(a => a.tipo === 'gerente') || null;
-  const editingAgent = agents.find(a => a.id === editingAgentId) || null;
-  const hasMultiAgent = agents.length > 0;
+  const rootAgent = currentAgents.find(a => a.tipo === 'gerente') || null;
+  const editingAgent = currentAgents.find(a => a.id === editingAgentId) || null;
+  const hasMultiAgent = currentAgents.length > 0;
 
   const getChildren = (parentId: string) =>
-    agents.filter(a => a.parent_id === parentId).sort((a, b) => a.ordem - b.ordem);
+    currentAgents.filter(a => a.parent_id === parentId).sort((a, b) => a.ordem - b.ordem);
 
   const handleZoomIn = () => setZoom(z => Math.min(2, z + 0.15));
   const handleZoomOut = () => setZoom(z => Math.max(0.3, z - 0.15));
@@ -1085,10 +1091,19 @@ export default function AIConfigPage() {
 
   const handleMouseUp = useCallback(() => setIsPanning(false), []);
 
-  // Load agents on mount
+  // Load agents on mount (both modules)
   useEffect(() => {
-    loadAgentTree().then(setAgents);
+    loadAgentTree('meetings').then(setAgents);
+    loadAgentTree('whatsapp').then(setWaAgents);
   }, []);
+
+  // Reset canvas state when switching tabs
+  useEffect(() => {
+    setEditingAgentId(null);
+    setAddingChildFor(null);
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }, [activeType]);
 
   // Load files when editing agent changes
   useEffect(() => {
@@ -1102,8 +1117,8 @@ export default function AIConfigPage() {
   const handleInitAgents = async () => {
     setInitializingAgents(true);
     try {
-      const tree = await initializeAgentTree();
-      setAgents(tree);
+      const tree = await initializeAgentTree(activeType);
+      setCurrentAgents(tree);
       toast({ title: 'Multi-agente ativado!', description: 'Hierarquia criada: Gerente → Classificador → Avaliador' });
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Erro', description: e.message });
@@ -1115,16 +1130,16 @@ export default function AIConfigPage() {
   const handleSaveAgent = async (agent: AgentNode) => {
     const saved = await saveAgent(agent);
     if (saved) {
-      setAgents(prev => prev.map(a => a.id === saved.id ? saved : a));
+      setCurrentAgents(prev => prev.map(a => a.id === saved.id ? saved : a));
       toast({ title: 'Agente salvo!' });
     }
   };
 
   const handleDeleteAgent = async (id: string) => {
     // Also remove children
-    const childIds = agents.filter(a => a.parent_id === id).map(a => a.id);
+    const childIds = currentAgents.filter(a => a.parent_id === id).map(a => a.id);
     await deleteAgent(id);
-    setAgents(prev => prev.filter(a => a.id !== id && !childIds.includes(a.id)));
+    setCurrentAgents(prev => prev.filter(a => a.id !== id && !childIds.includes(a.id)));
     if (editingAgentId === id) setEditingAgentId(null);
     toast({ title: 'Agente removido' });
   };
@@ -1136,7 +1151,7 @@ export default function AIConfigPage() {
       prompt: 'Você é um classificador de reuniões. Analise o título e o início da transcrição para identificar o tipo da reunião. Retorne APENAS JSON: {"tipo": "<nome exato do tipo>", "confianca": <0-100>}',
     },
     avaliador: {
-      nome: `Novo Avaliador ${agents.filter(a => a.tipo === 'avaliador').length + 1}`,
+      nome: `Novo Avaliador ${currentAgents.filter(a => a.tipo === 'avaliador').length + 1}`,
       descricao: 'Avalia reuniões com critérios específicos',
       prompt: 'Você é um avaliador de reuniões. Analise a transcrição e avalie cada critério com base nos sinais identificados. Seja específico e construtivo nos feedbacks.',
     },
@@ -1168,9 +1183,10 @@ Avalie cada critério abaixo e retorne APENAS JSON válido (sem markdown):
   const handleAddAgent = async (parentId: string, tipo: AgentTipo) => {
     const config = defaultAgentConfig[tipo];
     if (!config) return;
-    const siblings = agents.filter(a => a.parent_id === parentId);
+    const siblings = currentAgents.filter(a => a.parent_id === parentId);
     const saved = await saveAgent({
       parent_id: parentId,
+      modulo: activeType,
       tipo,
       nome: config.nome,
       descricao: config.descricao,
@@ -1188,7 +1204,7 @@ Avalie cada critério abaixo e retorne APENAS JSON válido (sem markdown):
       ativo: true,
     });
     if (saved) {
-      setAgents(prev => [...prev, saved]);
+      setCurrentAgents(prev => [...prev, saved]);
       setEditingAgentId(saved.id);
       setAddingChildFor(null);
     }
@@ -1197,7 +1213,7 @@ Avalie cada critério abaixo e retorne APENAS JSON válido (sem markdown):
   const handleToggleAgent = async (agent: AgentNode) => {
     const updated = { ...agent, ativo: !agent.ativo };
     const saved = await saveAgent(updated);
-    if (saved) setAgents(prev => prev.map(a => a.id === saved.id ? saved : a));
+    if (saved) setCurrentAgents(prev => prev.map(a => a.id === saved.id ? saved : a));
   };
 
   const handleUploadFile = async (file: File) => {
@@ -1583,193 +1599,100 @@ Avalie cada critério abaixo e retorne APENAS JSON válido (sem markdown):
         </>
       )}
 
-      {/* ═══ WHATSAPP TAB: Original criteria view ═══ */}
+      {/* ═══ WHATSAPP TAB: Same multi-agent canvas as Meetings ═══ */}
       {activeType === 'whatsapp' && (
         <>
-          {/* Methodology presets */}
-          <MethodologySelector activeType={activeType} onApply={handleApplyMethodology} />
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Criteria list */}
-            <div className="lg:col-span-2 space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <h2 className="text-sm font-semibold">Critérios de Avaliação</h2>
-                  <span className={cn(
-                    'text-[10px] px-2 py-0.5 rounded-full border font-semibold',
-                    totalWeight === 100
-                      ? 'bg-success/10 text-success border-success/20'
-                      : totalWeight > 100
-                      ? 'bg-destructive/10 text-destructive border-destructive/20'
-                      : 'bg-warning/10 text-warning border-warning/20'
-                  )}>
-                    Total: {totalWeight}% {totalWeight !== 100 && '⚠️'}
-                  </span>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="text-xs border-border h-7"
-                  disabled={remainingWeight <= 0}
-                  onClick={() => setAddingCriteria(true)}
+          {!hasMultiAgent ? (
+            <div className="glass-card p-8 rounded-xl text-center space-y-4">
+              <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center mx-auto">
+                <MessageSquare className="w-8 h-8 text-accent" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold mb-1">Sistema Multi-Agente — WhatsApp</h2>
+                <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                  Ative a hierarquia de agentes para avaliar conversas WhatsApp de forma especializada.
+                  Cada tipo de conversa pode ter critérios e metodologias próprias.
+                </p>
+              </div>
+              <Button className="bg-gradient-primary" onClick={handleInitAgents} disabled={initializingAgents}>
+                {initializingAgents
+                  ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Criando...</>
+                  : <><Crown className="w-4 h-4 mr-2" /> Ativar Multi-Agente</>}
+              </Button>
+            </div>
+          ) : (
+            <div className="relative">
+              {/* Canvas container */}
+              <div
+                ref={canvasRef}
+                className="relative w-full rounded-2xl border border-border overflow-hidden bg-[radial-gradient(circle_at_1px_1px,hsl(var(--border)/0.3)_1px,transparent_0)] bg-[length:24px_24px]"
+                style={{ height: 'calc(100vh - 260px)', minHeight: 400, cursor: isPanning ? 'grabbing' : 'grab' }}
+                onWheel={handleWheel}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+              >
+                <div
+                  className="absolute inset-0 flex items-start justify-center pt-12 transition-transform duration-75"
+                  style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: 'top center' }}
                 >
-                  <Plus className="w-3 h-3 mr-1" /> Adicionar
-                </Button>
+                  {rootAgent && (
+                    <CanvasTreeNode
+                      agent={rootAgent}
+                      agents={currentAgents}
+                      getChildren={getChildren}
+                      onClickAgent={setEditingAgentId}
+                      onToggleAgent={handleToggleAgent}
+                      addingChildFor={addingChildFor}
+                      setAddingChildFor={setAddingChildFor}
+                      onAddAgent={handleAddAgent}
+                    />
+                  )}
+                </div>
+
+                {/* Zoom controls */}
+                <div className="absolute bottom-4 right-4 flex items-center gap-1 bg-background/90 backdrop-blur-sm rounded-xl border border-border p-1 shadow-lg">
+                  <button onClick={handleZoomOut} className="w-8 h-8 rounded-lg hover:bg-muted flex items-center justify-center" title="Zoom out">
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="text-xs font-mono font-medium w-12 text-center text-muted-foreground">
+                    {Math.round(zoom * 100)}%
+                  </span>
+                  <button onClick={handleZoomIn} className="w-8 h-8 rounded-lg hover:bg-muted flex items-center justify-center" title="Zoom in">
+                    <Plus className="w-4 h-4" />
+                  </button>
+                  <div className="w-px h-5 bg-border mx-0.5" />
+                  <button onClick={handleZoomReset} className="w-8 h-8 rounded-lg hover:bg-muted flex items-center justify-center" title="Reset zoom">
+                    <Maximize2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Legend */}
+                <div className="absolute bottom-4 left-4 bg-background/90 backdrop-blur-sm rounded-xl border border-border px-3 py-2 shadow-lg">
+                  <div className="flex items-center gap-4 text-[10px]">
+                    <span className="flex items-center gap-1"><Crown className="w-3 h-3 text-red-400" /> Gerente</span>
+                    <span className="flex items-center gap-1"><GitBranch className="w-3 h-3 text-orange-400" /> Classificador</span>
+                    <span className="flex items-center gap-1"><Users className="w-3 h-3 text-blue-400" /> Avaliador</span>
+                    <span className="flex items-center gap-1"><Heart className="w-3 h-3 text-purple-400" /> Sentimental</span>
+                  </div>
+                </div>
               </div>
 
-              {criteria.map(c => (
-                <CriteriaCard
-                  key={c.id}
-                  criteria={c}
-                  onEdit={setEditingCriteria}
-                  onDelete={handleDelete}
+              {/* Agent config modal */}
+              {editingAgent && (
+                <AgentConfigModal
+                  agent={editingAgent}
+                  onSave={handleSaveAgent}
+                  onDelete={handleDeleteAgent}
+                  onClose={() => setEditingAgentId(null)}
+                  files={agentFiles}
+                  onUploadFile={handleUploadFile}
+                  onDeleteFile={handleDeleteFile}
+                  uploadingFile={uploadingFile}
                 />
-              ))}
-
-              {totalWeight !== 100 && (
-                <div className={cn(
-                  'flex items-center gap-2 p-3 rounded-lg border',
-                  totalWeight > 100
-                    ? 'bg-destructive/5 border-destructive/20'
-                    : 'bg-warning/5 border-warning/20'
-                )}>
-                  <AlertTriangle className={cn('w-4 h-4 flex-shrink-0', totalWeight > 100 ? 'text-destructive' : 'text-warning')} />
-                  <p className="text-xs text-muted-foreground">
-                    {totalWeight > 100
-                      ? <>Os pesos ultrapassam 100%. Reduza <span className="text-destructive font-semibold">{totalWeight - 100}%</span> antes de salvar.</>
-                      : <>Os pesos devem somar exatamente 100%. Faltam <span className="text-warning font-semibold">{remainingWeight}%</span> para distribuir.</>
-                    }
-                  </p>
-                </div>
               )}
             </div>
-
-            {/* System prompt + settings */}
-            <div className="space-y-4">
-              <div className="glass-card p-4 rounded-xl space-y-3">
-                <div className="flex items-center gap-2">
-                  <Brain className="w-4 h-4 text-accent" />
-                  <h3 className="text-xs font-semibold">Prompt do Sistema</h3>
-                </div>
-                <p className="text-[10px] text-muted-foreground">
-                  Este prompt define o comportamento base da IA ao avaliar conversas de WhatsApp.
-                </p>
-                <Textarea
-                  value={systemPrompt}
-                  onChange={e => setSystemPrompt(e.target.value)}
-                  className="text-xs bg-secondary border-border min-h-[140px] resize-none"
-                />
-              </div>
-
-              <div className="glass-card p-4 rounded-xl space-y-3">
-                <div className="flex items-center gap-2">
-                  <Target className="w-4 h-4 text-primary" />
-                  <h3 className="text-xs font-semibold">Parâmetros</h3>
-                </div>
-                <div className="space-y-2.5">
-                  {[
-                    { label: 'Score mínimo para aprovação', value: '70' },
-                    { label: 'Score de excelência', value: '85' },
-                    { label: 'Modelo de IA', value: 'GPT-4o Mini' },
-                  ].map(p => (
-                    <div key={p.label} className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">{p.label}</span>
-                      <span className="text-xs font-semibold text-foreground">{p.value}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="glass-card p-4 rounded-xl">
-                <div className="flex items-center gap-2 mb-2">
-                  <Sparkles className="w-4 h-4 text-accent" />
-                  <h3 className="text-xs font-semibold">Testar Configuração</h3>
-                </div>
-                <p className="text-[10px] text-muted-foreground mb-3">
-                  Roda uma conversa de exemplo com a OpenAI usando seu prompt e critérios atuais.
-                </p>
-                <Button
-                  size="sm"
-                  className="w-full text-xs h-8 bg-gradient-primary"
-                  onClick={handleTest}
-                  disabled={testLoading}>
-                  {testLoading
-                    ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Analisando...</>
-                    : <><Brain className="w-3.5 h-3.5 mr-1.5" /> Testar com Exemplo</>}
-                </Button>
-
-                {testResult && (
-                  <div className="mt-3 space-y-2.5 pt-3 border-t border-border/50">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Score</span>
-                      <span className={cn('text-lg font-bold font-mono',
-                        testResult.score >= 85 ? 'text-success' : testResult.score >= 70 ? 'text-primary' : testResult.score >= 50 ? 'text-warning' : 'text-destructive')}>
-                        {testResult.score}/100
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground leading-snug">{testResult.summary}</p>
-                    <div className="space-y-1.5">
-                      {testResult.breakdown?.map((b, i) => (
-                        <div key={i} className="space-y-0.5">
-                          <div className="flex justify-between text-[10px]">
-                            <span className="text-muted-foreground">{b.label}</span>
-                            <span className={cn('font-bold font-mono',
-                              b.score >= 85 ? 'text-success' : b.score >= 70 ? 'text-primary' : b.score >= 50 ? 'text-warning' : 'text-destructive')}>{b.score}</span>
-                          </div>
-                          <div className="h-1 rounded-full bg-muted overflow-hidden">
-                            <div className={cn('h-full rounded-full', b.score >= 85 ? 'bg-success' : b.score >= 70 ? 'bg-primary' : b.score >= 50 ? 'bg-warning' : 'bg-destructive')}
-                              style={{ width: `${b.score}%` }} />
-                          </div>
-                          <p className="text-[9px] text-muted-foreground/70">{b.feedback}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Weight overview */}
-              <div className="glass-card p-4 rounded-xl">
-                <div className="flex items-center gap-2 mb-3">
-                  <Star className="w-4 h-4 text-primary" />
-                  <h3 className="text-xs font-semibold">Distribuição de Pesos</h3>
-                </div>
-                <div className="space-y-2">
-                  {criteria.map(c => (
-                    <div key={c.id} className="space-y-1">
-                      <div className="flex justify-between text-[10px]">
-                        <span className="text-muted-foreground">{c.label}</span>
-                        <span className="font-medium text-foreground">{c.weight}%</span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                        <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${c.weight}%` }} />
-                      </div>
-                    </div>
-                  ))}
-                  <div className={cn('flex justify-between text-[10px] pt-1 border-t border-border mt-1', totalWeight === 100 ? 'text-success' : 'text-warning')}>
-                    <span className="font-semibold">Total</span>
-                    <span className="font-bold">{totalWeight}%</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {editingCriteria && (
-            <CriteriaModal
-              criteria={editingCriteria}
-              maxWeight={remainingWeight + editingCriteria.weight}
-              onClose={() => setEditingCriteria(null)}
-              onSave={handleSaveCriteria}
-            />
-          )}
-
-          {addingCriteria && (
-            <CriteriaModal
-              maxWeight={remainingWeight}
-              onClose={() => setAddingCriteria(false)}
-              onSave={handleSaveCriteria}
-            />
           )}
         </>
       )}
