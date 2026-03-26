@@ -16,8 +16,7 @@ import {
   fetchTranscriptsFromDrive, ensureAppmaxParticipantsRegistered, fetchTranscriptInfo, resolveMeetingTranscript,
   type DbMeeting, type TranscriptInfo
 } from '@/lib/meetingsService';
-import { evaluateMeeting, loadEvaluationByEntity, loadAllEvaluationsForEntity, type StoredEvaluation } from '@/lib/evaluationService';
-import { loadAgentTree } from '@/lib/agentService';
+import { loadAllEvaluationsForEntity, type StoredEvaluation } from '@/lib/evaluationService';
 import { evaluateMeetingMultiAgent } from '@/lib/multiAgentEvaluation';
 
 const STATUS_CONFIG: Record<string, { label: string; class: string }> = {
@@ -363,13 +362,8 @@ export default function MeetingsPage() {
       setEvalProgress({ current: ok + fail + 1, total: targetMeetings.length });
       try {
         const emails = m.participantes?.map(p => p.email) || [];
-        const agentTree = await loadAgentTree();
-        if (agentTree.length > 0) {
-          const multiResult = await evaluateMeetingMultiAgent(token, m.id, m.titulo, m.transcricao!, m.vendedor_id || null, emails);
-          if (!multiResult) throw new Error('Multi-agent evaluation returned null');
-        } else {
-          await evaluateMeeting(token, 'gpt-4o-mini', m.id, m.titulo, m.transcricao!, m.vendedor_id || null, emails);
-        }
+        const multiResult = await evaluateMeetingMultiAgent(token, m.id, m.titulo, m.transcricao!, m.vendedor_id || null, emails);
+        if (!multiResult) throw new Error('Avaliação retornou null');
         ok++;
       } catch (err) {
         console.warn(`[eval] Failed ${m.id}:`, err);
@@ -387,13 +381,8 @@ export default function MeetingsPage() {
   };
 
   const handleEvaluateAll = () => {
-    const pending = visibleMeetings.filter(m => !m.analisada_por_ia && m.transcricao && m.status === 'concluida');
-    runBatchEvaluation(pending, 'Avaliação');
-  };
-
-  const handleReEvaluateAll = () => {
     const withTranscript = visibleMeetings.filter(m => m.transcricao && m.status === 'concluida');
-    runBatchEvaluation(withTranscript, 'Reavaliação');
+    runBatchEvaluation(withTranscript, 'Avaliação');
   };
 
   const handleCancelEval = () => {
@@ -407,16 +396,8 @@ export default function MeetingsPage() {
     setReEvaluating(true);
     try {
       const emails = meeting.participantes?.map(p => p.email) || [];
-      // Use multi-agent if available
-      const agentTree = await loadAgentTree();
-      let score: number | null = null;
-      if (agentTree.length > 0) {
-        const multiResult = await evaluateMeetingMultiAgent(token, meeting.id, meeting.titulo, meeting.transcricao, meeting.vendedor_id || null, emails);
-        score = multiResult ? Math.round(multiResult.primaryResult.totalScore) : null;
-      } else {
-        const result = await evaluateMeeting(token, 'gpt-4o-mini', meeting.id, meeting.titulo, meeting.transcricao, meeting.vendedor_id || null, emails);
-        score = result ? Math.round(result.totalScore) : null;
-      }
+      const multiResult = await evaluateMeetingMultiAgent(token, meeting.id, meeting.titulo, meeting.transcricao, meeting.vendedor_id || null, emails);
+      const score = multiResult ? Math.round(multiResult.primaryResult.totalScore) : null;
       await loadMeetings();
       // Reload all evaluations for multi-agent selector
       const evals = await loadAllEvaluationsForEntity(meeting.id);
@@ -508,26 +489,15 @@ export default function MeetingsPage() {
                   </button>
                 </div>
               ) : (
-                <>
-                  <Button
-                    size="sm"
-                    onClick={handleEvaluateAll}
-                    disabled={syncing || loading}
-                    className="text-xs h-8"
-                    variant="outline"
-                  >
-                    <Brain className="w-3.5 h-3.5 mr-1.5" /> Avaliar IA
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleReEvaluateAll}
-                    disabled={syncing || loading}
-                    className="text-xs h-8"
-                    variant="outline"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Reavaliar Todas
-                  </Button>
-                </>
+                <Button
+                  size="sm"
+                  onClick={handleEvaluateAll}
+                  disabled={syncing || loading}
+                  className="text-xs h-8"
+                  variant="outline"
+                >
+                  <Brain className="w-3.5 h-3.5 mr-1.5" /> Avaliar Todas
+                </Button>
               )}
               {syncing && syncProgress.phase ? (
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-accent/30 bg-accent/5">
