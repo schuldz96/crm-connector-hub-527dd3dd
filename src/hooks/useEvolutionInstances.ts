@@ -52,8 +52,8 @@ async function syncInstancesToDb(apiInstances: EvolutionInstance[]) {
     const empresaId = await getSaasEmpresaId();
     for (const inst of apiInstances) {
       const dbStatus = STATUS_TO_DB[inst.connectionStatus] || 'desconectada';
-      await supabase
-        .schema('saas')
+      await supabaseSaas
+        .schema(\'saas\')
         .from('instancias_whatsapp')
         .upsert(
           {
@@ -74,8 +74,8 @@ async function syncInstancesToDb(apiInstances: EvolutionInstance[]) {
 
 async function loadInstancesFromDb(): Promise<EvolutionInstance[]> {
   const empresaId = await getSaasEmpresaId();
-  const { data, error } = await supabase
-    .schema('saas')
+  const { data, error } = await supabaseSaas
+    .schema(\'saas\')
     .from('instancias_whatsapp')
     .select('id,nome,telefone,status,owner_jid,usuario_id')
     .eq('empresa_id', empresaId)

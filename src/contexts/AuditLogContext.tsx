@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useCallback, useRef } from 'react';
 import type { UserRole } from '@/types';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, supabaseSaas } from '@/integrations/supabase/client';
 import { getSaasEmpresaId } from '@/lib/saas';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -81,8 +81,8 @@ export function AuditLogProvider({ children }: { children: React.ReactNode }) {
     const run = async () => {
       try {
         const empresaId = await getSaasEmpresaId();
-        const { data, error } = await supabase
-          .schema('saas')
+        const { data, error } = await supabaseSaas
+          .schema(\'saas\')
           .from('logs_auditoria')
           .select('id,usuario_id,tipo_evento,pagina,pagina_label,metadados,criado_em')
           .eq('empresa_id', empresaId)
@@ -124,8 +124,8 @@ export function AuditLogProvider({ children }: { children: React.ReactNode }) {
           // Resolve email → UUID for usuario_id column
           let usuarioId: string | null = null;
           if (entry.userEmail) {
-            const { data: usr } = await supabase
-              .schema('saas')
+            const { data: usr } = await supabaseSaas
+              .schema(\'saas\')
               .from('usuarios')
               .select('id')
               .eq('empresa_id', empresaId)
@@ -134,7 +134,7 @@ export function AuditLogProvider({ children }: { children: React.ReactNode }) {
             usuarioId = usr?.id ?? null;
           }
 
-          await supabase.schema('saas').from('logs_auditoria').insert({
+          await supabaseSaas.schema('saas').from('logs_auditoria').insert({
             empresa_id: empresaId,
             usuario_id: usuarioId,
             tipo_evento: entry.type,
@@ -161,7 +161,7 @@ export function AuditLogProvider({ children }: { children: React.ReactNode }) {
     void (async () => {
       try {
         const empresaId = await getSaasEmpresaId();
-        await supabase.schema('saas').from('logs_auditoria').delete().eq('empresa_id', empresaId);
+        await supabaseSaas.schema('saas').from('logs_auditoria').delete().eq('empresa_id', empresaId);
       } catch {
         // no-op
       }

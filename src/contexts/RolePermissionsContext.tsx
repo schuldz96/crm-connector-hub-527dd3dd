@@ -5,7 +5,7 @@
  */
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { UserRole, ResourceId, RolePermission } from '@/types';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, supabaseSaas } from '@/integrations/supabase/client';
 import { roleFromDb, roleToDb, scopeFromDb, scopeToDb } from '@/lib/saas';
 
 export const ALL_RESOURCES: { id: ResourceId; label: string; icon: string }[] = [
@@ -115,8 +115,8 @@ export function RolePermissionsProvider({ children }: { children: React.ReactNod
   useEffect(() => {
     const run = async () => {
       try {
-        const { data, error } = await supabase
-          .schema('saas')
+        const { data, error } = await supabaseSaas
+          .schema(\'saas\')
           .from('permissoes_papeis')
           .select('papel,recurso,escopo,permitido');
         if (error) throw error;
@@ -163,8 +163,8 @@ export function RolePermissionsProvider({ children }: { children: React.ReactNod
               escopo: scopeToDb(updated.scope),
               permitido: updated.resources.includes(r.id),
             }));
-            const { error } = await supabase
-              .schema('saas')
+            const { error } = await supabaseSaas
+              .schema(\'saas\')
               .from('permissoes_papeis')
               .upsert(rows, { onConflict: 'papel,recurso' });
             if (error) throw error;

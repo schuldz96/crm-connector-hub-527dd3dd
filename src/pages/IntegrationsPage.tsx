@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { assignInstanceToUser, getInstanceForUserFromList, type EvolutionInstance } from '@/hooks/useEvolutionInstances';
 import { loadAllowedUsers } from '@/lib/accessControl';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, supabaseSaas } from '@/integrations/supabase/client';
 import { getSaasEmpresaId } from '@/lib/saas';
 
 import { CONFIG } from '@/lib/config';
@@ -592,11 +592,11 @@ function DatabasePanel() {
       const empresaId = await getSaasEmpresaId();
 
       const [intRes, tokRes] = await Promise.all([
-        supabase.schema('saas').from('integracoes')
+        supabaseSaas.schema('saas').from('integracoes')
           .select('id,tipo,nome,status,configuracao,conectado_em')
           .eq('empresa_id', empresaId)
           .order('tipo', { ascending: true }),
-        supabase.schema('saas').from('tokens_ia_modulo')
+        supabaseSaas.schema('saas').from('tokens_ia_modulo')
           .select('id,modulo_codigo,provedor,modelo,ativo')
           .eq('empresa_id', empresaId)
           .order('modulo_codigo', { ascending: true }),

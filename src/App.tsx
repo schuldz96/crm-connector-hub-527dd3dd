@@ -15,6 +15,7 @@ import GoogleCallbackPage from "@/pages/GoogleCallbackPage";
 import DashboardPage from "@/pages/DashboardPage";
 import MeetingsPage from "@/pages/MeetingsPage";
 import WhatsAppPage from "@/pages/WhatsAppPage";
+import InboxPage from "@/pages/InboxPage";
 import TeamsPage from "@/pages/TeamsPage";
 import UsersPage from "@/pages/UsersPage";
 import IntegrationsPage from "@/pages/IntegrationsPage";
@@ -56,6 +57,7 @@ function ProtectedRoutes() {
         <Route path="/dashboard"    element={<DashboardPage />} />
         <Route path="/meetings"     element={<MeetingsPage />} />
         <Route path="/whatsapp"     element={<WhatsAppPage />} />
+        <Route path="/inbox"        element={<InboxPage />} />
         <Route path="/training"     element={<TrainingPage />} />
         <Route path="/teams"        element={<TeamsPage />} />
         <Route path="/users"        element={<UsersPage />} />

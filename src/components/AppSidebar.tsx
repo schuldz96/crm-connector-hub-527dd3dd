@@ -11,7 +11,7 @@ import {
   LayoutDashboard, Video, MessageSquare, Users, Bell,
   BarChart3, Zap, ChevronLeft, ChevronRight,
   LogOut, ChevronDown, Building2, Shield, Plug2,
-  GraduationCap, SlidersHorizontal, User, Target, Activity
+  GraduationCap, SlidersHorizontal, User, Target, Activity, Inbox,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -24,18 +24,19 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { path: '/dashboard',    label: 'Dashboard',     icon: LayoutDashboard, resource: 'dashboard' },
-  { path: '/meetings',     label: 'Reuniões',       icon: Video,           resource: 'meetings' },
-  { path: '/whatsapp',     label: 'WhatsApp',       icon: MessageSquare,   resource: 'whatsapp' },
-  { path: '/performance',  label: 'Desempenho',     icon: Activity,        resource: 'performance' },
-  { path: '/training',     label: 'Treinamentos',   icon: GraduationCap,   resource: 'training' },
-  { path: '/teams',        label: 'Times',          icon: Target,          resource: 'teams' },
-  { path: '/users',        label: 'Usuários',       icon: Users,           resource: 'users' },
-  { path: '/reports',      label: 'Relatórios',     icon: BarChart3,       resource: 'reports' },
-  { path: '/integrations', label: 'Integrações',    icon: Plug2,           resource: 'integrations' },
-  { path: '/automations',  label: 'Automações',     icon: Bell,            resource: 'automations' },
-  { path: '/ai-config',    label: 'Config. IA',     icon: SlidersHorizontal, resource: 'ai-config' },
-  { path: '/admin',        label: 'Admin',          icon: Shield,          resource: 'admin' },
+  { path: '/dashboard',    label: 'Dashboard',       icon: LayoutDashboard, resource: 'dashboard' },
+  { path: '/meetings',     label: 'Reuniões',         icon: Video,           resource: 'meetings' },
+  { path: '/whatsapp',     label: 'WhatsApp',         icon: MessageSquare,   resource: 'whatsapp' },
+  { path: '/inbox',        label: 'Caixa de Entrada', icon: Inbox,           resource: 'whatsapp' },
+  { path: '/performance',  label: 'Desempenho',       icon: Activity,        resource: 'performance' },
+  { path: '/training',     label: 'Treinamentos',     icon: GraduationCap,   resource: 'training' },
+  { path: '/teams',        label: 'Times',            icon: Target,          resource: 'teams' },
+  { path: '/users',        label: 'Usuários',         icon: Users,           resource: 'users' },
+  { path: '/reports',      label: 'Relatórios',       icon: BarChart3,       resource: 'reports' },
+  { path: '/integrations', label: 'Integrações',      icon: Plug2,           resource: 'integrations' },
+  { path: '/automations',  label: 'Automações',       icon: Bell,            resource: 'automations' },
+  { path: '/ai-config',    label: 'Config. IA',       icon: SlidersHorizontal, resource: 'ai-config' },
+  { path: '/admin',        label: 'Admin',            icon: Shield,          resource: 'admin' },
 ];
 
 export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
