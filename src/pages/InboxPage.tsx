@@ -45,6 +45,33 @@ const AvatarInitials = ({ name }: { name: string }) => (
 );
 
 /* ── Normalize Brazilian phone (ensure 9th digit for mobile) */
+/* ── Convert AudioBuffer to MP3 using lamejs ─────── */
+async function audioBufferToMp3(audioBuffer: AudioBuffer): Promise<Blob> {
+  const { Mp3Encoder } = await import('lamejs');
+  const sampleRate = audioBuffer.sampleRate;
+  const samples = audioBuffer.getChannelData(0);
+  const encoder = new Mp3Encoder(1, sampleRate, 128); // mono, 128kbps
+  const blockSize = 1152;
+  const mp3Data: Int8Array[] = [];
+
+  // Convert float32 to int16
+  const int16 = new Int16Array(samples.length);
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+  }
+
+  for (let i = 0; i < int16.length; i += blockSize) {
+    const chunk = int16.subarray(i, i + blockSize);
+    const mp3buf = encoder.encodeBuffer(chunk);
+    if (mp3buf.length > 0) mp3Data.push(new Int8Array(mp3buf));
+  }
+  const end = encoder.flush();
+  if (end.length > 0) mp3Data.push(new Int8Array(end));
+
+  return new Blob(mp3Data, { type: 'audio/mpeg' });
+}
+
 function normalizePhone(phone: string): string {
   let p = phone.replace(/\D/g, '');
   // 55 + DDD(2) + 8 digits → add 9 after DDD for mobile
@@ -541,19 +568,25 @@ export default function InboxPage() {
     if (!selectedAccount || !selectedConv) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // Always use webm/opus (Chrome default) — Edge Function handles Meta upload
       const mimeType = 'audio/webm;codecs=opus';
       const mediaRecorder = new MediaRecorder(stream, { mimeType });
       audioChunksRef.current = [];
       mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/ogg' });
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         if (blob.size < 100) return;
         setSending(true);
         try {
-          // Upload via Edge Function proxy (server-side → Meta accepts ogg/opus)
-          const file = new File([blob], 'audio.ogg', { type: 'audio/ogg' });
+          // Convert WebM/Opus → MP3 (audio/mpeg) which Meta accepts
+          const arrayBuffer = await blob.arrayBuffer();
+          const audioCtx = new AudioContext();
+          const decoded = await audioCtx.decodeAudioData(arrayBuffer);
+          const mp3Blob = await audioBufferToMp3(decoded);
+          audioCtx.close();
+
+          // Upload MP3 via Edge Function proxy
+          const file = new File([mp3Blob], 'audio.mp3', { type: 'audio/mpeg' });
           const upload = await uploadMediaToMeta(selectedAccount!, file);
           if (upload.error || !upload.mediaId) throw new Error(upload.error || 'Upload falhou');
 
