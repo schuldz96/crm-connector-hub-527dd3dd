@@ -342,28 +342,27 @@ export default function MeetingsPage() {
   };
 
   const cancelEvalRef = { current: false };
-  const handleEvaluateAll = async () => {
+
+  const runBatchEvaluation = async (targetMeetings: DbMeeting[], label: string) => {
     const token = tokens.meetings;
     if (!token?.startsWith('sk-')) {
       toast({ variant: 'destructive', title: 'Token não configurado', description: 'Configure o token de Reuniões em Admin → Tokens OpenAI.' });
       return;
     }
-    const pending = meetings.filter(m => !m.analisada_por_ia && m.transcricao && m.status === 'concluida');
-    if (pending.length === 0) {
-      toast({ title: 'Nada para avaliar', description: 'Todas as reuniões com transcrição já foram avaliadas.' });
+    if (targetMeetings.length === 0) {
+      toast({ title: 'Nada para avaliar', description: `Nenhuma reunião encontrada para ${label}.` });
       return;
     }
     setEvaluating(true);
     setEvalCancelled(false);
     cancelEvalRef.current = false;
-    setEvalProgress({ current: 0, total: pending.length });
+    setEvalProgress({ current: 0, total: targetMeetings.length });
     let ok = 0, fail = 0;
-    for (const m of pending) {
+    for (const m of targetMeetings) {
       if (cancelEvalRef.current) break;
-      setEvalProgress({ current: ok + fail + 1, total: pending.length });
+      setEvalProgress({ current: ok + fail + 1, total: targetMeetings.length });
       try {
         const emails = m.participantes?.map(p => p.email) || [];
-        // Use multi-agent if available, fallback to single agent
         const agentTree = await loadAgentTree();
         if (agentTree.length > 0) {
           const multiResult = await evaluateMeetingMultiAgent(token, m.id, m.titulo, m.transcricao!, m.vendedor_id || null, emails);
@@ -383,8 +382,18 @@ export default function MeetingsPage() {
     if (cancelEvalRef.current) {
       toast({ title: 'Avaliação cancelada', description: `${ok} avaliadas antes do cancelamento.` });
     } else {
-      toast({ title: 'Avaliação concluída', description: `${ok} avaliadas, ${fail} falharam de ${pending.length} pendentes.` });
+      toast({ title: `${label} concluída`, description: `${ok} avaliadas, ${fail} falharam de ${targetMeetings.length} total.` });
     }
+  };
+
+  const handleEvaluateAll = () => {
+    const pending = visibleMeetings.filter(m => !m.analisada_por_ia && m.transcricao && m.status === 'concluida');
+    runBatchEvaluation(pending, 'Avaliação');
+  };
+
+  const handleReEvaluateAll = () => {
+    const withTranscript = visibleMeetings.filter(m => m.transcricao && m.status === 'concluida');
+    runBatchEvaluation(withTranscript, 'Reavaliação');
   };
 
   const handleCancelEval = () => {
@@ -499,15 +508,26 @@ export default function MeetingsPage() {
                   </button>
                 </div>
               ) : (
-                <Button
-                  size="sm"
-                  onClick={handleEvaluateAll}
-                  disabled={syncing || loading}
-                  className="text-xs h-8"
-                  variant="outline"
-                >
-                  <Brain className="w-3.5 h-3.5 mr-1.5" /> Avaliar IA
-                </Button>
+                <>
+                  <Button
+                    size="sm"
+                    onClick={handleEvaluateAll}
+                    disabled={syncing || loading}
+                    className="text-xs h-8"
+                    variant="outline"
+                  >
+                    <Brain className="w-3.5 h-3.5 mr-1.5" /> Avaliar IA
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleReEvaluateAll}
+                    disabled={syncing || loading}
+                    className="text-xs h-8"
+                    variant="outline"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Reavaliar Todas
+                  </Button>
+                </>
               )}
               {syncing && syncProgress.phase ? (
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-accent/30 bg-accent/5">
