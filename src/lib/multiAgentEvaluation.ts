@@ -242,7 +242,10 @@ export async function evaluateMeetingMultiAgent(
   // Step 2: Evaluate ALL active avaliadores in parallel
   console.log(`[multiAgent] Evaluating with ${activeAvaliadores.length} agents: ${activeAvaliadores.map(a => a.nome).join(', ')}`);
 
-  const evalPromises = activeAvaliadores.map(async (avaliador) => {
+  // Run evaluations SEQUENTIALLY (avoid OpenAI rate limits with parallel calls)
+  const evalResults: { avaliador: AgentNode; result: EvaluationResult; step: ChainStep }[] = [];
+
+  for (const avaliador of activeAvaliadores) {
     try {
       const files = await loadAgentFiles(avaliador.id);
       const fileTexts = files
@@ -250,6 +253,7 @@ export async function evaluateMeetingMultiAgent(
         .map(f => `[${f.nome}]\n${f.texto_extraido}`);
 
       const t1 = Date.now();
+      console.log(`[multiAgent] → Evaluating: ${avaliador.nome}...`);
       const result = await evaluateWithAgent(avaliador, apiToken, titulo, transcricao, fileTexts);
       const step: ChainStep = {
         agente: avaliador.nome, tipo: 'avaliador',
@@ -257,16 +261,13 @@ export async function evaluateMeetingMultiAgent(
         output_resumo: `Score: ${result.totalScore}, ${result.criteriaScores?.length || 0} critérios`,
         duracao_ms: Date.now() - t1,
       };
-      console.log(`[multiAgent] ✓ ${avaliador.nome}: score ${result.totalScore}`);
-      return { avaliador, result, step };
+      console.log(`[multiAgent] ✓ ${avaliador.nome}: score ${result.totalScore} (${Date.now() - t1}ms)`);
+      evalResults.push({ avaliador, result, step });
     } catch (err: any) {
-      console.error(`[multiAgent] ✗ ${avaliador.nome} failed:`, err.message);
-      return null;
+      console.error(`[multiAgent] ✗ ${avaliador.nome} failed:`, err.message || err);
     }
-  });
+  }
 
-  const rawResults = await Promise.all(evalPromises);
-  const evalResults = rawResults.filter((r): r is NonNullable<typeof r> => r !== null);
   console.log(`[multiAgent] ${evalResults.length}/${activeAvaliadores.length} evaluations succeeded`);
 
   if (evalResults.length === 0) {
