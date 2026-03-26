@@ -541,33 +541,25 @@ export default function InboxPage() {
     if (!selectedAccount || !selectedConv) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // Use mp4 if available (Meta accepts it), fallback to webm then ogg
-      const mimeType = MediaRecorder.isTypeSupported('audio/mp4')
-        ? 'audio/mp4'
-        : MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
-        ? 'audio/ogg;codecs=opus'
-        : 'audio/webm;codecs=opus';
+      // Always use webm/opus (Chrome default) — Edge Function handles Meta upload
+      const mimeType = 'audio/webm;codecs=opus';
       const mediaRecorder = new MediaRecorder(stream, { mimeType });
       audioChunksRef.current = [];
       mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(audioChunksRef.current, { type: mimeType });
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/ogg' });
         if (blob.size < 100) return;
         setSending(true);
         try {
-          // Strategy: upload to Supabase Storage, send public URL to Meta
-          const ext = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('ogg') ? 'ogg' : 'ogg';
-          const storageMime = mimeType.includes('mp4') ? 'audio/mp4' : 'audio/ogg';
-          const fileName = `audio/${Date.now()}.${ext}`;
-          const { error: upErr } = await supabase.storage.from('inbox-media').upload(fileName, blob, { contentType: storageMime, upsert: true });
-          if (upErr) throw new Error(upErr.message);
-          const { data: urlData } = supabase.storage.from('inbox-media').getPublicUrl(fileName);
-          if (!urlData?.publicUrl) throw new Error('URL pública não disponível');
+          // Upload via Edge Function proxy (server-side → Meta accepts ogg/opus)
+          const file = new File([blob], 'audio.ogg', { type: 'audio/ogg' });
+          const upload = await uploadMediaToMeta(selectedAccount!, file);
+          if (upload.error || !upload.mediaId) throw new Error(upload.error || 'Upload falhou');
 
           const result = await sendMediaMessage(
             selectedAccount!, selectedConv!.id, selectedConv!.contact_phone,
-            'audio', urlData.publicUrl,
+            'audio', upload.mediaId,
           );
           if (result.success) {
             const data = await loadMessages(selectedConv!.id);
