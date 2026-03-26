@@ -29,6 +29,8 @@ export interface TemplateComponent {
   buttons?: { type: string; text: string; url?: string; phone_number?: string }[];
 }
 
+export type TemplateQuality = 'GREEN' | 'YELLOW' | 'RED' | 'UNKNOWN';
+
 export interface MetaTemplate {
   id: string;
   name: string;
@@ -37,6 +39,7 @@ export interface MetaTemplate {
   language: TemplateLanguage;
   components: TemplateComponent[];
   rejected_reason?: string;
+  quality_score?: { score: TemplateQuality; date?: number } | null;
 }
 
 /* ── Account form ───────────────────────────────────── */
@@ -70,6 +73,19 @@ const StatusBadge = ({ status }: { status: TemplateStatus }) => {
   };
   const cfg = map[status] || map.DRAFT;
   return <Badge variant="outline" className={cn('text-[10px] h-5 px-1.5', cfg.className)}>{cfg.label}</Badge>;
+};
+
+/* ── Quality badge ──────────────────────────────────── */
+const QualityBadge = ({ quality }: { quality?: MetaTemplate['quality_score'] }) => {
+  const score = quality?.score || 'UNKNOWN';
+  const map: Record<string, { label: string; className: string }> = {
+    GREEN: { label: 'Alta', className: 'bg-green-500/10 text-green-500 border-green-500/20' },
+    YELLOW: { label: 'Média', className: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' },
+    RED: { label: 'Baixa', className: 'bg-red-500/10 text-red-500 border-red-500/20' },
+    UNKNOWN: { label: 'N/A', className: 'bg-muted text-muted-foreground border-border' },
+  };
+  const cfg = map[score] || map.UNKNOWN;
+  return <Badge variant="outline" className={cn('text-[10px] h-5 px-1.5', cfg.className)}>Q: {cfg.label}</Badge>;
 };
 
 /* ── Category badge ─────────────────────────────────── */
@@ -150,7 +166,7 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
     }
     setLoadingTemplates(true);
     try {
-      const url = `https://graph.facebook.com/v19.0/${account.waba_id}/message_templates?access_token=${account.access_token}&fields=id,name,status,category,language,components,rejected_reason&limit=100`;
+      const url = `https://graph.facebook.com/v19.0/${account.waba_id}/message_templates?access_token=${account.access_token}&fields=id,name,status,category,language,components,rejected_reason,quality_score&limit=100`;
       const res = await fetch(url);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -622,6 +638,7 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
                             <code className="text-xs font-mono font-semibold">{t.name}</code>
                             <StatusBadge status={t.status} />
                             <CatBadge cat={t.category} />
+                            <QualityBadge quality={t.quality_score} />
                             <span className="text-[10px] text-muted-foreground">{t.language}</span>
                           </div>
                           {t.rejected_reason && (
