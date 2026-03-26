@@ -63,38 +63,211 @@ function MsgStatusIcon({ status }: { status: string }) {
   return <Clock className="w-2.5 h-2.5 opacity-40" />;
 }
 
-/* ── New conversation dialog ───────────────────────────── */
+/* ── New conversation dialog (with template + params) ─── */
 function NewConversationDialog({
-  open, onClose, onStart,
+  open, onClose, account, onSent,
 }: {
   open: boolean;
   onClose: () => void;
-  onStart: (phone: string, name: string) => void;
+  account: MetaInboxAccount | null;
+  onSent: () => void;
 }) {
+  const { toast } = useToast();
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [loadingTpl, setLoadingTpl] = useState(false);
+  const [selectedTpl, setSelectedTpl] = useState<any | null>(null);
+  const [tplParams, setTplParams] = useState<string[]>([]);
+  const [sending, setSending] = useState(false);
+
+  // Load approved templates when dialog opens
+  useEffect(() => {
+    if (!open || !account?.waba_id) return;
+    setLoadingTpl(true);
+    fetch(`https://graph.facebook.com/v19.0/${account.waba_id}/message_templates?access_token=${account.access_token}&fields=id,name,status,category,language,components&limit=100`)
+      .then(r => r.json())
+      .then(data => setTemplates((data.data || []).filter((t: any) => t.status === 'APPROVED')))
+      .catch(() => {})
+      .finally(() => setLoadingTpl(false));
+  }, [open, account?.waba_id]);
+
+  // When template changes, detect params {{1}}, {{2}}, etc.
+  useEffect(() => {
+    if (!selectedTpl) { setTplParams([]); return; }
+    const bodyComp = selectedTpl.components?.find((c: any) => c.type === 'BODY');
+    const text = bodyComp?.text || '';
+    const matches = text.match(/\{\{\d+\}\}/g) || [];
+    setTplParams(matches.map(() => ''));
+  }, [selectedTpl?.id]);
+
+  const bodyText = selectedTpl?.components?.find((c: any) => c.type === 'BODY')?.text || '';
+
+  // Preview: replace {{1}}, {{2}} with filled values
+  const previewText = tplParams.reduce((txt, val, i) => txt.replace(`{{${i + 1}}}`, val || `{{${i + 1}}}`), bodyText);
+
+  const handleSend = async () => {
+    if (!phone.trim() || !selectedTpl || !account) return;
+    setSending(true);
+    try {
+      const empresaId = await getSaasEmpresaId();
+
+      // 1. Create or find conversation
+      let convId: string;
+      const { data: existing } = await (supabase as any)
+        .from('meta_inbox_conversations')
+        .select('id')
+        .eq('account_id', account.id)
+        .eq('contact_phone', phone.trim())
+        .maybeSingle();
+
+      if (existing) {
+        convId = existing.id;
+      } else {
+        const { data: created, error } = await (supabase as any)
+          .from('meta_inbox_conversations')
+          .insert({
+            account_id: account.id,
+            empresa_id: empresaId,
+            contact_phone: phone.trim(),
+            contact_name: name.trim() || phone.trim(),
+            status: 'open',
+          })
+          .select('id')
+          .single();
+        if (error) throw error;
+        convId = created.id;
+      }
+
+      // 2. Build template components with params
+      const components: any[] = [];
+      if (tplParams.length > 0) {
+        components.push({
+          type: 'body',
+          parameters: tplParams.map(v => ({ type: 'text', text: v || ' ' })),
+        });
+      }
+
+      // 3. Send template
+      const result = await sendTemplateMessage(
+        account, convId, phone.trim(),
+        selectedTpl.name, selectedTpl.language, components,
+      );
+
+      if (!result.success) throw new Error(result.error);
+
+      toast({ title: 'Template enviado!', description: `${selectedTpl.name} → ${phone.trim()}` });
+      setPhone(''); setName(''); setSelectedTpl(null); setTplParams([]);
+      onSent();
+      onClose();
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro ao enviar', description: e.message });
+    } finally {
+      setSending(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-sm bg-card border-border">
+      <DialogContent className="max-w-lg bg-card border-border max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-sm flex items-center gap-2">
             <UserPlus className="w-4 h-4 text-primary" /> Nova Conversa
           </DialogTitle>
         </DialogHeader>
-        <div className="space-y-3 pt-2">
-          <div>
-            <label className="text-xs font-medium block mb-1">Telefone (com DDI) *</label>
-            <Input value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
-              placeholder="5511999990001" className="h-9 text-sm bg-secondary border-border font-mono" />
+        <div className="flex-1 overflow-y-auto space-y-4 pt-2">
+          {/* Phone + Name */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium block mb-1">Telefone (com DDI) *</label>
+              <Input value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
+                placeholder="5511999990001" className="h-9 text-sm bg-secondary border-border font-mono" />
+            </div>
+            <div>
+              <label className="text-xs font-medium block mb-1">Nome do contato</label>
+              <Input value={name} onChange={e => setName(e.target.value)}
+                placeholder="Ex: João Silva" className="h-9 text-sm bg-secondary border-border" />
+            </div>
           </div>
+
+          {/* Template selector */}
           <div>
-            <label className="text-xs font-medium block mb-1">Nome do contato</label>
-            <Input value={name} onChange={e => setName(e.target.value)}
-              placeholder="Ex: João Silva" className="h-9 text-sm bg-secondary border-border" />
+            <label className="text-xs font-medium block mb-1">
+              <LayoutTemplate className="w-3 h-3 inline mr-1" /> Template *
+              <span className="text-[10px] text-muted-foreground font-normal ml-2">
+                (obrigatório para primeira mensagem — fora da janela 24h)
+              </span>
+            </label>
+            {loadingTpl ? (
+              <div className="flex items-center gap-2 py-3 text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" /><span className="text-xs">Carregando templates...</span>
+              </div>
+            ) : (
+              <select
+                value={selectedTpl?.id || ''}
+                onChange={e => {
+                  const t = templates.find((t: any) => t.id === e.target.value);
+                  setSelectedTpl(t || null);
+                }}
+                className="w-full h-9 text-sm bg-secondary border border-border rounded-md px-3"
+              >
+                <option value="">Selecione um template aprovado...</option>
+                {templates.map((t: any) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} ({t.category} · {t.language})
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
-          <Button className="w-full h-9 text-xs" disabled={!phone.trim()}
-            onClick={() => { onStart(phone.trim(), name.trim()); onClose(); }}>
-            <Send className="w-3.5 h-3.5 mr-1.5" /> Iniciar conversa
+
+          {/* Template preview + params */}
+          {selectedTpl && (
+            <div className="rounded-xl border border-border bg-secondary/50 p-4 space-y-3">
+              {/* Preview */}
+              <div>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">Prévia da mensagem</p>
+                <div className="bg-primary/10 rounded-xl p-3 text-sm whitespace-pre-wrap">
+                  {previewText}
+                </div>
+              </div>
+
+              {/* Params */}
+              {tplParams.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                    Parâmetros ({tplParams.length})
+                  </p>
+                  <div className="space-y-2">
+                    {tplParams.map((val, i) => (
+                      <div key={i}>
+                        <label className="text-[11px] text-muted-foreground block mb-0.5">
+                          {`{{${i + 1}}}`}
+                        </label>
+                        <Input
+                          value={val}
+                          onChange={e => {
+                            const next = [...tplParams];
+                            next[i] = e.target.value;
+                            setTplParams(next);
+                          }}
+                          placeholder={`Valor para {{${i + 1}}}`}
+                          className="h-8 text-xs bg-background border-border"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Send button */}
+          <Button className="w-full h-10 text-sm" disabled={!phone.trim() || !selectedTpl || sending}
+            onClick={handleSend}>
+            {sending
+              ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Enviando...</>
+              : <><Send className="w-4 h-4 mr-2" /> Enviar template e iniciar conversa</>}
           </Button>
         </div>
       </DialogContent>
@@ -288,42 +461,6 @@ export default function InboxPage() {
   };
 
   // ── Start new conversation ─────────────────────────────
-  const handleNewConversation = async (phone: string, name: string) => {
-    if (!selectedAccount) return;
-    const empresaId = await getSaasEmpresaId();
-    // Create conversation in DB
-    const { data, error } = await supabase
-      .from('meta_inbox_conversations')
-      .insert({
-        account_id: selectedAccount.id,
-        empresa_id: empresaId,
-        contact_phone: phone,
-        contact_name: name || phone,
-        status: 'open',
-      })
-      .select()
-      .single();
-
-    if (error) {
-      // Maybe already exists
-      const { data: existing } = await supabase
-        .from('meta_inbox_conversations')
-        .select('*')
-        .eq('account_id', selectedAccount.id)
-        .eq('contact_phone', phone)
-        .maybeSingle();
-      if (existing) {
-        setSelectedConv(existing as InboxConversation);
-        await loadConvs();
-        return;
-      }
-      toast({ variant: 'destructive', title: 'Erro', description: error.message });
-      return;
-    }
-    await loadConvs();
-    if (data) setSelectedConv(data as InboxConversation);
-  };
-
   // ── Filter conversations ───────────────────────────────
   const filteredConvs = conversations.filter(c =>
     !searchQuery ||
@@ -600,7 +737,7 @@ export default function InboxPage() {
       )}
 
       {/* New conversation dialog */}
-      <NewConversationDialog open={newConvOpen} onClose={() => setNewConvOpen(false)} onStart={handleNewConversation} />
+      <NewConversationDialog open={newConvOpen} onClose={() => setNewConvOpen(false)} account={selectedAccount} onSent={loadConvs} />
 
       {/* Settings modal */}
       {settingsOpen && (
