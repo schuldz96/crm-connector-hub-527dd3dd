@@ -789,22 +789,6 @@ export default function MeetingsPage() {
                 )}
               </div>
 
-              {/* Methodology selector (multi-agent) */}
-              {allEvals.length > 1 && (
-                <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-secondary/30">
-                  <span className="text-[10px] text-muted-foreground font-semibold uppercase">Metodologia:</span>
-                  <div className="flex gap-1 flex-wrap">
-                    {allEvals.map((ev, i) => (
-                      <button key={ev.id} onClick={() => setSelectedEvalIdx(i)}
-                        className={cn('text-[10px] px-2 py-0.5 rounded-full border transition-colors',
-                          selectedEvalIdx === i ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground')}>
-                        {(ev as any).tipo_reuniao_detectado || `Avaliacao ${i + 1}`}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {/* Tabs */}
               <div className="flex border-b border-border">
                 {[
@@ -998,6 +982,32 @@ export default function MeetingsPage() {
                                 </li>
                               ))}
                             </ul>
+                          </div>
+                        )}
+
+                        {/* Methodology selector — above criteria */}
+                        {allEvals.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Metodologia</p>
+                            <div className="flex gap-1.5 flex-wrap">
+                              {allEvals.map((ev, i) => (
+                                <button key={ev.id} onClick={() => setSelectedEvalIdx(i)}
+                                  className={cn('text-[11px] px-2.5 py-1 rounded-lg border transition-all font-medium',
+                                    selectedEvalIdx === i
+                                      ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                                      : 'border-border text-muted-foreground hover:text-foreground hover:border-foreground/30')}>
+                                  {(ev as any).tipo_reuniao_detectado || `Avaliação ${i + 1}`}
+                                  <span className={cn('ml-1.5 text-[10px] font-bold',
+                                    (ev.score ?? 0) >= 80 ? 'text-success' : (ev.score ?? 0) >= 60 ? '' : 'text-warning'
+                                  )}>{ev.score ?? '—'}</span>
+                                </button>
+                              ))}
+                              {allEvals.length <= 1 && (
+                                <span className="text-[10px] text-muted-foreground/50 self-center ml-1">
+                                  Clique "Reavaliar" para ver mais metodologias
+                                </span>
+                              )}
+                            </div>
                           </div>
                         )}
 
