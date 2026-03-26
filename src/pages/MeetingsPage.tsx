@@ -451,6 +451,15 @@ export default function MeetingsPage() {
     return matchSearch && matchTransc;
   });
 
+  // Pagination
+  const PAGE_SIZE = 20;
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginatedMeetings = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  // Reset page when filters change
+  useEffect(() => { setCurrentPage(1); }, [search, transcFilter]);
+
   return (
     <div className="page-container animate-fade-in">
       <div className="flex gap-6">
@@ -615,7 +624,7 @@ export default function MeetingsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map(m => {
+                  {paginatedMeetings.map(m => {
                     const statusCfg = STATUS_CONFIG[m.status] || { label: m.status, class: '' };
                     return (
                       <tr
@@ -680,6 +689,44 @@ export default function MeetingsPage() {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+              <p className="text-xs text-muted-foreground">
+                {filtered.length} reuniões · Página {currentPage} de {totalPages}
+              </p>
+              <div className="flex items-center gap-1">
+                <Button size="sm" variant="outline" className="h-7 text-xs px-2"
+                  disabled={currentPage <= 1} onClick={() => setCurrentPage(p => p - 1)}>
+                  Anterior
+                </Button>
+                {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                  let page: number;
+                  if (totalPages <= 7) {
+                    page = i + 1;
+                  } else if (currentPage <= 4) {
+                    page = i + 1;
+                  } else if (currentPage >= totalPages - 3) {
+                    page = totalPages - 6 + i;
+                  } else {
+                    page = currentPage - 3 + i;
+                  }
+                  return (
+                    <button key={page} onClick={() => setCurrentPage(page)}
+                      className={cn('w-7 h-7 rounded text-xs font-medium transition-colors',
+                        currentPage === page ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted')}>
+                      {page}
+                    </button>
+                  );
+                })}
+                <Button size="sm" variant="outline" className="h-7 text-xs px-2"
+                  disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)}>
+                  Próxima
+                </Button>
+              </div>
             </div>
           )}
         </div>

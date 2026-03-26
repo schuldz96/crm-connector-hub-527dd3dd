@@ -324,8 +324,9 @@ export async function evaluateMeetingMultiAgent(
     .eq('tipo_contexto', 'reuniao')
     .eq('entidade_id', reuniaoId);
 
-  // Determine primary result (from classified avaliador)
-  const primaryEvalResult = evalResults.find(er => er.avaliador.id === primaryAvaliador.id) || evalResults[0];
+  // Determine primary result — ALWAYS prefer Sandler for the main score
+  const sandlerResult = evalResults.find(er => /sandler/i.test(er.avaliador.nome));
+  const primaryEvalResult = sandlerResult || evalResults.find(er => er.avaliador.id === primaryAvaliador.id) || evalResults[0];
   const primaryScoreVal = Math.round(primaryEvalResult.result.totalScore);
 
   // Insert ONE row PER avaliador
