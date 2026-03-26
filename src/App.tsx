@@ -15,6 +15,7 @@ import GoogleCallbackPage from "@/pages/GoogleCallbackPage";
 import DashboardPage from "@/pages/DashboardPage";
 import MeetingsPage from "@/pages/MeetingsPage";
 import WhatsAppPage from "@/pages/WhatsAppPage";
+import InboxPage from "@/pages/InboxPage";
 import TeamsPage from "@/pages/TeamsPage";
 import UsersPage from "@/pages/UsersPage";
 import IntegrationsPage from "@/pages/IntegrationsPage";
