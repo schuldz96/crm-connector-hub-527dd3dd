@@ -21,6 +21,7 @@ export const ALL_RESOURCES: { id: ResourceId; label: string; icon: string }[] = 
   { id: 'integrations', label: 'Integrações',       icon: '🔌' },
   { id: 'automations',  label: 'Automações',        icon: '⚡' },
   { id: 'ai-config',    label: 'Config. IA',        icon: '🤖' },
+  { id: 'inbox',        label: 'Caixa de Entrada',  icon: '📥' },
   { id: 'admin',        label: 'Painel Admin',      icon: '🔐' },
 ];
 
