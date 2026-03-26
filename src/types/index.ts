@@ -38,6 +38,7 @@ export type ResourceId =
   | 'integrations'
   | 'automations'
   | 'ai-config'
+  | 'inbox'
   | 'admin';
 
 export interface RolePermission {

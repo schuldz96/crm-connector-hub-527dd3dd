@@ -38,7 +38,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermission[] = [
     color: 'destructive',
     canDelete: false,
     scope: 'all',
-    resources: ['dashboard','meetings','whatsapp','performance','training','teams','areas','users','reports','integrations','automations','ai-config','admin'],
+    resources: ['dashboard','meetings','whatsapp','inbox','performance','training','teams','areas','users','reports','integrations','automations','ai-config','admin'],
   },
   {
     role: 'ceo',
@@ -46,7 +46,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermission[] = [
     color: 'destructive',
     canDelete: true,
     scope: 'all',
-    resources: ['dashboard','meetings','whatsapp','performance','training','teams','areas','users','reports','integrations','automations','ai-config'],
+    resources: ['dashboard','meetings','whatsapp','inbox','performance','training','teams','areas','users','reports','integrations','automations','ai-config'],
   },
   {
     role: 'director',
@@ -54,7 +54,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermission[] = [
     color: 'primary',
     canDelete: true,
     scope: 'all',
-    resources: ['dashboard','meetings','whatsapp','performance','training','teams','areas','users','reports'],
+    resources: ['dashboard','meetings','whatsapp','inbox','performance','training','teams','areas','users','reports'],
   },
   {
     role: 'manager',
@@ -62,7 +62,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermission[] = [
     color: 'accent',
     canDelete: true,
     scope: 'area',
-    resources: ['dashboard','meetings','whatsapp','performance','training','teams','areas','users','reports'],
+    resources: ['dashboard','meetings','whatsapp','inbox','performance','training','teams','areas','users','reports'],
   },
   {
     role: 'coordinator',
@@ -70,7 +70,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermission[] = [
     color: 'warning',
     canDelete: true,
     scope: 'area',
-    resources: ['dashboard','meetings','whatsapp','performance','training','teams','reports'],
+    resources: ['dashboard','meetings','whatsapp','inbox','performance','training','teams','reports'],
   },
   {
     role: 'supervisor',
@@ -78,15 +78,15 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermission[] = [
     color: 'success',
     canDelete: true,
     scope: 'team',
-    resources: ['dashboard','meetings','whatsapp','performance','training','teams','reports'],
+    resources: ['dashboard','meetings','whatsapp','inbox','performance','training','teams','reports'],
   },
   {
     role: 'member',
-    label: 'Vendedor',
+    label: 'Analista',
     color: 'muted-foreground',
     canDelete: true,
     scope: 'self',
-    resources: ['dashboard','meetings','whatsapp','performance','training'],
+    resources: ['dashboard','meetings','whatsapp','inbox','performance','training'],
   },
 ];
 

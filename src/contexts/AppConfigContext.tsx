@@ -7,7 +7,7 @@ import { CONFIG } from '@/lib/config';
 export type ModuleId =
   | 'dashboard' | 'meetings' | 'whatsapp' | 'training'
   | 'teams' | 'users' | 'reports' | 'integrations'
-  | 'automations' | 'ai-config' | 'admin';
+  | 'automations' | 'ai-config' | 'inbox' | 'admin';
 
 export interface ModuleConfig {
   id: ModuleId;
@@ -103,6 +103,7 @@ export const DEFAULT_MODULES: ModuleConfig[] = [
   { id: 'integrations', label: 'Integrações',    enabled: true },
   { id: 'automations',  label: 'Automações',     enabled: true },
   { id: 'ai-config',    label: 'Config. IA',     enabled: true },
+  { id: 'inbox',        label: 'Caixa de Entrada', enabled: true },
   { id: 'admin',        label: 'Admin',          enabled: true },
 ];
 
