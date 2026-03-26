@@ -14,7 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      meta_inbox_accounts: {
+        Row: {
+          access_token: string
+          created_at: string
+          empresa_id: string
+          id: string
+          nome: string
+          phone_display: string | null
+          phone_number_id: string
+          status: string
+          token_type: string
+          updated_at: string
+          waba_id: string | null
+          webhook_verify_token: string | null
+        }
+        Insert: {
+          access_token: string
+          created_at?: string
+          empresa_id: string
+          id?: string
+          nome: string
+          phone_display?: string | null
+          phone_number_id: string
+          status?: string
+          token_type?: string
+          updated_at?: string
+          waba_id?: string | null
+          webhook_verify_token?: string | null
+        }
+        Update: {
+          access_token?: string
+          created_at?: string
+          empresa_id?: string
+          id?: string
+          nome?: string
+          phone_display?: string | null
+          phone_number_id?: string
+          status?: string
+          token_type?: string
+          updated_at?: string
+          waba_id?: string | null
+          webhook_verify_token?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
