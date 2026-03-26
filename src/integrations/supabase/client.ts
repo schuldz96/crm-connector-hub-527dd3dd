@@ -19,8 +19,15 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
 });
 
 /**
- * Untyped Supabase client for use with the 'saas' schema
- * (tables not present in the generated types.ts)
+ * Untyped Supabase client for use with custom schemas (e.g. 'saas')
+ * that are not present in the generated types.ts.
+ * Use this when querying tables from the 'saas' schema.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const supabaseSaas = supabase as any;
+export const supabaseSaas: ReturnType<typeof createClient> = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+  auth: {
+    storage: localStorage,
+    persistSession: true,
+    autoRefreshToken: true,
+  }
+}) as any;
