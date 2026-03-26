@@ -220,25 +220,26 @@ export async function sendMediaMessage(
   }
 }
 
-// ─── Upload media to Meta ───────────────────────────────────────────────────
+// ─── Upload media to Meta (via Supabase proxy to avoid CORS) ────────────────
 export async function uploadMediaToMeta(
   account: MetaInboxAccount,
   file: File,
 ): Promise<{ mediaId?: string; error?: string }> {
   try {
-    const formData = new FormData();
-    formData.append('messaging_product', 'whatsapp');
-    formData.append('file', file);
-    formData.append('type', file.type);
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://lwusznsduxcqjjmbbobt.supabase.co';
 
-    const res = await fetch(`${META_API}/${account.phone_number_id}/media`, {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('phone_number_id', account.phone_number_id);
+    formData.append('access_token', account.access_token);
+
+    const res = await fetch(`${supabaseUrl}/functions/v1/meta-upload-media`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${account.access_token}` },
       body: formData,
     });
 
     const data = await res.json();
-    if (!res.ok) throw new Error(data?.error?.message || `HTTP ${res.status}`);
+    if (!res.ok || data.error) throw new Error(data?.error?.message || data?.error || `HTTP ${res.status}`);
     return { mediaId: data.id };
   } catch (e: any) {
     return { error: e.message };
