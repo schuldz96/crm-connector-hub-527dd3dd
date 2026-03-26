@@ -128,24 +128,24 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
         const empresaId = await getSaasEmpresaId();
 
         const [tokensRes, modulesRes, usersRes, userModsRes] = await Promise.all([
-          supabase
+          (supabase as any)
             .schema('saas')
             .from('tokens_ia_modulo')
             .select('modulo_codigo,token_criptografado,modelo')
             .eq('empresa_id', empresaId)
             .eq('provedor', 'openai'),
-          supabase
+          (supabase as any)
             .schema('saas')
             .from('configuracoes_modulos_empresa')
             .select('modulo_codigo,habilitado')
             .eq('empresa_id', empresaId),
-          supabase
+          (supabase as any)
             .schema('saas')
             .from('usuarios')
             .select('id,email')
             .eq('empresa_id', empresaId)
             .eq('status', 'ativo'),
-          supabase
+          (supabase as any)
             .schema('saas')
             .from('configuracoes_modulos_usuario')
             .select('usuario_id,modulo_codigo,habilitado'),
@@ -199,7 +199,7 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
     void (async () => {
       try {
         const empresaId = await getSaasEmpresaId();
-        await supabase
+        await (supabase as any)
           .schema('saas')
           .from('tokens_ia_modulo')
           .upsert({
@@ -219,7 +219,7 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
     void (async () => {
       try {
         const empresaId = await getSaasEmpresaId();
-        await supabase
+        await (supabase as any)
           .schema('saas')
           .from('tokens_ia_modulo')
           .upsert({
@@ -239,7 +239,7 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
     void (async () => {
       try {
         const empresaId = await getSaasEmpresaId();
-        await supabase
+        await (supabase as any)
           .schema('saas')
           .from('configuracoes_modulos_empresa')
           .upsert({ empresa_id: empresaId, modulo_codigo: id, habilitado: enabled }, { onConflict: 'empresa_id,modulo_codigo' });
@@ -258,7 +258,7 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
     void (async () => {
       try {
         const empresaId = await getSaasEmpresaId();
-        const { data: u } = await supabase
+        const { data: u } = await (supabase as any)
           .schema('saas')
           .from('usuarios')
           .select('id')
@@ -267,7 +267,7 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
           .maybeSingle();
         if (!u?.id) return;
 
-        await supabase
+        await (supabase as any)
           .schema('saas')
           .from('configuracoes_modulos_usuario')
           .delete()
@@ -278,7 +278,7 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
           modulo_codigo: m.id,
           habilitado: !disabledModules.includes(m.id),
         }));
-        await supabase
+        await (supabase as any)
           .schema('saas')
           .from('configuracoes_modulos_usuario')
           .upsert(rows, { onConflict: 'usuario_id,modulo_codigo' });
