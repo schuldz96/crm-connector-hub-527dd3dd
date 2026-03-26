@@ -367,11 +367,29 @@ export async function loadMeetingsFromDb(): Promise<DbMeeting[]> {
     }
   }
 
-  return filteredRows.map((r: any) => ({
+  // Update durations from transcription in background
+  const toUpdateDuration: { id: string; minutos: number }[] = [];
+
+  const mapped = filteredRows.map((r: any) => {
+    let duracao = r.duracao_minutos || 0;
+
+    // Extract duration from transcription: "A reunião terminou depois de HH:MM:SS"
+    if ((!duracao || duracao === 0) && r.transcricao) {
+      const match = r.transcricao.match(/terminou depois de (\d{1,2}):(\d{2}):(\d{2})/i);
+      if (match) {
+        const h = parseInt(match[1], 10);
+        const m = parseInt(match[2], 10);
+        const s = parseInt(match[3], 10);
+        duracao = Math.round(h * 60 + m + s / 60);
+        if (duracao > 0) toUpdateDuration.push({ id: r.id, minutos: duracao });
+      }
+    }
+
+    return {
     id: r.id,
     titulo: r.titulo || '',
     data_reuniao: r.data_reuniao,
-    duracao_minutos: r.duracao_minutos || 0,
+    duracao_minutos: duracao,
     cliente_nome: r.cliente_nome,
     cliente_email: r.cliente_email,
     link_meet: r.link_meet,
@@ -389,7 +407,17 @@ export async function loadMeetingsFromDb(): Promise<DbMeeting[]> {
     transcript_file_id: r.transcript_file_id || null,
     sentimento: r.sentimento || null,
     meeting_code: r.link_meet ? r.link_meet.replace('https://meet.google.com/', '') : null,
-  }));
+  };
+  });
+
+  // Update durations in DB in background (fire-and-forget)
+  if (toUpdateDuration.length > 0) {
+    Promise.all(toUpdateDuration.map(({ id, minutos }) =>
+      (supabase as any).schema('saas').from('reunioes').update({ duracao_minutos: minutos }).eq('id', id)
+    )).catch(() => {});
+  }
+
+  return mapped;
 }
 
 /**
