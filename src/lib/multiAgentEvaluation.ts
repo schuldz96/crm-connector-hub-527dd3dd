@@ -26,6 +26,16 @@ export interface MultiAgentResult extends EvaluationResult {
   sentimentoResumo?: string;
 }
 
+export interface MultiAgentResults {
+  results: MultiAgentResult[];
+  primaryResult: MultiAgentResult;
+  sentimento?: string;
+  sentimentoConfianca?: number;
+  sentimentoResumo?: string;
+  chainLog: ChainStep[];
+  participation: { email?: string; name: string; percent: number }[];
+}
+
 // ─── Step 1: Classificador — detect meeting type ─────────────────────────────
 async function classifyMeeting(
   classificador: AgentNode,
@@ -161,7 +171,7 @@ Responda APENAS com JSON válido (sem markdown):
   }
 }
 
-// ─── Main: run the full multi-agent chain ────────────────────────────────────
+// ─── Main: run the full multi-agent chain (ALL active avaliadores) ───────────
 export async function evaluateMeetingMultiAgent(
   apiToken: string,
   reuniaoId: string,
@@ -169,7 +179,7 @@ export async function evaluateMeetingMultiAgent(
   transcricao: string,
   vendedorId: string | null,
   participantEmails?: string[],
-): Promise<MultiAgentResult | null> {
+): Promise<MultiAgentResults | null> {
   if (!apiToken || !transcricao) return null;
 
   const agents = await loadAgentTree();
@@ -180,14 +190,13 @@ export async function evaluateMeetingMultiAgent(
   const chainLog: ChainStep[] = [];
   const activeAvaliadores = avaliadores.filter(a => a.ativo);
 
-  // Step 1: Classify
-  let selectedAvaliador: AgentNode;
+  // Step 1: Classify (to determine the primary avaliador)
+  let primaryAvaliador: AgentNode;
   let tipoReuniao = '';
 
   if (activeAvaliadores.length === 1) {
-    // Only one avaliador, skip classification
-    selectedAvaliador = activeAvaliadores[0];
-    tipoReuniao = selectedAvaliador.nome;
+    primaryAvaliador = activeAvaliadores[0];
+    tipoReuniao = primaryAvaliador.nome;
     chainLog.push({
       agente: 'Classificador', tipo: 'classificador',
       input_resumo: 'Apenas 1 avaliador ativo — classificação pulada',
@@ -207,7 +216,6 @@ export async function evaluateMeetingMultiAgent(
       duracao_ms: Date.now() - t0,
     });
 
-    // Find matching avaliador (exact → fuzzy → fallback)
     const exactMatch = activeAvaliadores.find(a =>
       a.nome.toLowerCase() === tipoReuniao.toLowerCase()
     );
@@ -215,40 +223,48 @@ export async function evaluateMeetingMultiAgent(
       tipoReuniao.toLowerCase().includes(a.nome.toLowerCase()) ||
       a.nome.toLowerCase().includes(tipoReuniao.toLowerCase())
     ) : null;
-    // Fallback: agent named "Fallback" or "Padrão" or the first one
     const fallbackAgent = activeAvaliadores.find(a =>
       /fallback|padr[aã]o|default|geral/i.test(a.nome)
     ) || activeAvaliadores[0];
 
-    selectedAvaliador = exactMatch || fuzzyMatch || fallbackAgent;
+    primaryAvaliador = exactMatch || fuzzyMatch || fallbackAgent;
 
     if (!exactMatch && !fuzzyMatch) {
       chainLog.push({
         agente: 'Fallback', tipo: 'fallback',
         input_resumo: `Classificação "${tipoReuniao}" não encontrou avaliador correspondente`,
-        output_resumo: `Usando fallback: ${selectedAvaliador.nome}`,
+        output_resumo: `Usando fallback: ${primaryAvaliador.nome}`,
         duracao_ms: 0,
       });
     }
   }
 
-  // Step 2: Load reference files for the selected avaliador
-  const files = await loadAgentFiles(selectedAvaliador.id);
-  const fileTexts = files
-    .filter(f => f.texto_extraido && f.texto_extraido.length > 0)
-    .map(f => `[${f.nome}]\n${f.texto_extraido}`);
+  // Step 2: Evaluate ALL active avaliadores in parallel
+  const evalPromises = activeAvaliadores.map(async (avaliador) => {
+    const files = await loadAgentFiles(avaliador.id);
+    const fileTexts = files
+      .filter(f => f.texto_extraido && f.texto_extraido.length > 0)
+      .map(f => `[${f.nome}]\n${f.texto_extraido}`);
 
-  // Step 3: Evaluate
-  const t1 = Date.now();
-  const result = await evaluateWithAgent(selectedAvaliador, apiToken, titulo, transcricao, fileTexts);
-  chainLog.push({
-    agente: selectedAvaliador.nome, tipo: 'avaliador',
-    input_resumo: `Transcrição: ${transcricao.length} chars, ${fileTexts.length} arquivos ref`,
-    output_resumo: `Score: ${result.totalScore}, ${result.criteriaScores?.length || 0} critérios`,
-    duracao_ms: Date.now() - t1,
+    const t1 = Date.now();
+    const result = await evaluateWithAgent(avaliador, apiToken, titulo, transcricao, fileTexts);
+    const step: ChainStep = {
+      agente: avaliador.nome, tipo: 'avaliador',
+      input_resumo: `Transcrição: ${transcricao.length} chars, ${fileTexts.length} arquivos ref`,
+      output_resumo: `Score: ${result.totalScore}, ${result.criteriaScores?.length || 0} critérios`,
+      duracao_ms: Date.now() - t1,
+    };
+    return { avaliador, result, step };
   });
 
-  // Step 4: Sentiment analysis (parallel-safe, runs after evaluation)
+  const evalResults = await Promise.all(evalPromises);
+
+  // Add all avaliador steps to chainLog
+  for (const er of evalResults) {
+    chainLog.push(er.step);
+  }
+
+  // Step 3: Sentiment analysis
   let sentimento: string | undefined;
   let sentimentoConfianca: number | undefined;
   let sentimentoResumo: string | undefined;
@@ -282,11 +298,9 @@ export async function evaluateMeetingMultiAgent(
   // Calculate participation deterministically
   const participation = parseTranscriptParticipation(transcricao, participantEmails || []);
 
-  // Persist to DB
+  // Persist to DB — delete ALL existing evaluations for this meeting
   const empresaId = await getSaasEmpresaId();
-  const scoreVal = Math.round(result.totalScore);
 
-  // Delete existing
   await (supabase as any)
     .schema('saas')
     .from('analises_ia')
@@ -294,36 +308,54 @@ export async function evaluateMeetingMultiAgent(
     .eq('tipo_contexto', 'reuniao')
     .eq('entidade_id', reuniaoId);
 
-  // Insert new
-  const { error: insertErr } = await (supabase as any)
-    .schema('saas')
-    .from('analises_ia')
-    .insert({
-      empresa_id: empresaId,
-      tipo_contexto: 'reuniao',
-      entidade_id: reuniaoId,
-      vendedor_id: vendedorId,
-      agente_avaliador_id: selectedAvaliador.id,
-      tipo_reuniao_detectado: tipoReuniao,
-      chain_log: chainLog,
-      score: scoreVal,
-      criterios: result.criteriaScores,
-      resumo: result.summary,
-      payload: {
-        insights: result.insights,
-        criticalAlerts: result.criticalAlerts,
-        titulo,
-        participation,
-        sentimento,
-        sentimentoConfianca,
-        sentimentoResumo,
-      },
+  // Determine primary result (from classified avaliador)
+  const primaryEvalResult = evalResults.find(er => er.avaliador.id === primaryAvaliador.id) || evalResults[0];
+  const primaryScoreVal = Math.round(primaryEvalResult.result.totalScore);
+
+  // Insert ONE row PER avaliador
+  const allResults: MultiAgentResult[] = [];
+
+  for (const er of evalResults) {
+    const isPrimary = er.avaliador.id === primaryAvaliador.id;
+    const scoreVal = Math.round(er.result.totalScore);
+
+    const { error: insertErr } = await (supabase as any)
+      .schema('saas')
+      .from('analises_ia')
+      .insert({
+        empresa_id: empresaId,
+        tipo_contexto: 'reuniao',
+        entidade_id: reuniaoId,
+        vendedor_id: vendedorId,
+        agente_avaliador_id: er.avaliador.id,
+        tipo_reuniao_detectado: er.avaliador.nome,
+        chain_log: isPrimary ? chainLog : [er.step],
+        score: scoreVal,
+        criterios: er.result.criteriaScores,
+        resumo: er.result.summary,
+        payload: {
+          insights: er.result.insights,
+          criticalAlerts: er.result.criticalAlerts,
+          titulo,
+          participation,
+          ...(isPrimary ? { sentimento, sentimentoConfianca, sentimentoResumo } : {}),
+        },
+      });
+
+    if (insertErr) console.error(`[multiAgent] Insert failed for ${er.avaliador.nome}:`, insertErr);
+
+    allResults.push({
+      ...er.result,
+      tipoReuniao: er.avaliador.nome,
+      agenteAvaliadorId: er.avaliador.id,
+      chainLog: isPrimary ? chainLog : [er.step],
+      participation,
+      ...(isPrimary ? { sentimento, sentimentoConfianca, sentimentoResumo } : {}),
     });
+  }
 
-  if (insertErr) console.error('[multiAgent] Insert failed:', insertErr);
-
-  // Update reunioes (include sentimento)
-  const reuniaoUpdate: any = { score: scoreVal, analisada_por_ia: true };
+  // Update reunioes with PRIMARY score
+  const reuniaoUpdate: any = { score: primaryScoreVal, analisada_por_ia: true };
   if (sentimento) reuniaoUpdate.sentimento = sentimento;
 
   await (supabase as any)
@@ -332,14 +364,15 @@ export async function evaluateMeetingMultiAgent(
     .update(reuniaoUpdate)
     .eq('id', reuniaoId);
 
+  const primaryMultiResult = allResults.find(r => r.agenteAvaliadorId === primaryAvaliador.id) || allResults[0];
+
   return {
-    ...result,
-    tipoReuniao,
-    agenteAvaliadorId: selectedAvaliador.id,
-    chainLog,
-    participation,
+    results: allResults,
+    primaryResult: primaryMultiResult,
     sentimento,
     sentimentoConfianca,
     sentimentoResumo,
+    chainLog,
+    participation,
   };
 }

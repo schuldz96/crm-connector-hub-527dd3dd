@@ -355,6 +355,19 @@ export async function loadEvaluationByEntity(entidadeId: string): Promise<Stored
   return data || null;
 }
 
+// ─── Load ALL evaluations for an entity (multi-agent support) ────────────────
+export async function loadAllEvaluationsForEntity(entidadeId: string): Promise<(StoredEvaluation & { payload?: any })[]> {
+  const empresaId = await getSaasEmpresaId();
+  const { data } = await (supabase as any)
+    .schema('saas')
+    .from('analises_ia')
+    .select('id,tipo_contexto,vendedor_id,score,criterios,resumo,payload,instancia_nome,contato_telefone,periodo_ref,entidade_id,criado_em,agente_avaliador_id,tipo_reuniao_detectado,chain_log')
+    .eq('empresa_id', empresaId)
+    .eq('entidade_id', entidadeId)
+    .order('criado_em', { ascending: true });
+  return data || [];
+}
+
 // ─── Load stored evaluations ─────────────────────────────────────────────────
 export async function loadEvaluations(opts?: {
   tipoContexto?: 'whatsapp' | 'reuniao';

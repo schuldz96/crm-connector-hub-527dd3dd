@@ -16,7 +16,7 @@ import {
   fetchTranscriptsFromDrive, ensureAppmaxParticipantsRegistered, fetchTranscriptInfo, resolveMeetingTranscript,
   type DbMeeting, type TranscriptInfo
 } from '@/lib/meetingsService';
-import { evaluateMeeting, loadEvaluationByEntity, type StoredEvaluation } from '@/lib/evaluationService';
+import { evaluateMeeting, loadEvaluationByEntity, loadAllEvaluationsForEntity, type StoredEvaluation } from '@/lib/evaluationService';
 import { loadAgentTree } from '@/lib/agentService';
 import { evaluateMeetingMultiAgent } from '@/lib/multiAgentEvaluation';
 
@@ -137,7 +137,9 @@ export default function MeetingsPage() {
   const [transcFilter, setTranscFilter] = useState('all');
   const [selectedMeeting, setSelectedMeeting] = useState<DbMeeting | null>(null);
   const [detailTab, setDetailTab] = useState<'info' | 'transcript' | 'participants'>('info');
-  const [meetingEval, setMeetingEval] = useState<(StoredEvaluation & { payload?: any }) | null>(null);
+  const [allEvals, setAllEvals] = useState<(StoredEvaluation & { payload?: any })[]>([]);
+  const [selectedEvalIdx, setSelectedEvalIdx] = useState(0);
+  const meetingEval = allEvals[selectedEvalIdx] || null;
   const [reEvaluating, setReEvaluating] = useState(false);
   const [transcriptInfo, setTranscriptInfo] = useState<TranscriptInfo | null>(null);
   const [hydratingTranscript, setHydratingTranscript] = useState(false);
@@ -169,12 +171,23 @@ export default function MeetingsPage() {
     return () => clearInterval(timer);
   }, [loadMeetings]);
 
-  // Load evaluation when meeting is selected
+  // Load all evaluations when meeting is selected (multi-agent support)
   useEffect(() => {
     if (selectedMeeting?.analisada_por_ia) {
-      loadEvaluationByEntity(selectedMeeting.id).then(setMeetingEval).catch(() => setMeetingEval(null));
+      loadAllEvaluationsForEntity(selectedMeeting.id).then(evals => {
+        setAllEvals(evals);
+        // Default to first eval (primary/Sandler)
+        const sandlerIdx = evals.findIndex(e =>
+          (e as any).tipo_reuniao_detectado?.toLowerCase().includes('sandler')
+        );
+        setSelectedEvalIdx(sandlerIdx >= 0 ? sandlerIdx : 0);
+      }).catch(() => {
+        setAllEvals([]);
+        setSelectedEvalIdx(0);
+      });
     } else {
-      setMeetingEval(null);
+      setAllEvals([]);
+      setSelectedEvalIdx(0);
     }
   }, [selectedMeeting?.id, selectedMeeting?.analisada_por_ia]);
 
@@ -353,7 +366,8 @@ export default function MeetingsPage() {
         // Use multi-agent if available, fallback to single agent
         const agentTree = await loadAgentTree();
         if (agentTree.length > 0) {
-          await evaluateMeetingMultiAgent(token, m.id, m.titulo, m.transcricao!, m.vendedor_id || null, emails);
+          const multiResult = await evaluateMeetingMultiAgent(token, m.id, m.titulo, m.transcricao!, m.vendedor_id || null, emails);
+          if (!multiResult) throw new Error('Multi-agent evaluation returned null');
         } else {
           await evaluateMeeting(token, 'gpt-4o-mini', m.id, m.titulo, m.transcricao!, m.vendedor_id || null, emails);
         }
@@ -386,13 +400,22 @@ export default function MeetingsPage() {
       const emails = meeting.participantes?.map(p => p.email) || [];
       // Use multi-agent if available
       const agentTree = await loadAgentTree();
-      const result = agentTree.length > 0
-        ? await evaluateMeetingMultiAgent(token, meeting.id, meeting.titulo, meeting.transcricao, meeting.vendedor_id || null, emails)
-        : await evaluateMeeting(token, 'gpt-4o-mini', meeting.id, meeting.titulo, meeting.transcricao, meeting.vendedor_id || null, emails);
-      const score = result ? Math.round(result.totalScore) : null;
+      let score: number | null = null;
+      if (agentTree.length > 0) {
+        const multiResult = await evaluateMeetingMultiAgent(token, meeting.id, meeting.titulo, meeting.transcricao, meeting.vendedor_id || null, emails);
+        score = multiResult ? Math.round(multiResult.primaryResult.totalScore) : null;
+      } else {
+        const result = await evaluateMeeting(token, 'gpt-4o-mini', meeting.id, meeting.titulo, meeting.transcricao, meeting.vendedor_id || null, emails);
+        score = result ? Math.round(result.totalScore) : null;
+      }
       await loadMeetings();
-      const evalData = await loadEvaluationByEntity(meeting.id);
-      setMeetingEval(evalData);
+      // Reload all evaluations for multi-agent selector
+      const evals = await loadAllEvaluationsForEntity(meeting.id);
+      setAllEvals(evals);
+      const sandlerIdx = evals.findIndex(e =>
+        (e as any).tipo_reuniao_detectado?.toLowerCase().includes('sandler')
+      );
+      setSelectedEvalIdx(sandlerIdx >= 0 ? sandlerIdx : 0);
       setSelectedMeeting(prev => prev ? { ...prev, analisada_por_ia: true, score: score ?? prev.score } : null);
       toast({ title: 'Avaliação concluída', description: `Score: ${score ?? '—'}/100` });
     } catch (err: any) {
@@ -745,6 +768,22 @@ export default function MeetingsPage() {
                   </a>
                 )}
               </div>
+
+              {/* Methodology selector (multi-agent) */}
+              {allEvals.length > 1 && (
+                <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-secondary/30">
+                  <span className="text-[10px] text-muted-foreground font-semibold uppercase">Metodologia:</span>
+                  <div className="flex gap-1 flex-wrap">
+                    {allEvals.map((ev, i) => (
+                      <button key={ev.id} onClick={() => setSelectedEvalIdx(i)}
+                        className={cn('text-[10px] px-2 py-0.5 rounded-full border transition-colors',
+                          selectedEvalIdx === i ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground')}>
+                        {(ev as any).tipo_reuniao_detectado || `Avaliacao ${i + 1}`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Tabs */}
               <div className="flex border-b border-border">
