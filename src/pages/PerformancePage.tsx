@@ -1,5 +1,6 @@
-import { useState, useMemo, useEffect } from 'react';
-import { TrendingUp, Users, User, MessageSquare, Video, Brain, ChevronDown, Award, BarChart3, Calendar, Lock, Loader2 } from 'lucide-react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { TrendingUp, Users, User, MessageSquare, Video, Brain, ChevronDown, Award, BarChart3, Calendar, Lock, Loader2, Filter } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, LineChart, Line, Legend } from 'recharts';
 import { useAuth } from '@/contexts/AuthContext';
@@ -70,27 +71,59 @@ export default function PerformancePage() {
   const { user, hasMinRole } = useAuth();
   const role = user?.role ?? 'member';
 
+  // ── Period filter ─────────────────────────────────────────────────────────
+  type PeriodKey = '7d' | '30d' | '90d' | 'this_month' | 'last_month' | 'all';
+  const [period, setPeriod] = useState<PeriodKey>('30d');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+
+  const periodDates = useMemo(() => {
+    const now = new Date();
+    const fmt = (d: Date) => d.toISOString().split('T')[0];
+    switch (period) {
+      case '7d': { const s = new Date(now); s.setDate(s.getDate() - 7); return { from: fmt(s), to: fmt(now) }; }
+      case '30d': { const s = new Date(now); s.setDate(s.getDate() - 30); return { from: fmt(s), to: fmt(now) }; }
+      case '90d': { const s = new Date(now); s.setDate(s.getDate() - 90); return { from: fmt(s), to: fmt(now) }; }
+      case 'this_month': return { from: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`, to: fmt(now) };
+      case 'last_month': {
+        const lm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const lmEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+        return { from: fmt(lm), to: fmt(lmEnd) };
+      }
+      default: return { from: '', to: '' };
+    }
+  }, [period]);
+
   // ── Load data from DB ─────────────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
   const [dbUsers, setDbUsers] = useState<any[]>([]);
   const [dbTeams, setDbTeams] = useState<any[]>([]);
   const [evaluations, setEvaluations] = useState<StoredEvaluation[]>([]);
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      const [users, teams, evals] = await Promise.all([
-        loadUsersForPerformance(),
-        loadTeamsForPerformance(),
-        loadEvaluations(),
-      ]);
-      setDbUsers(users);
-      setDbTeams(teams);
-      setEvaluations(evals);
-      setLoading(false);
-    };
-    load();
-  }, []);
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    const [users, teams, evals] = await Promise.all([
+      loadUsersForPerformance(),
+      loadTeamsForPerformance(),
+      loadEvaluations(),
+    ]);
+    setDbUsers(users);
+    setDbTeams(teams);
+
+    // Filter evaluations by period
+    const { from, to } = periodDates;
+    const filtered = from
+      ? evals.filter(e => {
+          const d = e.criado_em?.split('T')[0] || '';
+          return d >= from && d <= to;
+        })
+      : evals;
+
+    setEvaluations(filtered);
+    setLoading(false);
+  }, [periodDates]);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   // ── Map DB users to consistent format ─────────────────────────────────────
   const users = useMemo(() => dbUsers.map(u => ({
@@ -257,6 +290,26 @@ export default function PerformancePage() {
             <TrendingUp className="w-6 h-6 text-primary" /> Desempenho
           </h1>
           <p className="text-sm text-muted-foreground">Scores compilados de reuniões e WhatsApp por vendedor ou time</p>
+        </div>
+        {/* Period filter */}
+        <div className="flex items-center gap-1.5">
+          <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+          {([
+            { key: '7d', label: '7 dias' },
+            { key: '30d', label: '30 dias' },
+            { key: '90d', label: '90 dias' },
+            { key: 'this_month', label: 'Este mês' },
+            { key: 'last_month', label: 'Mês passado' },
+            { key: 'all', label: 'Tudo' },
+          ] as const).map(p => (
+            <button key={p.key} onClick={() => setPeriod(p.key)}
+              className={cn('text-[11px] px-2.5 py-1 rounded-lg border transition-all font-medium',
+                period === p.key
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'border-border text-muted-foreground hover:text-foreground')}>
+              {p.label}
+            </button>
+          ))}
         </div>
       </div>
 
