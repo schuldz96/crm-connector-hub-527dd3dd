@@ -5,7 +5,7 @@
  */
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { UserRole, ResourceId, RolePermission } from '@/types';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, supabaseSaas } from '@/integrations/supabase/client';
 import { roleFromDb, roleToDb, scopeFromDb, scopeToDb } from '@/lib/saas';
 
 export const ALL_RESOURCES: { id: ResourceId; label: string; icon: string }[] = [

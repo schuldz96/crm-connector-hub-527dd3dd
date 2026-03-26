@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, supabaseSaas } from '@/integrations/supabase/client';
 import type { UserRole } from '@/types';
 import {
   getSaasEmpresaId,
