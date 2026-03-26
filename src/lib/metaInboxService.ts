@@ -158,14 +158,15 @@ export async function sendMediaMessage(
 ): Promise<{ success: boolean; wamid?: string; error?: string }> {
   try {
     const mediaPayload: Record<string, unknown> = {};
-    // If it's a Meta media ID (not a URL)
     if (mediaIdOrUrl.startsWith('http')) {
       mediaPayload.link = mediaIdOrUrl;
     } else {
       mediaPayload.id = mediaIdOrUrl;
     }
-    if (caption) mediaPayload.caption = caption;
-    if (filename) mediaPayload.filename = filename;
+    // caption: only for image, video, document (not audio)
+    if (caption && mediaType !== 'audio') mediaPayload.caption = caption;
+    // filename: ONLY for document — Meta rejects it for image/audio/video
+    if (filename && mediaType === 'document') mediaPayload.filename = filename;
 
     const res = await fetch(`${META_API}/${account.phone_number_id}/messages`, {
       method: 'POST',

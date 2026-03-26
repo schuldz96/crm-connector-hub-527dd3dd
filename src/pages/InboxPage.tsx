@@ -519,16 +519,21 @@ export default function InboxPage() {
     if (!selectedAccount || !selectedConv) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+      // Try ogg first (Meta requires it), fall back to webm
+      const mimeType = MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
+        ? 'audio/ogg;codecs=opus'
+        : 'audio/webm;codecs=opus';
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
       audioChunksRef.current = [];
       mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const blob = new Blob(audioChunksRef.current, { type: mimeType });
         if (blob.size < 100) return;
         setSending(true);
         try {
-          const file = new File([blob], 'audio.webm', { type: 'audio/webm' });
+          // Meta accepts: audio/ogg, audio/aac, audio/mp4, audio/amr, audio/mpeg
+          const file = new File([blob], 'audio.ogg', { type: 'audio/ogg' });
           const upload = await uploadMediaToMeta(selectedAccount!, file);
           if (upload.error || !upload.mediaId) throw new Error(upload.error || 'Upload falhou');
           const result = await sendMediaMessage(
