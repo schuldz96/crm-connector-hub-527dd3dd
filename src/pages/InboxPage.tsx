@@ -52,7 +52,7 @@ async function audioBufferToMp3(audioBuffer: AudioBuffer): Promise<Blob> {
   const samples = audioBuffer.getChannelData(0);
   const encoder = new Mp3Encoder(1, sampleRate, 128); // mono, 128kbps
   const blockSize = 1152;
-  const mp3Data: Int8Array[] = [];
+  const mp3Data: any[] = [];
 
   // Convert float32 to int16
   const int16 = new Int16Array(samples.length);
@@ -64,10 +64,10 @@ async function audioBufferToMp3(audioBuffer: AudioBuffer): Promise<Blob> {
   for (let i = 0; i < int16.length; i += blockSize) {
     const chunk = int16.subarray(i, i + blockSize);
     const mp3buf = encoder.encodeBuffer(chunk);
-    if (mp3buf.length > 0) mp3Data.push(new Int8Array(mp3buf) as unknown as BlobPart);
+    if (mp3buf.length > 0) mp3Data.push(new Uint8Array(mp3buf));
   }
   const end = encoder.flush();
-  if (end.length > 0) mp3Data.push(new Int8Array(end) as unknown as BlobPart);
+  if (end.length > 0) mp3Data.push(new Uint8Array(end));
 
   return new Blob(mp3Data, { type: 'audio/mpeg' });
 }
