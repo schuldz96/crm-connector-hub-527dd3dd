@@ -45,31 +45,25 @@ const AvatarInitials = ({ name }: { name: string }) => (
 );
 
 /* ── Normalize Brazilian phone (ensure 9th digit for mobile) */
-/* ── Convert AudioBuffer to MP3 using lamejs ─────── */
-async function audioBufferToMp3(audioBuffer: AudioBuffer): Promise<Blob> {
-  const { Mp3Encoder } = await import('lamejs');
-  const sampleRate = audioBuffer.sampleRate;
+/* ── Convert AudioBuffer to WAV (PCM) ────────────── */
+function audioBufferToWav(audioBuffer: AudioBuffer): Blob {
+  const numCh = 1;
+  const sr = audioBuffer.sampleRate;
   const samples = audioBuffer.getChannelData(0);
-  const encoder = new Mp3Encoder(1, sampleRate, 128); // mono, 128kbps
-  const blockSize = 1152;
-  const mp3Data: Int8Array[] = [];
-
-  // Convert float32 to int16
-  const int16 = new Int16Array(samples.length);
+  const buf = new ArrayBuffer(44 + samples.length * 2);
+  const v = new DataView(buf);
+  const w = (o: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, 'RIFF'); v.setUint32(4, 36 + samples.length * 2, true);
+  w(8, 'WAVE'); w(12, 'fmt '); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, numCh, true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr * numCh * 2, true);
+  v.setUint16(32, numCh * 2, true); v.setUint16(34, 16, true);
+  w(36, 'data'); v.setUint32(40, samples.length * 2, true);
   for (let i = 0; i < samples.length; i++) {
     const s = Math.max(-1, Math.min(1, samples[i]));
-    int16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    v.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
   }
-
-  for (let i = 0; i < int16.length; i += blockSize) {
-    const chunk = int16.subarray(i, i + blockSize);
-    const mp3buf = encoder.encodeBuffer(chunk);
-    if (mp3buf.length > 0) mp3Data.push(new Int8Array(mp3buf));
-  }
-  const end = encoder.flush();
-  if (end.length > 0) mp3Data.push(new Int8Array(end));
-
-  return new Blob(mp3Data, { type: 'audio/mpeg' });
+  return new Blob([buf], { type: 'audio/wav' });
 }
 
 function normalizePhone(phone: string): string {
@@ -654,21 +648,23 @@ export default function InboxPage() {
         if (blob.size < 100) return;
         setSending(true);
         try {
-          // Convert WebM/Opus → MP3 (audio/mpeg) which Meta accepts
+          // Convert WebM → WAV (PCM) via AudioContext, then upload to Storage
           const arrayBuffer = await blob.arrayBuffer();
           const audioCtx = new AudioContext();
           const decoded = await audioCtx.decodeAudioData(arrayBuffer);
-          const mp3Blob = await audioBufferToMp3(decoded);
+          const wavBlob = audioBufferToWav(decoded);
           audioCtx.close();
 
-          // Upload MP3 via Edge Function proxy
-          const file = new File([mp3Blob], 'audio.mp3', { type: 'audio/mpeg' });
-          const upload = await uploadMediaToMeta(selectedAccount!, file);
-          if (upload.error || !upload.mediaId) throw new Error(upload.error || 'Upload falhou');
+          // Upload WAV to Supabase Storage → send public URL to Meta
+          const fileName = `audio/${Date.now()}.wav`;
+          const { error: upErr } = await supabase.storage.from('inbox-media').upload(fileName, wavBlob, { contentType: 'audio/wav', upsert: true });
+          if (upErr) throw new Error(upErr.message);
+          const { data: urlData } = supabase.storage.from('inbox-media').getPublicUrl(fileName);
+          if (!urlData?.publicUrl) throw new Error('URL pública não disponível');
 
           const result = await sendMediaMessage(
             selectedAccount!, selectedConv!.id, selectedConv!.contact_phone,
-            'audio', upload.mediaId,
+            'audio', urlData.publicUrl,
           );
           if (result.success) {
             const data = await loadMessages(selectedConv!.id);
