@@ -637,24 +637,30 @@ export default function InboxPage() {
   const startRecording = async () => {
     if (!selectedAccount || !selectedConv) return;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = 'audio/webm;codecs=opus';
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 48000 } });
+
+      // Use OpusMediaRecorder polyfill to record REAL OGG/Opus
+      // (Chrome native MediaRecorder only outputs WebM which Meta rejects for voice)
+      const OpusMediaRecorder = (await import('opus-media-recorder')).default;
+      const mediaRecorder = new OpusMediaRecorder(
+        stream,
+        { mimeType: 'audio/ogg' },
+        { encoderWorkerFactory: () => new Worker('/encoderWorker.js'), OggOpusEncoderWasmPath: '/OggOpusEncoder.wasm' },
+      );
       audioChunksRef.current = [];
-      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mediaRecorder.ondataavailable = (e: any) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/ogg' });
         if (blob.size < 100) return;
         setSending(true);
         try {
-          // Send WebM blob directly as audio/ogg — Chrome WebM uses Opus codec
-          // Meta accepts Opus payload when mime declares audio/ogg (tested & confirmed)
+          // Upload real OGG/Opus to Meta via Edge Function proxy
           const oggFile = new File([blob], 'audio.ogg', { type: 'audio/ogg' });
           const upload = await uploadMediaToMeta(selectedAccount!, oggFile);
           if (upload.error || !upload.mediaId) throw new Error(upload.error || 'Upload falhou');
 
-          // Send as voice message (voice: true for voice note appearance)
+          // Send as voice message (voice: true)
           const result = await sendMediaMessage(
             selectedAccount!, selectedConv!.id, selectedConv!.contact_phone,
             'audio', upload.mediaId, undefined, undefined, true,
