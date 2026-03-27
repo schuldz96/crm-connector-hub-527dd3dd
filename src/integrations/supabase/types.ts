@@ -59,6 +59,238 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_inbox_conversations: {
+        Row: {
+          account_id: string
+          assigned_user_id: string | null
+          contact_name: string | null
+          contact_phone: string
+          contact_profile_pic: string | null
+          created_at: string | null
+          empresa_id: string
+          id: string
+          last_inbound_ts: string | null
+          last_message: string | null
+          last_message_from_me: boolean | null
+          last_message_ts: string | null
+          status: string | null
+          tags: string[] | null
+          unread_count: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          account_id: string
+          assigned_user_id?: string | null
+          contact_name?: string | null
+          contact_phone: string
+          contact_profile_pic?: string | null
+          created_at?: string | null
+          empresa_id: string
+          id?: string
+          last_inbound_ts?: string | null
+          last_message?: string | null
+          last_message_from_me?: boolean | null
+          last_message_ts?: string | null
+          status?: string | null
+          tags?: string[] | null
+          unread_count?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          account_id?: string
+          assigned_user_id?: string | null
+          contact_name?: string | null
+          contact_phone?: string
+          contact_profile_pic?: string | null
+          created_at?: string | null
+          empresa_id?: string
+          id?: string
+          last_inbound_ts?: string | null
+          last_message?: string | null
+          last_message_from_me?: boolean | null
+          last_message_ts?: string | null
+          status?: string | null
+          tags?: string[] | null
+          unread_count?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_inbox_conversations_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "meta_inbox_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_inbox_messages: {
+        Row: {
+          account_id: string
+          body: string | null
+          caption: string | null
+          conversation_id: string
+          created_at: string | null
+          delivered_at: string | null
+          empresa_id: string
+          error_code: string | null
+          error_message: string | null
+          failed_at: string | null
+          from_me: boolean
+          from_phone: string | null
+          id: string
+          media_filename: string | null
+          media_id: string | null
+          media_mime: string | null
+          media_url: string | null
+          msg_type: string
+          read_at: string | null
+          sent_at: string | null
+          status: string | null
+          template_components: Json | null
+          template_language: string | null
+          template_name: string | null
+          timestamp: string
+          to_phone: string | null
+          wamid: string | null
+        }
+        Insert: {
+          account_id: string
+          body?: string | null
+          caption?: string | null
+          conversation_id: string
+          created_at?: string | null
+          delivered_at?: string | null
+          empresa_id: string
+          error_code?: string | null
+          error_message?: string | null
+          failed_at?: string | null
+          from_me?: boolean
+          from_phone?: string | null
+          id?: string
+          media_filename?: string | null
+          media_id?: string | null
+          media_mime?: string | null
+          media_url?: string | null
+          msg_type?: string
+          read_at?: string | null
+          sent_at?: string | null
+          status?: string | null
+          template_components?: Json | null
+          template_language?: string | null
+          template_name?: string | null
+          timestamp?: string
+          to_phone?: string | null
+          wamid?: string | null
+        }
+        Update: {
+          account_id?: string
+          body?: string | null
+          caption?: string | null
+          conversation_id?: string
+          created_at?: string | null
+          delivered_at?: string | null
+          empresa_id?: string
+          error_code?: string | null
+          error_message?: string | null
+          failed_at?: string | null
+          from_me?: boolean
+          from_phone?: string | null
+          id?: string
+          media_filename?: string | null
+          media_id?: string | null
+          media_mime?: string | null
+          media_url?: string | null
+          msg_type?: string
+          read_at?: string | null
+          sent_at?: string | null
+          status?: string | null
+          template_components?: Json | null
+          template_language?: string | null
+          template_name?: string | null
+          timestamp?: string
+          to_phone?: string | null
+          wamid?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_inbox_messages_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "meta_inbox_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_inbox_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "meta_inbox_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_inbox_templates: {
+        Row: {
+          account_id: string
+          category: string
+          components: Json | null
+          display_name: string | null
+          empresa_id: string
+          id: string
+          is_active: boolean | null
+          language: string
+          meta_template_id: string
+          name: string
+          quality_score: string | null
+          rejected_reason: string | null
+          status: string
+          synced_at: string | null
+          version: number | null
+        }
+        Insert: {
+          account_id: string
+          category?: string
+          components?: Json | null
+          display_name?: string | null
+          empresa_id: string
+          id?: string
+          is_active?: boolean | null
+          language?: string
+          meta_template_id: string
+          name: string
+          quality_score?: string | null
+          rejected_reason?: string | null
+          status?: string
+          synced_at?: string | null
+          version?: number | null
+        }
+        Update: {
+          account_id?: string
+          category?: string
+          components?: Json | null
+          display_name?: string | null
+          empresa_id?: string
+          id?: string
+          is_active?: boolean | null
+          language?: string
+          meta_template_id?: string
+          name?: string
+          quality_score?: string | null
+          rejected_reason?: string | null
+          status?: string
+          synced_at?: string | null
+          version?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_inbox_templates_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "meta_inbox_accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
