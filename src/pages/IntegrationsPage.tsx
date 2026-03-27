@@ -28,6 +28,7 @@ interface EvolutionInstance {
   ownerJid?: string;
   profileName?: string;
   profilePicUrl?: string;
+  assignedUserEmail?: string;
   _count?: { Message: number; Contact: number; Chat: number };
 }
 
