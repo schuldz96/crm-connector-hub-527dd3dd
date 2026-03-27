@@ -381,8 +381,8 @@ export default function MeetingsPage() {
   };
 
   const handleEvaluateAll = () => {
-    const withTranscript = visibleMeetings.filter(m => m.transcricao && m.status === 'concluida');
-    runBatchEvaluation(withTranscript, 'Avaliação');
+    const pending = visibleMeetings.filter(m => !m.analisada_por_ia && m.transcricao && m.status === 'concluida');
+    runBatchEvaluation(pending, 'Avaliação');
   };
 
   const handleCancelEval = () => {
