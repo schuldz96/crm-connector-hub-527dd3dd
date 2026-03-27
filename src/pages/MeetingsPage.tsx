@@ -135,6 +135,7 @@ export default function MeetingsPage() {
   const [evalCancelled, setEvalCancelled] = useState(false);
   const [search, setSearch] = useState('');
   const [transcFilter, setTranscFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [selectedMeeting, setSelectedMeeting] = useState<DbMeeting | null>(null);
   const [detailTab, setDetailTab] = useState<'info' | 'transcript' | 'participants'>('info');
   const [allEvals, setAllEvals] = useState<(StoredEvaluation & { payload?: any })[]>([]);
@@ -449,7 +450,10 @@ export default function MeetingsPage() {
     const matchTransc = transcFilter === 'all'
       || (transcFilter === 'com' && !!m.transcricao)
       || (transcFilter === 'sem' && !m.transcricao);
-    return matchSearch && matchTransc;
+    const matchStatus = statusFilter === 'all'
+      || (statusFilter === 'sem' && (!m.status || m.status === 'agendada'))
+      || m.status === statusFilter;
+    return matchSearch && matchTransc && matchStatus;
   });
 
   // Pagination
@@ -459,7 +463,7 @@ export default function MeetingsPage() {
   const paginatedMeetings = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   // Reset page when filters change
-  useEffect(() => { setCurrentPage(1); }, [search, transcFilter]);
+  useEffect(() => { setCurrentPage(1); }, [search, transcFilter, statusFilter]);
 
   return (
     <div className="page-container animate-fade-in">
@@ -593,6 +597,27 @@ export default function MeetingsPage() {
                   )}
                 >
                   {{ all: 'Todas', com: 'Com transcrição', sem: 'Sem transcrição' }[s]}
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-1.5 flex-wrap">
+              {[
+                { key: 'all', label: 'Todos status' },
+                { key: 'sem', label: 'Sem status' },
+                { key: 'concluida', label: 'Concluída' },
+                { key: 'no_show', label: 'No-show' },
+              ].map(s => (
+                <button
+                  key={s.key}
+                  onClick={() => setStatusFilter(s.key)}
+                  className={cn(
+                    'text-xs px-3 py-1.5 rounded-lg border transition-all',
+                    statusFilter === s.key
+                      ? 'bg-primary/15 border-primary/30 text-primary font-medium'
+                      : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
+                  )}
+                >
+                  {s.label}
                 </button>
               ))}
             </div>
