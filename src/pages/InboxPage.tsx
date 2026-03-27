@@ -648,26 +648,22 @@ export default function InboxPage() {
         if (blob.size < 100) return;
         setSending(true);
         try {
-          // Convert WebM → WAV → upload to Storage → send as audio link
-          // Meta doesn't accept WAV via URL, so we convert + upload to Storage
-          // and send the WAV as a document (which Meta accepts for any type)
+          // Convert WebM → WAV, upload via Edge Function (converts to OGG/Opus server-side)
           const arrayBuffer = await blob.arrayBuffer();
           const audioCtx = new AudioContext();
           const decoded = await audioCtx.decodeAudioData(arrayBuffer);
           const wavBlob = audioBufferToWav(decoded);
           audioCtx.close();
 
-          // Upload to Storage
-          const fileName = `audio/${Date.now()}.wav`;
-          const { error: upErr } = await supabase.storage.from('inbox-media').upload(fileName, wavBlob, { contentType: 'audio/wav', upsert: true });
-          if (upErr) throw new Error(upErr.message);
-          const { data: urlData } = supabase.storage.from('inbox-media').getPublicUrl(fileName);
-          if (!urlData?.publicUrl) throw new Error('URL não disponível');
+          // Upload WAV via Edge Function proxy (converts to OGG if ffmpeg available)
+          const wavFile = new File([wavBlob], 'audio.wav', { type: 'audio/wav' });
+          const upload = await uploadMediaToMeta(selectedAccount!, wavFile);
+          if (upload.error || !upload.mediaId) throw new Error(upload.error || 'Upload falhou');
 
-          // Send as document (Meta accepts any format as document)
+          // Send as voice message (voice: true for voice note appearance)
           const result = await sendMediaMessage(
             selectedAccount!, selectedConv!.id, selectedConv!.contact_phone,
-            'document', urlData.publicUrl, 'Mensagem de voz', 'audio.wav',
+            'audio', upload.mediaId, undefined, undefined, true,
           );
           if (result.success) {
             const data = await loadMessages(selectedConv!.id);
