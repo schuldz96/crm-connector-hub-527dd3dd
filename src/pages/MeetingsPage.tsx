@@ -298,15 +298,15 @@ function ManualMeetingModal({
             </label>
           </div>
 
-          {/* Manual transcription */}
-          <div>
-            <label className="text-xs font-medium block mb-1">
-              Transcrição {file ? '(ou complemento)' : '*'}
-            </label>
-            <Textarea value={descricao} onChange={e => setDescricao(e.target.value)}
-              placeholder="Cole a transcrição da reunião aqui..."
-              className="text-xs bg-secondary border-border min-h-[120px] resize-y" />
-          </div>
+          {/* Manual transcription — only if no file */}
+          {!file && (
+            <div>
+              <label className="text-xs font-medium block mb-1">Transcrição *</label>
+              <Textarea value={descricao} onChange={e => setDescricao(e.target.value)}
+                placeholder="Cole a transcrição da reunião aqui..."
+                className="text-xs bg-secondary border-border min-h-[120px] resize-y" />
+            </div>
+          )}
 
           {/* Save */}
           <Button className="w-full h-10" onClick={handleSave} disabled={saving}>
