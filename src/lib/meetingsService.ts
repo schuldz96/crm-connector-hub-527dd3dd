@@ -27,6 +27,7 @@ export interface DbMeeting {
   transcript_file_id?: string | null;
   sentimento?: string | null;
   meeting_code?: string | null;
+  auditoria_manual?: boolean;
 }
 
 export interface TranscriptInfo {
@@ -410,6 +411,7 @@ export async function loadMeetingsFromDb(): Promise<DbMeeting[]> {
     transcript_file_id: r.transcript_file_id || null,
     sentimento: r.sentimento || null,
     meeting_code: r.link_meet ? r.link_meet.replace('https://meet.google.com/', '') : null,
+    auditoria_manual: r.auditoria_manual || false,
   };
   });
 

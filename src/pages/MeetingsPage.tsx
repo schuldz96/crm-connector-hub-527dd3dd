@@ -5,8 +5,12 @@ import {
   Video, Search, Brain, Clock, Calendar,
   User, Building2, ExternalLink, Sparkles, X,
   TrendingUp, TrendingDown, Lightbulb, AlertTriangle,
-  CheckCircle2, Target, MessageSquare, RefreshCw, Loader2, Users, Key, Heart, Trash2
+  CheckCircle2, Target, MessageSquare, RefreshCw, Loader2, Users, Key, Heart, Trash2,
+  Plus, Upload, FileText, ClipboardCheck,
 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { getSaasEmpresaId } from '@/lib/saas';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppConfig } from '@/contexts/AppConfigContext';
@@ -122,6 +126,200 @@ function ScoreBar({ value, label, icon, tip }: { value: number; label: string; i
   );
 }
 
+// ─── Manual Meeting Upload Modal ────────────────────────────────────────────
+function ManualMeetingModal({
+  open, onClose, onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const { toast } = useToast();
+  const [emails, setEmails] = useState('');
+  const [titulo, setTitulo] = useState('');
+  const [descricao, setDescricao] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) setFile(f);
+    e.target.value = '';
+  };
+
+  const handleSave = async () => {
+    if (!emails.trim()) return toast({ variant: 'destructive', title: 'Informe ao menos um e-mail.' });
+    if (!titulo.trim()) return toast({ variant: 'destructive', title: 'Informe o título/descritivo.' });
+    if (!file && !descricao.trim()) return toast({ variant: 'destructive', title: 'Envie um arquivo ou escreva a transcrição.' });
+
+    setSaving(true);
+    try {
+      const empresaId = await getSaasEmpresaId();
+
+      // Extract text from file
+      let transcricao = descricao.trim();
+      let arquivoOriginal: string | null = null;
+
+      if (file) {
+        arquivoOriginal = file.name;
+        if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+          transcricao = await file.text();
+        } else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+          // For PDF: upload to storage and store text as placeholder
+          // Real PDF extraction would need a server-side lib
+          transcricao = descricao.trim() || `[Conteúdo do arquivo: ${file.name}]`;
+          toast({ title: 'PDF detectado', description: 'Para PDFs, cole o texto no campo de transcrição manualmente.' });
+        } else {
+          transcricao = await file.text();
+        }
+      }
+
+      // Parse emails
+      const emailList = emails.split(/[,;\n]/).map(e => e.trim().toLowerCase()).filter(Boolean);
+      const participantes = emailList.map(e => ({ email: e, name: e.split('@')[0] }));
+
+      // Resolve vendedor from first email
+      let vendedorId: string | null = null;
+      if (emailList.length > 0) {
+        const { data: vendedor } = await (supabase as any)
+          .schema('saas')
+          .from('usuarios')
+          .select('id')
+          .eq('empresa_id', empresaId)
+          .eq('email', emailList[0])
+          .maybeSingle();
+        vendedorId = vendedor?.id || null;
+      }
+
+      // Extract duration from transcription
+      let duracao = 0;
+      const dMatch = transcricao.match(/terminou depois de (\d{1,2}):(\d{2}):(\d{2})/i);
+      if (dMatch) {
+        duracao = Math.round(parseInt(dMatch[1]) * 60 + parseInt(dMatch[2]) + parseInt(dMatch[3]) / 60);
+      }
+
+      // Insert meeting
+      const { data: reuniao, error: insertErr } = await (supabase as any)
+        .schema('saas')
+        .from('reunioes')
+        .insert({
+          empresa_id: empresaId,
+          titulo: titulo.trim(),
+          data_reuniao: new Date().toISOString(),
+          duracao_minutos: duracao,
+          status: 'concluida',
+          transcricao: transcricao || null,
+          participantes,
+          vendedor_id: vendedorId,
+          auditoria_manual: true,
+          arquivo_original: arquivoOriginal,
+        })
+        .select('id')
+        .single();
+
+      if (insertErr) throw insertErr;
+
+      toast({ title: 'Reunião criada!', description: 'A avaliação automática será processada em breve.' });
+
+      // Enqueue for automatic evaluation (trigger should handle it, but force it)
+      if (transcricao && transcricao.length > 50) {
+        await (supabase as any)
+          .schema('saas')
+          .from('fila_avaliacoes')
+          .insert({ empresa_id: empresaId, reuniao_id: reuniao.id, status: 'pendente' })
+          .then(() => {})
+          .catch(() => {});
+      }
+
+      setEmails(''); setTitulo(''); setDescricao(''); setFile(null);
+      onCreated();
+      onClose();
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro ao criar reunião', description: e.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-lg bg-card border-border max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="text-sm flex items-center gap-2">
+            <ClipboardCheck className="w-4 h-4 text-primary" /> Nova Reunião Manual
+            <span className="text-[9px] px-2 py-0.5 rounded-full bg-warning/10 text-warning border border-warning/20 font-medium ml-auto">
+              Auditoria
+            </span>
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex-1 overflow-y-auto space-y-4 pt-2">
+          {/* Emails */}
+          <div>
+            <label className="text-xs font-medium block mb-1">E-mails dos participantes *</label>
+            <Textarea value={emails} onChange={e => setEmails(e.target.value)}
+              placeholder="vendedor@appmax.com.br, cliente@empresa.com (separados por vírgula)"
+              className="text-xs bg-secondary border-border min-h-[60px] resize-none" />
+            <p className="text-[10px] text-muted-foreground mt-0.5">O primeiro e-mail será o vendedor responsável</p>
+          </div>
+
+          {/* Title */}
+          <div>
+            <label className="text-xs font-medium block mb-1">Título / Descritivo *</label>
+            <Input value={titulo} onChange={e => setTitulo(e.target.value)}
+              placeholder="Ex: Apresentação de proposta — Cliente XPTO"
+              className="h-9 text-sm bg-secondary border-border" />
+          </div>
+
+          {/* File upload */}
+          <div>
+            <label className="text-xs font-medium block mb-1.5">
+              <Upload className="w-3 h-3 inline mr-1" /> Arquivo de transcrição
+            </label>
+            <label className={cn(
+              'flex items-center justify-center gap-2 p-4 rounded-xl border-2 border-dashed cursor-pointer transition-colors',
+              file ? 'border-primary/50 bg-primary/5' : 'border-border hover:border-primary/30 hover:bg-primary/5'
+            )}>
+              {file ? (
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-primary" />
+                  <span className="text-xs font-medium">{file.name}</span>
+                  <span className="text-[10px] text-muted-foreground">({(file.size / 1024).toFixed(0)}KB)</span>
+                  <button onClick={(e) => { e.preventDefault(); setFile(null); }} className="ml-2">
+                    <X className="w-3 h-3 text-muted-foreground hover:text-destructive" />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">Clique para enviar .txt ou .pdf</span>
+                </>
+              )}
+              <input type="file" className="hidden" accept=".txt,.pdf,.doc,.docx" onChange={handleFileChange} />
+            </label>
+          </div>
+
+          {/* Manual transcription */}
+          <div>
+            <label className="text-xs font-medium block mb-1">
+              Transcrição {file ? '(ou complemento)' : '*'}
+            </label>
+            <Textarea value={descricao} onChange={e => setDescricao(e.target.value)}
+              placeholder="Cole a transcrição da reunião aqui..."
+              className="text-xs bg-secondary border-border min-h-[120px] resize-y" />
+          </div>
+
+          {/* Save */}
+          <Button className="w-full h-10" onClick={handleSave} disabled={saving}>
+            {saving
+              ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Salvando...</>
+              : <><ClipboardCheck className="w-4 h-4 mr-2" /> Criar reunião e avaliar</>}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function MeetingsPage() {
   const { user, hasMinRole } = useAuth();
   const { tokens } = useAppConfig();
@@ -136,6 +334,7 @@ export default function MeetingsPage() {
   const [search, setSearch] = useState('');
   const [transcFilter, setTranscFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [showManualMeeting, setShowManualMeeting] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<DbMeeting | null>(null);
   const [detailTab, setDetailTab] = useState<'info' | 'transcript' | 'participants'>('info');
   const [allEvals, setAllEvals] = useState<(StoredEvaluation & { payload?: any })[]>([]);
@@ -503,15 +702,21 @@ export default function MeetingsPage() {
                   </button>
                 </div>
               ) : (
-                <Button
-                  size="sm"
-                  onClick={handleEvaluateAll}
-                  disabled={syncing || loading}
-                  className="text-xs h-8"
-                  variant="outline"
-                >
-                  <Brain className="w-3.5 h-3.5 mr-1.5" /> Avaliar Todas
-                </Button>
+                <>
+                  <Button
+                    size="sm"
+                    onClick={handleEvaluateAll}
+                    disabled={syncing || loading}
+                    className="text-xs h-8"
+                    variant="outline"
+                  >
+                    <Brain className="w-3.5 h-3.5 mr-1.5" /> Avaliar Todas
+                  </Button>
+                  <Button size="sm" variant="outline" className="text-xs h-8"
+                    onClick={() => setShowManualMeeting(true)}>
+                    <Plus className="w-3.5 h-3.5 mr-1.5" /> Nova Reunião
+                  </Button>
+                </>
               )}
               {syncing && syncProgress.phase ? (
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-accent/30 bg-accent/5">
@@ -664,7 +869,12 @@ export default function MeetingsPage() {
                               <Video className="w-4 h-4 text-primary" />
                             </div>
                             <div>
-                              <p className="text-sm font-medium">{m.titulo}</p>
+                              <p className="text-sm font-medium flex items-center gap-1.5">
+                                {m.titulo}
+                                {m.auditoria_manual && (
+                                  <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-warning/10 text-warning border border-warning/20 font-semibold">Auditoria</span>
+                                )}
+                              </p>
                               <p className="text-xs text-muted-foreground">{m.cliente_nome || '—'}</p>
                               {(m.meeting_code || m.google_event_id) && (
                                 <p className="text-[10px] text-muted-foreground/60 font-mono">{m.meeting_code || m.google_event_id}</p>
@@ -1278,6 +1488,13 @@ export default function MeetingsPage() {
           </div>
         )}
       </div>
+
+      {/* Manual meeting modal */}
+      <ManualMeetingModal
+        open={showManualMeeting}
+        onClose={() => setShowManualMeeting(false)}
+        onCreated={loadMeetings}
+      />
     </div>
   );
 }
