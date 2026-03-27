@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { getSaasEmpresaId } from '@/lib/saas';
 import InboxSettingsModal from '@/components/inbox/InboxSettingsModal';
+import BulkSendModal from '@/components/inbox/BulkSendModal';
 import {
   loadConversations, loadMessages, markConversationRead,
   sendTextMessage, sendMediaMessage, sendTemplateMessage,
@@ -405,6 +406,7 @@ export default function InboxPage() {
   const [sending, setSending] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [newConvOpen, setNewConvOpen] = useState(false);
+  const [bulkSendOpen, setBulkSendOpen] = useState(false);
   const [confirmDeleteConv, setConfirmDeleteConv] = useState<InboxConversation | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -785,6 +787,9 @@ export default function InboxPage() {
           <Button variant="ghost" size="icon" className="w-8 h-8 flex-shrink-0" onClick={() => setNewConvOpen(true)} title="Nova conversa">
             <UserPlus className="w-3.5 h-3.5" />
           </Button>
+          <Button variant="ghost" size="icon" className="w-8 h-8 flex-shrink-0" onClick={() => setBulkSendOpen(true)} title="Envio em lote">
+            <Send className="w-3.5 h-3.5" />
+          </Button>
         </div>
 
         {selectedAccount && (
@@ -1159,6 +1164,9 @@ export default function InboxPage() {
         <InboxSettingsModal onClose={() => setSettingsOpen(false)} onSaved={loadAccountsFn}
           accounts={accounts} onAccountsChange={setAccounts} />
       )}
+
+      {/* Bulk send modal */}
+      <BulkSendModal open={bulkSendOpen} onClose={() => setBulkSendOpen(false)} account={selectedAccount} />
     </div>
   );
 }
