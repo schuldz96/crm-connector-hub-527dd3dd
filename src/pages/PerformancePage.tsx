@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { TrendingUp, Users, User, MessageSquare, Video, Brain, ChevronDown, Award, BarChart3, Calendar, Lock, Loader2, Filter, Search } from 'lucide-react';
+import { TrendingUp, Users, User, MessageSquare, Video, Brain, ChevronDown, Award, BarChart3, Calendar, Lock, Loader2, Filter } from 'lucide-react';
+import SearchableSelect from '@/components/ui/searchable-select';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, LineChart, Line, Legend } from 'recharts';
@@ -170,7 +171,6 @@ export default function PerformancePage() {
   const [mode, setMode] = useState<'team' | 'person'>('person');
   const [selectedTeamId, setSelectedTeamId] = useState<string>('');
   const [selectedUserId, setSelectedUserId] = useState<string>('');
-  const [perfUserSearch, setPerfUserSearch] = useState('');
 
   // Auto-select first user/team when data loads
   useEffect(() => {
@@ -351,44 +351,26 @@ export default function PerformancePage() {
               {visibleUsers[0]?.name ?? 'Você'}
             </div>
           ) : (
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  placeholder="Pesquisar..."
-                  value={perfUserSearch}
-                  onChange={e => setPerfUserSearch(e.target.value)}
-                  className="text-xs bg-secondary border border-border rounded-lg pl-8 pr-3 h-9 text-foreground outline-none focus:border-primary/50 w-[160px]"
-                />
-              </div>
-              <div className="relative">
-                <select
-                  value={selectedUserId}
-                  onChange={e => setSelectedUserId(e.target.value)}
-                  className="text-xs bg-secondary border border-border rounded-lg pl-3 pr-7 h-9 text-foreground outline-none focus:border-primary/50 cursor-pointer appearance-none min-w-[200px]">
-                  {visibleUsers.filter(u => !perfUserSearch || u.name.toLowerCase().includes(perfUserSearch.toLowerCase())).map(u => (
-                    <option key={u.id} value={u.id}>
-                      {u.name} — {u.role === 'member' ? 'Analista' : u.role === 'supervisor' ? 'Supervisor' : u.role === 'director' ? 'Diretor' : u.role}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="w-3 h-3 text-muted-foreground absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
-              </div>
-            </div>
+            <SearchableSelect
+              value={selectedUserId}
+              onChange={setSelectedUserId}
+              placeholder="Selecione um analista..."
+              options={visibleUsers.map(u => ({
+                value: u.id,
+                label: `${u.name} — ${u.role === 'member' ? 'Analista' : u.role === 'supervisor' ? 'Supervisor' : u.role === 'director' ? 'Diretor' : u.role}`,
+              }))}
+              className="min-w-[240px]"
+            />
           )
         ) : (
           visibleTeams.length > 1 ? (
-            <div className="relative">
-              <select
-                value={selectedTeamId}
-                onChange={e => setSelectedTeamId(e.target.value)}
-                className="text-xs bg-secondary border border-border rounded-lg pl-3 pr-7 h-9 text-foreground outline-none focus:border-primary/50 cursor-pointer appearance-none min-w-[200px]">
-                {visibleTeams.map(t => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-              <ChevronDown className="w-3 h-3 text-muted-foreground absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
+            <SearchableSelect
+              value={selectedTeamId}
+              onChange={setSelectedTeamId}
+              placeholder="Selecione um time..."
+              options={visibleTeams.map(t => ({ value: t.id, label: t.name }))}
+              className="min-w-[240px]"
+            />
           ) : (
             <div className="flex items-center gap-2 px-3 h-9 rounded-lg bg-secondary border border-border text-xs text-foreground">
               <Users className="w-3.5 h-3.5 text-muted-foreground" />

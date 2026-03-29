@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppConfig, DEFAULT_MODULES, type ModuleId, AI_MODELS, type ModuleAIKey } from '@/contexts/AppConfigContext';
+import SearchableSelect from '@/components/ui/searchable-select';
 import { useToast } from '@/hooks/use-toast';
 import {
   useRolePermissions,
@@ -591,21 +592,18 @@ export default function AdminPage() {
                       </div>
                       <div>
                         <label className="text-[10px] text-muted-foreground block mb-1">Gerente (e-mail)</label>
-                        <select
+                        <SearchableSelect
                           value={areaGerente}
-                          onChange={e => setAreaGerente(e.target.value)}
-                          className="w-full h-8 text-xs bg-secondary border border-border rounded-md px-2 text-foreground"
-                        >
-                          <option value="">— Sem gerente —</option>
-                          {allowedAccounts.filter(u => ['gerente', 'diretor', 'ceo', 'admin'].includes((u as any).role || '')).length === 0
-                            ? allowedAccounts.map(u => (
-                                <option key={u.email} value={u.email}>{u.name} ({u.email})</option>
-                              ))
-                            : allowedAccounts.map(u => (
-                                <option key={u.email} value={u.email}>{u.name} ({u.email})</option>
-                              ))
-                          }
-                        </select>
+                          onChange={setAreaGerente}
+                          placeholder="— Sem gerente —"
+                          allowClear
+                          size="sm"
+                          options={allowedAccounts.map(u => ({
+                            value: u.email,
+                            label: u.name,
+                            sub: u.email,
+                          }))}
+                        />
                       </div>
                     </div>
                     <div>

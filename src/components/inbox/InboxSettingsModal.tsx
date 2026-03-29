@@ -9,12 +9,14 @@ import {
   Settings, Plus, Trash2, Edit2, Save, X, Loader2,
   Check, AlertCircle, MessageSquare, Key, ExternalLink,
   Copy, CheckCheck, LayoutTemplate, ChevronDown, ChevronUp,
-  RefreshCw, Globe, Shield, RotateCcw, Users, Search,
+  RefreshCw, Globe, Shield, RotateCcw, Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import SearchableSelect from '@/components/ui/searchable-select';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { getSaasEmpresaId } from '@/lib/saas';
+import { useAuth } from '@/contexts/AuthContext';
 import type { MetaInboxAccount } from '@/pages/InboxPage';
 
 /* ── Meta Template types ────────────────────────────── */
@@ -138,7 +140,9 @@ interface UserAccessRow {
 
 export default function InboxSettingsModal({ onClose, onSaved, accounts = [], onAccountsChange }: Props) {
   const { toast } = useToast();
-  const [tab, setTab] = useState('accounts');
+  const { user } = useAuth();
+  const isRestrictedRole = user?.role === 'support' || user?.role === 'member';
+  const [tab, setTab] = useState(isRestrictedRole ? 'templates' : 'accounts');
   const [selectedAccount, setSelectedAccount] = useState<MetaInboxAccount | null>(accounts[0] ?? null);
 
   // Account form
@@ -165,7 +169,6 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
   const [loadingAccess, setLoadingAccess] = useState(false);
   const [savingAccess, setSavingAccess] = useState(false);
   const [accessAccountId, setAccessAccountId] = useState<string>(accounts[0]?.id || '');
-  const [accessUserSearch, setAccessUserSearch] = useState('');
 
   useEffect(() => {
     if (selectedAccount && tab === 'templates') {
@@ -562,18 +565,24 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
 
         <Tabs value={tab} onValueChange={setTab} className="flex-1 flex flex-col overflow-hidden">
           <TabsList className="mx-5 mt-3 flex-shrink-0 w-fit">
-            <TabsTrigger value="accounts" className="text-xs gap-1.5">
-              <MessageSquare className="w-3.5 h-3.5" /> Contas
-            </TabsTrigger>
+            {!isRestrictedRole && (
+              <TabsTrigger value="accounts" className="text-xs gap-1.5">
+                <MessageSquare className="w-3.5 h-3.5" /> Contas
+              </TabsTrigger>
+            )}
             <TabsTrigger value="templates" className="text-xs gap-1.5">
               <LayoutTemplate className="w-3.5 h-3.5" /> Templates
             </TabsTrigger>
-            <TabsTrigger value="access" className="text-xs gap-1.5">
-              <Users className="w-3.5 h-3.5" /> Acesso
-            </TabsTrigger>
-            <TabsTrigger value="webhook" className="text-xs gap-1.5">
-              <Globe className="w-3.5 h-3.5" /> Webhook
-            </TabsTrigger>
+            {!isRestrictedRole && (
+              <>
+                <TabsTrigger value="access" className="text-xs gap-1.5">
+                  <Users className="w-3.5 h-3.5" /> Acesso
+                </TabsTrigger>
+                <TabsTrigger value="webhook" className="text-xs gap-1.5">
+                  <Globe className="w-3.5 h-3.5" /> Webhook
+                </TabsTrigger>
+              </>
+            )}
           </TabsList>
 
           {/* ── Tab: Accounts ─────────────────────────────── */}
@@ -945,30 +954,15 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
               {/* Add user */}
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Adicionar usuário</p>
-                <div className="relative mb-1">
-                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <input
-                    placeholder="Pesquisar usuário..."
-                    value={accessUserSearch}
-                    onChange={e => setAccessUserSearch(e.target.value)}
-                    className="h-8 w-full text-xs rounded-md border border-border bg-background pl-8 pr-2 outline-none focus:border-primary/50"
-                  />
-                </div>
-                <select
-                  className="h-8 w-full text-xs rounded-md border border-border bg-background px-2"
+                <SearchableSelect
                   value=""
-                  onChange={e => { if (e.target.value) addUserAccess(e.target.value); }}
-                  disabled={savingAccess}
-                >
-                  <option value="">Selecione um usuário...</option>
-                  {allUsers
+                  onChange={v => { if (v) addUserAccess(v); }}
+                  placeholder="Selecione um usuário..."
+                  options={allUsers
                     .filter(u => !accessUsers.some(a => a.usuario_id === u.id))
-                    .filter(u => !accessUserSearch || u.nome.toLowerCase().includes(accessUserSearch.toLowerCase()) || u.email.toLowerCase().includes(accessUserSearch.toLowerCase()))
-                    .map(u => (
-                      <option key={u.id} value={u.id}>{u.nome} ({u.email})</option>
-                    ))
+                    .map(u => ({ value: u.id, label: u.nome, sub: u.email }))
                   }
-                </select>
+                />
               </div>
             </div>
           </TabsContent>

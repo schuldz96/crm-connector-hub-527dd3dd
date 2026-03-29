@@ -769,11 +769,9 @@ export default function InboxPage() {
       <div className="w-[200px] flex-shrink-0 border-r border-border flex flex-col bg-sidebar">
         <div className="h-14 flex items-center justify-between px-3 border-b border-border flex-shrink-0">
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Contas</span>
-          {!needsAccessFilter && (
-            <Button variant="ghost" size="icon" className="w-6 h-6" onClick={() => setSettingsOpen(true)} title="Configurações">
-              <Settings className="w-3.5 h-3.5" />
-            </Button>
-          )}
+          <Button variant="ghost" size="icon" className="w-6 h-6" onClick={() => setSettingsOpen(true)} title="Configurações">
+            <Settings className="w-3.5 h-3.5" />
+          </Button>
         </div>
         <div className="flex-1 overflow-y-auto py-1.5 px-1.5 space-y-0.5">
           {loadingAccounts ? (
