@@ -9,7 +9,7 @@ import {
   Settings, Plus, Trash2, Edit2, Save, X, Loader2,
   Check, AlertCircle, MessageSquare, Key, ExternalLink,
   Copy, CheckCheck, LayoutTemplate, ChevronDown, ChevronUp,
-  RefreshCw, Globe, Shield, RotateCcw,
+  RefreshCw, Globe, Shield, RotateCcw, Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -129,6 +129,13 @@ interface Props {
   onAccountsChange?: (accounts: MetaInboxAccount[]) => void;
 }
 
+interface UserAccessRow {
+  id: string;
+  usuario_id: string;
+  nome: string;
+  email: string;
+}
+
 export default function InboxSettingsModal({ onClose, onSaved, accounts = [], onAccountsChange }: Props) {
   const { toast } = useToast();
   const [tab, setTab] = useState('accounts');
@@ -152,11 +159,107 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
   const [expandedTemplate, setExpandedTemplate] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Access management
+  const [accessUsers, setAccessUsers] = useState<UserAccessRow[]>([]);
+  const [allUsers, setAllUsers] = useState<{ id: string; nome: string; email: string }[]>([]);
+  const [loadingAccess, setLoadingAccess] = useState(false);
+  const [savingAccess, setSavingAccess] = useState(false);
+  const [accessAccountId, setAccessAccountId] = useState<string>(accounts[0]?.id || '');
+
   useEffect(() => {
     if (selectedAccount && tab === 'templates') {
       fetchTemplates(selectedAccount);
     }
   }, [selectedAccount, tab]);
+
+  // Load access data when tab changes to 'access'
+  useEffect(() => {
+    if (tab === 'access') {
+      loadAllUsers();
+      if (accessAccountId) loadAccessForAccount(accessAccountId);
+    }
+  }, [tab, accessAccountId]);
+
+  const loadAllUsers = async () => {
+    try {
+      const empresaId = await getSaasEmpresaId();
+      const { data } = await (supabase as any)
+        .schema('saas')
+        .from('usuarios')
+        .select('id,nome,email')
+        .eq('empresa_id', empresaId)
+        .eq('status', 'ativo')
+        .order('nome');
+      setAllUsers(data || []);
+    } catch { /* silent */ }
+  };
+
+  const loadAccessForAccount = async (accountId: string) => {
+    setLoadingAccess(true);
+    try {
+      const { data, error } = await (supabase as any)
+        .from('meta_inbox_user_access')
+        .select('id, usuario_id')
+        .eq('account_id', accountId);
+      if (error) throw error;
+
+      const rows: UserAccessRow[] = (data || []).map((r: any) => {
+        const usr = allUsers.find(u => u.id === r.usuario_id) || { nome: '?', email: '?' };
+        return { id: r.id, usuario_id: r.usuario_id, nome: usr.nome, email: usr.email };
+      });
+
+      // If allUsers hasn't loaded yet, resolve names from DB
+      if (allUsers.length === 0 && data?.length) {
+        const empresaId = await getSaasEmpresaId();
+        const ids = data.map((r: any) => r.usuario_id);
+        const { data: usrs } = await (supabase as any)
+          .schema('saas')
+          .from('usuarios')
+          .select('id,nome,email')
+          .eq('empresa_id', empresaId)
+          .in('id', ids);
+        const usrMap = new Map((usrs || []).map((u: any) => [u.id, u]));
+        for (const row of rows) {
+          const u = usrMap.get(row.usuario_id);
+          if (u) { row.nome = u.nome; row.email = u.email; }
+        }
+      }
+      setAccessUsers(rows);
+    } catch { /* silent */ }
+    finally { setLoadingAccess(false); }
+  };
+
+  const addUserAccess = async (userId: string) => {
+    if (!accessAccountId || accessUsers.some(u => u.usuario_id === userId)) return;
+    setSavingAccess(true);
+    try {
+      const { data, error } = await (supabase as any)
+        .from('meta_inbox_user_access')
+        .insert({ usuario_id: userId, account_id: accessAccountId })
+        .select('id, usuario_id')
+        .single();
+      if (error) throw error;
+      const usr = allUsers.find(u => u.id === userId) || { nome: '?', email: '?' };
+      setAccessUsers(prev => [...prev, { id: data.id, usuario_id: userId, nome: usr.nome, email: usr.email }]);
+      toast({ title: `${usr.nome} adicionado(a) à caixa.` });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro ao adicionar acesso', description: e.message });
+    } finally { setSavingAccess(false); }
+  };
+
+  const removeUserAccess = async (accessId: string, userName: string) => {
+    try {
+      const { error } = await (supabase as any)
+        .from('meta_inbox_user_access')
+        .delete()
+        .eq('id', accessId);
+      if (error) throw error;
+      setAccessUsers(prev => prev.filter(u => u.id !== accessId));
+      toast({ title: `${userName} removido(a) da caixa.` });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro ao remover acesso', description: e.message });
+    }
+  };
 
   /* ── Fetch templates via Meta Graph API ─────────────── */
   const fetchTemplates = useCallback(async (account: MetaInboxAccount) => {
@@ -463,6 +566,9 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
             </TabsTrigger>
             <TabsTrigger value="templates" className="text-xs gap-1.5">
               <LayoutTemplate className="w-3.5 h-3.5" /> Templates
+            </TabsTrigger>
+            <TabsTrigger value="access" className="text-xs gap-1.5">
+              <Users className="w-3.5 h-3.5" /> Acesso
             </TabsTrigger>
             <TabsTrigger value="webhook" className="text-xs gap-1.5">
               <Globe className="w-3.5 h-3.5" /> Webhook
@@ -781,6 +887,78 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
                   ))}
                 </div>
               )}
+            </div>
+          </TabsContent>
+
+          {/* ── Tab: Access ───────────────────────────────── */}
+          <TabsContent value="access" className="flex-1 overflow-y-auto px-5 pb-5 mt-0 pt-4">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Caixa:</span>
+                <select
+                  value={accessAccountId}
+                  onChange={e => setAccessAccountId(e.target.value)}
+                  className="h-7 text-xs rounded-md border border-border bg-background px-2 flex-1"
+                >
+                  {accounts.map(a => (
+                    <option key={a.id} value={a.id}>{a.nome} {a.phone_display ? `(${a.phone_display})` : ''}</option>
+                  ))}
+                </select>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Usuários com cargo <strong>Suporte</strong> ou <strong>Analista</strong> só veem as caixas que estiverem atribuídas aqui. Cargos superiores veem todas as caixas automaticamente.
+              </p>
+
+              {/* Current users with access */}
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Usuários com acesso {loadingAccess && <Loader2 className="w-3 h-3 inline animate-spin ml-1" />}
+                </p>
+                {accessUsers.length === 0 && !loadingAccess && (
+                  <p className="text-xs text-muted-foreground py-3 text-center border border-dashed border-border rounded-lg">
+                    Nenhum usuário atribuído — somente cargos superiores podem ver esta caixa.
+                  </p>
+                )}
+                {accessUsers.map(u => (
+                  <div key={u.id} className="flex items-center justify-between border border-border rounded-lg px-3 py-2 bg-background">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 text-xs font-bold text-primary">
+                        {(u.nome || '?')[0].toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium truncate">{u.nome}</p>
+                        <p className="text-[10px] text-muted-foreground truncate">{u.email}</p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost" size="icon" className="w-7 h-7 text-destructive hover:text-destructive flex-shrink-0"
+                      onClick={() => removeUserAccess(u.id, u.nome)}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Add user */}
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Adicionar usuário</p>
+                <select
+                  className="h-8 w-full text-xs rounded-md border border-border bg-background px-2"
+                  value=""
+                  onChange={e => { if (e.target.value) addUserAccess(e.target.value); }}
+                  disabled={savingAccess}
+                >
+                  <option value="">Selecione um usuário...</option>
+                  {allUsers
+                    .filter(u => !accessUsers.some(a => a.usuario_id === u.id))
+                    .map(u => (
+                      <option key={u.id} value={u.id}>{u.nome} ({u.email})</option>
+                    ))
+                  }
+                </select>
+              </div>
             </div>
           </TabsContent>
 

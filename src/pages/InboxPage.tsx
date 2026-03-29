@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { getSaasEmpresaId } from '@/lib/saas';
+import { useAuth } from '@/contexts/AuthContext';
 import InboxSettingsModal from '@/components/inbox/InboxSettingsModal';
 import BulkSendModal from '@/components/inbox/BulkSendModal';
 import {
@@ -381,6 +382,7 @@ function NewConversationDialog({
 /* ─────────────────────────────────────────────────────── */
 export default function InboxPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [accounts, setAccounts] = useState<MetaInboxAccount[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [selectedAccount, setSelectedAccount] = useState<MetaInboxAccount | null>(null);
@@ -399,27 +401,56 @@ export default function InboxPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // ── Load accounts ──────────────────────────────────────
+  // ── Load accounts (filtered by user access for restricted roles) ──
+  const needsAccessFilter = user?.role === 'support' || user?.role === 'member';
+
   const loadAccountsFn = useCallback(async () => {
     setLoadingAccounts(true);
     try {
       const empresaId = await getSaasEmpresaId();
-      const { data, error } = await (supabase as any)
+      const { data: allAccounts, error } = await (supabase as any)
         .from('meta_inbox_accounts')
         .select('*')
         .eq('empresa_id', empresaId)
         .order('created_at', { ascending: true });
       if (error) throw error;
-      setAccounts(data || []);
-      if (data && data.length > 0 && !selectedAccount) {
-        setSelectedAccount(data[0]);
+
+      let filtered = allAccounts || [];
+
+      // For support/member roles, filter by meta_inbox_user_access
+      if (needsAccessFilter && user?.email) {
+        // Resolve saas.usuarios.id from email
+        const { data: usr } = await (supabase as any)
+          .schema('saas')
+          .from('usuarios')
+          .select('id')
+          .eq('empresa_id', empresaId)
+          .eq('email', user.email.toLowerCase())
+          .maybeSingle();
+
+        if (usr?.id) {
+          const { data: accessRows } = await (supabase as any)
+            .from('meta_inbox_user_access')
+            .select('account_id')
+            .eq('usuario_id', usr.id);
+
+          const allowedIds = new Set((accessRows || []).map((r: any) => r.account_id));
+          filtered = filtered.filter((a: MetaInboxAccount) => allowedIds.has(a.id));
+        } else {
+          filtered = [];
+        }
+      }
+
+      setAccounts(filtered);
+      if (filtered.length > 0 && !selectedAccount) {
+        setSelectedAccount(filtered[0]);
       }
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Erro ao carregar contas', description: e.message });
     } finally {
       setLoadingAccounts(false);
     }
-  }, []);
+  }, [needsAccessFilter, user?.email]);
 
   useEffect(() => { loadAccountsFn(); }, [loadAccountsFn]);
 
@@ -711,13 +742,19 @@ export default function InboxPage() {
             <Inbox className="w-8 h-8 text-primary" />
           </div>
           <div className="text-center max-w-sm">
-            <h2 className="text-lg font-semibold mb-1">Nenhuma caixa de entrada configurada</h2>
+            <h2 className="text-lg font-semibold mb-1">
+              {needsAccessFilter ? 'Nenhuma caixa de entrada atribuída' : 'Nenhuma caixa de entrada configurada'}
+            </h2>
             <p className="text-sm text-muted-foreground mb-5">
-              Conecte uma conta da API Oficial do WhatsApp (Meta) para começar a receber e enviar mensagens.
+              {needsAccessFilter
+                ? 'Solicite ao administrador acesso a uma ou mais caixas de entrada.'
+                : 'Conecte uma conta da API Oficial do WhatsApp (Meta) para começar a receber e enviar mensagens.'}
             </p>
-            <Button onClick={() => setSettingsOpen(true)} className="gap-2">
-              <Plus className="w-4 h-4" /> Conectar conta Meta WABA
-            </Button>
+            {!needsAccessFilter && (
+              <Button onClick={() => setSettingsOpen(true)} className="gap-2">
+                <Plus className="w-4 h-4" /> Conectar conta Meta WABA
+              </Button>
+            )}
           </div>
         </div>
         {settingsOpen && <InboxSettingsModal onClose={() => setSettingsOpen(false)} onSaved={loadAccountsFn} />}
@@ -732,9 +769,11 @@ export default function InboxPage() {
       <div className="w-[200px] flex-shrink-0 border-r border-border flex flex-col bg-sidebar">
         <div className="h-14 flex items-center justify-between px-3 border-b border-border flex-shrink-0">
           <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Contas</span>
-          <Button variant="ghost" size="icon" className="w-6 h-6" onClick={() => setSettingsOpen(true)} title="Configurações">
-            <Settings className="w-3.5 h-3.5" />
-          </Button>
+          {!needsAccessFilter && (
+            <Button variant="ghost" size="icon" className="w-6 h-6" onClick={() => setSettingsOpen(true)} title="Configurações">
+              <Settings className="w-3.5 h-3.5" />
+            </Button>
+          )}
         </div>
         <div className="flex-1 overflow-y-auto py-1.5 px-1.5 space-y-0.5">
           {loadingAccounts ? (
@@ -754,11 +793,13 @@ export default function InboxPage() {
             </button>
           ))}
         </div>
-        <div className="p-2 border-t border-border">
-          <Button variant="outline" size="sm" className="w-full text-xs h-8 gap-1.5" onClick={() => setSettingsOpen(true)}>
-            <Plus className="w-3 h-3" /> Adicionar conta
-          </Button>
-        </div>
+        {!needsAccessFilter && (
+          <div className="p-2 border-t border-border">
+            <Button variant="outline" size="sm" className="w-full text-xs h-8 gap-1.5" onClick={() => setSettingsOpen(true)}>
+              <Plus className="w-3 h-3" /> Adicionar conta
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Col 2 — Conversations */}
