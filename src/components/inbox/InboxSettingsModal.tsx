@@ -464,7 +464,9 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
       const baseName = tmpl.name.replace(/_v\d+$/, ''); // strip _v2, _v3 etc
       const displayName = existing?.display_name || baseName;
       const nextVersion = (existing?.version || 1) + 1;
-      const newMetaName = `${baseName}_v${nextVersion}`;
+      // Use timestamp suffix to avoid Meta's 4-week name quarantine on deleted templates
+      const ts = Math.floor(Date.now() / 1000);
+      const newMetaName = `${baseName}_v${nextVersion}_${ts}`;
 
       // Build components — normalize to what Meta accepts on creation
       const components: any[] = [];
@@ -476,9 +478,11 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
           }
           // Skip media headers — they require re-upload which isn't supported here
         } else if (c.type === 'BODY') {
-          // BODY: only type + text (never send format)
+          // BODY: type + text + example (required when body has {{N}} variables)
           if (c.text) {
-            components.push({ type: 'BODY', text: c.text });
+            const body: any = { type: 'BODY', text: c.text };
+            if (c.example) body.example = c.example;
+            components.push(body);
           }
         } else if (c.type === 'FOOTER') {
           if (c.text) {
@@ -521,8 +525,7 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         console.error('[recreateTemplate] Meta API error:', JSON.stringify(err, null, 2));
-        console.error('[recreateTemplate] Original tmpl:', JSON.stringify(tmpl, null, 2));
-        const detail = err?.error?.error_data?.details || err?.error?.message || `HTTP ${res.status}`;
+        const detail = err?.error?.error_user_msg || err?.error?.error_data?.details || err?.error?.message || `HTTP ${res.status}`;
         throw new Error(detail);
       }
 
