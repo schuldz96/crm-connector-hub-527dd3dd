@@ -10,6 +10,7 @@ import { RolePermissionsProvider } from "@/contexts/RolePermissionsContext";
 import { AuditLogProvider } from "@/contexts/AuditLogContext";
 import { NotificationsProvider } from "@/contexts/NotificationsContext";
 import AppLayout from "@/components/AppLayout";
+import RequireRole from "@/components/RequireRole";
 import LoginPage from "@/pages/LoginPage";
 import GoogleCallbackPage from "@/pages/GoogleCallbackPage";
 import DashboardPage from "@/pages/DashboardPage";
@@ -41,6 +42,17 @@ export const GOOGLE_CLIENT_ID = CONFIG.GOOGLE_CLIENT_ID;
 
 const queryClient = new QueryClient();
 
+/**
+ * R() — atalho para envolver páginas com RequireRole.
+ * resource: verifica se o cargo do usuário tem acesso ao recurso (tabela permissoes_papeis)
+ * minRole: exige cargo mínimo na hierarquia
+ */
+const R = (el: React.ReactNode, opts: { resource?: string; minRole?: string }) => (
+  <RequireRole resource={opts.resource} minRole={opts.minRole as any}>
+    {el}
+  </RequireRole>
+);
+
 function ProtectedRoutes() {
   const { isAuthenticated, isLoading, user } = useAuth();
 
@@ -60,31 +72,39 @@ function ProtectedRoutes() {
   return (
     <Routes>
       <Route element={<AppLayout />}>
-        <Route path="/dashboard"    element={<DashboardPage />} />
-        <Route path="/meetings"     element={<MeetingsPage />} />
-        <Route path="/whatsapp"     element={<WhatsAppPage />} />
-        <Route path="/inbox"        element={<InboxPage />} />
-        <Route path="/training"     element={<TrainingPage />} />
-        <Route path="/teams"        element={<TeamsPage />} />
-        <Route path="/users"        element={<UsersPage />} />
-        <Route path="/reports"      element={<ReportsPage />} />
-        <Route path="/integrations" element={<IntegrationsPage />} />
-        <Route path="/automations"  element={<AutomationsPage />} />
-        <Route path="/ai-config"    element={<AIConfigPage />} />
-        <Route path="/admin"        element={<AdminPage />} />
-        <Route path="/performance"  element={<PerformancePage />} />
-        {/* CRM routes — padrão HubSpot: /objects/0-X/views e /record/0-X/:id */}
-        <Route path="/crm/contacts"           element={<CRMContactsPage />} />
-        <Route path="/objects/0-1/views/*"     element={<CRMContactsPage />} />
-        <Route path="/crm/companies"           element={<CRMCompaniesPage />} />
-        <Route path="/objects/0-2/views/*"     element={<CRMCompaniesPage />} />
-        <Route path="/crm/deals"               element={<CRMDealsPage />} />
-        <Route path="/objects/0-3/views/*"     element={<CRMDealsPage />} />
-        <Route path="/crm/tickets"             element={<CRMTicketsPage />} />
-        <Route path="/objects/0-4/views/*"     element={<CRMTicketsPage />} />
-        <Route path="/crm/pipeline-settings"   element={<CRMPipelineSettingsPage />} />
-        <Route path="/record/:typeId/:numero"  element={<CRMRecordPage />} />
+        {/* Páginas abertas para qualquer usuário autenticado */}
+        <Route path="/dashboard"    element={R(<DashboardPage />,    { resource: 'dashboard' })} />
         <Route path="/me"           element={<MyProfilePage />} />
+
+        {/* Páginas com controle por recurso (respeita permissoes_papeis) */}
+        <Route path="/meetings"     element={R(<MeetingsPage />,     { resource: 'meetings' })} />
+        <Route path="/whatsapp"     element={R(<WhatsAppPage />,     { resource: 'whatsapp' })} />
+        <Route path="/inbox"        element={R(<InboxPage />,        { resource: 'inbox' })} />
+        <Route path="/training"     element={R(<TrainingPage />,     { resource: 'training' })} />
+        <Route path="/performance"  element={R(<PerformancePage />,  { resource: 'performance' })} />
+        <Route path="/reports"      element={R(<ReportsPage />,      { resource: 'reports' })} />
+
+        {/* Páginas restritas — exigem cargo + recurso */}
+        <Route path="/teams"        element={R(<TeamsPage />,        { resource: 'teams' })} />
+        <Route path="/users"        element={R(<UsersPage />,        { resource: 'users' })} />
+        <Route path="/integrations" element={R(<IntegrationsPage />, { resource: 'integrations' })} />
+        <Route path="/automations"  element={R(<AutomationsPage />,  { resource: 'automations' })} />
+        <Route path="/ai-config"    element={R(<AIConfigPage />,     { resource: 'ai-config' })} />
+        <Route path="/admin"        element={R(<AdminPage />,        { resource: 'admin' })} />
+
+        {/* CRM — exige recurso 'crm' */}
+        <Route path="/crm/contacts"           element={R(<CRMContactsPage />,       { resource: 'crm' })} />
+        <Route path="/objects/0-1/views/*"     element={R(<CRMContactsPage />,       { resource: 'crm' })} />
+        <Route path="/crm/companies"           element={R(<CRMCompaniesPage />,      { resource: 'crm' })} />
+        <Route path="/objects/0-2/views/*"     element={R(<CRMCompaniesPage />,      { resource: 'crm' })} />
+        <Route path="/crm/deals"               element={R(<CRMDealsPage />,          { resource: 'crm' })} />
+        <Route path="/objects/0-3/views/*"     element={R(<CRMDealsPage />,          { resource: 'crm' })} />
+        <Route path="/crm/tickets"             element={R(<CRMTicketsPage />,        { resource: 'crm' })} />
+        <Route path="/objects/0-4/views/*"     element={R(<CRMTicketsPage />,        { resource: 'crm' })} />
+        <Route path="/crm/pipeline-settings"   element={R(<CRMPipelineSettingsPage />, { resource: 'crm' })} />
+        <Route path="/record/:typeId/:numero"  element={R(<CRMRecordPage />,         { resource: 'crm' })} />
+
+        {/* Fallback */}
         <Route path="/"             element={<Navigate to={getDefaultRoute(user?.role)} replace />} />
         <Route path="*"             element={<NotFound />} />
       </Route>
