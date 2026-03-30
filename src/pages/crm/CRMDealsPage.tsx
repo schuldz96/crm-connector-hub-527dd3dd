@@ -100,6 +100,8 @@ export default function CRMDealsPage() {
   const [activeTab, setActiveTab] = useState('all');
   const [search, setSearch] = useState('');
   const [pipelineDropdown, setPipelineDropdown] = useState(false);
+  const [aiConfigStage, setAiConfigStage] = useState<{ id: string; name: string } | null>(null);
+  const [stageAIConfigs, setStageAIConfigs] = useState<Record<string, StageAIConfig>>({});
 
   const pipeline = PIPELINES.find(p => p.id === activePipeline)!;
   const deals = useMemo(() => generateDeals(pipeline.id, pipeline.stages), [pipeline.id]);
