@@ -456,6 +456,51 @@ export default function BulkSendModal({
     localStorage.removeItem(STORAGE_KEY);
   };
 
+  // ── Poll status updates (delivered/read) from webhook via DB ──
+  useEffect(() => {
+    // Only poll when there are sent rows with wamids
+    const sentRows = state.processedRows.filter(r => r.wamid && ['sent', 'fallback_sent'].includes(r.status));
+    if (sentRows.length === 0) return;
+
+    const poll = async () => {
+      try {
+        const wamids = sentRows.map(r => r.wamid!);
+        const { data } = await (supabase as any)
+          .from('meta_inbox_messages')
+          .select('wamid, status')
+          .in('wamid', wamids);
+        if (!data || data.length === 0) return;
+
+        const statusMap = new Map<string, string>();
+        for (const m of data) {
+          if (m.wamid && m.status) statusMap.set(m.wamid, m.status);
+        }
+
+        setState(prev => {
+          let changed = false;
+          const rows = prev.processedRows.map(r => {
+            if (!r.wamid) return r;
+            const dbStatus = statusMap.get(r.wamid);
+            if (!dbStatus) return r;
+            // Map DB status to row status
+            const newStatus: RowStatus =
+              dbStatus === 'read' ? 'read' :
+              dbStatus === 'delivered' ? 'delivered' :
+              dbStatus === 'failed' ? 'failed' :
+              r.status; // keep current if just 'sent'
+            if (newStatus !== r.status) { changed = true; return { ...r, status: newStatus }; }
+            return r;
+          });
+          return changed ? { ...prev, processedRows: rows } : prev;
+        });
+      } catch { /* silent */ }
+    };
+
+    poll(); // immediate first check
+    const interval = setInterval(poll, 5000); // then every 5s
+    return () => clearInterval(interval);
+  }, [state.processedRows.filter(r => r.wamid && ['sent', 'fallback_sent'].includes(r.status)).length]);
+
   // ── Stats ──────────────────────────────────────────────
   const stats = {
     total: state.processedRows.length,
