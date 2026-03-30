@@ -235,7 +235,25 @@ export default function CRMDealsPage() {
                     <span className="text-xs font-semibold text-foreground truncate">{stage.name}</span>
                     <Badge variant="outline" className="text-[10px] h-4 px-1 flex-shrink-0">{stageDeals.length}</Badge>
                   </div>
-                  <ChevronDown className="w-3 h-3 text-muted-foreground flex-shrink-0 -rotate-90" />
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => setAiConfigStage({ id: stage.id, name: stage.name })}
+                      className={cn(
+                        'flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors',
+                        stageAIConfigs[stage.id]?.active
+                          ? 'bg-primary/15 text-primary border border-primary/30'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                      )}
+                      title="Configurar IA"
+                    >
+                      <Bot className="w-3 h-3" />
+                      IA
+                      {stageAIConfigs[stage.id]?.active && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                      )}
+                    </button>
+                    <ChevronDown className="w-3 h-3 text-muted-foreground -rotate-90" />
+                  </div>
                 </div>
 
                 {/* Stage body */}
