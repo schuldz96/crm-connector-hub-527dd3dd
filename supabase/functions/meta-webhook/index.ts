@@ -122,6 +122,11 @@ function parseMessageBody(msg: any): { body: string; type: string; mediaId: stri
   else if (msg.location) { body = `[Localização] ${msg.location.latitude},${msg.location.longitude}`; }
   else if (msg.contacts) { body = '[Contato]'; }
   else if (msg.reaction) { body = `[Reação] ${msg.reaction.emoji || ''}`; }
+  else if (msg.button) { body = msg.button.text || '[Botão]'; }
+  else if (msg.interactive) {
+    const reply = msg.interactive.button_reply || msg.interactive.list_reply;
+    body = reply?.title || reply?.id || '[Interativo]';
+  }
   else { body = `[${type}]`; }
 
   return { body: body || caption || `[${type}]`, type, mediaId, mediaMime, mediaFilename, caption };
