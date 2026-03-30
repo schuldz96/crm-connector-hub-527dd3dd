@@ -525,15 +525,15 @@ export default function BulkSendModal({
     localStorage.removeItem(STORAGE_KEY);
   };
 
-  // ── Poll status updates (delivered/read) from webhook via DB ──
+  // ── Poll status updates (delivered/read/failed) from webhook — runs during AND after processing ──
   useEffect(() => {
-    // Only poll when there are sent rows with wamids
-    const sentRows = state.processedRows.filter(r => r.wamid && ['sent', 'fallback_sent'].includes(r.status));
-    if (sentRows.length === 0) return;
+    const rowsWithWamid = state.processedRows.filter(r => r.wamid && !['delivered', 'read', 'failed', 'fallback_failed'].includes(r.status));
+    if (rowsWithWamid.length === 0 || state.step === 'upload' || state.step === 'map') return;
 
     const poll = async () => {
       try {
-        const wamids = sentRows.map(r => r.wamid!);
+        const wamids = state.processedRows.filter(r => r.wamid).map(r => r.wamid!);
+        if (wamids.length === 0) return;
         const { data } = await (supabase as any)
           .from('meta_inbox_messages')
           .select('wamid, status')
@@ -541,9 +541,7 @@ export default function BulkSendModal({
         if (!data || data.length === 0) return;
 
         const statusMap = new Map<string, string>();
-        for (const m of data) {
-          if (m.wamid && m.status) statusMap.set(m.wamid, m.status);
-        }
+        for (const m of data) if (m.wamid && m.status) statusMap.set(m.wamid, m.status);
 
         setState(prev => {
           let changed = false;
@@ -551,12 +549,11 @@ export default function BulkSendModal({
             if (!r.wamid) return r;
             const dbStatus = statusMap.get(r.wamid);
             if (!dbStatus) return r;
-            // Map DB status to row status
             const newStatus: RowStatus =
               dbStatus === 'read' ? 'read' :
               dbStatus === 'delivered' ? 'delivered' :
               dbStatus === 'failed' ? 'failed' :
-              r.status; // keep current if just 'sent'
+              r.status;
             if (newStatus !== r.status) { changed = true; return { ...r, status: newStatus }; }
             return r;
           });
@@ -565,10 +562,122 @@ export default function BulkSendModal({
       } catch { /* silent */ }
     };
 
-    poll(); // immediate first check
-    const interval = setInterval(poll, 5000); // then every 5s
+    poll();
+    const interval = setInterval(poll, 5000);
     return () => clearInterval(interval);
-  }, [state.processedRows.filter(r => r.wamid && ['sent', 'fallback_sent'].includes(r.status)).length]);
+  }, [
+    state.processedRows.filter(r => r.wamid && !['delivered', 'read', 'failed', 'fallback_failed'].includes(r.status)).length,
+    state.step,
+  ]);
+
+  // ── Post-send review: wait for late callbacks, then check for failures ──
+  const [reviewPhase, setReviewPhase] = useState<'idle' | 'waiting' | 'checking' | 'retrying' | 'done'>('idle');
+  const [reviewCountdown, setReviewCountdown] = useState(0);
+  const reviewRanRef = useRef(false);
+
+  useEffect(() => {
+    // Trigger review once when processing finishes (step transitions to 'done')
+    if (state.step !== 'done' || reviewRanRef.current || state.processedRows.length === 0) return;
+    const hasWamids = state.processedRows.some(r => r.wamid);
+    if (!hasWamids) return;
+
+    reviewRanRef.current = true;
+    setReviewPhase('waiting');
+    setReviewCountdown(15);
+
+    // Countdown 15s to allow Meta late callbacks
+    const countdownInterval = setInterval(() => {
+      setReviewCountdown(prev => {
+        if (prev <= 1) { clearInterval(countdownInterval); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+
+    // After 15s, do final status check
+    const timer = setTimeout(async () => {
+      setReviewPhase('checking');
+      try {
+        const wamids = state.processedRows.filter(r => r.wamid).map(r => r.wamid!);
+        const { data } = await (supabase as any)
+          .from('meta_inbox_messages')
+          .select('wamid, status, error_code, error_message')
+          .in('wamid', wamids);
+
+        if (data && data.length > 0) {
+          const statusMap = new Map<string, { status: string; error_code?: string; error_message?: string }>();
+          for (const m of data) if (m.wamid) statusMap.set(m.wamid, m);
+
+          setState(prev => {
+            const rows = prev.processedRows.map(r => {
+              if (!r.wamid) return r;
+              const db = statusMap.get(r.wamid);
+              if (!db) return r;
+              const newStatus: RowStatus =
+                db.status === 'read' ? 'read' :
+                db.status === 'delivered' ? 'delivered' :
+                db.status === 'failed' ? 'failed' :
+                r.status;
+              if (newStatus !== r.status) {
+                return { ...r, status: newStatus, error: db.error_message || r.error };
+              }
+              return r;
+            });
+            return { ...prev, processedRows: rows };
+          });
+        }
+      } catch { /* silent */ }
+
+      // Check if there are late failures that need fallback retry
+      const currentState = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') as BulkSendState;
+      const lateFailed = currentState.processedRows.filter(
+        (r: ProcessedRow) => r.status === 'failed' && r.wamid,
+      );
+
+      if (lateFailed.length > 0 && currentState.fallbackTemplateName && account) {
+        setReviewPhase('retrying');
+        toast({
+          title: `${lateFailed.length} erro(s) detectado(s) na revisão`,
+          description: `Reenviando com template reserva: ${currentState.fallbackTemplateName}`,
+        });
+
+        // Retry each failed row with fallback template
+        for (const row of lateFailed) {
+          try {
+            const components: any[] = [];
+            if (row.params.length > 0) {
+              components.push({ type: 'body', parameters: row.params.map((v: string) => ({ type: 'text', text: v })) });
+            }
+
+            const retryResult = await sendTemplateMessage(
+              account, '', row.phone,
+              currentState.fallbackTemplateName, currentState.fallbackTemplateLanguage,
+              components,
+            );
+
+            setState(prev => {
+              const rows = prev.processedRows.map(r =>
+                r.phone === row.phone && r.status === 'failed'
+                  ? { ...r, status: (retryResult.success ? 'fallback_sent' : 'fallback_failed') as RowStatus, wamid: retryResult.wamid || r.wamid, error: retryResult.error || r.error, templateUsed: currentState.fallbackTemplateName }
+                  : r
+              );
+              return { ...prev, processedRows: rows };
+            });
+
+            await new Promise(r => setTimeout(r, INTERVAL_MS));
+          } catch { /* continue with next */ }
+        }
+      }
+
+      setReviewPhase('done');
+    }, 15000);
+
+    return () => { clearTimeout(timer); clearInterval(countdownInterval); };
+  }, [state.step]);
+
+  // Reset review state when starting new processing
+  useEffect(() => {
+    if (state.step === 'process') { reviewRanRef.current = false; setReviewPhase('idle'); }
+  }, [state.step]);
 
   // ── Stats ──────────────────────────────────────────────
   const stats = {
@@ -926,7 +1035,17 @@ export default function BulkSendModal({
                   </>
                 ) : null}
 
-                {state.step === 'done' && (
+                {state.step === 'done' && reviewPhase !== 'idle' && reviewPhase !== 'done' && (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+                    <span className="text-xs text-primary font-medium">
+                      {reviewPhase === 'waiting' && `Aguardando callbacks da Meta... ${reviewCountdown}s`}
+                      {reviewPhase === 'checking' && 'Revisando status final de todas as mensagens...'}
+                      {reviewPhase === 'retrying' && 'Reenviando erros com template reserva...'}
+                    </span>
+                  </div>
+                )}
+                {state.step === 'done' && (reviewPhase === 'done' || reviewPhase === 'idle') && (
                   <>
                     {stats.pending > 0 && (
                       <Button size="sm" className="text-xs" onClick={() => setState(s => ({ ...s, step: 'process', isProcessing: true }))}>
