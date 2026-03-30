@@ -3,8 +3,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
-  Search, Plus, Filter, ChevronDown, MoreHorizontal,
-  Calendar, User, AlertCircle, Ticket,
+  Search, Plus, Filter, ChevronDown, ChevronRight, MoreHorizontal,
+  Calendar, User, AlertCircle, Ticket, Download,
+  ArrowUpDown, BarChart3, Copy, Settings2, SlidersHorizontal, Kanban,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -43,6 +44,33 @@ const PIPELINES: Pipeline[] = [
     ],
   },
   {
+    id: 'nps',
+    name: 'NPS',
+    stages: [
+      { id: 'nps-new',       name: 'Novo',        color: 'hsl(var(--primary))' },
+      { id: 'nps-contact',   name: 'Contatado',   color: 'hsl(var(--warning))' },
+      { id: 'nps-resolved',  name: 'Resolvido',   color: 'hsl(var(--success))' },
+    ],
+  },
+  {
+    id: 'appcall',
+    name: 'Appcall',
+    stages: [
+      { id: 'ac-open',       name: 'Aberto',      color: 'hsl(var(--primary))' },
+      { id: 'ac-progress',   name: 'Andamento',   color: 'hsl(var(--warning))' },
+      { id: 'ac-done',       name: 'Concluído',   color: 'hsl(var(--success))' },
+    ],
+  },
+  {
+    id: 'csat',
+    name: 'Csat - Detratores',
+    stages: [
+      { id: 'cs-new',        name: 'Novo',        color: 'hsl(var(--primary))' },
+      { id: 'cs-contact',    name: 'Em contato',  color: 'hsl(var(--warning))' },
+      { id: 'cs-resolved',   name: 'Resolvido',   color: 'hsl(var(--success))' },
+    ],
+  },
+  {
     id: 'suporte-ativo',
     name: 'Suporte Ativo',
     stages: [
@@ -64,11 +92,17 @@ const PIPELINES: Pipeline[] = [
   },
 ];
 
-const PRIORITY_CONFIG: Record<TicketItem['priority'], { label: string; class: string }> = {
-  low:    { label: 'Baixa',   class: 'bg-muted text-muted-foreground' },
-  medium: { label: 'Média',   class: 'bg-warning/15 text-warning' },
-  high:   { label: 'Alta',    class: 'bg-destructive/15 text-destructive' },
-  urgent: { label: 'Urgente', class: 'bg-destructive/20 text-destructive font-semibold' },
+const TABS = [
+  { id: 'all', label: 'Todos os tickets', count: 5067 },
+  { id: 'mine', label: 'Meus tickets abertos' },
+  { id: 'unassigned', label: 'tickets não atribuídos' },
+];
+
+const PRIORITY_CONFIG: Record<TicketItem['priority'], { label: string; class: string; dot: string }> = {
+  low:    { label: 'Baixa',   class: 'bg-muted text-muted-foreground', dot: 'bg-success' },
+  medium: { label: 'Média',   class: 'bg-warning/15 text-warning', dot: 'bg-warning' },
+  high:   { label: 'Alta',    class: 'bg-destructive/15 text-destructive', dot: 'bg-destructive' },
+  urgent: { label: 'Urgente', class: 'bg-destructive/20 text-destructive font-semibold', dot: 'bg-destructive' },
 };
 
 const TAG_COLORS: Record<string, string> = {
@@ -79,24 +113,26 @@ const TAG_COLORS: Record<string, string> = {
 };
 
 function generateTickets(pipelineId: string, stages: Pipeline['stages']): TicketItem[] {
-  const names = ['Appmax <> Texas Farm', 'TRANSAÇÃO APROVADA', 'Isabela - Parcerias', 'Via Máfia', 'Shopinfo', 'Appmax & América', 'Appmax <> Ballena', '[Onb] voeazul.com', 'Luiz - Mídias Sociais', '[WA] digitalegacy'];
+  const names = ['Appmax <> Texas Farm Store', 'TRANSAÇÃO APROVADA - AUMENTE ATÉ 10% SUA...', 'Isabela - Parcerias', 'Via Máfia', 'Shopinfo', 'Appmax & América Joias', 'Appmax <> Ballena', '[Onb] http://www.voeazul.com...', 'Luiz - Mídias Sociais', '[WA] https://digitalegacy.com...', 'Appmax <> L&G Authentic', '[Onb] https://www.instagram.c...', 'Manipulados Rafao Lorenzatto', 'Renato Russo', 'Luciene Dlugasz Honório'];
+  const owners = ['Gabriel Luiz de...', 'Felipe Ezequiel...', 'Rysianne da Si...', 'Carlos Eduardo...', 'Jociel Victor N...', 'Luciano Jorge Miranda Fil...'];
   return stages.flatMap((stage, si) =>
-    Array.from({ length: Math.max(2, Math.floor(Math.random() * 5) + 1) }, (_, di) => ({
+    Array.from({ length: Math.max(2, Math.floor(Math.random() * 6) + 1) }, (_, di) => ({
       id: `${pipelineId}-${stage.id}-${di}`,
       name: names[(si * 3 + di) % names.length],
       stageId: stage.id,
-      owner: ['Gabriel Luiz', 'Felipe Ezequiel', 'Rysianne da Silva', 'Carlos Eduardo', ''][( si + di) % 5],
-      platform: ['VTEX', 'Shopify', 'Tray', 'Nuvemshop', 'Woocom', 'Magento', 'Outras'][(si + di) % 7],
+      owner: owners[(si + di) % owners.length],
+      platform: ['VTEX', 'Shopify', 'Tray', 'Nuvemshop', 'Woocom...', 'Magento', 'Outras', 'WBuy'][(si + di) % 8],
       pipelineId,
-      openDays: `${Math.floor(Math.random() * 7) + 1} dias`,
+      openDays: `Aberto por ${Math.floor(Math.random() * 7) + 1} ${Math.random() > 0.5 ? 'dias' : 'meses'}`,
       priority: (['low', 'medium', 'high', 'urgent'] as const)[(si + di) % 4],
-      tags: di % 2 === 0 ? ['Conta Criada'] : di % 3 === 0 ? ['Cadência não cumprida'] : [],
+      tags: di % 2 === 0 ? ['Conta Criada', 'Cadência não cumprida'] : di % 3 === 0 ? ['Integrado'] : [],
     }))
   );
 }
 
 export default function CRMTicketsPage() {
   const [activePipeline, setActivePipeline] = useState(PIPELINES[0].id);
+  const [activeTab, setActiveTab] = useState('all');
   const [search, setSearch] = useState('');
   const [pipelineDropdown, setPipelineDropdown] = useState(false);
 
@@ -117,108 +153,156 @@ export default function CRMTicketsPage() {
   }, [filteredTickets, pipeline.stages]);
 
   return (
-    <div className="p-6 space-y-4 h-full flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-bold text-foreground">Tickets</h1>
-          <Badge variant="outline" className="text-xs">{filteredTickets.length}</Badge>
+    <div className="flex flex-col h-full">
+      {/* Top tabs bar */}
+      <div className="flex items-center justify-between px-4 border-b border-border bg-card flex-shrink-0">
+        <div className="flex items-center gap-0">
+          <div className="flex items-center gap-1.5 px-3 py-2 border-r border-border">
+            <Ticket className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-sm font-medium text-foreground">Tickets</span>
+          </div>
+          {TABS.map((tab, idx) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                'px-3 py-2.5 text-sm transition-colors border-b-2 -mb-px',
+                activeTab === tab.id
+                  ? 'border-foreground text-foreground font-medium'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {tab.label}
+              {tab.count && (
+                <Badge variant="outline" className="ml-1.5 text-[10px] h-5 px-1.5 rounded-sm font-semibold">
+                  {tab.count.toLocaleString('pt-BR')}
+                </Badge>
+              )}
+              {idx === 0 && <span className="ml-1 text-muted-foreground/50 cursor-pointer">×</span>}
+            </button>
+          ))}
+          <button className="px-3 py-2.5 text-muted-foreground hover:text-foreground">
+            <Plus className="w-4 h-4" />
+          </button>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="w-4 h-4" /></Button>
+          <Button size="sm" className="gap-1.5 h-8">Adicionar tickets <ChevronRight className="w-3 h-3" /></Button>
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-card flex-shrink-0">
+        <div className="relative max-w-xs flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input placeholder="Pesquisar" value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-8 text-sm" />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs"><Kanban className="w-3.5 h-3.5" /> Exibição de quadro</Button>
+          <Button variant="ghost" size="icon" className="h-8 w-8"><Settings2 className="w-3.5 h-3.5" /></Button>
+          <div className="w-px h-5 bg-border mx-1" />
+          {/* Pipeline selector */}
           <DropdownMenu open={pipelineDropdown} onOpenChange={setPipelineDropdown}>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5">
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
                 {pipeline.name} <ChevronDown className="w-3 h-3" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64">
+              <div className="p-2">
+                <Input placeholder="Pesquisar" className="h-7 text-xs mb-2" />
+              </div>
               {PIPELINES.map(p => (
-                <DropdownMenuItem
-                  key={p.id}
-                  onClick={() => { setActivePipeline(p.id); setPipelineDropdown(false); }}
-                  className={cn(p.id === activePipeline && 'bg-muted')}
-                >
-                  {p.name}
-                </DropdownMenuItem>
+                <DropdownMenuItem key={p.id} onClick={() => { setActivePipeline(p.id); setPipelineDropdown(false); }}
+                  className={cn(p.id === activePipeline && 'bg-muted font-medium')}>{p.name}</DropdownMenuItem>
               ))}
+              <div className="border-t border-border mt-1 pt-1 px-2 pb-1">
+                <button className="text-xs text-primary hover:underline flex items-center gap-1">
+                  Editar pipeline <ChevronRight className="w-3 h-3" />
+                </button>
+              </div>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button size="sm" className="gap-1.5">
-            <Plus className="w-3.5 h-3.5" /> Adicionar ticket
-          </Button>
+          <div className="w-px h-5 bg-border mx-1" />
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs font-medium"><Filter className="w-3.5 h-3.5" /> Filtros</Button>
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs"><ArrowUpDown className="w-3.5 h-3.5" /> Classificar</Button>
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs"><BarChart3 className="w-3.5 h-3.5" /> Métrica</Button>
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs"><Download className="w-3.5 h-3.5" /> Exportar</Button>
+          <Button variant="ghost" size="icon" className="h-8 w-8"><Copy className="w-3.5 h-3.5" /></Button>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input placeholder="Pesquisar..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9" />
-        </div>
-        <Button variant="outline" size="sm" className="gap-1.5">
-          <Filter className="w-3.5 h-3.5" /> Filtros
-        </Button>
+      {/* Filter chips row */}
+      <div className="flex items-center gap-3 px-4 py-2 border-b border-border bg-card flex-shrink-0 text-xs">
+        <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground font-medium">
+          Proprietário do ticket <ChevronRight className="w-3 h-3 rotate-90" />
+        </button>
+        <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground font-medium">
+          Data de criação <ChevronRight className="w-3 h-3 rotate-90" />
+        </button>
+        <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground font-medium">
+          Data da última atividade <ChevronRight className="w-3 h-3 rotate-90" />
+        </button>
+        <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground font-medium">
+          Prioridade <ChevronRight className="w-3 h-3 rotate-90" />
+        </button>
+        <button className="text-muted-foreground hover:text-foreground font-medium">+ Mais</button>
+        <div className="w-px h-4 bg-border" />
+        <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground font-medium">
+          <SlidersHorizontal className="w-3 h-3" /> Filtros avançados
+        </button>
       </div>
 
       {/* Kanban board */}
-      <div className="flex-1 overflow-x-auto">
+      <div className="flex-1 overflow-x-auto p-4">
         <div className="flex gap-3 min-w-max h-full">
           {pipeline.stages.map(stage => {
             const stageTickets = ticketsByStage[stage.id] || [];
             return (
-              <div key={stage.id} className="w-[280px] flex flex-col flex-shrink-0">
-                <div className="flex items-center justify-between px-3 py-2 bg-muted/40 rounded-t-lg border border-border border-b-0">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full" style={{ background: stage.color }} />
-                    <span className="text-xs font-semibold text-foreground">{stage.name}</span>
-                    <Badge variant="outline" className="text-[10px] h-4 px-1">{stageTickets.length}</Badge>
+              <div key={stage.id} className="w-[260px] flex flex-col flex-shrink-0">
+                <div className="flex items-center justify-between px-3 py-2 bg-muted/50 rounded-t-lg border border-border border-b-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs font-semibold text-foreground truncate">{stage.name}</span>
+                    <Badge variant="outline" className="text-[10px] h-4 px-1 flex-shrink-0">{stageTickets.length}</Badge>
                   </div>
+                  <ChevronDown className="w-3 h-3 text-muted-foreground flex-shrink-0 -rotate-90" />
                 </div>
 
-                <div className="flex-1 overflow-y-auto border border-border rounded-b-lg bg-muted/10 p-2 space-y-2">
+                <div className="flex-1 overflow-y-auto border-x border-border bg-muted/5 p-1.5 space-y-1.5 max-h-[calc(100vh-320px)]">
                   {stageTickets.map(ticket => {
                     const pri = PRIORITY_CONFIG[ticket.priority];
                     return (
-                      <div key={ticket.id} className="bg-card border border-border rounded-lg p-3 space-y-2 hover:shadow-md transition-shadow cursor-pointer">
-                        <div className="flex items-start justify-between">
-                          <p className="text-sm font-semibold text-primary hover:underline leading-tight">{ticket.name}</p>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-5 w-5 -mt-0.5">
-                                <MoreHorizontal className="w-3.5 h-3.5" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem>Editar</DropdownMenuItem>
-                              <DropdownMenuItem>Mover</DropdownMenuItem>
-                              <DropdownMenuItem className="text-destructive">Excluir</DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                        <p className="text-xs text-muted-foreground">Aberto por {ticket.openDays}</p>
-                        <p className="text-xs text-muted-foreground">Plataforma: {ticket.platform}</p>
+                      <div key={ticket.id} className="bg-card border border-border rounded-lg p-3 space-y-1.5 hover:shadow-md transition-shadow cursor-pointer">
+                        <p className="text-[13px] font-semibold text-primary hover:underline leading-tight">{ticket.name}</p>
+                        <p className="text-xs text-muted-foreground">{ticket.openDays}</p>
+                        <p className="text-xs text-muted-foreground">Plataforma de ecommerce: {ticket.platform}</p>
+                        <p className="text-xs text-muted-foreground">Proprietário do ticket: {ticket.owner}</p>
                         {ticket.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
+                          <div className="flex flex-wrap gap-1 pt-0.5">
                             {ticket.tags.map(tag => (
-                              <Badge key={tag} variant="outline" className={cn('text-[10px] px-1.5 py-0', TAG_COLORS[tag] || 'bg-muted text-muted-foreground')}>
-                                {tag}
-                              </Badge>
+                              <Badge key={tag} variant="outline" className={cn('text-[10px] px-1.5 py-0 rounded-sm', TAG_COLORS[tag] || '')}>{tag}</Badge>
                             ))}
                           </div>
                         )}
                         {ticket.priority !== 'low' && (
-                          <Badge variant="outline" className={cn('text-[10px]', pri.class)}>
-                            <AlertCircle className="w-2.5 h-2.5 mr-0.5" /> {pri.label}
-                          </Badge>
+                          <div className="flex items-center gap-1.5">
+                            <div className={cn('w-2 h-2 rounded-full', pri.dot)} />
+                            <span className={cn('text-[10px]', pri.class)}>{pri.label}</span>
+                          </div>
                         )}
                         {ticket.owner && (
                           <div className="flex items-center gap-1.5 pt-1">
                             <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center">
                               <User className="w-3 h-3 text-muted-foreground" />
                             </div>
-                            <span className="text-[11px] text-muted-foreground">{ticket.owner}</span>
+                            <span className="text-[11px] text-primary hover:underline">{ticket.owner}</span>
                           </div>
                         )}
+                        <div className="flex items-center gap-2 pt-1 border-t border-border/50 mt-1">
+                          {['📋', '✨', '📧', '🔗'].map((icon, i) => (
+                            <button key={i} className="text-[10px] text-muted-foreground hover:text-foreground">{icon}</button>
+                          ))}
+                        </div>
                       </div>
                     );
                   })}
