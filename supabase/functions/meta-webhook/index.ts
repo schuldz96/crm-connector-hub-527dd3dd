@@ -149,8 +149,26 @@ async function insertInboundMessage(convId: string, accountId: string, empresaId
 }
 
 // ─── Update message status (scoped by account) ─────────────────────────────
+// Status hierarchy: sent < delivered < read < failed
+// Never regress (e.g. delivered → sent) since Meta callbacks arrive out of order
+const STATUS_RANK: Record<string, number> = { sent: 1, delivered: 2, read: 3, failed: 4 };
+
 async function updateMessageStatus(wamid: string, accountId: string, status: string, ts: Date, errorCode?: string, errorMsg?: string) {
-  const updates: Record<string, unknown> = { status };
+  // Check current status to avoid regression
+  const { data: current } = await sb.from('meta_inbox_messages')
+    .select('status').eq('wamid', wamid).eq('account_id', accountId).maybeSingle();
+
+  const currentRank = STATUS_RANK[current?.status] || 0;
+  const newRank = STATUS_RANK[status] || 0;
+
+  const updates: Record<string, unknown> = {};
+
+  // Only update status field if it's a progression (or failed overrides anything)
+  if (newRank > currentRank || status === 'failed') {
+    updates.status = status;
+  }
+
+  // Always record timestamps (they're additive, not replacements)
   if (status === 'sent') updates.sent_at = ts.toISOString();
   if (status === 'delivered') updates.delivered_at = ts.toISOString();
   if (status === 'read') updates.read_at = ts.toISOString();
@@ -159,7 +177,10 @@ async function updateMessageStatus(wamid: string, accountId: string, status: str
     if (errorCode) updates.error_code = errorCode;
     if (errorMsg) updates.error_message = errorMsg;
   }
-  await sb.from('meta_inbox_messages').update(updates).eq('wamid', wamid).eq('account_id', accountId);
+
+  if (Object.keys(updates).length > 0) {
+    await sb.from('meta_inbox_messages').update(updates).eq('wamid', wamid).eq('account_id', accountId);
+  }
 }
 
 // ─── Increment daily metric ─────────────────────────────────────────────────
