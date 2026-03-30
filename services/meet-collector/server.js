@@ -452,6 +452,31 @@ async function listTranscriptsForUser(userEmail, sinceIso, options = {}) {
   return res.data.files || [];
 }
 
+async function listRecordingsForUser(userEmail, sinceIso, options = {}) {
+  const auth = authAsUser(userEmail, DRIVE_SCOPES);
+  const drive = google.drive({ version: 'v3', auth });
+
+  const q = [
+    "mimeType='video/mp4'",
+    `createdTime >= '${sinceIso}'`,
+    'trashed = false',
+  ];
+
+  if (options.meetingCode) {
+    q.push(`name contains '${escapeDriveQueryValue(options.meetingCode)}'`);
+  }
+
+  const res = await drive.files.list({
+    q: q.join(' and '),
+    fields: 'files(id, name, mimeType, createdTime, size, webViewLink, webContentLink)',
+    pageSize: 200,
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+  });
+
+  return res.data.files || [];
+}
+
 async function exportDocAsText(userEmail, fileId) {
   const auth = authAsUser(userEmail, DRIVE_SCOPES);
   const drive = google.drive({ version: 'v3', auth });
@@ -476,6 +501,19 @@ async function exportCopiedDocAsText(fileId) {
   return res.data || '';
 }
 
+async function getDriveFileMetadataAsUser(userEmail, fileId) {
+  const auth = authAsUser(userEmail, DRIVE_SCOPES);
+  const drive = google.drive({ version: 'v3', auth });
+
+  const res = await drive.files.get({
+    fileId,
+    fields: 'id,name,mimeType,size,webViewLink,webContentLink,createdTime',
+    supportsAllDrives: true,
+  });
+
+  return res.data || null;
+}
+
 async function findCopiedDocBySourceId(sourceId) {
   requireEnvValue('DESTINATION_FOLDER_ID', DESTINATION_FOLDER_ID);
 
@@ -492,6 +530,30 @@ async function findCopiedDocBySourceId(sourceId) {
   const res = await drive.files.list({
     q,
     fields: 'files(id, name)',
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+    pageSize: 1,
+  });
+
+  return (res.data.files || [])[0] || null;
+}
+
+async function findCopiedFileBySourceId(sourceId, sourceType) {
+  requireEnvValue('DESTINATION_FOLDER_ID', DESTINATION_FOLDER_ID);
+
+  const auth = authAsServiceAccount(DRIVE_SCOPES);
+  const drive = google.drive({ version: 'v3', auth });
+
+  const q = [
+    `'${DESTINATION_FOLDER_ID}' in parents`,
+    'trashed = false',
+    `appProperties has { key='sourceId' and value='${escapeDriveQueryValue(sourceId)}' }`,
+    `appProperties has { key='sourceType' and value='${escapeDriveQueryValue(sourceType)}' }`,
+  ].join(' and ');
+
+  const res = await drive.files.list({
+    q,
+    fields: 'files(id, name, mimeType, size, webViewLink, webContentLink)',
     supportsAllDrives: true,
     includeItemsFromAllDrives: true,
     pageSize: 1,
@@ -529,6 +591,30 @@ async function createDocWithContent({ title, text, sourceId, owner }) {
   });
 
   return created.data.id;
+}
+
+async function copyFileToDestinationFromOwner({ userEmail, sourceFileId, title, sourceType }) {
+  requireEnvValue('DESTINATION_FOLDER_ID', DESTINATION_FOLDER_ID);
+
+  const auth = authAsUser(userEmail, DRIVE_SCOPES);
+  const drive = google.drive({ version: 'v3', auth });
+
+  const copied = await drive.files.copy({
+    fileId: sourceFileId,
+    requestBody: {
+      name: title,
+      parents: [DESTINATION_FOLDER_ID],
+      appProperties: {
+        sourceId: sourceFileId,
+        sourceType,
+        sourceOwner: userEmail,
+      },
+    },
+    supportsAllDrives: true,
+    fields: 'id,name,mimeType,size,webViewLink,webContentLink',
+  });
+
+  return copied.data || null;
 }
 
 async function runCollector({ sinceIso, email }) {
@@ -928,6 +1014,13 @@ async function getConferenceByKey(conferenceKey) {
         transcript_source_file_id,
         transcript_copied_file_id,
         transcript_text,
+        recording_source_file_id,
+        recording_copied_file_id,
+        recording_name,
+        recording_mime_type,
+        recording_size_bytes,
+        recording_web_view_link,
+        recording_web_content_link,
         attempts,
         error
       FROM saas.meet_conferences
@@ -935,6 +1028,48 @@ async function getConferenceByKey(conferenceKey) {
       LIMIT 1
     `,
     [conferenceKey]
+  );
+
+  return result.rows[0] || null;
+}
+
+async function markConferenceRecordingData({
+  conferenceKey,
+  sourceFileId,
+  copiedFileId,
+  recordingName,
+  recordingMimeType,
+  recordingSizeBytes,
+  recordingWebViewLink,
+  recordingWebContentLink,
+}) {
+  requireDatabase();
+
+  const result = await pool.query(
+    `
+      UPDATE saas.meet_conferences
+      SET
+        recording_source_file_id = COALESCE($2, recording_source_file_id),
+        recording_copied_file_id = COALESCE($3, recording_copied_file_id),
+        recording_name = COALESCE($4, recording_name),
+        recording_mime_type = COALESCE($5, recording_mime_type),
+        recording_size_bytes = COALESCE($6, recording_size_bytes),
+        recording_web_view_link = COALESCE($7, recording_web_view_link),
+        recording_web_content_link = COALESCE($8, recording_web_content_link),
+        updated_at = now()
+      WHERE conference_key = $1
+      RETURNING conference_key, recording_source_file_id, recording_copied_file_id, recording_name
+    `,
+    [
+      conferenceKey,
+      sourceFileId || null,
+      copiedFileId || null,
+      recordingName || null,
+      recordingMimeType || null,
+      recordingSizeBytes || null,
+      recordingWebViewLink || null,
+      recordingWebContentLink || null,
+    ]
   );
 
   return result.rows[0] || null;
@@ -954,7 +1089,9 @@ async function markConferenceTranscriptDone({ conferenceKey, sourceFileId, copie
         error = NULL,
         updated_at = now()
       WHERE conference_key = $1
-      RETURNING conference_key, status, transcript_source_file_id, transcript_copied_file_id, transcript_text
+      RETURNING conference_key, status, transcript_source_file_id, transcript_copied_file_id, transcript_text,
+        recording_source_file_id, recording_copied_file_id, recording_name, recording_mime_type,
+        recording_size_bytes, recording_web_view_link, recording_web_content_link
     `,
     [conferenceKey, sourceFileId, copiedFileId, transcriptText || null]
   );
@@ -998,6 +1135,128 @@ async function findConferenceByTranscriptSourceFileId(sourceFileId, excludeConfe
   );
 
   return result.rows[0] || null;
+}
+
+async function findConferenceByRecordingSourceFileId(sourceFileId, excludeConferenceKey) {
+  requireDatabase();
+
+  const result = await pool.query(
+    `
+      SELECT conference_key, status, recording_source_file_id, recording_copied_file_id, started_at
+      FROM saas.meet_conferences
+      WHERE recording_source_file_id = $1
+        AND conference_key <> $2
+      ORDER BY updated_at DESC
+      LIMIT 1
+    `,
+    [sourceFileId, excludeConferenceKey]
+  );
+
+  return result.rows[0] || null;
+}
+
+async function resolveConferenceRecording({ conference, ownerCandidates, bufferedSince }) {
+  if (conference.recording_copied_file_id || conference.recording_source_file_id) {
+    return { updated: false, reused: true };
+  }
+
+  let files = [];
+  let selectedOwner = ownerCandidates[0];
+
+  for (const ownerEmail of ownerCandidates) {
+    selectedOwner = ownerEmail;
+    if (conference.meeting_code) {
+      files = await withRetry(`listRecordingsForUser(code:${conference.meeting_code} owner:${ownerEmail})`, () =>
+        listRecordingsForUser(ownerEmail, bufferedSince, { meetingCode: conference.meeting_code })
+      );
+      if (files.length === 0) {
+        files = await withRetry(`listRecordingsForUser(fallback-without-code owner:${ownerEmail})`, () =>
+          listRecordingsForUser(ownerEmail, bufferedSince)
+        );
+      }
+    } else {
+      files = await withRetry(`listRecordingsForUser(no-meeting-code owner:${ownerEmail})`, () =>
+        listRecordingsForUser(ownerEmail, bufferedSince)
+      );
+    }
+
+    if (files.length > 0) break;
+  }
+
+  const sorted = files
+    .filter((file) => file && file.id)
+    .sort((a, b) => Date.parse(b.createdTime || 0) - Date.parse(a.createdTime || 0));
+
+  if (sorted.length === 0) {
+    return { updated: false, reused: false };
+  }
+
+  let selected = null;
+  for (const candidate of sorted) {
+    const conflict = await findConferenceByRecordingSourceFileId(candidate.id, conference.conference_key);
+    if (!conflict) {
+      selected = candidate;
+      break;
+    }
+  }
+
+  if (!selected) {
+    return { updated: false, reused: false };
+  }
+
+  return withSourceIdLock(selected.id, async () => {
+    const duplicate = await withRetry(`findCopiedFileBySourceId(recording:${selected.id})`, () =>
+      findCopiedFileBySourceId(selected.id, 'recording')
+    );
+
+    if (duplicate) {
+      await markConferenceRecordingData({
+        conferenceKey: conference.conference_key,
+        sourceFileId: selected.id,
+        copiedFileId: duplicate.id,
+        recordingName: duplicate.name || selected.name,
+        recordingMimeType: duplicate.mimeType || selected.mimeType,
+        recordingSizeBytes: duplicate.size ? Number(duplicate.size) : (selected.size ? Number(selected.size) : null),
+        recordingWebViewLink: duplicate.webViewLink || selected.webViewLink || null,
+        recordingWebContentLink: duplicate.webContentLink || selected.webContentLink || null,
+      });
+      return { updated: true, reused: true, copied: true };
+    }
+
+    let metadata = await withRetry(`getDriveFileMetadataAsUser(recording:${selected.id})`, () =>
+      getDriveFileMetadataAsUser(selectedOwner, selected.id)
+    );
+
+    let copiedFile = null;
+    try {
+      copiedFile = await withRetry(`copyFileToDestinationFromOwner(recording:${selected.id})`, () =>
+        copyFileToDestinationFromOwner({
+          userEmail: selectedOwner,
+          sourceFileId: selected.id,
+          title: selected.name || `Gravacao ${conference.meeting_code || conference.conference_key}`,
+          sourceType: 'recording',
+        })
+      );
+      if (copiedFile) {
+        metadata = copiedFile;
+      }
+    } catch (copyError) {
+      console.log(`[run-conference] não foi possível copiar gravação para pasta destino (source=${selected.id}): ${copyError.message}`);
+    }
+
+    await markConferenceRecordingData({
+      conferenceKey: conference.conference_key,
+      sourceFileId: selected.id,
+      copiedFileId: copiedFile?.id || null,
+      recordingName: metadata?.name || selected.name || null,
+      recordingMimeType: metadata?.mimeType || selected.mimeType || null,
+      recordingSizeBytes: metadata?.size ? Number(metadata.size) : (selected.size ? Number(selected.size) : null),
+      recordingWebViewLink: metadata?.webViewLink || selected.webViewLink || null,
+      recordingWebContentLink: metadata?.webContentLink || selected.webContentLink || null,
+    });
+
+    return { updated: true, reused: false, copied: Boolean(copiedFile?.id) };
+  });
 }
 
 async function withSourceIdLock(sourceId, fn) {
@@ -1080,29 +1339,12 @@ async function saveRunConferenceApiLog({
 }
 
 async function processConferenceByKey(conferenceKey) {
-  const conference = await getConferenceByKey(conferenceKey);
+  let conference = await getConferenceByKey(conferenceKey);
   if (!conference) {
     return {
       ok: false,
       statusCode: 404,
       error: 'conference_key não encontrado',
-    };
-  }
-
-  // Idempotency: if already processed, do not try to fetch transcript again.
-  if (conference.status === 'TRANSCRIPT_DONE') {
-    console.log(`[run-conference] já processada conference_key=${conferenceKey} source=${conference.transcript_source_file_id || 'N/A'} copied=${conference.transcript_copied_file_id || 'N/A'}`);
-    return {
-      ok: true,
-      statusCode: 200,
-      duplicated: true,
-      alreadyProcessed: true,
-      result: {
-        conference_key: conference.conference_key,
-        status: conference.status,
-        transcript_source_file_id: conference.transcript_source_file_id,
-        transcript_copied_file_id: conference.transcript_copied_file_id,
-      },
     };
   }
 
@@ -1120,6 +1362,44 @@ async function processConferenceByKey(conferenceKey) {
 
   console.log(`[run-conference] conference_key=${conferenceKey}`);
   console.log(`[run-conference] owners=${ownerCandidates.join(',')} since=${bufferedSince} meeting_code=${conference.meeting_code || 'N/A'}`);
+
+  try {
+    const recordingResult = await resolveConferenceRecording({
+      conference,
+      ownerCandidates,
+      bufferedSince,
+    });
+    if (recordingResult.updated) {
+      console.log(`[run-conference] gravação vinculada conference_key=${conferenceKey} copied=${recordingResult.copied ? 'yes' : 'no'}`);
+      conference = (await getConferenceByKey(conferenceKey)) || conference;
+    }
+  } catch (recordingError) {
+    console.log(`[run-conference] falha ao resolver gravação conference_key=${conferenceKey}: ${recordingError.message}`);
+  }
+
+  // Idempotency: if transcript already processed, return current state.
+  if (conference.status === 'TRANSCRIPT_DONE') {
+    console.log(`[run-conference] já processada conference_key=${conferenceKey} source=${conference.transcript_source_file_id || 'N/A'} copied=${conference.transcript_copied_file_id || 'N/A'}`);
+    return {
+      ok: true,
+      statusCode: 200,
+      duplicated: true,
+      alreadyProcessed: true,
+      result: {
+        conference_key: conference.conference_key,
+        status: conference.status,
+        transcript_source_file_id: conference.transcript_source_file_id,
+        transcript_copied_file_id: conference.transcript_copied_file_id,
+        recording_source_file_id: conference.recording_source_file_id,
+        recording_copied_file_id: conference.recording_copied_file_id,
+        recording_name: conference.recording_name,
+        recording_mime_type: conference.recording_mime_type,
+        recording_size_bytes: conference.recording_size_bytes,
+        recording_web_view_link: conference.recording_web_view_link,
+        recording_web_content_link: conference.recording_web_content_link,
+      },
+    };
+  }
 
   let files = [];
   let transcriptOwnerEmail = ownerCandidates[0];
@@ -1283,13 +1563,20 @@ async function fetchConferenceTranscriptByKey(conferenceKey) {
   return {
     ok: true,
     statusCode: 200,
-    result: {
-      conference_key: conference.conference_key,
-      status: conference.status,
-      transcript_copied_file_id: conference.transcript_copied_file_id,
-      transcript_text: transcriptText,
-    },
-  };
+      result: {
+        conference_key: conference.conference_key,
+        status: conference.status,
+        transcript_copied_file_id: conference.transcript_copied_file_id,
+        transcript_text: transcriptText,
+        recording_source_file_id: conference.recording_source_file_id,
+        recording_copied_file_id: conference.recording_copied_file_id,
+        recording_name: conference.recording_name,
+        recording_mime_type: conference.recording_mime_type,
+        recording_size_bytes: conference.recording_size_bytes,
+        recording_web_view_link: conference.recording_web_view_link,
+        recording_web_content_link: conference.recording_web_content_link,
+      },
+    };
 }
 
 async function discoverMeetConferences({ startIso, endIso }) {

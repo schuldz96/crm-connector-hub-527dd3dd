@@ -28,6 +28,9 @@ export interface DbMeeting {
   sentimento?: string | null;
   meeting_code?: string | null;
   auditoria_manual?: boolean;
+  gravacao_file_id?: string | null;
+  gravacao_nome?: string | null;
+  gravacao_link?: string | null;
 }
 
 export interface TranscriptInfo {
@@ -36,6 +39,13 @@ export interface TranscriptInfo {
   transcript_text?: string;
   meeting_code?: string;
   status?: string;
+  recording_source_file_id?: string;
+  recording_copied_file_id?: string;
+  recording_name?: string;
+  recording_mime_type?: string;
+  recording_size_bytes?: number;
+  recording_web_view_link?: string;
+  recording_web_content_link?: string;
 }
 
 interface CollectorTranscriptResult {
@@ -412,6 +422,9 @@ export async function loadMeetingsFromDb(): Promise<DbMeeting[]> {
     sentimento: r.sentimento || null,
     meeting_code: r.link_meet ? r.link_meet.replace('https://meet.google.com/', '') : null,
     auditoria_manual: r.auditoria_manual || false,
+    gravacao_file_id: r.gravacao_file_id || null,
+    gravacao_nome: r.gravacao_nome || null,
+    gravacao_link: r.gravacao_link || null,
   };
   });
 

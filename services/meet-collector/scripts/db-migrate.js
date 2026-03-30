@@ -57,6 +57,13 @@ const SQL_BOOTSTRAP = `
     transcript_source_file_id text,
     transcript_copied_file_id text,
     transcript_text text,
+    recording_source_file_id text,
+    recording_copied_file_id text,
+    recording_name text,
+    recording_mime_type text,
+    recording_size_bytes bigint,
+    recording_web_view_link text,
+    recording_web_content_link text,
     attempts integer not null default 0,
     error text,
     created_at timestamptz not null default now(),
@@ -66,6 +73,7 @@ const SQL_BOOTSTRAP = `
   create index if not exists idx_saas_meet_conferences_status on saas.meet_conferences(status);
   create index if not exists idx_saas_meet_conferences_started_at on saas.meet_conferences(started_at desc);
   create index if not exists idx_saas_meet_conferences_organizer on saas.meet_conferences(organizer_email);
+  create index if not exists idx_saas_meet_conferences_recording_source on saas.meet_conferences(recording_source_file_id);
 
   create table if not exists saas.run_conference_api_logs (
     id uuid primary key default gen_random_uuid(),
@@ -115,6 +123,20 @@ async function main() {
     } else {
       console.log(`Migration ja aplicada: ${MIGRATION_NAME}`);
     }
+
+    await client.query(`
+      alter table saas.meet_conferences
+        add column if not exists recording_source_file_id text,
+        add column if not exists recording_copied_file_id text,
+        add column if not exists recording_name text,
+        add column if not exists recording_mime_type text,
+        add column if not exists recording_size_bytes bigint,
+        add column if not exists recording_web_view_link text,
+        add column if not exists recording_web_content_link text;
+
+      create index if not exists idx_saas_meet_conferences_recording_source
+        on saas.meet_conferences(recording_source_file_id);
+    `);
 
     if (INTERNAL_EMAIL_DOMAIN) {
       await client.query(

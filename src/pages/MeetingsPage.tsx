@@ -16,8 +16,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useToast } from '@/hooks/use-toast';
 import {
-  loadMeetingsFromDb, syncMeetConferences, clearAllMeetings, dispararTranscricoes, pullTranscriptions,
-  fetchTranscriptsFromDrive, ensureAppmaxParticipantsRegistered, fetchTranscriptInfo, resolveMeetingTranscript,
+  loadMeetingsFromDb, clearAllMeetings, ensureAppmaxParticipantsRegistered, fetchTranscriptInfo, resolveMeetingTranscript,
   type DbMeeting, type TranscriptInfo
 } from '@/lib/meetingsService';
 import { loadAllEvaluationsForEntity, type StoredEvaluation } from '@/lib/evaluationService';
@@ -455,93 +454,6 @@ export default function MeetingsPage() {
     };
   }, [selectedMeeting?.id, selectedMeeting?.google_event_id, selectedMeeting?.transcricao]);
 
-  const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0, phase: '' });
-
-  // Persist last sync info for F5 resilience
-  const SYNC_KEY = 'meetings_last_sync';
-  const [lastSync, setLastSync] = useState<{ time: string; result: string } | null>(() => {
-    try { return JSON.parse(localStorage.getItem(SYNC_KEY) || 'null'); } catch { return null; }
-  });
-
-  const saveSyncStatus = (result: string) => {
-    const info = { time: new Date().toISOString(), result };
-    localStorage.setItem(SYNC_KEY, JSON.stringify(info));
-    setLastSync(info);
-  };
-
-  const handleSync = async () => {
-    setSyncing(true);
-    try {
-      // Step 1: Import new meetings from meet_conferences (call_interna=false only)
-      setSyncProgress({ current: 0, total: 0, phase: 'Importando reuniões...' });
-      toast({ title: 'Sincronizando...', description: 'Buscando novas reuniões do Google Meet.' });
-      const syncResult = await syncMeetConferences();
-
-      // Step 2: Reload to get fresh list with google_event_ids
-      const freshMeetings = await loadMeetingsFromDb();
-      setMeetings(freshMeetings);
-
-      // Step 3: Dispatch transcription POSTs via pg_net for NEW conferences
-      setSyncProgress({ current: 0, total: 0, phase: 'Disparando transcrições para NEW...' });
-      const dispatchResult = await dispararTranscricoes();
-      console.log(`[meetings] Dispatched: ${dispatchResult.dispatched}, Skipped: ${dispatchResult.skipped}`);
-
-      // Step 4: Pull TRANSCRIPT_DONE transcriptions immediately (already ready in appmax)
-      setSyncProgress({ current: 0, total: 0, phase: 'Puxando transcrições prontas (TRANSCRIPT_DONE)...' });
-      const pullResult = await pullTranscriptions();
-      console.log('[meetings] pullTranscriptions result:', pullResult);
-
-      // Step 5: Fetch actual transcript text from Google Drive (Edge Function)
-      setSyncProgress({ current: 0, total: 0, phase: 'Buscando conteúdo das transcrições no Google Drive...' });
-      let driveFetched = 0;
-      try {
-        const driveResult = await fetchTranscriptsFromDrive();
-        driveFetched = driveResult.fetched;
-        console.log('[meetings] fetchTranscriptsFromDrive result:', driveResult);
-      } catch (e) {
-        console.warn('[meetings] fetchTranscriptsFromDrive failed (Edge Function may not be deployed):', e);
-      }
-
-      // Step 6: If there are dispatched NEW ones, poll for them
-      let extraPulled = 0;
-      if (dispatchResult.dispatched > 0 && pullResult.pending > 0) {
-        const maxAttempts = 12;
-        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-          setSyncProgress({
-            current: attempt,
-            total: maxAttempts,
-            phase: `Aguardando ${pullResult.pending} transcrições pendentes... (${attempt}/${maxAttempts})`
-          });
-          await new Promise(r => setTimeout(r, 10000));
-          const poll = await pullTranscriptions();
-          extraPulled += poll.updated;
-          console.log(`[meetings] Poll ${attempt}: +${poll.updated} transcripts, ${poll.pending} still pending`);
-          if (poll.pending === 0) break;
-        }
-      }
-
-      // Final reload
-      await loadMeetings();
-
-      const totalTranscripts = pullResult.updated + extraPulled;
-      const parts = [`${syncResult.inserted} novas, ${syncResult.updated} atualizadas`];
-      if (totalTranscripts > 0) parts.push(`${totalTranscripts} transcrições importadas`);
-      if (driveFetched > 0) parts.push(`${driveFetched} transcrições lidas do Drive`);
-      if (dispatchResult.dispatched > 0) parts.push(`${dispatchResult.dispatched} transcrições disparadas`);
-      if (dispatchResult.skipped > 0) parts.push(`${dispatchResult.skipped} já processadas`);
-
-      const resultText = parts.join('. ') + '.';
-      saveSyncStatus(resultText);
-      toast({ title: 'Sincronização concluída', description: resultText });
-    } catch (err: any) {
-      console.error('[meetings] Sync error:', err);
-      saveSyncStatus(`Erro: ${err.message}`);
-      toast({ variant: 'destructive', title: 'Erro na sincronização', description: err.message });
-    } finally {
-      setSyncing(false);
-      setSyncProgress({ current: 0, total: 0, phase: '' });
-    }
-  };
 
   const handleClearAll = async () => {
     if (!confirm('Tem certeza que deseja apagar TODAS as reuniões e análises IA? Essa ação não pode ser desfeita.')) return;
@@ -735,24 +647,8 @@ export default function MeetingsPage() {
                   </Button>
                 </>
               )}
-              {syncing && syncProgress.phase ? (
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-accent/30 bg-accent/5">
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-medium text-accent">
-                      {syncProgress.phase}
-                      {syncProgress.total > 0 && ` ${syncProgress.current}/${syncProgress.total}`}
-                    </span>
-                    {syncProgress.total > 0 && (
-                      <div className="w-20 h-1 bg-muted rounded-full overflow-hidden mt-0.5">
-                        <div className="h-full bg-accent rounded-full transition-all" style={{ width: `${(syncProgress.current / syncProgress.total) * 100}%` }} />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <>
-                <Button
+              
+              <Button
                   size="sm"
                   variant="outline"
                   onClick={handleClearAll}
@@ -762,39 +658,8 @@ export default function MeetingsPage() {
                   <Trash2 className="w-3.5 h-3.5 mr-1.5" />
                   Limpar tudo
                 </Button>
-                <Button
-                  size="sm"
-                  onClick={handleSync}
-                  disabled={syncing || loading}
-                  className="text-xs h-8 bg-gradient-primary"
-                >
-                  {syncing ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5 mr-1.5" />}
-                  {syncing ? 'Sincronizando...' : 'Sincronizar'}
-                </Button>
-                </>
-              )}
             </div>
           </div>
-
-          {/* Sync progress / last sync info */}
-          {(syncing && syncProgress.phase) && (
-            <div className="flex items-center gap-2 mb-3 p-2.5 rounded-lg bg-primary/5 border border-primary/20">
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-primary flex-shrink-0" />
-              <span className="text-xs text-primary">{syncProgress.phase}</span>
-              {syncProgress.total > 0 && (
-                <span className="text-[10px] text-muted-foreground ml-auto">
-                  {syncProgress.current}/{syncProgress.total}
-                </span>
-              )}
-            </div>
-          )}
-          {!syncing && lastSync && (
-            <div className="flex items-center gap-2 mb-3 text-[10px] text-muted-foreground">
-              <span>Última sync: {new Date(lastSync.time).toLocaleString('pt-BR')}</span>
-              <span className="opacity-50">|</span>
-              <span>{lastSync.result}</span>
-            </div>
-          )}
 
           <div className="flex flex-wrap items-center gap-3 mb-4">
             <div className="relative flex-1 min-w-48">
@@ -855,7 +720,7 @@ export default function MeetingsPage() {
               <Video className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
               <p className="text-sm text-muted-foreground mb-1">Nenhuma reunião encontrada.</p>
               <p className="text-xs text-muted-foreground">
-                Clique em "Sincronizar" para importar reuniões do Google Meet.
+                As reuniões são sincronizadas automaticamente.
               </p>
             </div>
           ) : (
@@ -1125,10 +990,35 @@ export default function MeetingsPage() {
                         {hydratingTranscript ? 'Carregando transcrição...' : (selectedMeeting.transcricao ? 'Disponível' : 'Não disponível')}
                       </span>
                     </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-muted-foreground">Gravação:</span>
+                      <span className={cn('font-medium', (selectedMeeting.gravacao_link || transcriptInfo?.recording_web_view_link) ? 'text-success' : 'text-muted-foreground')}>
+                        {(selectedMeeting.gravacao_link || transcriptInfo?.recording_web_view_link) ? 'Disponível' : 'Não disponível'}
+                      </span>
+                    </div>
+                    {(selectedMeeting.gravacao_link || transcriptInfo?.recording_web_view_link || transcriptInfo?.recording_web_content_link) && (
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-muted-foreground">Link gravação:</span>
+                        <a
+                          href={selectedMeeting.gravacao_link || transcriptInfo?.recording_web_view_link || transcriptInfo?.recording_web_content_link || '#'}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary underline underline-offset-2"
+                        >
+                          Abrir gravação
+                        </a>
+                      </div>
+                    )}
                     {transcriptInfo?.transcript_copied_file_id && (
                       <div className="flex items-center gap-2 text-xs">
                         <span className="text-muted-foreground">File ID:</span>
                         <span className="font-mono text-[10px] text-muted-foreground">{transcriptInfo.transcript_copied_file_id}</span>
+                      </div>
+                    )}
+                    {(transcriptInfo?.recording_copied_file_id || transcriptInfo?.recording_source_file_id) && (
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-muted-foreground">Recording ID:</span>
+                        <span className="font-mono text-[10px] text-muted-foreground">{transcriptInfo.recording_copied_file_id || transcriptInfo.recording_source_file_id}</span>
                       </div>
                     )}
                     {transcriptInfo?.status && (
