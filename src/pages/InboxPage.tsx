@@ -570,10 +570,39 @@ export default function InboxPage() {
 
   useEffect(() => { loadConvs(); setSelectedConv(null); setMessages([]); }, [loadConvs]);
 
-  // Poll conversations every 5s
+  // Poll conversations every 5s — merge instead of replace to preserve scroll position
   useEffect(() => {
     if (!selectedAccount) return;
-    const t = setInterval(() => loadConvs(), 5000);
+    const t = setInterval(async () => {
+      try {
+        const fresh = await loadConversations(selectedAccount.id);
+        setConversations(prev => {
+          // Only update if something actually changed
+          if (prev.length !== fresh.length) return fresh;
+          let changed = false;
+          const merged = prev.map(old => {
+            const updated = fresh.find(f => f.id === old.id);
+            if (!updated) { changed = true; return old; }
+            // Check if any visible field changed
+            if (
+              old.last_message !== updated.last_message ||
+              old.last_message_ts !== updated.last_message_ts ||
+              old.unread_count !== updated.unread_count ||
+              old.contact_name !== updated.contact_name ||
+              old.status !== updated.status
+            ) {
+              changed = true;
+              return updated;
+            }
+            return old; // keep same reference
+          });
+          // Check for new conversations not in prev
+          const newConvs = fresh.filter(f => !prev.some(p => p.id === f.id));
+          if (newConvs.length > 0) { changed = true; merged.push(...newConvs); }
+          return changed ? merged : prev;
+        });
+      } catch { /* silent */ }
+    }, 5000);
     return () => clearInterval(t);
   }, [selectedAccount?.id]);
 
