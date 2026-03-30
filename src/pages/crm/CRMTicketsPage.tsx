@@ -268,7 +268,25 @@ export default function CRMTicketsPage() {
                     <span className="text-xs font-semibold text-foreground truncate">{stage.name}</span>
                     <Badge variant="outline" className="text-[10px] h-4 px-1 flex-shrink-0">{stageTickets.length}</Badge>
                   </div>
-                  <ChevronDown className="w-3 h-3 text-muted-foreground flex-shrink-0 -rotate-90" />
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => setAiConfigStage({ id: stage.id, name: stage.name })}
+                      className={cn(
+                        'flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors',
+                        stageAIConfigs[stage.id]?.active
+                          ? 'bg-primary/15 text-primary border border-primary/30'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                      )}
+                      title="Configurar IA"
+                    >
+                      <Bot className="w-3 h-3" />
+                      IA
+                      {stageAIConfigs[stage.id]?.active && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                      )}
+                    </button>
+                    <ChevronDown className="w-3 h-3 text-muted-foreground -rotate-90" />
+                  </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto border-x border-border bg-muted/5 p-1.5 space-y-1.5 max-h-[calc(100vh-320px)]">
@@ -315,6 +333,18 @@ export default function CRMTicketsPage() {
           })}
         </div>
       </div>
+      {/* AI Config Modal */}
+      {aiConfigStage && (
+        <StageAIConfigModal
+          open={!!aiConfigStage}
+          onClose={() => setAiConfigStage(null)}
+          stageName={aiConfigStage.name}
+          stageId={aiConfigStage.id}
+          allStages={pipeline.stages.map(s => ({ id: s.id, name: s.name }))}
+          initialConfig={stageAIConfigs[aiConfigStage.id]}
+          onSave={(id, cfg) => setStageAIConfigs(prev => ({ ...prev, [id]: cfg }))}
+        />
+      )}
     </div>
   );
 }
