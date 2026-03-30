@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -32,6 +33,7 @@ const formatCurrency = (v: number) =>
   `R$ ${v}`;
 
 export default function CRMDealsPage() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('all');
   const [search, setSearch] = useState('');
   const [pipelineDropdown, setPipelineDropdown] = useState(false);
@@ -127,7 +129,10 @@ export default function CRMDealsPage() {
                     className={cn(p.id === pipelineId && 'bg-muted font-medium')}>{p.nome}</DropdownMenuItem>
                 ))}
                 <div className="border-t border-border mt-1 pt-1 px-2 pb-1">
-                  <button className="text-xs text-primary hover:underline flex items-center gap-1">
+                  <button
+                    onClick={() => navigate(`/crm/pipeline-settings?type=deal&pipeline=${pipelineId}`)}
+                    className="text-xs text-primary hover:underline flex items-center gap-1"
+                  >
                     Editar pipeline <ChevronRight className="w-3 h-3" />
                   </button>
                 </div>
