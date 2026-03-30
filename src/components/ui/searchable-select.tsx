@@ -103,6 +103,7 @@ export default function SearchableSelect({
       {open && createPortal(
         <div
           ref={dropdownRef}
+          data-searchable-select-portal
           className="fixed bg-card border border-border rounded-lg shadow-xl overflow-hidden"
           style={{ top: pos.top, left: pos.left, width: Math.max(pos.width, 220), zIndex: 9999 }}
         >

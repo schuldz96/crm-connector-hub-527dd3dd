@@ -558,7 +558,14 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="bg-card border-border max-w-3xl max-h-[88vh] flex flex-col p-0 gap-0">
+      <DialogContent
+        className="bg-card border-border max-w-3xl max-h-[88vh] flex flex-col p-0 gap-0"
+        onPointerDownOutside={e => {
+          // Prevent dialog from stealing focus when SearchableSelect portal is open
+          const target = e.target as HTMLElement;
+          if (target.closest('[data-searchable-select-portal]')) e.preventDefault();
+        }}
+      >
         <DialogHeader className="px-5 pt-5 pb-3 border-b border-border flex-shrink-0">
           <DialogTitle className="text-sm font-semibold flex items-center gap-2">
             <Settings className="w-4 h-4 text-primary" />
