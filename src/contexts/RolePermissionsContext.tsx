@@ -23,6 +23,7 @@ export const ALL_RESOURCES: { id: ResourceId; label: string; icon: string }[] = 
   { id: 'ai-config',    label: 'Config. IA',        icon: '🤖' },
   { id: 'inbox',        label: 'Caixa de Entrada',  icon: '📥' },
   { id: 'admin',        label: 'Painel Admin',      icon: '🔐' },
+  { id: 'crm',          label: 'CRM',               icon: '🏷️' },
 ];
 
 export const SCOPE_LABELS: Record<RolePermission['scope'], string> = {
@@ -39,7 +40,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermission[] = [
     color: 'destructive',
     canDelete: false,
     scope: 'all',
-    resources: ['dashboard','meetings','whatsapp','inbox','performance','training','teams','areas','users','reports','integrations','automations','ai-config','admin'],
+    resources: ['dashboard','meetings','whatsapp','inbox','performance','training','teams','areas','users','reports','integrations','automations','ai-config','admin','crm'],
   },
   {
     role: 'ceo',

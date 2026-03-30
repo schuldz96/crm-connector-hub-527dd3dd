@@ -41,7 +41,8 @@ export type ResourceId =
   | 'automations'
   | 'ai-config'
   | 'inbox'
-  | 'admin';
+  | 'admin'
+  | 'crm';
 
 export interface RolePermission {
   role: UserRole;
