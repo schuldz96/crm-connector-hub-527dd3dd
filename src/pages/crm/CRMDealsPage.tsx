@@ -5,12 +5,13 @@ import { Badge } from '@/components/ui/badge';
 import {
   Search, Plus, Filter, ChevronDown, ChevronRight, MoreHorizontal,
   Briefcase, Calendar, DollarSign, User, Download,
-  ArrowUpDown, BarChart3, Copy, Settings2, SlidersHorizontal, Kanban,
+  ArrowUpDown, BarChart3, Copy, Settings2, SlidersHorizontal, Kanban, Bot,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import StageAIConfigModal, { type StageAIConfig } from '@/components/crm/StageAIConfigModal';
 
 interface Pipeline {
   id: string;
