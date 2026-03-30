@@ -64,9 +64,10 @@ export interface StageAIConfig {
   followUps: FollowUpItem[];
   // RAG tab
   ragEnabled: boolean;
-  ragSources: string[];
+  ragSource: string;
+  ragMaxTurns: number;
   // Transições tab
-  transitions: { stageId: string; condition: string }[];
+  transitions: { stageId: string; condition: string; trigger: string }[];
 }
 
 const DEFAULT_CONFIG: StageAIConfig = {
@@ -86,7 +87,8 @@ const DEFAULT_CONFIG: StageAIConfig = {
   questions: [],
   followUps: [],
   ragEnabled: false,
-  ragSources: [],
+  ragSource: '',
+  ragMaxTurns: 10,
   transitions: [],
 };
 
@@ -640,19 +642,55 @@ export default function StageAIConfigModal({
           {/* ═══ RAG Tab ═══ */}
           {activeTab === 'rag' && (
             <>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold text-foreground">Base de Conhecimento (RAG)</p>
-                  <p className="text-xs text-muted-foreground">Conecte documentos e URLs para enriquecer as respostas da IA</p>
-                </div>
-                <Switch checked={config.ragEnabled} onCheckedChange={v => update('ragEnabled', v)} />
+              {/* Checkbox styled like reference */}
+              <div
+                className={cn(
+                  'flex items-center gap-3 p-4 rounded-lg border transition-colors cursor-pointer',
+                  config.ragEnabled
+                    ? 'bg-emerald-500/15 border-emerald-500/30'
+                    : 'bg-muted/30 border-border'
+                )}
+                onClick={() => update('ragEnabled', !config.ragEnabled)}
+              >
+                <input
+                  type="checkbox"
+                  checked={config.ragEnabled}
+                  onChange={e => update('ragEnabled', e.target.checked)}
+                  className="w-5 h-5 rounded accent-primary"
+                />
+                <span className={cn(
+                  'text-sm font-medium',
+                  config.ragEnabled ? 'text-primary' : 'text-muted-foreground'
+                )}>
+                  Habilitar base de conhecimento RAG
+                </span>
               </div>
 
               {config.ragEnabled && (
-                <div className="border border-dashed border-border rounded-lg p-6 text-center space-y-2">
-                  <p className="text-sm text-muted-foreground">Arraste arquivos aqui ou clique para fazer upload</p>
-                  <Button variant="outline" size="sm">Selecionar arquivos</Button>
-                  <p className="text-xs text-muted-foreground">PDF, TXT, DOCX, URLs</p>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-semibold text-foreground mb-1.5 block">Base de Conhecimento RAG</label>
+                    <Select value={config.ragSource} onValueChange={v => update('ragSource', v)}>
+                      <SelectTrigger className="h-10"><SelectValue placeholder="Selecione uma base..." /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="historico-marcor">Histórico MarcoR (31577 chunks)</SelectItem>
+                        <SelectItem value="docs-produto">Docs Produto (8420 chunks)</SelectItem>
+                        <SelectItem value="faq-suporte">FAQ Suporte (2150 chunks)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-semibold text-foreground mb-1.5 block">Máximo de Turnos</label>
+                    <Input
+                      type="number"
+                      value={config.ragMaxTurns}
+                      onChange={e => update('ragMaxTurns', Number(e.target.value))}
+                      className="h-10"
+                      min={1}
+                      max={50}
+                    />
+                  </div>
                 </div>
               )}
             </>
@@ -662,35 +700,63 @@ export default function StageAIConfigModal({
           {activeTab === 'transitions' && (
             <>
               <p className="text-sm text-muted-foreground">
-                Configure transições automáticas entre etapas baseadas em condições da conversa.
+                Configure quando o lead deve ser movido automaticamente para outra etapa. Cada regra define um gatilho e a etapa de destino.
               </p>
 
-              {allStages.filter(s => s.id !== stageId).length > 0 ? (
+              {config.transitions.length > 0 && (
                 <div className="space-y-3">
-                  {allStages.filter(s => s.id !== stageId).map(stage => (
-                    <div key={stage.id} className="border border-border rounded-lg p-3 flex items-center gap-3">
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-foreground">{stage.name}</p>
+                  {config.transitions.map((t, idx) => (
+                    <div key={idx} className="border border-border rounded-lg p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-muted-foreground">Transição {idx + 1}</span>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => {
+                          update('transitions', config.transitions.filter((_, i) => i !== idx));
+                        }}>
+                          <Trash2 className="w-3 h-3 text-destructive" />
+                        </Button>
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-foreground mb-1 block">Gatilho</label>
                         <Input
-                          placeholder="Condição (ex: lead respondeu positivamente)"
-                          className="h-8 mt-1.5 text-xs"
-                          value={config.transitions.find(t => t.stageId === stage.id)?.condition || ''}
+                          value={t.trigger}
                           onChange={e => {
-                            const existing = config.transitions.filter(t => t.stageId !== stage.id);
-                            if (e.target.value) {
-                              update('transitions', [...existing, { stageId: stage.id, condition: e.target.value }]);
-                            } else {
-                              update('transitions', existing);
-                            }
+                            const updated = [...config.transitions];
+                            updated[idx] = { ...updated[idx], trigger: e.target.value };
+                            update('transitions', updated);
                           }}
+                          placeholder="Ex: lead respondeu positivamente"
+                          className="h-8 text-xs"
                         />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-foreground mb-1 block">Etapa de destino</label>
+                        <Select
+                          value={t.stageId}
+                          onValueChange={v => {
+                            const updated = [...config.transitions];
+                            updated[idx] = { ...updated[idx], stageId: v };
+                            update('transitions', updated);
+                          }}
+                        >
+                          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                          <SelectContent>
+                            {allStages.filter(s => s.id !== stageId).map(s => (
+                              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
                   ))}
                 </div>
-              ) : (
-                <p className="text-xs text-muted-foreground italic">Nenhuma outra etapa disponível para transição.</p>
               )}
+
+              <button
+                onClick={() => update('transitions', [...config.transitions, { stageId: '', condition: '', trigger: '' }])}
+                className="text-sm text-primary hover:underline flex items-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" /> Adicionar transição
+              </button>
             </>
           )}
         </div>
