@@ -68,7 +68,11 @@ export default function SearchableSelect({
     if (open) {
       setSearch('');
       updatePos();
-      setTimeout(() => inputRef.current?.focus(), 0);
+      // Multiple focus attempts to fight Radix Dialog focus trap
+      const focusInput = () => inputRef.current?.focus();
+      setTimeout(focusInput, 0);
+      setTimeout(focusInput, 50);
+      setTimeout(focusInput, 150);
     }
   }, [open, updatePos]);
 
@@ -106,6 +110,9 @@ export default function SearchableSelect({
           data-searchable-select-portal
           className="fixed bg-card border border-border rounded-lg shadow-xl overflow-hidden"
           style={{ top: pos.top, left: pos.left, width: Math.max(pos.width, 220), zIndex: 9999 }}
+          onPointerDown={e => e.stopPropagation()}
+          onFocus={e => e.stopPropagation()}
+          onWheel={e => e.stopPropagation()}
         >
           {/* Search input */}
           <div className="p-1.5 border-b border-border">

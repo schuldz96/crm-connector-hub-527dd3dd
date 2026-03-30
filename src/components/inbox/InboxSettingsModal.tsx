@@ -561,7 +561,14 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
       <DialogContent
         className="bg-card border-border max-w-3xl max-h-[88vh] flex flex-col p-0 gap-0"
         onPointerDownOutside={e => {
-          // Prevent dialog from stealing focus when SearchableSelect portal is open
+          const target = e.target as HTMLElement;
+          if (target.closest('[data-searchable-select-portal]')) e.preventDefault();
+        }}
+        onFocusOutside={e => {
+          const target = e.target as HTMLElement;
+          if (target.closest('[data-searchable-select-portal]')) e.preventDefault();
+        }}
+        onInteractOutside={e => {
           const target = e.target as HTMLElement;
           if (target.closest('[data-searchable-select-portal]')) e.preventDefault();
         }}
