@@ -88,6 +88,8 @@ async function upsertConversation(
     if (!fromMe) {
       updates.unread_count = (existing.unread_count || 0) + 1;
       updates.last_inbound_ts = ts.toISOString();
+      // Unarchive conversation when new inbound message arrives
+      updates.status = 'open';
     }
     await sb.from('meta_inbox_conversations').update(updates).eq('id', existing.id);
     return existing.id;

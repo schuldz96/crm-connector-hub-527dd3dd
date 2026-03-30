@@ -8,7 +8,7 @@ import {
   Inbox, Search, MessageSquare, Settings, Send, CheckCheck, Plus,
   Loader2, RefreshCw, ChevronRight, Phone, Clock, Check,
   Paperclip, Image as ImageIcon, FileText, Mic, MicOff, LayoutTemplate,
-  AlertTriangle, X, UserPlus, Trash2, RotateCcw,
+  AlertTriangle, X, UserPlus, Trash2, RotateCcw, Archive, ArchiveRestore,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -491,7 +491,7 @@ export default function InboxPage() {
   const [messages, setMessages] = useState<InboxMessage[]>([]);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  type InboxFilter = 'all' | 'pending' | 'unreplied' | 'replied';
+  type InboxFilter = 'all' | 'pending' | 'unreplied' | 'replied' | 'archived';
   type InboxSortKey = 'recent' | 'oldest' | 'alpha_asc' | 'alpha_desc';
   const [chatFilter, setChatFilter] = useState<InboxFilter>('all');
   const [chatSortKey, setChatSortKey] = useState<InboxSortKey>('recent');
@@ -843,6 +843,23 @@ export default function InboxPage() {
     setRecording(false);
   };
 
+  // ── Archive/unarchive conversation ──────────────────────
+  const handleArchiveConversation = async (conv: InboxConversation) => {
+    const newStatus = conv.status === 'archived' ? 'open' : 'archived';
+    try {
+      await (supabase as any).from('meta_inbox_conversations')
+        .update({ status: newStatus })
+        .eq('id', conv.id);
+      setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, status: newStatus } : c));
+      if (newStatus === 'archived' && selectedConv?.id === conv.id) {
+        setSelectedConv(null); setMessages([]);
+      }
+      toast({ title: newStatus === 'archived' ? 'Conversa arquivada' : 'Conversa desarquivada' });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: e.message });
+    }
+  };
+
   // ── Delete conversation ─────────────────────────────────
   const handleDeleteConversation = async (conv: InboxConversation) => {
     try {
@@ -866,6 +883,11 @@ export default function InboxPage() {
       c.contact_phone.includes(searchQuery)
     );
 
+    // Hide archived unless explicitly viewing archived filter
+    if (chatFilter !== 'archived') {
+      list = list.filter(c => c.status !== 'archived');
+    }
+
     // Status filter
     if (chatFilter === 'pending') {
       list = list.filter(c => c.unread_count > 0);
@@ -873,6 +895,8 @@ export default function InboxPage() {
       list = list.filter(c => !c.last_message_from_me && c.unread_count === 0);
     } else if (chatFilter === 'replied') {
       list = list.filter(c => c.last_message_from_me);
+    } else if (chatFilter === 'archived') {
+      list = list.filter(c => c.status === 'archived');
     }
 
     // Sort
@@ -989,11 +1013,13 @@ export default function InboxPage() {
             { key: 'pending',   label: 'Pendentes' },
             { key: 'unreplied', label: 'N. Resp.' },
             { key: 'replied',   label: 'Respond.' },
+            { key: 'archived',  label: 'Arquiv.' },
           ] as const).map(f => {
-            const count = f.key === 'all' ? conversations.length
-              : f.key === 'pending' ? conversations.filter(c => c.unread_count > 0).length
-              : f.key === 'unreplied' ? conversations.filter(c => !c.last_message_from_me && c.unread_count === 0).length
-              : conversations.filter(c => c.last_message_from_me).length;
+            const count = f.key === 'all' ? conversations.filter(c => c.status !== 'archived').length
+              : f.key === 'pending' ? conversations.filter(c => c.status !== 'archived' && c.unread_count > 0).length
+              : f.key === 'unreplied' ? conversations.filter(c => c.status !== 'archived' && !c.last_message_from_me && c.unread_count === 0).length
+              : f.key === 'replied' ? conversations.filter(c => c.status !== 'archived' && c.last_message_from_me).length
+              : conversations.filter(c => c.status === 'archived').length;
             return (
               <button
                 key={f.key}
@@ -1097,6 +1123,12 @@ export default function InboxPage() {
               )}>
                 {within24h ? '24h ativa' : 'Fora da janela'}
               </span>
+              {/* Archive/unarchive chat */}
+              <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-foreground"
+                title={selectedConv.status === 'archived' ? 'Desarquivar conversa' : 'Arquivar conversa'}
+                onClick={() => handleArchiveConversation(selectedConv)}>
+                {selectedConv.status === 'archived' ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+              </Button>
               {/* Delete chat */}
               <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-destructive"
                 title="Apagar conversa"
