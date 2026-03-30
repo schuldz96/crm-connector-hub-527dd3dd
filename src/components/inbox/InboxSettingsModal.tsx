@@ -501,23 +501,29 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
       }
 
       // Create in Meta with new name
+      const payload = {
+        name: newMetaName,
+        category: tmpl.category,
+        language: tmpl.language,
+        components,
+      };
+      console.log('[recreateTemplate] Sending payload:', JSON.stringify(payload, null, 2));
+
       const res = await fetch(`https://graph.facebook.com/v21.0/${selectedAccount.waba_id}/message_templates`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${selectedAccount.access_token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          name: newMetaName,
-          category: tmpl.category,
-          language: tmpl.language,
-          components,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err?.error?.message || `HTTP ${res.status}`);
+        console.error('[recreateTemplate] Meta API error:', JSON.stringify(err, null, 2));
+        console.error('[recreateTemplate] Original tmpl:', JSON.stringify(tmpl, null, 2));
+        const detail = err?.error?.error_data?.details || err?.error?.message || `HTTP ${res.status}`;
+        throw new Error(detail);
       }
 
       const data = await res.json();
