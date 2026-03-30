@@ -466,14 +466,39 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
       const nextVersion = (existing?.version || 1) + 1;
       const newMetaName = `${baseName}_v${nextVersion}`;
 
-      // Build same components
-      const components = tmpl.components.map(c => {
-        const comp: any = { type: c.type };
-        if (c.format) comp.format = c.format;
-        if (c.text) comp.text = c.text;
-        if (c.buttons) comp.buttons = c.buttons;
-        return comp;
-      });
+      // Build components — normalize to what Meta accepts on creation
+      const components: any[] = [];
+      for (const c of tmpl.components) {
+        if (c.type === 'HEADER') {
+          // HEADER: only TEXT format can be recreated (IMAGE/VIDEO/DOCUMENT need media upload)
+          if (c.format === 'TEXT' && c.text) {
+            components.push({ type: 'HEADER', format: 'TEXT', text: c.text });
+          }
+          // Skip media headers — they require re-upload which isn't supported here
+        } else if (c.type === 'BODY') {
+          // BODY: only type + text (never send format)
+          if (c.text) {
+            components.push({ type: 'BODY', text: c.text });
+          }
+        } else if (c.type === 'FOOTER') {
+          if (c.text) {
+            components.push({ type: 'FOOTER', text: c.text });
+          }
+        } else if (c.type === 'BUTTONS' && c.buttons?.length) {
+          // Buttons: only send allowed fields per button type
+          const cleanButtons = c.buttons.map((btn: any) => {
+            if (btn.type === 'QUICK_REPLY') return { type: 'QUICK_REPLY', text: btn.text };
+            if (btn.type === 'URL') return { type: 'URL', text: btn.text, url: btn.url, ...(btn.example ? { example: btn.example } : {}) };
+            if (btn.type === 'PHONE_NUMBER') return { type: 'PHONE_NUMBER', text: btn.text, phone_number: btn.phone_number };
+            return { type: btn.type, text: btn.text };
+          });
+          components.push({ type: 'BUTTONS', buttons: cleanButtons });
+        }
+      }
+      // Must have at least a BODY
+      if (!components.some(c => c.type === 'BODY')) {
+        throw new Error('Template sem corpo (BODY) — não é possível recriar.');
+      }
 
       // Create in Meta with new name
       const res = await fetch(`https://graph.facebook.com/v21.0/${selectedAccount.waba_id}/message_templates`, {
