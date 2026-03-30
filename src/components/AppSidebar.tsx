@@ -36,7 +36,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/integrations', label: 'Integrações',      icon: Plug2,           resource: 'integrations' },
   { path: '/automations',  label: 'Automações',       icon: Bell,            resource: 'automations' },
   { path: '/ai-config',    label: 'Config. IA',       icon: SlidersHorizontal, resource: 'ai-config' },
-  { path: '/admin',        label: 'Admin',            icon: Shield,          resource: 'admin' },
+  { path: '/admin?s=company', label: 'Admin',          icon: Shield,          resource: 'admin' },
 ];
 
 export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
@@ -47,14 +47,14 @@ export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean
   const navigate = useNavigate();
   const [profileOpen, setProfileOpen] = useState(false);
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) => location.pathname === path.split('?')[0];
 
   // Normalize user ID: google_email → user_email (DB stores as user_)
   const normalizedUserId = (user?.id ?? '').replace(/^google_/, 'user_');
 
   // Don't render nav items until config is loaded (prevents flash of unauthorized items)
   const visibleItems = configLoaded ? NAV_ITEMS.filter(item => {
-    const moduleId = item.path.replace('/', '') as any;
+    const moduleId = item.path.split('?')[0].replace('/', '') as any;
     const resourceOk = !item.resource || canAccess(item.resource);
     const moduleOk = isModuleEnabledForUser(moduleId, normalizedUserId, user?.teamId);
     return resourceOk && moduleOk;
