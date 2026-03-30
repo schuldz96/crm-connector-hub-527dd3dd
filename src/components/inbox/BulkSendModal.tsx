@@ -143,6 +143,7 @@ export default function BulkSendModal({
   const [loadingTpl, setLoadingTpl] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
   const [selectedLog, setSelectedLog] = useState<any | null>(null);
+  const [refreshingLog, setRefreshingLog] = useState(false);
   const processingRef = useRef(false);
   const timerRef = useRef<number | null>(null);
 
@@ -167,6 +168,74 @@ export default function BulkSendModal({
   useEffect(() => {
     if (open && state.step === 'upload') loadLogs();
   }, [open, state.step, loadLogs]);
+
+  // Refresh status of a saved log by querying wamids from meta_inbox_messages
+  const refreshLogStatus = useCallback(async (log: any) => {
+    if (!log?.rows_detail || !Array.isArray(log.rows_detail)) return log;
+    const wamids = log.rows_detail.filter((r: any) => r.wamid).map((r: any) => r.wamid);
+    if (wamids.length === 0) return log;
+
+    setRefreshingLog(true);
+    try {
+      const { data } = await (supabase as any)
+        .from('meta_inbox_messages')
+        .select('wamid, status')
+        .in('wamid', wamids);
+      if (!data || data.length === 0) { setRefreshingLog(false); return log; }
+
+      const statusMap = new Map<string, string>();
+      for (const m of data) if (m.wamid && m.status) statusMap.set(m.wamid, m.status);
+
+      let changed = false;
+      const updatedRows = log.rows_detail.map((r: any) => {
+        if (!r.wamid) return r;
+        const dbStatus = statusMap.get(r.wamid);
+        if (!dbStatus) return r;
+        const newStatus = dbStatus === 'read' ? 'read' : dbStatus === 'delivered' ? 'delivered' : dbStatus === 'failed' ? 'failed' : r.status;
+        if (newStatus !== r.status) { changed = true; return { ...r, status: newStatus }; }
+        return r;
+      });
+
+      if (changed) {
+        const sent = updatedRows.filter((r: any) => ['sent', 'delivered', 'read', 'fallback_sent'].includes(r.status)).length;
+        const delivered = updatedRows.filter((r: any) => r.status === 'delivered' || r.status === 'read').length;
+        const readCount = updatedRows.filter((r: any) => r.status === 'read').length;
+        const failed = updatedRows.filter((r: any) => ['failed', 'fallback_failed'].includes(r.status)).length;
+
+        // Persist updated counts back to DB
+        await (supabase as any).from('meta_bulk_send_logs').update({
+          rows_detail: updatedRows,
+          sent_count: sent,
+          delivered_count: delivered,
+          read_count: readCount,
+          failed_count: failed,
+        }).eq('id', log.id);
+
+        const updatedLog = {
+          ...log,
+          rows_detail: updatedRows,
+          sent_count: sent,
+          delivered_count: delivered,
+          read_count: readCount,
+          failed_count: failed,
+        };
+        setSelectedLog(updatedLog);
+        // Also refresh the logs list
+        setLogs(prev => prev.map(l => l.id === log.id ? updatedLog : l));
+        setRefreshingLog(false);
+        return updatedLog;
+      }
+    } catch (e) {
+      console.error('[BulkSend] Failed to refresh log status:', e);
+    }
+    setRefreshingLog(false);
+    return log;
+  }, []);
+
+  // Auto-refresh when opening a log detail
+  useEffect(() => {
+    if (selectedLog) refreshLogStatus(selectedLog);
+  }, [selectedLog?.id]);
 
   // Load templates
   useEffect(() => {
@@ -575,9 +644,19 @@ export default function BulkSendModal({
           {/* ═══ Log detail view ═══ */}
           {state.step === 'upload' && selectedLog && (
             <div className="space-y-4">
-              <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => setSelectedLog(null)}>
-                ← Voltar
-              </Button>
+              <div className="flex items-center justify-between">
+                <Button variant="ghost" size="sm" className="text-xs h-7" onClick={() => setSelectedLog(null)}>
+                  ← Voltar
+                </Button>
+                <Button
+                  variant="outline" size="sm" className="text-xs h-7 gap-1"
+                  onClick={() => refreshLogStatus(selectedLog)}
+                  disabled={refreshingLog}
+                >
+                  {refreshingLog ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
+                  Atualizar status
+                </Button>
+              </div>
               <div className="space-y-3">
                 <div>
                   <p className="text-sm font-semibold">{selectedLog.template_name}</p>
