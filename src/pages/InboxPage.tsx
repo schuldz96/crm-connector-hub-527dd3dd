@@ -392,6 +392,10 @@ export default function InboxPage() {
   const [messages, setMessages] = useState<InboxMessage[]>([]);
   const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  type InboxFilter = 'all' | 'pending' | 'unreplied' | 'replied';
+  type InboxSortKey = 'recent' | 'oldest' | 'alpha_asc' | 'alpha_desc';
+  const [chatFilter, setChatFilter] = useState<InboxFilter>('all');
+  const [chatSortKey, setChatSortKey] = useState<InboxSortKey>('recent');
   const [msgInput, setMsgInput] = useState('');
   const [sending, setSending] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -726,12 +730,33 @@ export default function InboxPage() {
     }
   };
 
-  // ── Filter conversations ───────────────────────────────
-  const filteredConvs = conversations.filter(c =>
-    !searchQuery ||
-    (c.contact_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.contact_phone.includes(searchQuery)
-  );
+  // ── Filter & sort conversations ────────────────────────
+  const filteredConvs = (() => {
+    let list = conversations.filter(c =>
+      !searchQuery ||
+      (c.contact_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.contact_phone.includes(searchQuery)
+    );
+
+    // Status filter
+    if (chatFilter === 'pending') {
+      list = list.filter(c => c.unread_count > 0);
+    } else if (chatFilter === 'unreplied') {
+      list = list.filter(c => !c.last_message_from_me && c.unread_count === 0);
+    } else if (chatFilter === 'replied') {
+      list = list.filter(c => c.last_message_from_me);
+    }
+
+    // Sort
+    list = [...list].sort((a, b) => {
+      if (chatSortKey === 'oldest') return new Date(a.last_message_ts || 0).getTime() - new Date(b.last_message_ts || 0).getTime();
+      if (chatSortKey === 'alpha_asc') return (a.contact_name || a.contact_phone).localeCompare(b.contact_name || b.contact_phone, 'pt-BR');
+      if (chatSortKey === 'alpha_desc') return (b.contact_name || b.contact_phone).localeCompare(a.contact_name || a.contact_phone, 'pt-BR');
+      return new Date(b.last_message_ts || 0).getTime() - new Date(a.last_message_ts || 0).getTime(); // recent default
+    });
+
+    return list;
+  })();
 
   /* ── No accounts state ──────────────────────────────── */
   if (!loadingAccounts && accounts.length === 0) {
@@ -828,6 +853,57 @@ export default function InboxPage() {
             </Badge>
           </div>
         )}
+
+        {/* Chat status filters */}
+        <div className="px-2 py-1.5 border-b border-border flex-shrink-0 flex gap-1">
+          {([
+            { key: 'all',       label: 'Todas' },
+            { key: 'pending',   label: 'Pendentes' },
+            { key: 'unreplied', label: 'N. Resp.' },
+            { key: 'replied',   label: 'Respond.' },
+          ] as const).map(f => {
+            const count = f.key === 'all' ? conversations.length
+              : f.key === 'pending' ? conversations.filter(c => c.unread_count > 0).length
+              : f.key === 'unreplied' ? conversations.filter(c => !c.last_message_from_me && c.unread_count === 0).length
+              : conversations.filter(c => c.last_message_from_me).length;
+            return (
+              <button
+                key={f.key}
+                onClick={() => setChatFilter(f.key)}
+                className={cn(
+                  'flex-1 text-[10px] rounded-md px-1 py-1 font-medium transition-colors leading-tight',
+                  chatFilter === f.key
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-secondary text-muted-foreground hover:text-foreground'
+                )}>
+                {f.label}
+                {count > 0 && <span className="opacity-70"> ({count})</span>}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Chat sort */}
+        <div className="px-2 py-1.5 border-b border-border flex-shrink-0 flex gap-1">
+          {([
+            { key: 'recent',     label: 'Recente \u2193' },
+            { key: 'oldest',     label: 'Antigo \u2191' },
+            { key: 'alpha_asc',  label: 'A\u2013Z' },
+            { key: 'alpha_desc', label: 'Z\u2013A' },
+          ] as const).map(s => (
+            <button
+              key={s.key}
+              onClick={() => setChatSortKey(s.key)}
+              className={cn(
+                'flex-1 text-[10px] rounded-md px-1 py-1 font-medium transition-colors',
+                chatSortKey === s.key
+                  ? 'bg-secondary text-foreground border border-border'
+                  : 'text-muted-foreground hover:text-foreground'
+              )}>
+              {s.label}
+            </button>
+          ))}
+        </div>
 
         <div className="flex-1 overflow-y-auto">
           {loadingConvs ? (
