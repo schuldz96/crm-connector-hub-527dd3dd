@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { createPortal } from 'react-dom';
 import { Search, ChevronDown, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -32,9 +31,7 @@ export default function SearchableSelect({
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const selected = options.find(o => o.value === value);
@@ -45,44 +42,31 @@ export default function SearchableSelect({
     (o.sub && o.sub.toLowerCase().includes(search.toLowerCase()))
   );
 
-  const updatePos = useCallback(() => {
-    if (!triggerRef.current) return;
-    const rect = triggerRef.current.getBoundingClientRect();
-    setPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
-  }, []);
-
+  // Close on click outside the entire container
   useEffect(() => {
+    if (!open) return;
     const handler = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (
-        triggerRef.current?.contains(target) ||
-        dropdownRef.current?.contains(target)
-      ) return;
+      if (containerRef.current?.contains(e.target as Node)) return;
       setOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, []);
+  }, [open]);
 
+  // Focus input when opening
   useEffect(() => {
     if (open) {
       setSearch('');
-      updatePos();
-      // Multiple focus attempts to fight Radix Dialog focus trap
-      const focusInput = () => inputRef.current?.focus();
-      setTimeout(focusInput, 0);
-      setTimeout(focusInput, 50);
-      setTimeout(focusInput, 150);
+      requestAnimationFrame(() => inputRef.current?.focus());
     }
-  }, [open, updatePos]);
+  }, [open]);
 
   const h = size === 'sm' ? 'h-7 text-[10px]' : 'h-9 text-xs';
 
   return (
-    <div className={cn('relative', className)}>
+    <div ref={containerRef} className={cn('relative', className)}>
       {/* Trigger */}
       <button
-        ref={triggerRef}
         type="button"
         onClick={() => setOpen(!open)}
         className={cn(
@@ -103,16 +87,11 @@ export default function SearchableSelect({
         )}
       </button>
 
-      {/* Dropdown via portal — avoids overflow:hidden clipping */}
-      {open && createPortal(
+      {/* Dropdown rendered inline (no portal) */}
+      {open && (
         <div
-          ref={dropdownRef}
-          data-searchable-select-portal
-          className="fixed bg-card border border-border rounded-lg shadow-xl overflow-hidden"
-          style={{ top: pos.top, left: pos.left, width: Math.max(pos.width, 220), zIndex: 9999 }}
-          onPointerDown={e => e.stopPropagation()}
-          onFocus={e => e.stopPropagation()}
-          onWheel={e => e.stopPropagation()}
+          className="absolute left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-xl overflow-hidden"
+          style={{ zIndex: 9999 }}
         >
           {/* Search input */}
           <div className="p-1.5 border-b border-border">
@@ -124,6 +103,9 @@ export default function SearchableSelect({
                 onChange={e => setSearch(e.target.value)}
                 placeholder={searchPlaceholder}
                 className={cn('w-full bg-secondary border border-border rounded-md pl-7 pr-2 outline-none focus:border-primary/50', h)}
+                onKeyDown={e => {
+                  if (e.key === 'Escape') setOpen(false);
+                }}
               />
             </div>
           </div>
@@ -152,8 +134,7 @@ export default function SearchableSelect({
               </button>
             ))}
           </div>
-        </div>,
-        document.body
+        </div>
       )}
     </div>
   );

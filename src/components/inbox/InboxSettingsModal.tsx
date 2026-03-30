@@ -558,21 +558,7 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent
-        className="bg-card border-border max-w-3xl max-h-[88vh] flex flex-col p-0 gap-0"
-        onPointerDownOutside={e => {
-          const target = e.target as HTMLElement;
-          if (target.closest('[data-searchable-select-portal]')) e.preventDefault();
-        }}
-        onFocusOutside={e => {
-          const target = e.target as HTMLElement;
-          if (target.closest('[data-searchable-select-portal]')) e.preventDefault();
-        }}
-        onInteractOutside={e => {
-          const target = e.target as HTMLElement;
-          if (target.closest('[data-searchable-select-portal]')) e.preventDefault();
-        }}
-      >
+      <DialogContent className="bg-card border-border max-w-3xl max-h-[88vh] flex flex-col p-0 gap-0">
         <DialogHeader className="px-5 pt-5 pb-3 border-b border-border flex-shrink-0">
           <DialogTitle className="text-sm font-semibold flex items-center gap-2">
             <Settings className="w-4 h-4 text-primary" />
@@ -969,7 +955,7 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
               </div>
 
               {/* Add user */}
-              <div className="space-y-2">
+              <div className="space-y-2 pb-60">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Adicionar usuário</p>
                 <SearchableSelect
                   value=""
