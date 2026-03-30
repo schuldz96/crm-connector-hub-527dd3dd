@@ -90,7 +90,105 @@ function MsgStatusIcon({ status }: { status: string }) {
   return <Clock className="w-2.5 h-2.5 opacity-40" />;
 }
 
-/* ── New conversation dialog (with template + params) ─── */
+/* ── Inline Media (image/video) with lazy URL fetching from media_id ── */
+function InlineMedia({ type, mediaUrl, mediaId, account, caption }: {
+  type: 'image' | 'video';
+  mediaUrl: string | null;
+  mediaId: string | null;
+  account: MetaInboxAccount | null;
+  caption?: string | null;
+}) {
+  const [src, setSrc] = useState<string | null>(mediaUrl || null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (src || !mediaId || !account?.access_token) return;
+    let cancelled = false;
+    setLoading(true);
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://lwusznsduxcqjjmbbobt.supabase.co';
+    const proxyUrl = `${supabaseUrl}/functions/v1/meta-download-media?media_id=${mediaId}&access_token=${encodeURIComponent(account.access_token)}`;
+    fetch(proxyUrl)
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.blob();
+      })
+      .then(blob => {
+        if (!cancelled) setSrc(URL.createObjectURL(blob));
+      })
+      .catch(() => { if (!cancelled) setError(true); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [src, mediaId, account?.access_token]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-40 bg-muted/30">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error || !src) {
+    return (
+      <div className="flex items-center justify-center h-20 bg-muted/30 text-muted-foreground text-xs">
+        {type === 'image' ? '[Imagem não disponível]' : '[Vídeo não disponível]'}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {type === 'image'
+        ? <img src={src} alt="imagem" className="max-w-full max-h-60 object-contain cursor-pointer" onClick={() => window.open(src, '_blank')} />
+        : <video src={src} controls className="max-w-full max-h-60" />
+      }
+    </div>
+  );
+}
+
+/* ── Inline Document with download via proxy ────────── */
+function InlineDocument({ mediaUrl, mediaId, filename, account }: {
+  mediaUrl: string | null;
+  mediaId: string | null;
+  filename: string | null;
+  account: MetaInboxAccount | null;
+}) {
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    const url = mediaUrl;
+    if (url) { window.open(url, '_blank'); return; }
+    if (!mediaId || !account?.access_token) return;
+
+    setDownloading(true);
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://lwusznsduxcqjjmbbobt.supabase.co';
+      const proxyUrl = `${supabaseUrl}/functions/v1/meta-download-media?media_id=${mediaId}&access_token=${encodeURIComponent(account.access_token)}`;
+      const res = await fetch(proxyUrl);
+      if (!res.ok) throw new Error('Download failed');
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename || 'document';
+      a.click();
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error('[InlineDocument] Download failed:', err);
+    }
+    setDownloading(false);
+  };
+
+  return (
+    <button onClick={handleDownload} className="px-3.5 py-2 flex items-center gap-2 w-full hover:bg-muted/30 transition-colors">
+      {downloading ? <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" /> : <FileText className="w-4 h-4 flex-shrink-0 opacity-70" />}
+      <span className="text-xs truncate underline">{filename || 'Documento'}</span>
+      <Download className="w-3 h-3 flex-shrink-0 opacity-50" />
+    </button>
+  );
+}
+
 /* ── Audio Player with lazy URL fetching ────────────── */
 function AudioPlayer({ mediaUrl, mediaId, fromMe, account }: {
   mediaUrl: string | null;
@@ -1014,13 +1112,17 @@ export default function InboxPage() {
                       ? 'bg-primary text-primary-foreground rounded-br-sm'
                       : 'bg-card text-foreground border border-border rounded-bl-sm'
                   )}>
-                    {/* Media (image/video) */}
-                    {(msg.msg_type === 'image' || msg.msg_type === 'video') && msg.media_url && (
-                      msg.msg_type === 'image'
-                        ? <img src={msg.media_url} alt="imagem" className="max-w-full max-h-60 object-contain" />
-                        : <video src={msg.media_url} controls className="max-w-full max-h-60" />
+                    {/* Media: image, video, sticker — resolve via media_url or media_id proxy */}
+                    {(msg.msg_type === 'image' || msg.msg_type === 'video' || msg.msg_type === 'sticker') && (msg.media_url || msg.media_id) && (
+                      <InlineMedia
+                        type={msg.msg_type === 'video' ? 'video' : 'image'}
+                        mediaUrl={msg.media_url}
+                        mediaId={msg.media_id}
+                        account={selectedAccount}
+                        caption={msg.caption}
+                      />
                     )}
-                    {/* Audio — WhatsApp style */}
+                    {/* Audio — WhatsApp style player */}
                     {(msg.msg_type === 'audio' || msg.msg_type === 'ptt') && (
                       <div className="px-3 py-2">
                         <AudioPlayer
@@ -1031,16 +1133,28 @@ export default function InboxPage() {
                         />
                       </div>
                     )}
-                    {/* Document */}
-                    {msg.msg_type === 'document' && (
+                    {/* Document — download link via proxy */}
+                    {msg.msg_type === 'document' && (msg.media_url || msg.media_id) && (
+                      <InlineDocument
+                        mediaUrl={msg.media_url}
+                        mediaId={msg.media_id}
+                        filename={msg.media_filename}
+                        account={selectedAccount}
+                      />
+                    )}
+                    {msg.msg_type === 'document' && !msg.media_url && !msg.media_id && (
                       <div className="px-3.5 py-2 flex items-center gap-2">
                         <FileText className="w-4 h-4 flex-shrink-0 opacity-70" />
                         <span className="text-xs truncate">{msg.media_filename || msg.body}</span>
                       </div>
                     )}
-                    {/* Body text (hide for audio/media-only) */}
-                    {msg.body && msg.msg_type !== 'document' && msg.msg_type !== 'audio' && msg.msg_type !== 'ptt' && !(msg.body === '[Áudio]') && (
+                    {/* Body text (hide for pure media messages) */}
+                    {msg.body && !['document', 'audio', 'ptt', 'sticker'].includes(msg.msg_type) && !msg.body.startsWith('[Imagem]') && !msg.body.startsWith('[Vídeo]') && !msg.body.startsWith('[Áudio]') && !msg.body.startsWith('[Sticker]') && (
                       <p className="px-3.5 py-2 leading-relaxed whitespace-pre-wrap">{msg.body}</p>
+                    )}
+                    {/* Caption for media messages */}
+                    {msg.caption && (msg.msg_type === 'image' || msg.msg_type === 'video' || msg.msg_type === 'document') && (
+                      <p className="px-3.5 py-1.5 text-xs opacity-80 whitespace-pre-wrap">{msg.caption}</p>
                     )}
                     {/* Template buttons */}
                     {msg.msg_type === 'template' && tplComps.length > 0 && (() => {
