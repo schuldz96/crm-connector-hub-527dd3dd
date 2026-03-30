@@ -26,6 +26,10 @@ import TrainingPage from "@/pages/TrainingPage";
 import AIConfigPage from "@/pages/AIConfigPage";
 import PerformancePage from "@/pages/PerformancePage";
 import MyProfilePage from "@/pages/MyProfilePage";
+import CRMContactsPage from "@/pages/crm/CRMContactsPage";
+import CRMDealsPage from "@/pages/crm/CRMDealsPage";
+import CRMTicketsPage from "@/pages/crm/CRMTicketsPage";
+import CRMCompaniesPage from "@/pages/crm/CRMCompaniesPage";
 import NotFound from "@/pages/NotFound";
 
 import { CONFIG } from '@/lib/config';
