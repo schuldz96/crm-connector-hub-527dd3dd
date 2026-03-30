@@ -461,9 +461,12 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
         .eq('name', tmpl.name)
         .maybeSingle();
 
-      const baseName = tmpl.name.replace(/_v\d+(_\d+)?$/, ''); // strip _v2, _v3_timestamp etc
+      const baseName = tmpl.name.replace(/_[a-z0-9]{6}$/, '').replace(/_v\d+(_\d+)?$/, '');
       const displayName = existing?.display_name || baseName;
-      const startVersion = (existing?.version || 1) + 1;
+      const nextVersion = (existing?.version || 1) + 1;
+      // Random 6-char suffix (a-z0-9) — never collides, avoids Meta's 4-week quarantine
+      const rnd = Array.from({ length: 6 }, () => 'abcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 36)]).join('');
+      const newMetaName = `${baseName}_${rnd}`;
 
       // Build components — normalize to what Meta accepts on creation
       const components: any[] = [];
@@ -494,50 +497,25 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
         throw new Error('Template sem corpo (BODY) — não é possível recriar.');
       }
 
-      // Try v2, v3, v4... up to 10 attempts (Meta quarantines deleted names for 4 weeks)
-      let newMetaName = '';
-      let newTemplateId = '';
-      let successVersion = startVersion;
-      const MAX_ATTEMPTS = 10;
+      // Single call — random suffix guarantees unique name, no quarantine issues
+      const payload = { name: newMetaName, category: tmpl.category, language: tmpl.language, components };
+      const res = await fetch(`https://graph.facebook.com/v21.0/${selectedAccount.waba_id}/message_templates`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${selectedAccount.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
 
-      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-        const ver = startVersion + attempt;
-        newMetaName = `${baseName}_v${ver}`;
-
-        const payload = { name: newMetaName, category: tmpl.category, language: tmpl.language, components };
-        const res = await fetch(`https://graph.facebook.com/v21.0/${selectedAccount.waba_id}/message_templates`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${selectedAccount.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          newTemplateId = data.id;
-          successVersion = ver;
-          break;
-        }
-
+      if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        const subcode = err?.error?.error_subcode;
-
-        // 2388023 = name quarantined (being deleted), try next version
-        if (subcode === 2388023) {
-          console.warn(`[recreateTemplate] ${newMetaName} em quarentena, tentando v${ver + 1}...`);
-          continue;
-        }
-
-        // Any other error — throw with detailed message
         const detail = err?.error?.error_user_msg || err?.error?.message || `HTTP ${res.status}`;
         throw new Error(detail);
       }
 
-      if (!newTemplateId) {
-        throw new Error(`Não foi possível criar após ${MAX_ATTEMPTS} tentativas. Todos os nomes (v${startVersion}-v${startVersion + MAX_ATTEMPTS - 1}) estão em quarentena na Meta.`);
-      }
+      const data = await res.json();
+      const newTemplateId = data.id;
 
       // Mark old version as inactive in local DB
       await (supabase as any)
@@ -555,7 +533,7 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
           meta_template_id: newTemplateId,
           name: newMetaName,
           display_name: displayName,
-          version: successVersion,
+          version: nextVersion,
           is_active: true,
           status: 'PENDING',
           category: tmpl.category,
@@ -564,7 +542,7 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
           synced_at: new Date().toISOString(),
         }, { onConflict: 'account_id,meta_template_id' });
 
-      toast({ title: 'Template recriado!', description: `${displayName} v${successVersion} (${newMetaName}) enviado para aprovação.` });
+      toast({ title: 'Template recriado!', description: `${displayName} v${nextVersion} (${newMetaName}) enviado para aprovação.` });
       await fetchTemplates(selectedAccount);
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Erro ao recriar template', description: e.message });
