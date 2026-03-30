@@ -461,35 +461,26 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
         .eq('name', tmpl.name)
         .maybeSingle();
 
-      const baseName = tmpl.name.replace(/_v\d+$/, ''); // strip _v2, _v3 etc
+      const baseName = tmpl.name.replace(/_v\d+(_\d+)?$/, ''); // strip _v2, _v3_timestamp etc
       const displayName = existing?.display_name || baseName;
-      const nextVersion = (existing?.version || 1) + 1;
-      // Use timestamp suffix to avoid Meta's 4-week name quarantine on deleted templates
-      const ts = Math.floor(Date.now() / 1000);
-      const newMetaName = `${baseName}_v${nextVersion}_${ts}`;
+      const startVersion = (existing?.version || 1) + 1;
 
       // Build components — normalize to what Meta accepts on creation
       const components: any[] = [];
       for (const c of tmpl.components) {
         if (c.type === 'HEADER') {
-          // HEADER: only TEXT format can be recreated (IMAGE/VIDEO/DOCUMENT need media upload)
           if (c.format === 'TEXT' && c.text) {
             components.push({ type: 'HEADER', format: 'TEXT', text: c.text });
           }
-          // Skip media headers — they require re-upload which isn't supported here
         } else if (c.type === 'BODY') {
-          // BODY: type + text + example (required when body has {{N}} variables)
           if (c.text) {
             const body: any = { type: 'BODY', text: c.text };
             if (c.example) body.example = c.example;
             components.push(body);
           }
         } else if (c.type === 'FOOTER') {
-          if (c.text) {
-            components.push({ type: 'FOOTER', text: c.text });
-          }
+          if (c.text) components.push({ type: 'FOOTER', text: c.text });
         } else if (c.type === 'BUTTONS' && c.buttons?.length) {
-          // Buttons: only send allowed fields per button type
           const cleanButtons = c.buttons.map((btn: any) => {
             if (btn.type === 'QUICK_REPLY') return { type: 'QUICK_REPLY', text: btn.text };
             if (btn.type === 'URL') return { type: 'URL', text: btn.text, url: btn.url, ...(btn.example ? { example: btn.example } : {}) };
@@ -499,38 +490,54 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
           components.push({ type: 'BUTTONS', buttons: cleanButtons });
         }
       }
-      // Must have at least a BODY
       if (!components.some(c => c.type === 'BODY')) {
         throw new Error('Template sem corpo (BODY) — não é possível recriar.');
       }
 
-      // Create in Meta with new name
-      const payload = {
-        name: newMetaName,
-        category: tmpl.category,
-        language: tmpl.language,
-        components,
-      };
-      console.log('[recreateTemplate] Sending payload:', JSON.stringify(payload, null, 2));
+      // Try v2, v3, v4... up to 10 attempts (Meta quarantines deleted names for 4 weeks)
+      let newMetaName = '';
+      let newTemplateId = '';
+      let successVersion = startVersion;
+      const MAX_ATTEMPTS = 10;
 
-      const res = await fetch(`https://graph.facebook.com/v21.0/${selectedAccount.waba_id}/message_templates`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${selectedAccount.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        const ver = startVersion + attempt;
+        newMetaName = `${baseName}_v${ver}`;
 
-      if (!res.ok) {
+        const payload = { name: newMetaName, category: tmpl.category, language: tmpl.language, components };
+        const res = await fetch(`https://graph.facebook.com/v21.0/${selectedAccount.waba_id}/message_templates`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${selectedAccount.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          newTemplateId = data.id;
+          successVersion = ver;
+          break;
+        }
+
         const err = await res.json().catch(() => ({}));
-        console.error('[recreateTemplate] Meta API error:', JSON.stringify(err, null, 2));
-        const detail = err?.error?.error_user_msg || err?.error?.error_data?.details || err?.error?.message || `HTTP ${res.status}`;
+        const subcode = err?.error?.error_subcode;
+
+        // 2388023 = name quarantined (being deleted), try next version
+        if (subcode === 2388023) {
+          console.warn(`[recreateTemplate] ${newMetaName} em quarentena, tentando v${ver + 1}...`);
+          continue;
+        }
+
+        // Any other error — throw with detailed message
+        const detail = err?.error?.error_user_msg || err?.error?.message || `HTTP ${res.status}`;
         throw new Error(detail);
       }
 
-      const data = await res.json();
-      const newTemplateId = data.id;
+      if (!newTemplateId) {
+        throw new Error(`Não foi possível criar após ${MAX_ATTEMPTS} tentativas. Todos os nomes (v${startVersion}-v${startVersion + MAX_ATTEMPTS - 1}) estão em quarentena na Meta.`);
+      }
 
       // Mark old version as inactive in local DB
       await (supabase as any)
@@ -548,7 +555,7 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
           meta_template_id: newTemplateId,
           name: newMetaName,
           display_name: displayName,
-          version: nextVersion,
+          version: successVersion,
           is_active: true,
           status: 'PENDING',
           category: tmpl.category,
@@ -557,7 +564,7 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
           synced_at: new Date().toISOString(),
         }, { onConflict: 'account_id,meta_template_id' });
 
-      toast({ title: 'Template recriado!', description: `${displayName} v${nextVersion} (${newMetaName}) enviado para aprovação.` });
+      toast({ title: 'Template recriado!', description: `${displayName} v${successVersion} (${newMetaName}) enviado para aprovação.` });
       await fetchTemplates(selectedAccount);
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Erro ao recriar template', description: e.message });
