@@ -130,29 +130,27 @@ export default function CRMTicketsPage() {
           <Button variant="ghost" size="icon" className="h-8 w-8"><Settings2 className="w-3.5 h-3.5" /></Button>
           <div className="w-px h-5 bg-border mx-1" />
           {/* Pipeline selector */}
-          {pipelines.length > 0 && (
-            <DropdownMenu open={pipelineDropdown} onOpenChange={setPipelineDropdown}>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
-                  {pipeline?.nome || 'Pipeline'} <ChevronDown className="w-3 h-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
-                {pipelines.map(p => (
-                  <DropdownMenuItem key={p.id} onClick={() => { setActivePipelineId(p.id); setPipelineDropdown(false); }}
-                    className={cn(p.id === pipelineId && 'bg-muted font-medium')}>{p.nome}</DropdownMenuItem>
-                ))}
-                <div className="border-t border-border mt-1 pt-1 px-2 pb-1">
-                  <button
-                    onClick={() => navigate(`/crm/pipeline-settings?type=ticket&pipeline=${pipelineId}`)}
-                    className="text-xs text-primary hover:underline flex items-center gap-1"
-                  >
-                    Editar pipeline <ChevronRight className="w-3 h-3" />
-                  </button>
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          <DropdownMenu open={pipelineDropdown} onOpenChange={setPipelineDropdown}>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                {pipeline?.nome || 'Pipeline'} <ChevronDown className="w-3 h-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              {pipelines.map(p => (
+                <DropdownMenuItem key={p.id} onClick={() => { setActivePipelineId(p.id); setPipelineDropdown(false); }}
+                  className={cn(p.id === pipelineId && 'bg-muted font-medium')}>{p.nome}</DropdownMenuItem>
+              ))}
+              <div className="border-t border-border mt-1 pt-1 px-2 pb-1">
+                <button
+                  onClick={() => navigate(`/crm/pipeline-settings?type=ticket&pipeline=${pipelineId}`)}
+                  className="text-xs text-primary hover:underline flex items-center gap-1"
+                >
+                  Editar pipeline <ChevronRight className="w-3 h-3" />
+                </button>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <div className="w-px h-5 bg-border mx-1" />
           <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs font-medium"><Filter className="w-3.5 h-3.5" /> Filtros</Button>
           <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs"><ArrowUpDown className="w-3.5 h-3.5" /> Classificar</Button>
