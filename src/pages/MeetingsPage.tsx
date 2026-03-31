@@ -6,7 +6,7 @@ import {
   User, Building2, ExternalLink, Sparkles, X,
   TrendingUp, TrendingDown, Lightbulb, AlertTriangle,
   CheckCircle2, Target, MessageSquare, RefreshCw, Loader2, Users, Key, Heart, Trash2,
-  Plus, Upload, FileText, ClipboardCheck,
+  Plus, Upload, FileText, ClipboardCheck, Pencil,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
@@ -352,7 +352,48 @@ export default function MeetingsPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [showManualMeeting, setShowManualMeeting] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<DbMeeting | null>(null);
-  const [detailTab, setDetailTab] = useState<'info' | 'transcript' | 'participants'>('info');
+  const [detailTab, setDetailTab] = useState<'info' | 'transcript' | 'participants' | 'comments'>('info');
+  const [comments, setComments] = useState<any[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editCommentText, setEditCommentText] = useState('');
+  const [loadingComments, setLoadingComments] = useState(false);
+
+  const saas = () => (supabase as any).schema('saas');
+
+  const loadComments = async (meetingId: string) => {
+    setLoadingComments(true);
+    try {
+      const { data } = await saas().from('comentarios_reuniao').select('*').eq('reuniao_id', meetingId).order('criado_em', { ascending: false });
+      setComments(data || []);
+    } catch { setComments([]); }
+    finally { setLoadingComments(false); }
+  };
+
+  const addComment = async () => {
+    if (!newComment.trim() || !selectedMeeting) return;
+    try {
+      const empresaId = await getSaasEmpresaId();
+      await saas().from('comentarios_reuniao').insert({
+        empresa_id: empresaId, reuniao_id: selectedMeeting.id,
+        autor_nome: user?.name || 'Anônimo', conteudo: newComment.trim(),
+      });
+      setNewComment('');
+      loadComments(selectedMeeting.id);
+    } catch { /* ignore */ }
+  };
+
+  const deleteComment = async (id: string) => {
+    await saas().from('comentarios_reuniao').delete().eq('id', id);
+    if (selectedMeeting) loadComments(selectedMeeting.id);
+  };
+
+  const saveEditComment = async (id: string) => {
+    if (!editCommentText.trim()) return;
+    await saas().from('comentarios_reuniao').update({ conteudo: editCommentText.trim(), atualizado_em: new Date().toISOString() }).eq('id', id);
+    setEditingCommentId(null);
+    if (selectedMeeting) loadComments(selectedMeeting.id);
+  };
   const [allEvals, setAllEvals] = useState<(StoredEvaluation & { payload?: any })[]>([]);
   const [selectedEvalIdx, setSelectedEvalIdx] = useState(0);
   const meetingEval = allEvals[selectedEvalIdx] || null;
@@ -945,6 +986,7 @@ export default function MeetingsPage() {
                   { key: 'info', label: 'Detalhes', icon: Target },
                   { key: 'transcript', label: 'Transcrição', icon: MessageSquare },
                   { key: 'participants', label: 'Participantes', icon: Users },
+                  { key: 'comments', label: 'Comentários', icon: MessageSquare },
                 ].map(tab => (
                   <button
                     key={tab.key}
@@ -1386,6 +1428,76 @@ export default function MeetingsPage() {
                         <p className="text-[10px] text-muted-foreground text-center pt-2">
                           Avalie com IA para ver a % de participação de cada pessoa.
                         </p>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Comments tab */}
+                {detailTab === 'comments' && (() => {
+                  // Load comments when tab opens
+                  if (comments.length === 0 && !loadingComments && selectedMeeting) {
+                    loadComments(selectedMeeting.id);
+                  }
+                  return (
+                    <div className="space-y-3">
+                      {/* Add comment */}
+                      <div className="flex gap-2">
+                        <input
+                          value={newComment}
+                          onChange={e => setNewComment(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && addComment()}
+                          placeholder="Adicionar comentário..."
+                          className="flex-1 h-9 px-3 text-xs border border-border rounded-lg bg-background focus:outline-none focus:border-primary/50"
+                        />
+                        <button onClick={addComment} disabled={!newComment.trim()} className="px-3 h-9 text-xs font-medium bg-primary text-primary-foreground rounded-lg disabled:opacity-50">
+                          Enviar
+                        </button>
+                      </div>
+
+                      {loadingComments ? (
+                        <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>
+                      ) : comments.length === 0 ? (
+                        <div className="text-center py-6 text-muted-foreground">
+                          <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                          <p className="text-xs">Nenhum comentário</p>
+                        </div>
+                      ) : (
+                        comments.map(c => (
+                          <div key={c.id} className="p-3 rounded-lg border border-border bg-muted/20 space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary">
+                                  {(c.autor_nome || '?')[0].toUpperCase()}
+                                </div>
+                                <span className="text-xs font-medium">{c.autor_nome}</span>
+                                <span className="text-[10px] text-muted-foreground">
+                                  {new Date(c.criado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                  {c.atualizado_em !== c.criado_em && ' (editado)'}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <button onClick={() => { setEditingCommentId(c.id); setEditCommentText(c.conteudo); }} className="text-muted-foreground hover:text-foreground">
+                                  <Pencil className="w-3 h-3" />
+                                </button>
+                                <button onClick={() => deleteComment(c.id)} className="text-muted-foreground hover:text-destructive">
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+                            {editingCommentId === c.id ? (
+                              <div className="flex gap-2">
+                                <input value={editCommentText} onChange={e => setEditCommentText(e.target.value)}
+                                  onKeyDown={e => e.key === 'Enter' && saveEditComment(c.id)}
+                                  className="flex-1 h-8 px-2 text-xs border border-border rounded bg-background" autoFocus />
+                                <button onClick={() => saveEditComment(c.id)} className="text-xs text-primary hover:underline">Salvar</button>
+                                <button onClick={() => setEditingCommentId(null)} className="text-xs text-muted-foreground">Cancelar</button>
+                              </div>
+                            ) : (
+                              <p className="text-xs text-foreground whitespace-pre-wrap">{c.conteudo}</p>
+                            )}
+                          </div>
+                        ))
                       )}
                     </div>
                   );
