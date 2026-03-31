@@ -669,23 +669,32 @@ export default function PerformancePage() {
                   <AlertCircle className="w-3.5 h-3.5 text-destructive" /> Alertas de Desvio
                 </p>
                 {(() => {
-                  const alerts: string[] = [];
-                  for (const c of meetCriteria) {
-                    if (c.score < 50) alerts.push(`${c.label}: score ${c.score} (crítico)`);
+                  // Extract per-meeting deviations from individual eval feedbacks
+                  const deviations: { date: string; title: string; issue: string; score: number; evalObj: StoredEvaluation }[] = [];
+                  for (const ev of meetEvals) {
+                    const date = new Date(ev.criado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                    const title = (ev.payload as any)?.titulo || (ev as any).resumo?.slice(0, 30) || 'Reunião';
+                    // Check critical alerts from AI
+                    const critAlerts = (ev.payload as any)?.criticalAlerts || [];
+                    for (const alert of critAlerts) {
+                      deviations.push({ date, title, issue: alert, score: ev.score || 0, evalObj: ev });
+                    }
+                    // Check criteria with score < 30 (severe deviation)
+                    for (const c of ((ev.criterios || []) as any[])) {
+                      if (c.score < 30 && c.feedback) {
+                        deviations.push({ date, title, issue: `${c.label} (${c.score}): ${c.feedback}`, score: c.score, evalObj: ev });
+                      }
+                    }
                   }
-                  for (const c of waCriteria) {
-                    if (c.score < 50) alerts.push(`WhatsApp ${c.label}: score ${c.score}`);
-                  }
-                  if (avgMeetingScore !== null && avgMeetingScore < 50) alerts.push('Score médio de reuniões abaixo de 50');
-                  if (avgWaScore !== null && avgWaScore < 50) alerts.push('Score médio WhatsApp abaixo de 50');
-                  if (alerts.length === 0) return <p className="text-xs text-success flex items-center gap-1"><Shield className="w-3 h-3" /> Nenhum desvio detectado</p>;
+                  if (deviations.length === 0) return <p className="text-xs text-success flex items-center gap-1"><Shield className="w-3 h-3" /> Nenhum desvio detectado</p>;
                   return (
-                    <div className="space-y-1.5">
-                      {alerts.map((a, i) => (
-                        <div key={i} className="flex items-start gap-1.5 text-xs text-destructive">
+                    <div className="max-h-[140px] overflow-y-auto space-y-1.5 pr-1">
+                      {deviations.slice(0, 20).map((d, i) => (
+                        <button key={i} onClick={() => openEvalDetail(d.evalObj)}
+                          className="flex items-start gap-1.5 text-[10px] text-destructive hover:bg-destructive/5 rounded p-0.5 -m-0.5 w-full text-left transition-colors">
                           <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                          <span>{a}</span>
-                        </div>
+                          <span><strong>{d.date}</strong> {d.issue}</span>
+                        </button>
                       ))}
                     </div>
                   );
