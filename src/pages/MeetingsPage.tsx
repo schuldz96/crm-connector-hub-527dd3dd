@@ -350,6 +350,10 @@ export default function MeetingsPage() {
   const [search, setSearch] = useState('');
   const [transcFilter, setTranscFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [ownerFilter, setOwnerFilter] = useState('all');
+  const [scoreFilter, setScoreFilter] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [showManualMeeting, setShowManualMeeting] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<DbMeeting | null>(null);
   const [detailTab, setDetailTab] = useState<'info' | 'transcript' | 'participants' | 'comments'>('info');
@@ -629,7 +633,15 @@ export default function MeetingsPage() {
     const matchStatus = statusFilter === 'all'
       || (statusFilter === 'sem' && (!m.status || m.status === 'agendada'))
       || m.status === statusFilter;
-    return matchSearch && matchTransc && matchStatus;
+    const matchOwner = ownerFilter === 'all' || m.vendedor_id === ownerFilter;
+    const matchScore = scoreFilter === 'all'
+      || (scoreFilter === 'high' && (m.score || 0) >= 70)
+      || (scoreFilter === 'mid' && (m.score || 0) >= 50 && (m.score || 0) < 70)
+      || (scoreFilter === 'low' && (m.score || 0) > 0 && (m.score || 0) < 50)
+      || (scoreFilter === 'none' && (!m.score || m.score === 0));
+    const mDate = m.data_reuniao?.split('T')[0] || '';
+    const matchDate = (!dateFrom || mDate >= dateFrom) && (!dateTo || mDate <= dateTo);
+    return matchSearch && matchTransc && matchStatus && matchOwner && matchScore && matchDate;
   });
 
   // Pagination
@@ -756,6 +768,30 @@ export default function MeetingsPage() {
                 </button>
               ))}
             </div>
+            {/* Owner filter */}
+            <select value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}
+              className="h-8 px-2 text-xs border border-border rounded-lg bg-secondary text-foreground">
+              <option value="all">Todos owners</option>
+              {[...new Map(visibleMeetings.map(m => [m.vendedor_id, m.vendedor_nome])).entries()]
+                .filter(([id]) => id)
+                .sort(([,a],[,b]) => (a || '').localeCompare(b || ''))
+                .map(([id, name]) => <option key={id} value={id!}>{name || 'Sem nome'}</option>)}
+            </select>
+            {/* Score filter */}
+            <select value={scoreFilter} onChange={e => setScoreFilter(e.target.value)}
+              className="h-8 px-2 text-xs border border-border rounded-lg bg-secondary text-foreground">
+              <option value="all">Todos scores</option>
+              <option value="high">70+ (Bom)</option>
+              <option value="mid">50-69 (Regular)</option>
+              <option value="low">1-49 (Crítico)</option>
+              <option value="none">Sem score</option>
+            </select>
+            {/* Date range */}
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+              className="h-8 px-2 text-xs border border-border rounded-lg bg-secondary text-foreground" />
+            <span className="text-xs text-muted-foreground">a</span>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+              className="h-8 px-2 text-xs border border-border rounded-lg bg-secondary text-foreground" />
           </div>
 
           {loading ? (
