@@ -298,23 +298,30 @@ export default function PerformancePage() {
     // Radar data from meeting criteria
     const radarData = meetCriteria.length ? meetCriteria.slice(0, 8).map(c => ({ subject: c.label.length > 12 ? c.label.slice(0, 12) + '…' : c.label, A: c.score })) : null;
 
-    // Score trend for meetings (averaged by day)
-    const trendByDay: Record<string, { total: number; count: number; ts: number }> = {};
+    // Score trend for meetings — fill all 30 days, carry forward last score
+    const trendByDay: Record<string, { total: number; count: number }> = {};
     for (const e of meetEvals.filter(ev => ev.criado_em)) {
-      const d = new Date(e.criado_em);
-      const dayKey = d.toISOString().split('T')[0]; // YYYY-MM-DD for sorting
-      const dayLabel = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-      if (!trendByDay[dayKey]) trendByDay[dayKey] = { total: 0, count: 0, ts: new Date(dayKey).getTime() };
+      const dayKey = new Date(e.criado_em).toISOString().split('T')[0];
+      if (!trendByDay[dayKey]) trendByDay[dayKey] = { total: 0, count: 0 };
       trendByDay[dayKey].total += (e.score || 0);
       trendByDay[dayKey].count++;
     }
-    const trend = Object.entries(trendByDay)
-      .sort(([, a], [, b]) => a.ts - b.ts) // oldest first
-      .map(([key, v]) => ({
-        date: new Date(key).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-        score: Math.round(v.total / v.count),
-        reunioes: v.count,
-      }));
+    // Generate all days in last 30 days
+    const trend: { date: string; score: number; reunioes: number }[] = [];
+    const today = new Date();
+    let lastScore = avgMeetingScore || 0;
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().split('T')[0];
+      const label = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      if (trendByDay[key]) {
+        lastScore = Math.round(trendByDay[key].total / trendByDay[key].count);
+        trend.push({ date: label, score: lastScore, reunioes: trendByDay[key].count });
+      } else {
+        trend.push({ date: label, score: lastScore, reunioes: 0 });
+      }
+    }
 
     return { u, avgMeetingScore, avgWaScore, overallScore, meetCriteria, meetCriteriaByAgent, waCriteria, trend, radarData, meetEvals, waEvals };
   };
