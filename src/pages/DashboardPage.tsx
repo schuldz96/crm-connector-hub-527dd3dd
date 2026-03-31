@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { loadMeetingsFromDb, type DbMeeting } from '@/lib/meetingsService';
+import { cn } from '@/lib/utils';
 import { loadUsersForPerformance, loadTeamsForPerformance } from '@/lib/evaluationService';
 import { useEvolutionInstances } from '@/hooks/useEvolutionInstances';
 import {
@@ -157,9 +158,10 @@ export default function DashboardPage() {
       }
       bySeller.set(key, cur);
     }
-    return Array.from(bySeller.values())
-      .filter(s => s.name !== 'Sem vendedor')
-      .map(s => ({
+    return Array.from(bySeller.entries())
+      .filter(([, s]) => s.name !== 'Sem vendedor')
+      .map(([id, s]) => ({
+        id,
         name: s.name,
         meetings: s.meetings,
         score: s.scoreCount ? Math.round(s.scoreSum / s.scoreCount) : 0,
@@ -360,7 +362,8 @@ export default function DashboardPage() {
           </div>
           <div className="space-y-1 max-h-[300px] overflow-y-auto pr-1">
             {topSellers.map((seller, i) => (
-              <div key={seller.name} className="flex items-center gap-2 py-1">
+              <div key={seller.id} onClick={() => { if (canFilter) setFilterSeller(seller.id); }}
+                className={cn('flex items-center gap-2 py-1 rounded-md px-1 -mx-1 transition-colors', canFilter && 'cursor-pointer hover:bg-muted/50', filterSeller === seller.id && 'bg-primary/10')}>
                 <span className={`text-xs font-bold w-4 text-center flex-shrink-0 ${i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-amber-600' : 'text-muted-foreground'}`}>
                   {i + 1}
                 </span>
