@@ -247,7 +247,15 @@ export default function CRMDealsPage() {
           </button>
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="w-4 h-4" /></Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="w-4 h-4" /></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => navigate('/crm/0-5?object=deal')}>Editar propriedades</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/crm/restore?type=0-3')}>Restaurar registros</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button size="sm" className="gap-1.5 h-8" onClick={() => setShowCreateModal(true)}>
             Adicionar negócios <ChevronRight className="w-3 h-3" />
           </Button>

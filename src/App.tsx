@@ -34,6 +34,7 @@ import CRMCompaniesPage from "@/pages/crm/CRMCompaniesPage";
 import CRMPipelineSettingsPage from "@/pages/crm/CRMPipelineSettingsPage";
 import CRMPropertiesPage from "@/pages/crm/CRMPropertiesPage";
 import CRMRecordPage from "@/pages/crm/CRMRecordPage";
+import CRMRestorePage from "@/pages/crm/CRMRestorePage";
 import NotFound from "@/pages/NotFound";
 
 import { CONFIG } from '@/lib/config';
@@ -105,6 +106,7 @@ function ProtectedRoutes() {
         <Route path="/crm/0-4"                 element={R(<CRMTicketsPage />,          { resource: 'crm' })} />
         <Route path="/crm/0-5"                 element={R(<CRMPropertiesPage />,       { resource: 'crm' })} />
         <Route path="/crm/0-6"                 element={R(<CRMPipelineSettingsPage />, { resource: 'crm' })} />
+        <Route path="/crm/restore"                element={R(<CRMRestorePage />,       { resource: 'crm' })} />
         <Route path="/crm/record/:typeId/:numero" element={R(<CRMRecordPage />,       { resource: 'crm' })} />
 
         {/* CRM — redirects legados para manter compatibilidade */}
