@@ -398,7 +398,8 @@ export default function PerformancePage() {
               options={visibleUsers.filter(u => u.role === 'member').sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map(u => {
                 const perf = buildUserPerf(u.id);
                 const score = perf?.overallScore;
-                return { value: u.id, label: score !== null && score !== undefined ? `${u.name} · ${score}` : u.name };
+                const dot = score != null ? (score >= 85 ? '🟢' : score >= 70 ? '🔵' : score >= 50 ? '🟡' : '🔴') : '';
+                return { value: u.id, label: score != null ? `${u.name}  ${dot} ${score}` : u.name };
               })}
               className="min-w-[240px]"
             />
