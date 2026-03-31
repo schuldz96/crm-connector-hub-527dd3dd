@@ -415,44 +415,55 @@ export default function CRMRecordPage() {
   return (
     <div className="flex h-full overflow-hidden bg-background">
       {/* ============ LEFT SIDEBAR ============ */}
-      <div className="w-[280px] flex-shrink-0 border-r border-border overflow-y-auto bg-card">
+      <div className="w-[320px] flex-shrink-0 border-r border-border overflow-y-auto bg-card">
         <div className="p-4 space-y-4">
-          {/* Back button */}
-          <button
-            onClick={handleBack}
-            className="flex items-center gap-1.5 text-sm text-primary hover:underline"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            {labels.back}
-          </button>
+          {/* Header: Back + Actions */}
+          <div className="flex items-center justify-between">
+            <button onClick={handleBack} className="flex items-center gap-1 text-sm text-primary hover:underline">
+              <ArrowLeft className="w-3.5 h-3.5" /> {labels.back}
+            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-7 text-xs gap-1">Ações <ChevronDown className="w-3 h-3" /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem><Star className="w-3.5 h-3.5 mr-2" /> Seguir</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate(`/crm/0-5?object=${objectType}`)}><Eye className="w-3.5 h-3.5 mr-2" /> Exibir todas as propriedades</DropdownMenuItem>
+                <DropdownMenuItem><History className="w-3.5 h-3.5 mr-2" /> Exibir histórico da propriedade</DropdownMenuItem>
+                <DropdownMenuItem><GitMerge className="w-3.5 h-3.5 mr-2" /> Revisar associações</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem><Sparkles className="w-3.5 h-3.5 mr-2" /> Resumir (AI)</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem><Copy className="w-3.5 h-3.5 mr-2" /> Clonar</DropdownMenuItem>
+                <DropdownMenuItem className="text-destructive"><Trash2 className="w-3.5 h-3.5 mr-2" /> Excluir</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
 
-          {/* Record name */}
-          <div className="flex items-center gap-2">
-            {isEditingName ? (
-              <div className="flex items-center gap-1 w-full">
-                <Input
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="h-8 text-lg font-semibold"
-                  autoFocus
-                  onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
-                />
-                <Button size="sm" variant="ghost" onClick={handleSaveName}>
-                  <CheckSquare className="w-4 h-4" />
-                </Button>
-              </div>
-            ) : (
-              <>
-                <h1 className="text-lg font-semibold text-foreground truncate">{recordName}</h1>
-                <button onClick={handleStartEditName} className="text-muted-foreground hover:text-foreground">
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-              </>
-            )}
+          {/* Record name + avatar */}
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold text-lg flex-shrink-0">
+              {recordName.charAt(0).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              {isEditingName ? (
+                <div className="flex items-center gap-1">
+                  <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-8 text-base font-semibold" autoFocus onKeyDown={(e) => e.key === 'Enter' && handleSaveName()} />
+                  <Button size="sm" variant="ghost" onClick={handleSaveName}><CheckSquare className="w-4 h-4" /></Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <h1 className="text-base font-semibold text-foreground truncate">{recordName}</h1>
+                  <button onClick={handleStartEditName} className="text-muted-foreground hover:text-foreground flex-shrink-0">
+                    <Pencil className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Key properties by type */}
-          <div className="space-y-2 text-sm">
+          <div className="space-y-1 text-sm">
             {objectType === 'deal' && (
               <>
                 <PropertyRow label="Valor" value={formatCurrency(rec.valor as number)} />
@@ -507,65 +518,68 @@ export default function CRMRecordPage() {
             )}
           </div>
 
-          {/* Activity buttons */}
-          <div className="pt-2 border-t border-border">
-            <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Atividades</p>
-            <div className="flex flex-wrap gap-1">
-              <ActivityButton icon={<StickyNote className="w-3.5 h-3.5" />} label="Observação" onClick={() => setActiveModal('nota')} />
-              <ActivityButton icon={<Mail className="w-3.5 h-3.5" />} label="E-mail" onClick={() => setActiveModal('email')} />
-              <ActivityButton icon={<Phone className="w-3.5 h-3.5" />} label="Chamada" onClick={() => setActiveModal('chamada')} />
-              <ActivityButton icon={<CheckSquare className="w-3.5 h-3.5" />} label="Tarefa" onClick={() => setActiveModal('tarefa')} />
-              <ActivityButton icon={<CalendarDays className="w-3.5 h-3.5" />} label="Reunião" onClick={() => setActiveModal('reuniao')} />
+          {/* Activity buttons — HubSpot style */}
+          <div className="pt-3 border-t border-border">
+            <div className="flex items-center justify-center gap-4">
+              {[
+                { icon: <StickyNote className="w-4 h-4" />, label: 'Observa...', type: 'nota' as const },
+                { icon: <Mail className="w-4 h-4" />, label: 'E-mail', type: 'email' as const },
+                { icon: <Phone className="w-4 h-4" />, label: 'Chamada', type: 'chamada' as const },
+                { icon: <CheckSquare className="w-4 h-4" />, label: 'Tarefa', type: 'tarefa' as const },
+                { icon: <CalendarDays className="w-4 h-4" />, label: 'Reunião', type: 'reuniao' as const },
+              ].map(a => (
+                <button key={a.type} onClick={() => setActiveModal(a.type)} className="flex flex-col items-center gap-1 group">
+                  <div className="w-9 h-9 rounded-full border border-border flex items-center justify-center text-muted-foreground group-hover:text-foreground group-hover:border-foreground transition-colors">
+                    {a.icon}
+                  </div>
+                  <span className="text-[10px] text-muted-foreground group-hover:text-foreground">{a.label}</span>
+                </button>
+              ))}
               <DropdownMenu open={showMoreActions} onOpenChange={setShowMoreActions}>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-8 px-2 text-xs">
-                    <MoreHorizontal className="w-3.5 h-3.5" />
-                  </Button>
+                  <button className="flex flex-col items-center gap-1 group">
+                    <div className="w-9 h-9 rounded-full border border-border flex items-center justify-center text-muted-foreground group-hover:text-foreground group-hover:border-foreground transition-colors">
+                      <MoreHorizontal className="w-4 h-4" />
+                    </div>
+                    <span className="text-[10px] text-muted-foreground group-hover:text-foreground">Mais</span>
+                  </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-64">
-                  <DropdownMenuItem>Inscrever em uma sequência</DropdownMenuItem>
-                  <DropdownMenuItem>Criar uma mensagem do WhatsApp</DropdownMenuItem>
+                <DropdownMenuContent align="end" className="w-64">
+                  <div className="px-2 py-1.5">
+                    <Input placeholder="Pesquisar" className="h-7 text-xs" />
+                  </div>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem>Registrar SMS</DropdownMenuItem>
-                  <DropdownMenuItem>Registrar correio postal</DropdownMenuItem>
-                  <DropdownMenuItem>Registrar um e-mail</DropdownMenuItem>
-                  <DropdownMenuItem>Registrar uma chamada</DropdownMenuItem>
-                  <DropdownMenuItem>Registrar uma mensagem do LinkedIn</DropdownMenuItem>
-                  <DropdownMenuItem>Registrar uma mensagem do WhatsApp</DropdownMenuItem>
-                  <DropdownMenuItem>Registrar uma reunião</DropdownMenuItem>
+                  <DropdownMenuItem><MessageSquare className="w-3.5 h-3.5 mr-2" /> Criar mensagem do WhatsApp</DropdownMenuItem>
+                  <DropdownMenuItem><Send className="w-3.5 h-3.5 mr-2" /> Registrar SMS</DropdownMenuItem>
+                  <DropdownMenuItem><Mail className="w-3.5 h-3.5 mr-2" /> Registrar um e-mail</DropdownMenuItem>
+                  <DropdownMenuItem><Phone className="w-3.5 h-3.5 mr-2" /> Registrar uma chamada</DropdownMenuItem>
+                  <DropdownMenuItem><Linkedin className="w-3.5 h-3.5 mr-2" /> Mensagem do LinkedIn</DropdownMenuItem>
+                  <DropdownMenuItem><CalendarDays className="w-3.5 h-3.5 mr-2" /> Registrar uma reunião</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
           </div>
 
           {/* About this object */}
-          <div className="pt-2 border-t border-border">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Sobre esse {labels.singular}
+          <div className="pt-3 border-t border-border">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                <ChevronDown className="w-3 h-3" /> Sobre esse {labels.singular}
               </p>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-6 px-2 text-xs">
-                    Ações <ChevronDown className="w-3 h-3 ml-1" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuItem><Star className="w-3.5 h-3.5 mr-2" /> Seguir</DropdownMenuItem>
-                  <DropdownMenuItem><Eye className="w-3.5 h-3.5 mr-2" /> Exibir todas as propriedades</DropdownMenuItem>
-                  <DropdownMenuItem><History className="w-3.5 h-3.5 mr-2" /> Exibir histórico da propriedade</DropdownMenuItem>
-                  <DropdownMenuItem><History className="w-3.5 h-3.5 mr-2" /> Ver histórico de associação</DropdownMenuItem>
-                  <DropdownMenuItem><GitMerge className="w-3.5 h-3.5 mr-2" /> Revisar associações</DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem><Sparkles className="w-3.5 h-3.5 mr-2" /> Resumir (AI)</DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem><RefreshCw className="w-3.5 h-3.5 mr-2" /> Restaurar atividade</DropdownMenuItem>
-                  <DropdownMenuItem><Shield className="w-3.5 h-3.5 mr-2" /> Ver acesso ao registro</DropdownMenuItem>
-                  <DropdownMenuItem><GitMerge className="w-3.5 h-3.5 mr-2" /> Mesclar</DropdownMenuItem>
-                  <DropdownMenuItem><Copy className="w-3.5 h-3.5 mr-2" /> Clonar</DropdownMenuItem>
-                  <DropdownMenuItem className="text-destructive"><Trash2 className="w-3.5 h-3.5 mr-2" /> Excluir</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <div className="flex items-center gap-1">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs">Ações <ChevronDown className="w-3 h-3 ml-0.5" /></Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuItem onClick={() => navigate(`/crm/0-5?object=${objectType}`)}>Exibir todas as propriedades</DropdownMenuItem>
+                    <DropdownMenuItem>Exibir histórico da propriedade</DropdownMenuItem>
+                    <DropdownMenuItem>Ver histórico de associação</DropdownMenuItem>
+                    <DropdownMenuItem>Revisar associações</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0"><Settings className="w-3 h-3 text-muted-foreground" /></Button>
+              </div>
             </div>
 
             {/* All properties (readonly) */}
@@ -997,6 +1011,7 @@ export default function CRMRecordPage() {
                 subtitle: c.email as string || c.cargo as string || '',
                 email: c.email as string,
                 assocId: assocMeta.contact.find(a => a.id === c.id)?.assocId || '',
+                href: `/crm/record/0-1/${c.numero_registro as string}`,
               }))}
               onCopy={handleCopyText}
               onRemove={handleRemoveAssociation}
@@ -1018,6 +1033,7 @@ export default function CRMRecordPage() {
                 subtitle: c.dominio as string || c.setor as string || '',
                 email: '',
                 assocId: assocMeta.company.find(a => a.id === c.id)?.assocId || '',
+                href: `/crm/record/0-2/${c.numero_registro as string}`,
               }))}
               onCopy={handleCopyText}
               onRemove={handleRemoveAssociation}
@@ -1039,6 +1055,7 @@ export default function CRMRecordPage() {
                 subtitle: t.status as string || '',
                 email: '',
                 assocId: assocMeta.ticket.find(a => a.id === t.id)?.assocId || '',
+                href: `/crm/record/0-4/${t.numero_registro as string}`,
               }))}
               onCopy={handleCopyText}
               onRemove={handleRemoveAssociation}
@@ -1060,6 +1077,7 @@ export default function CRMRecordPage() {
                 subtitle: formatCurrency(d.valor as number),
                 email: '',
                 assocId: assocMeta.deal.find(a => a.id === d.id)?.assocId || '',
+                href: `/crm/record/0-3/${d.numero_registro as string}`,
               }))}
               onCopy={handleCopyText}
               onRemove={handleRemoveAssociation}
@@ -1213,6 +1231,7 @@ interface AssociationItem {
   subtitle: string;
   email: string;
   assocId: string;
+  href?: string;
 }
 
 function AssociationSection({
@@ -1262,12 +1281,16 @@ function AssociationSection({
           ) : (
             <>
               {items.slice(0, 5).map(item => (
-                <div key={item.id} className="flex items-start gap-2 p-2 rounded-md bg-muted/30">
+                <div key={item.id} className="flex items-start gap-2 p-2 rounded-md bg-muted/30 hover:bg-muted/50 transition-colors">
                   <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-semibold shrink-0">
                     {item.name.charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
+                    {item.href ? (
+                      <a href={item.href} className="text-sm font-medium text-primary hover:underline truncate block">{item.name}</a>
+                    ) : (
+                      <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
+                    )}
                     {item.subtitle && (
                       <p className="text-xs text-muted-foreground truncate">{item.subtitle}</p>
                     )}
