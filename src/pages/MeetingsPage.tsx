@@ -19,7 +19,7 @@ import {
   loadMeetingsFromDb, clearAllMeetings, ensureAppmaxParticipantsRegistered, fetchTranscriptInfo, resolveMeetingTranscript,
   type DbMeeting, type TranscriptInfo
 } from '@/lib/meetingsService';
-import { loadAllEvaluationsForEntity, type StoredEvaluation } from '@/lib/evaluationService';
+import { loadAllEvaluationsForEntity, parseTranscriptParticipation, type StoredEvaluation } from '@/lib/evaluationService';
 import { evaluateMeetingMultiAgent } from '@/lib/multiAgentEvaluation';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -1388,40 +1388,25 @@ export default function MeetingsPage() {
 
                 {/* ─ Participants tab ─ */}
                 {detailTab === 'participants' && (() => {
-                  const iaParticipation: { email?: string; name: string; percent: number }[] = meetingEval?.payload?.participation || [];
+                  // Calculate participation directly from transcript (always sums to 100%)
+                  const participantEmails = (selectedMeeting.participantes || []).map((p: any) => p.email).filter(Boolean);
+                  const transcriptParticipation = selectedMeeting.transcricao
+                    ? parseTranscriptParticipation(selectedMeeting.transcricao, participantEmails)
+                    : [];
 
-                  const transcriptNames = extractTranscriptParticipantNames(selectedMeeting.transcricao);
-                  const baseParticipants = transcriptNames.length > 0
-                    ? transcriptNames.map((name) => ({
-                        name,
-                        email: findEmailByParticipantName(name, selectedMeeting.participantes) || null,
-                      }))
-                    : selectedMeeting.participantes.map((p) => ({
-                        name: p.name || p.email.split('@')[0],
-                        email: p.email,
+                  const participantsWithPct = transcriptParticipation.length > 0
+                    ? transcriptParticipation.map(p => ({
+                        name: p.name,
+                        email: p.email || null,
+                        pct: p.percent,
+                      })).sort((a, b) => b.pct - a.pct)
+                    : (selectedMeeting.participantes || []).map((p: any) => ({
+                        name: p.name || p.email?.split('@')[0] || '?',
+                        email: p.email || null,
+                        pct: 0,
                       }));
 
-                  const participantsWithPct = baseParticipants.map((p) => {
-                    const displayName = p.name;
-                    const normalizedDisplayName = normalizeName(displayName);
-
-                    const match = (p.email
-                      ? iaParticipation.find((ip) => ip.email?.toLowerCase() === p.email?.toLowerCase())
-                      : undefined)
-                      || iaParticipation.find((ip) => normalizeName(ip.name) === normalizedDisplayName)
-                      || iaParticipation.find((ip) => {
-                        const ipTokens = normalizeName(ip.name).split(' ').filter((t) => t.length >= 3);
-                        const displayTokens = normalizedDisplayName.split(' ').filter((t) => t.length >= 3);
-                        return displayTokens.some((token) => ipTokens.includes(token));
-                      });
-
-                    return {
-                      ...p,
-                      pct: match?.percent || 0,
-                    };
-                  }).sort((a, b) => b.pct - a.pct);
-
-                  const totalPct = participantsWithPct.reduce((sum, p) => sum + p.pct, 0);
+                  const totalPct = participantsWithPct.reduce((sum: number, p: any) => sum + p.pct, 0);
 
                   return (
                     <div className="space-y-2">
@@ -1432,7 +1417,7 @@ export default function MeetingsPage() {
                       )}
                       {totalPct > 0 && (
                         <div className="flex items-center justify-between text-[10px] text-muted-foreground px-1">
-                          <span>Participação calculada pela IA</span>
+                          <span>Participação calculada por contagem de caracteres</span>
                           <span className={cn('font-bold', totalPct === 100 ? 'text-success' : 'text-warning')}>Total: {totalPct}%</span>
                         </div>
                       )}
@@ -1490,9 +1475,9 @@ export default function MeetingsPage() {
                           <p className="text-xs text-muted-foreground">Nenhum participante registrado.</p>
                         </div>
                       )}
-                      {iaParticipation.length === 0 && selectedMeeting.transcricao && (
+                      {transcriptParticipation.length === 0 && selectedMeeting.transcricao && (
                         <p className="text-[10px] text-muted-foreground text-center pt-2">
-                          Avalie com IA para ver a % de participação de cada pessoa.
+                          Não foi possível extrair participação da transcrição. Verifique o formato.
                         </p>
                       )}
                     </div>
