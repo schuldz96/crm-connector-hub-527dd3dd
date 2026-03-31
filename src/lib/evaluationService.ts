@@ -153,7 +153,16 @@ export function parseTranscriptParticipation(
     'transcricao',
     'participantes',
     'meeting notes',
+    'a reuniao terminou depois de 00',
   ]);
+
+  const ignoredPatterns = [
+    /^a reuni[aã]o terminou/i,
+    /^meeting ended/i,
+    /^recording/i,
+    /^this meeting is being recorded/i,
+    /^[0-9]/,
+  ];
 
   const speakerCharCount: Record<string, number> = {};
   let currentSpeaker = '';
@@ -166,6 +175,9 @@ export function parseTranscriptParticipation(
     if (!n || n.length < 3) return false;
     if (ignoredSpeakers.has(n)) return false;
     if (/^\d/.test(n)) return false;
+    if (ignoredPatterns.some(p => p.test(value))) return false;
+    // Reject if name has more than 6 words (likely a sentence, not a name)
+    if (n.split(' ').length > 6) return false;
     return true;
   };
 
