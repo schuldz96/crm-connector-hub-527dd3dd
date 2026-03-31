@@ -16,6 +16,8 @@ import {
   useCrmRecord, useCrmActivities, useCrmAssociatedRecords,
   useCreateActivity, useCreateAssociation, useDeleteAssociation,
   useCrmContacts, useCrmCompanies, useCrmDeals, useCrmTickets,
+  useCreateContact, useCreateCompany, useCreateDeal, useCreateTicket,
+  useCrmPipelines, useSaasUsers,
 } from '@/hooks/useCrm';
 import type { CrmObjectType, ActivityType, CrmActivity } from '@/types/crm';
 import {
@@ -158,6 +160,14 @@ export default function CRMRecordPage() {
   const [selectedAssociationIds, setSelectedAssociationIds] = useState<string[]>([]);
   const [expandedActivity, setExpandedActivity] = useState<string | null>(null);
 
+  // Create new in association
+  const [newContactForm, setNewContactForm] = useState({ email: '', nome: '', telefone: '', cargo: '' });
+  const [newCompanyForm, setNewCompanyForm] = useState({ nome: '', dominio: '', cnpj: '' });
+  const [newDealForm, setNewDealForm] = useState({ nome: '', valor: '' });
+  const [newTicketForm, setNewTicketForm] = useState({ titulo: '', prioridade: 'medium' });
+  const [emailExists, setEmailExists] = useState(false);
+  const [checkingEmail, setCheckingEmail] = useState(false);
+
   // Activity form states
   const [noteContent, setNoteContent] = useState('');
   const [emailForm, setEmailForm] = useState({ to: '', from: '', subject: '', body: '' });
@@ -179,6 +189,13 @@ export default function CRMRecordPage() {
   const { data: searchCompanies } = useCrmCompanies({ search: associationSearch, perPage: 10 });
   const { data: searchDeals } = useCrmDeals({ search: associationSearch, perPage: 10 });
   const { data: searchTickets } = useCrmTickets({ search: associationSearch, perPage: 10 });
+  const createContact = useCreateContact();
+  const createCompany = useCreateCompany();
+  const createDealMut = useCreateDeal();
+  const createTicketMut = useCreateTicket();
+  const { data: dealPipelines = [] } = useCrmPipelines('deal');
+  const { data: ticketPipelines = [] } = useCrmPipelines('ticket');
+  const { data: saasUsers = [] } = useSaasUsers();
 
   const createActivity = useCreateActivity();
   const createAssociation = useCreateAssociation();
@@ -366,6 +383,54 @@ export default function CRMRecordPage() {
         setAssociationSearch('');
       })
       .catch((e) => toast({ title: 'Erro', description: String(e), variant: 'destructive' }));
+  };
+
+  const checkEmailExists = async (email: string) => {
+    if (!email || !email.includes('@')) { setEmailExists(false); return; }
+    setCheckingEmail(true);
+    try {
+      const results = await (await import('@/lib/crmService')).default || {};
+      // Use search contacts to check
+      const existing = searchContacts?.data?.find(c => c.email?.toLowerCase() === email.toLowerCase());
+      setEmailExists(!!existing);
+    } catch { setEmailExists(false); }
+    finally { setCheckingEmail(false); }
+  };
+
+  const handleCreateAndAssociate = async () => {
+    if (!associationDialog) return;
+    try {
+      let newId: string | null = null;
+      if (associationDialog === 'contact') {
+        if (!newContactForm.email || !newContactForm.nome) { toast({ title: 'Preencha e-mail e nome', variant: 'destructive' }); return; }
+        if (emailExists) { toast({ title: 'E-mail já existe. Use "Adicionar existente"', variant: 'destructive' }); return; }
+        const created = await createContact.mutateAsync({ nome: newContactForm.nome, email: newContactForm.email, telefone: newContactForm.telefone || null, cargo: newContactForm.cargo || null, status: 'lead' } as any);
+        newId = created.id;
+      } else if (associationDialog === 'company') {
+        if (!newCompanyForm.nome) { toast({ title: 'Preencha o nome da empresa', variant: 'destructive' }); return; }
+        const created = await createCompany.mutateAsync({ nome: newCompanyForm.nome, dominio: newCompanyForm.dominio || null, cnpj: newCompanyForm.cnpj || null } as any);
+        newId = created.id;
+      } else if (associationDialog === 'deal') {
+        if (!newDealForm.nome) { toast({ title: 'Preencha o nome do negócio', variant: 'destructive' }); return; }
+        const pip = dealPipelines[0];
+        const created = await createDealMut.mutateAsync({ nome: newDealForm.nome, valor: parseFloat(newDealForm.valor) || 0, pipeline_id: pip?.id, estagio_id: pip?.estagios?.[0]?.id, status: 'aberto' } as any);
+        newId = created.id;
+      } else if (associationDialog === 'ticket') {
+        if (!newTicketForm.titulo) { toast({ title: 'Preencha o nome do ticket', variant: 'destructive' }); return; }
+        const pip = ticketPipelines[0];
+        const created = await createTicketMut.mutateAsync({ titulo: newTicketForm.titulo, pipeline_id: pip?.id, estagio_id: pip?.estagios?.[0]?.id, prioridade: newTicketForm.prioridade, status: 'aberto' } as any);
+        newId = created.id;
+      }
+      if (newId) {
+        await createAssociation.mutateAsync({ origem_tipo: objectType, origem_id: recordId, destino_tipo: associationDialog, destino_id: newId });
+        toast({ title: `${OBJECT_LABELS[associationDialog].singular} criado e associado` });
+        setAssociationDialog(null);
+        setNewContactForm({ email: '', nome: '', telefone: '', cargo: '' });
+        setNewCompanyForm({ nome: '', dominio: '', cnpj: '' });
+        setNewDealForm({ nome: '', valor: '' });
+        setNewTicketForm({ titulo: '', prioridade: 'medium' });
+      }
+    } catch (e) { toast({ title: 'Erro ao criar', description: String(e), variant: 'destructive' }); }
   };
 
   const handleRemoveAssociation = (assocId: string) => {
@@ -915,12 +980,14 @@ export default function CRMRecordPage() {
                     {month}
                   </h3>
                   <div className="space-y-2">
-                    {items.map(activity => (
+                    {items.map(activity => {
+                      const borderColor = activity.tipo === 'nota' ? 'border-l-amber-500' : activity.tipo === 'email' ? 'border-l-blue-500' : activity.tipo === 'chamada' ? 'border-l-green-500' : activity.tipo === 'tarefa' ? 'border-l-purple-500' : activity.tipo === 'reuniao' ? 'border-l-orange-500' : 'border-l-muted-foreground';
+                      return (
                       <div
                         key={activity.id}
-                        className="flex items-start gap-3 p-3 rounded-lg border border-border bg-card hover:bg-muted/30 transition-colors"
+                        className={cn('flex items-start gap-3 p-4 rounded-lg border border-border border-l-4 bg-card hover:bg-muted/20 transition-colors', borderColor)}
                       >
-                        <div className="mt-0.5 p-1.5 rounded-md bg-muted text-muted-foreground">
+                        <div className="mt-0.5 p-1.5 rounded-full bg-muted text-muted-foreground">
                           {getActivityIcon(activity.tipo)}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -985,7 +1052,7 @@ export default function CRMRecordPage() {
                           </div>
                         </div>
                       </div>
-                    ))}
+                    );})}
                   </div>
                 </div>
               ))}
@@ -1160,8 +1227,98 @@ export default function CRMRecordPage() {
               </div>
             </div>
           ) : (
-            <div className="text-center py-8 text-muted-foreground text-sm">
-              Use a página de {associationDialog ? OBJECT_LABELS[associationDialog].plural : ''} para criar um novo registro e depois associe aqui.
+            <div className="space-y-3">
+              {/* CREATE NEW CONTACT */}
+              {associationDialog === 'contact' && (
+                <>
+                  <div>
+                    <label className="text-xs font-medium">E-mail *</label>
+                    <Input value={newContactForm.email} onChange={e => { setNewContactForm(p => ({ ...p, email: e.target.value })); }} onBlur={() => {
+                      const email = newContactForm.email;
+                      if (email && email.includes('@')) {
+                        const existing = searchContacts?.data?.find(c => c.email?.toLowerCase() === email.toLowerCase());
+                        setEmailExists(!!existing);
+                      }
+                    }} placeholder="email@exemplo.com" className="mt-1 h-8 text-sm" />
+                    {emailExists && <p className="text-xs text-destructive mt-1">Este e-mail já existe. Use "Adicionar existente".</p>}
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium">Nome *</label>
+                    <Input value={newContactForm.nome} onChange={e => setNewContactForm(p => ({ ...p, nome: e.target.value }))} placeholder="Nome completo" className="mt-1 h-8 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium">Telefone</label>
+                    <Input value={newContactForm.telefone} onChange={e => setNewContactForm(p => ({ ...p, telefone: e.target.value }))} placeholder="+55 11 99999-0000" className="mt-1 h-8 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium">Cargo</label>
+                    <Input value={newContactForm.cargo} onChange={e => setNewContactForm(p => ({ ...p, cargo: e.target.value }))} placeholder="Ex: Gerente Comercial" className="mt-1 h-8 text-sm" />
+                  </div>
+                </>
+              )}
+
+              {/* CREATE NEW COMPANY */}
+              {associationDialog === 'company' && (
+                <>
+                  <div>
+                    <label className="text-xs font-medium">Nome da empresa *</label>
+                    <Input value={newCompanyForm.nome} onChange={e => setNewCompanyForm(p => ({ ...p, nome: e.target.value }))} placeholder="Razão social" className="mt-1 h-8 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium">Domínio</label>
+                    <Input value={newCompanyForm.dominio} onChange={e => setNewCompanyForm(p => ({ ...p, dominio: e.target.value }))} placeholder="empresa.com.br" className="mt-1 h-8 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium">CNPJ</label>
+                    <Input value={newCompanyForm.cnpj} onChange={e => setNewCompanyForm(p => ({ ...p, cnpj: e.target.value }))} placeholder="00.000.000/0001-00" className="mt-1 h-8 text-sm" />
+                  </div>
+                </>
+              )}
+
+              {/* CREATE NEW DEAL */}
+              {associationDialog === 'deal' && (
+                <>
+                  <div>
+                    <label className="text-xs font-medium">Nome do negócio *</label>
+                    <Input value={newDealForm.nome} onChange={e => setNewDealForm(p => ({ ...p, nome: e.target.value }))} placeholder="Nome do negócio" className="mt-1 h-8 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium">Valor</label>
+                    <Input type="number" value={newDealForm.valor} onChange={e => setNewDealForm(p => ({ ...p, valor: e.target.value }))} placeholder="0.00" className="mt-1 h-8 text-sm" />
+                  </div>
+                  {dealPipelines[0] && (
+                    <div>
+                      <label className="text-xs font-medium">Pipeline</label>
+                      <p className="text-sm text-muted-foreground mt-1">{dealPipelines[0].nome}</p>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* CREATE NEW TICKET */}
+              {associationDialog === 'ticket' && (
+                <>
+                  <div>
+                    <label className="text-xs font-medium">Nome do ticket *</label>
+                    <Input value={newTicketForm.titulo} onChange={e => setNewTicketForm(p => ({ ...p, titulo: e.target.value }))} placeholder="Título do ticket" className="mt-1 h-8 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium">Prioridade</label>
+                    <select value={newTicketForm.prioridade} onChange={e => setNewTicketForm(p => ({ ...p, prioridade: e.target.value }))} className="mt-1 w-full h-8 text-sm border border-border rounded-md px-2 bg-background">
+                      <option value="low">Baixa</option>
+                      <option value="medium">Média</option>
+                      <option value="high">Alta</option>
+                      <option value="urgent">Urgente</option>
+                    </select>
+                  </div>
+                  {ticketPipelines[0] && (
+                    <div>
+                      <label className="text-xs font-medium">Pipeline</label>
+                      <p className="text-sm text-muted-foreground mt-1">{ticketPipelines[0].nome}</p>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
 
@@ -1169,14 +1326,16 @@ export default function CRMRecordPage() {
             <Button variant="outline" size="sm" onClick={() => setAssociationDialog(null)}>
               Cancelar
             </Button>
-            <Button
-              size="sm"
-              onClick={handleAddAssociation}
-              disabled={selectedAssociationIds.length === 0 || createAssociation.isPending}
-            >
-              {createAssociation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
-              Próximo
-            </Button>
+            {associationTab === 'existing' ? (
+              <Button size="sm" onClick={handleAddAssociation} disabled={selectedAssociationIds.length === 0 || createAssociation.isPending}>
+                {createAssociation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+                Associar
+              </Button>
+            ) : (
+              <Button size="sm" onClick={handleCreateAndAssociate} disabled={emailExists}>
+                Criar e associar
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
