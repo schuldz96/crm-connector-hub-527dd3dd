@@ -494,41 +494,8 @@ export default function BulkSendModal({
     processingRef.current = false;
     if (timerRef.current) clearTimeout(timerRef.current);
 
-    // Save log to DB before clearing
-    if (state.processedRows.length > 0 && state.templateName && account) {
-      try {
-        const empresaId = await getSaasEmpresaId();
-        const sent = state.processedRows.filter(r => ['sent', 'delivered', 'read'].includes(r.status)).length;
-        const failed = state.processedRows.filter(r => ['failed', 'fallback_failed'].includes(r.status)).length;
-        const delivered = state.processedRows.filter(r => r.status === 'delivered').length;
-        const read = state.processedRows.filter(r => r.status === 'read').length;
-        const fallbackSent = state.processedRows.filter(r => r.status === 'fallback_sent').length;
-
-        await (supabase as any).from('meta_bulk_send_logs').insert({
-          account_id: account.id,
-          empresa_id: empresaId,
-          template_name: state.templateName,
-          template_language: state.templateLanguage,
-          template_body: state.templateBody || null,
-          fallback_template: state.fallbackTemplateName || null,
-          fallback_body: state.fallbackTemplateBody || null,
-          total_rows: state.processedRows.length,
-          sent_count: sent,
-          delivered_count: delivered,
-          read_count: read,
-          failed_count: failed,
-          fallback_sent_count: fallbackSent,
-          rows_detail: state.processedRows.map(r => ({
-            phone: r.phone, status: r.status, error: r.error, wamid: r.wamid, params: r.params, templateUsed: r.templateUsed,
-          })),
-          finished_at: new Date().toISOString(),
-        });
-        toast({ title: 'Log salvo!', description: `${sent} enviados, ${failed} erros registrados.` });
-      } catch (e) {
-        console.error('[BulkSend] Failed to save log:', e);
-      }
-    }
-
+    // Log already auto-saved when step transitions to 'done'
+    logSavedRef.current = false; // Reset for next send
     setState(EMPTY_STATE);
     localStorage.removeItem(STORAGE_KEY);
   };
@@ -582,6 +549,33 @@ export default function BulkSendModal({
   const [reviewPhase, setReviewPhase] = useState<'idle' | 'waiting' | 'checking' | 'retrying' | 'done'>('idle');
   const [reviewCountdown, setReviewCountdown] = useState(0);
   const reviewRanRef = useRef(false);
+
+  // Auto-save log when processing finishes (don't wait for user to click reset)
+  const logSavedRef = useRef(false);
+  useEffect(() => {
+    if (state.step !== 'done' || logSavedRef.current || state.processedRows.length === 0 || !account) return;
+    logSavedRef.current = true;
+    (async () => {
+      try {
+        const empresaId = await getSaasEmpresaId();
+        const sent = state.processedRows.filter(r => ['sent', 'delivered', 'read'].includes(r.status)).length;
+        const failed = state.processedRows.filter(r => ['failed', 'fallback_failed'].includes(r.status)).length;
+        const delivered = state.processedRows.filter(r => r.status === 'delivered').length;
+        const readCount = state.processedRows.filter(r => r.status === 'read').length;
+        const fallbackSent = state.processedRows.filter(r => r.status === 'fallback_sent').length;
+        await (supabase as any).from('meta_bulk_send_logs').insert({
+          account_id: account.id, empresa_id: empresaId,
+          template_name: state.templateName, template_language: state.templateLanguage,
+          template_body: state.templateBody || null, fallback_template: state.fallbackTemplateName || null,
+          total_rows: state.processedRows.length, sent_count: sent, delivered_count: delivered,
+          read_count: readCount, failed_count: failed, fallback_sent_count: fallbackSent,
+          rows_detail: state.processedRows.map(r => ({ phone: r.phone, status: r.status, error: r.error, wamid: r.wamid, params: r.params, templateUsed: r.templateUsed })),
+          finished_at: new Date().toISOString(),
+        });
+        loadLogs();
+      } catch (e) { console.error('[BulkSend] Auto-save log failed:', e); }
+    })();
+  }, [state.step]);
 
   useEffect(() => {
     // Trigger review once when processing finishes (step transitions to 'done')
