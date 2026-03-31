@@ -53,10 +53,21 @@ export default function DashboardPage() {
     return allMeetings.filter(m => m.vendedor_email?.toLowerCase() === userEmail);
   }, [allMeetings, user?.email, user?.role, user?.areaId, user?.teamId, hasMinRole]);
 
-  // ── KPIs ────────────────────────────────────────────────────────────
+  // ── Month filter ────────────────────────────────────────────────────
   const now = new Date();
-  const currentMonth = now.getMonth();
-  const currentYear = now.getFullYear();
+  const [filterMonth, setFilterMonth] = useState(now.getMonth());
+  const [filterYear, setFilterYear] = useState(now.getFullYear());
+  const currentMonth = filterMonth;
+  const currentYear = filterYear;
+
+  const goMonth = (dir: -1 | 1) => {
+    let m = filterMonth + dir;
+    let y = filterYear;
+    if (m < 0) { m = 11; y--; }
+    if (m > 11) { m = 0; y++; }
+    setFilterMonth(m);
+    setFilterYear(y);
+  };
 
   const meetingsThisMonthAll = useMemo(() =>
     meetings.filter(m => {
@@ -145,7 +156,7 @@ export default function DashboardPage() {
   // ── Recent meetings ────────────────────────────────────────────────
   const recentMeetings = useMemo(() => meetings.slice(0, 15), [meetings]);
 
-  const monthLabel = now.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).replace('.', '');
+  const monthLabel = new Date(filterYear, filterMonth).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).replace('.', '');
 
   const kpiCards = [
     { label: 'Reuniões este mês', value: String(meetingsThisMonth), icon: Video, color: 'violet', unit: '', sub: `${meetingsWithTranscript} transcritas · ${meetingsEvaluated} avaliadas` },
@@ -167,10 +178,14 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="text-xs h-8 border-border">
-            <Calendar className="w-3.5 h-3.5 mr-1.5" />
-            {monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1)}
-          </Button>
+          <div className="flex items-center border border-border rounded-lg overflow-hidden">
+            <button onClick={() => goMonth(-1)} className="px-2 h-8 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-xs">&lt;</button>
+            <span className="px-3 h-8 flex items-center gap-1.5 text-xs font-medium">
+              <Calendar className="w-3.5 h-3.5" />
+              {monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1)}
+            </span>
+            <button onClick={() => goMonth(1)} className="px-2 h-8 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-xs">&gt;</button>
+          </div>
           <Button size="sm" className="text-xs h-8 bg-gradient-primary" onClick={() => navigate('/reports')}>
             <Zap className="w-3.5 h-3.5 mr-1.5" />
             Gerar Relatório IA
