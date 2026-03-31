@@ -355,6 +355,7 @@ export default function MeetingsPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [openFilter, setOpenFilter] = useState<string | null>(null);
+  const [emailSearch, setEmailSearch] = useState('');
   const [showManualMeeting, setShowManualMeeting] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<DbMeeting | null>(null);
   const [detailTab, setDetailTab] = useState<'info' | 'transcript' | 'participants' | 'comments'>('info');
@@ -1394,108 +1395,82 @@ export default function MeetingsPage() {
                     ? parseTranscriptParticipation(selectedMeeting.transcricao, participantEmails)
                     : [];
 
-                  const fromTranscript = transcriptParticipation.map(p => ({
-                    name: p.name, email: p.email || null, pct: p.percent,
-                  }));
-                  // Add registered participants who didn't speak (0%)
-                  // Use fuzzy token matching to avoid duplicates
-                  const tokenize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[\s._-]+/).filter(t => t.length >= 3);
-                  const transcriptTokens = fromTranscript.map(p => ({
-                    ...p,
-                    tokens: tokenize(p.name),
-                    emailLower: (p.email || '').toLowerCase(),
-                  }));
-                  const silent = (selectedMeeting.participantes || [])
-                    .filter((p: any) => {
-                      const regName = p.name || p.email?.split('@')[0] || '';
-                      const regEmail = (p.email || '').toLowerCase();
-                      const regTokens = tokenize(regName);
-                      // Check if any transcript participant matches by email or shared name tokens
-                      // Require: email match, OR 2+ shared tokens, OR 1 shared token >= 5 chars (avoid "Thiago" vs "Thiago" different person)
-                      return !transcriptTokens.some(tp => {
-                        if (regEmail && tp.emailLower === regEmail) return true;
-                        const shared = regTokens.filter(rt => tp.tokens.includes(rt));
-                        if (shared.length >= 2) return true;
-                        if (shared.length === 1 && shared[0].length >= 5) return true;
-                        return false;
-                      });
-                    })
-                    .map((p: any) => ({ name: p.name || p.email?.split('@')[0] || '?', email: p.email || null, pct: 0 }));
-                  const participantsWithPct = [...fromTranscript, ...silent].sort((a, b) => b.pct - a.pct);
+                  // Collect all unique emails from meeting
+                  const allEmails = [...new Set((selectedMeeting.participantes || []).map((p: any) => p.email).filter(Boolean))] as string[];
 
-                  const totalPct = participantsWithPct.reduce((sum: number, p: any) => sum + p.pct, 0);
+                  const totalPct = transcriptParticipation.reduce((sum, p) => sum + p.percent, 0);
 
                   return (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
+                      {/* Section 1: Speakers from transcript */}
                       {transcriptParticipation.length > 0 && (
-                        <div className="text-[10px] text-muted-foreground px-1">
-                          Participantes extraídos da transcrição.
-                        </div>
-                      )}
-                      {totalPct > 0 && (
-                        <div className="flex items-center justify-between text-[10px] text-muted-foreground px-1">
-                          <span>Participação calculada por contagem de caracteres</span>
-                          <span className={cn('font-bold', totalPct === 100 ? 'text-success' : 'text-warning')}>Total: {totalPct}%</span>
-                        </div>
-                      )}
-                      {participantsWithPct.length > 0 ? (
-                        participantsWithPct.map((p, i) => {
-                          const isExternal = p.email ? !p.email.endsWith('@appmax.com.br') : false;
-                          const pct = p.pct;
-                          return (
-                            <div
-                              key={i}
-                              className={cn(
-                                'flex items-center gap-2.5 p-2.5 rounded-lg border',
-                                isExternal ? 'bg-accent/5 border-accent/15' : 'bg-secondary border-border'
-                              )}
-                            >
-                              <div className="w-7 h-7 rounded-full bg-secondary border border-border flex items-center justify-center text-[10px] font-bold flex-shrink-0">
-                                {(p.name || '?')[0].toUpperCase()}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <p className="text-xs font-medium truncate">{p.name}</p>
-                                  {pct > 0 && (
-                                    <span className={cn(
-                                      'text-[10px] font-bold',
-                                      pct >= 30 ? 'text-success' : pct >= 10 ? 'text-primary' : 'text-muted-foreground'
-                                    )}>{pct}%</span>
-                                  )}
+                        <>
+                          <div className="flex items-center justify-between text-[10px] text-muted-foreground px-1">
+                            <span className="font-semibold uppercase tracking-wider">Participação na call</span>
+                            <span className={cn('font-bold', totalPct === 100 ? 'text-success' : 'text-warning')}>Total: {totalPct}%</span>
+                          </div>
+                          <div className="space-y-1.5">
+                            {transcriptParticipation.sort((a, b) => b.percent - a.percent).map((p, i) => (
+                              <div key={i} className="flex items-center gap-2.5 p-2 rounded-lg bg-secondary border border-border">
+                                <div className="w-7 h-7 rounded-full bg-muted border border-border flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                                  {(p.name || '?')[0].toUpperCase()}
                                 </div>
-                                {p.email ? (
-                                  <p className="text-[10px] text-muted-foreground truncate">{p.email}</p>
-                                ) : (
-                                  <p className="text-[10px] text-muted-foreground/70 truncate">Email não identificado</p>
-                                )}
-                                {pct > 0 && (
-                                  <div className="h-1 bg-muted rounded-full overflow-hidden mt-1">
-                                    <div
-                                      className="h-full rounded-full transition-all"
-                                      style={{
-                                        width: `${pct}%`,
-                                        background: pct >= 30 ? 'hsl(168 80% 42%)' : pct >= 10 ? 'hsl(210 100% 56%)' : 'hsl(var(--muted-foreground))',
-                                      }}
-                                    />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-xs font-medium truncate">{p.name}</p>
+                                    <span className={cn('text-[10px] font-bold',
+                                      p.percent >= 30 ? 'text-success' : p.percent >= 10 ? 'text-primary' : 'text-muted-foreground'
+                                    )}>{p.percent}%</span>
                                   </div>
-                                )}
+                                  <div className="h-1 bg-muted rounded-full overflow-hidden mt-1">
+                                    <div className="h-full rounded-full transition-all"
+                                      style={{ width: `${Math.min(p.percent, 100)}%`, background: p.percent >= 30 ? 'hsl(168 80% 42%)' : p.percent >= 10 ? 'hsl(210 100% 56%)' : 'hsl(var(--muted-foreground))' }} />
+                                  </div>
+                                </div>
                               </div>
-                              {isExternal && (
-                                <span className="text-[10px] font-medium text-accent bg-accent/10 px-1.5 py-0.5 rounded flex-shrink-0">Externo</span>
-                              )}
-                            </div>
-                          );
-                        })
-                      ) : (
+                            ))}
+                          </div>
+                        </>
+                      )}
+
+                      {transcriptParticipation.length === 0 && (
                         <div className="p-3 rounded-lg bg-muted/50 border border-border text-center">
                           <Users className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
-                          <p className="text-xs text-muted-foreground">Nenhum participante registrado.</p>
+                          <p className="text-xs text-muted-foreground">Sem transcrição para calcular participação.</p>
                         </div>
                       )}
                       {transcriptParticipation.length === 0 && selectedMeeting.transcricao && (
                         <p className="text-[10px] text-muted-foreground text-center pt-2">
                           Não foi possível extrair participação da transcrição. Verifique o formato.
                         </p>
+                      )}
+
+                      {/* Section 2: All emails */}
+                      {allEmails.length > 0 && (
+                        <>
+                          <div className="border-t border-border pt-3 mt-3">
+                            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">E-mails da reunião ({allEmails.length})</p>
+                            <div className="relative mb-2">
+                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+                              <input value={emailSearch} onChange={e => setEmailSearch(e.target.value)}
+                                placeholder="Pesquisar e-mail..." className="w-full pl-7 h-7 text-[10px] border border-border rounded-md bg-background px-2" />
+                            </div>
+                            <div className="space-y-1 max-h-[150px] overflow-y-auto">
+                              {allEmails
+                                .filter(e => !emailSearch || e.toLowerCase().includes(emailSearch.toLowerCase()))
+                                .sort((a, b) => a.localeCompare(b))
+                                .map(email => {
+                                  const isExternal = !email.endsWith('@appmax.com.br');
+                                  return (
+                                    <div key={email} className="flex items-center justify-between py-1 px-2 rounded hover:bg-muted/30 text-[10px]">
+                                      <span className="text-muted-foreground truncate">{email}</span>
+                                      {isExternal && <span className="text-accent text-[9px] flex-shrink-0 ml-1">Externo</span>}
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                          </div>
+                        </>
                       )}
                     </div>
                   );
