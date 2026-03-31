@@ -39,6 +39,7 @@ const CRON_INTERVAL_MINUTES = Number(process.env.CRON_INTERVAL_MINUTES || 30);
 const CRON_LOOKBACK_MINUTES = Number(process.env.CRON_LOOKBACK_MINUTES || 60);
 const CRON_TRANSCRIPT_DELAY_MINUTES = Number(process.env.CRON_TRANSCRIPT_DELAY_MINUTES || 30);
 const CRON_TRANSCRIPT_BATCH_SIZE = Number(process.env.CRON_TRANSCRIPT_BATCH_SIZE || 20);
+const CRON_RECORDING_BATCH_SIZE = Number(process.env.CRON_RECORDING_BATCH_SIZE || 20);
 const REPORTS_CUSTOMER_ID = process.env.REPORTS_CUSTOMER_ID || 'my_customer';
 const INTERNAL_EMAIL_DOMAIN = (
   process.env.INTERNAL_EMAIL_DOMAIN ||
@@ -1679,6 +1680,52 @@ async function processPendingTranscriptionsCronTick() {
   return { selected: keys.length, ok, fail };
 }
 
+async function processPendingRecordingsCronTick() {
+  requireDatabase();
+
+  const result = await pool.query(
+    `
+      SELECT conference_key
+      FROM saas.meet_conferences
+      WHERE coalesce(call_interna, false) = false
+        AND ended_at IS NOT NULL
+        AND started_at <= now() - make_interval(mins => $1::int)
+        AND (
+          recording_source_file_id IS NULL
+          OR recording_source_file_id = ''
+        )
+      ORDER BY started_at ASC
+      LIMIT $2
+    `,
+    [Math.max(0, CRON_TRANSCRIPT_DELAY_MINUTES), Math.max(1, CRON_RECORDING_BATCH_SIZE)]
+  );
+
+  const keys = result.rows.map((row) => row.conference_key).filter(Boolean);
+  if (keys.length === 0) {
+    return { selected: 0, ok: 0, fail: 0 };
+  }
+
+  let ok = 0;
+  let fail = 0;
+
+  for (const conferenceKey of keys) {
+    try {
+      // processConferenceByKey agora também resolve gravação mesmo para TRANSCRIPT_DONE.
+      const processed = await processConferenceByKey(conferenceKey);
+      if (processed?.ok) {
+        ok += 1;
+      } else {
+        fail += 1;
+      }
+    } catch (error) {
+      fail += 1;
+      console.log(`[cron] erro ao processar gravação conference_key=${conferenceKey}: ${error.message}`);
+    }
+  }
+
+  return { selected: keys.length, ok, fail };
+}
+
 let cronRunning = false;
 
 async function runDiscoveryCronTick() {
@@ -1710,9 +1757,10 @@ async function runDiscoveryCronTick() {
 
     const summary = await discoverMeetConferences({ startIso, endIso });
     const transcriptSummary = await processPendingTranscriptionsCronTick();
+    const recordingSummary = await processPendingRecordingsCronTick();
     const durationSec = ((Date.now() - tickStartedAt) / 1000).toFixed(2);
 
-  console.log(`[cron] finalizado em ${durationSec}s orgUnits=${summary.orgUnits.join('|')} ouUsers=${summary.ouUsers} activities=${summary.activities} consolidated=${summary.consolidatedConferences} filtered=${summary.filteredConferences} conferences=${summary.conferences} inserted=${summary.inserted} updated=${summary.updated} errors=${summary.errors} transcriptions_selected=${transcriptSummary.selected} transcriptions_ok=${transcriptSummary.ok} transcriptions_fail=${transcriptSummary.fail}`);
+  console.log(`[cron] finalizado em ${durationSec}s orgUnits=${summary.orgUnits.join('|')} ouUsers=${summary.ouUsers} activities=${summary.activities} consolidated=${summary.consolidatedConferences} filtered=${summary.filteredConferences} conferences=${summary.conferences} inserted=${summary.inserted} updated=${summary.updated} errors=${summary.errors} transcriptions_selected=${transcriptSummary.selected} transcriptions_ok=${transcriptSummary.ok} transcriptions_fail=${transcriptSummary.fail} recordings_selected=${recordingSummary.selected} recordings_ok=${recordingSummary.ok} recordings_fail=${recordingSummary.fail}`);
   } catch (error) {
     console.log(`[cron] falha: ${error.message}`);
   } finally {
