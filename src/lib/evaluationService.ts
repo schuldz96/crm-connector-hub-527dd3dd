@@ -220,22 +220,23 @@ export function parseTranscriptParticipation(
     return tokenMatch?.email;
   };
 
-  const rawResults = Object.entries(speakerCharCount).map(([speaker, chars]) => ({
-    name: speaker,
-    email: mapSpeakerToEmail(speaker),
-    chars,
-    percent: Math.round((chars / totalChars) * 100),
-  }));
+  const rawResults = Object.entries(speakerCharCount)
+    .filter(([, chars]) => chars > 0)
+    .map(([speaker, chars]) => ({
+      name: speaker,
+      email: mapSpeakerToEmail(speaker),
+      chars,
+      percent: parseFloat(((chars / totalChars) * 100).toFixed(2)),
+    }));
 
-  // Ensure minimum 1% for anyone who spoke, then normalize to 100%
-  const withMin = rawResults.filter(r => r.chars > 0).map(r => ({ ...r, percent: Math.max(1, r.percent) }));
-  const sum = withMin.reduce((acc, r) => acc + r.percent, 0);
-  if (sum !== 100 && withMin.length > 0) {
-    const sorted = [...withMin].sort((a, b) => b.chars - a.chars);
-    sorted[0].percent += (100 - sum);
+  // Normalize to exactly 100%
+  const sum = rawResults.reduce((acc, r) => acc + r.percent, 0);
+  if (sum !== 100 && rawResults.length > 0) {
+    const sorted = [...rawResults].sort((a, b) => b.chars - a.chars);
+    sorted[0].percent = parseFloat((sorted[0].percent + (100 - sum)).toFixed(2));
   }
 
-  return withMin.map(r => ({ email: r.email, name: r.name, percent: r.percent }));
+  return rawResults.map(r => ({ email: r.email, name: r.name, percent: r.percent }));
 }
 
 // ─── Evaluate a meeting ──────────────────────────────────────────────────────
