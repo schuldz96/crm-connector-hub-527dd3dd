@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { loadMeetingsFromDb, type DbMeeting } from '@/lib/meetingsService';
+import { loadUsersForPerformance, loadTeamsForPerformance } from '@/lib/evaluationService';
 import { useEvolutionInstances } from '@/hooks/useEvolutionInstances';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -28,12 +29,21 @@ export default function DashboardPage() {
   const { instances } = useEvolutionInstances();
   const [allMeetings, setAllMeetings] = useState<DbMeeting[]>([]);
   const [loadingMeetings, setLoadingMeetings] = useState(true);
+  const [dbUsers, setDbUsers] = useState<any[]>([]);
+  const [dbTeams, setDbTeams] = useState<any[]>([]);
+  const [filterSeller, setFilterSeller] = useState('all');
+  const [filterTeam, setFilterTeam] = useState('all');
+  const canFilter = hasMinRole('supervisor');
 
   useEffect(() => {
     loadMeetingsFromDb()
       .then(setAllMeetings)
       .catch(err => console.error('[dashboard] load meetings:', err))
       .finally(() => setLoadingMeetings(false));
+    if (canFilter) {
+      loadUsersForPerformance().then(setDbUsers);
+      loadTeamsForPerformance().then(setDbTeams);
+    }
   }, []);
 
   // ── Role-based visibility ─────────────────────────────────────────
@@ -53,6 +63,14 @@ export default function DashboardPage() {
     return allMeetings.filter(m => m.vendedor_email?.toLowerCase() === userEmail);
   }, [allMeetings, user?.email, user?.role, user?.areaId, user?.teamId, hasMinRole]);
 
+  // Apply seller/team filters
+  const filteredMeetings = useMemo(() => {
+    let list = meetings;
+    if (filterTeam !== 'all') list = list.filter(m => m.time_id === filterTeam);
+    if (filterSeller !== 'all') list = list.filter(m => m.vendedor_id === filterSeller);
+    return list;
+  }, [meetings, filterSeller, filterTeam]);
+
   // ── Month filter ────────────────────────────────────────────────────
   const now = new Date();
   const [filterMonth, setFilterMonth] = useState(now.getMonth());
@@ -70,7 +88,7 @@ export default function DashboardPage() {
   };
 
   const meetingsThisMonthAll = useMemo(() =>
-    meetings.filter(m => {
+    filteredMeetings.filter(m => {
       const d = new Date(m.data_reuniao);
       return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
     }),
@@ -81,7 +99,7 @@ export default function DashboardPage() {
   const meetingsEvaluated = useMemo(() => meetingsThisMonthAll.filter(m => m.analisada_por_ia).length, [meetingsThisMonthAll]);
 
   const avgScoreMeet = useMemo(() => {
-    const withScore = meetings.filter(m => typeof m.score === 'number' && m.score !== null && m.score > 0);
+    const withScore = filteredMeetings.filter(m => typeof m.score === 'number' && m.score !== null && m.score > 0);
     if (!withScore.length) return 0;
     return Number((withScore.reduce((sum, m) => sum + (m.score || 0), 0) / withScore.length).toFixed(1));
   }, [meetings]);
@@ -121,7 +139,7 @@ export default function DashboardPage() {
   // ── Top Sellers (vendedores com mais reuniões e score) ─────────────
   const topSellers = useMemo(() => {
     const bySeller = new Map<string, { name: string; meetings: number; scoreSum: number; scoreCount: number }>();
-    for (const m of meetings) {
+    for (const m of filteredMeetings) {
       const key = m.vendedor_id || m.vendedor_email || 'unknown';
       const name = m.vendedor_nome || m.vendedor_email || 'Sem vendedor';
       const cur = bySeller.get(key) || { name, meetings: 0, scoreSum: 0, scoreCount: 0 };
@@ -142,7 +160,7 @@ export default function DashboardPage() {
       }))
       .sort((a, b) => b.score - a.score || b.meetings - a.meetings)
       .slice(0, 6);
-  }, [meetings]);
+  }, [filteredMeetings]);
 
   const instancesSummary = useMemo(() => {
     return visibleInstances.map(i => ({
@@ -154,7 +172,7 @@ export default function DashboardPage() {
   }, [visibleInstances]);
 
   // ── Recent meetings ────────────────────────────────────────────────
-  const recentMeetings = useMemo(() => meetings.slice(0, 15), [meetings]);
+  const recentMeetings = useMemo(() => filteredMeetings.slice(0, 15), [filteredMeetings]);
 
   const monthLabel = new Date(filterYear, filterMonth).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).replace('.', '');
 
@@ -186,6 +204,25 @@ export default function DashboardPage() {
             </span>
             <button onClick={() => goMonth(1)} className="px-2 h-8 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-xs">&gt;</button>
           </div>
+          {canFilter && (
+            <>
+              <select value={filterTeam} onChange={e => { setFilterTeam(e.target.value); setFilterSeller('all'); }}
+                className="h-8 px-2 text-xs border border-border rounded-lg bg-secondary text-foreground">
+                <option value="all">Todas equipes</option>
+                {dbTeams.sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).map(t => (
+                  <option key={t.id} value={t.id}>{t.nome}</option>
+                ))}
+              </select>
+              <select value={filterSeller} onChange={e => setFilterSeller(e.target.value)}
+                className="h-8 px-2 text-xs border border-border rounded-lg bg-secondary text-foreground">
+                <option value="all">Todos vendedores</option>
+                {dbUsers
+                  .filter(u => u.papel === 'vendedor' && (filterTeam === 'all' || u.time_id === filterTeam))
+                  .sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
+                  .map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}
+              </select>
+            </>
+          )}
         </div>
       </div>
 
