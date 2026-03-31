@@ -380,7 +380,7 @@ export async function loadEvaluations(opts?: {
   let query = (supabase as any)
     .schema('saas')
     .from('analises_ia')
-    .select('id,tipo_contexto,vendedor_id,score,criterios,resumo,instancia_nome,contato_telefone,periodo_ref,entidade_id,criado_em')
+    .select('id,tipo_contexto,vendedor_id,score,criterios,resumo,instancia_nome,contato_telefone,periodo_ref,entidade_id,payload,agente_avaliador_id,criado_em')
     .eq('empresa_id', empresaId)
     .order('criado_em', { ascending: false });
 
@@ -428,6 +428,21 @@ export async function loadTeamsForPerformance(): Promise<any[]> {
     return [];
   }
   return data || [];
+}
+
+// ─── Load meeting durations (for avg call time metric) ────────────────────────
+export async function loadMeetingDurations(): Promise<Record<string, number>> {
+  const empresaId = await getSaasEmpresaId();
+  const { data, error } = await (supabase as any)
+    .schema('saas')
+    .from('reunioes')
+    .select('id,duracao_minutos,vendedor_id')
+    .eq('empresa_id', empresaId)
+    .gt('duracao_minutos', 0);
+  if (error) return {};
+  const map: Record<string, number> = {};
+  for (const r of (data || [])) map[r.id] = r.duracao_minutos;
+  return map;
 }
 
 // ─── Load recent evaluations with chain_log (for execution history) ─────────

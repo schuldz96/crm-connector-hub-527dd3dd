@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, LineChart, Line, Legend } from 'recharts';
 import { useAuth } from '@/contexts/AuthContext';
-import { loadEvaluations, loadUsersForPerformance, loadTeamsForPerformance, type StoredEvaluation } from '@/lib/evaluationService';
+import { loadEvaluations, loadUsersForPerformance, loadTeamsForPerformance, loadMeetingDurations, type StoredEvaluation } from '@/lib/evaluationService';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function scoreColor(s: number) {
@@ -100,14 +100,17 @@ export default function PerformancePage() {
   const [dbUsers, setDbUsers] = useState<any[]>([]);
   const [dbTeams, setDbTeams] = useState<any[]>([]);
   const [evaluations, setEvaluations] = useState<StoredEvaluation[]>([]);
+  const [meetingDurations, setMeetingDurations] = useState<Record<string, number>>({});
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const [users, teams, evals] = await Promise.all([
+    const [users, teams, evals, durations] = await Promise.all([
       loadUsersForPerformance(),
       loadTeamsForPerformance(),
       loadEvaluations(),
+      loadMeetingDurations(),
     ]);
+    setMeetingDurations(durations);
     setDbUsers(users);
     setDbTeams(teams);
 
@@ -169,6 +172,7 @@ export default function PerformancePage() {
   const canSeeTeam = hasMinRole('supervisor');
 
   const [mode, setMode] = useState<'team' | 'person'>('person');
+  const [rankingLimit, setRankingLimit] = useState(5);
   const [selectedTeamId, setSelectedTeamId] = useState<string>('');
   const [selectedUserId, setSelectedUserId] = useState<string>('');
 
@@ -203,20 +207,26 @@ export default function PerformancePage() {
     const parts = [avgMeetingScore, avgWaScore].filter(Boolean) as number[];
     const overallScore = parts.length ? Math.round(parts.reduce((a, b) => a + b, 0) / parts.length) : null;
 
-    // Criteria averages for meetings
-    const meetCriteriaMap: Record<string, { total: number; count: number; weight: number }> = {};
+    // Criteria averages for meetings — grouped by agent (methodology)
+    const meetByAgent: Record<string, { criteria: Record<string, { total: number; count: number; weight: number }> }> = {};
     for (const e of meetEvals) {
+      const agentKey = (e as any).agente_avaliador_id || '_default';
+      if (!meetByAgent[agentKey]) meetByAgent[agentKey] = { criteria: {} };
       for (const c of (e.criterios || []) as any[]) {
-        if (!meetCriteriaMap[c.label]) meetCriteriaMap[c.label] = { total: 0, count: 0, weight: c.weight || 0 };
-        meetCriteriaMap[c.label].total += c.score;
-        meetCriteriaMap[c.label].count++;
+        const map = meetByAgent[agentKey].criteria;
+        if (!map[c.label]) map[c.label] = { total: 0, count: 0, weight: c.weight || 0 };
+        map[c.label].total += c.score;
+        map[c.label].count++;
       }
     }
-    const meetCriteria = Object.entries(meetCriteriaMap).map(([label, v]) => ({
-      label,
-      score: Math.round(v.total / v.count),
-      weight: v.weight,
+    const meetCriteriaByAgent = Object.entries(meetByAgent).map(([agentId, { criteria: cmap }]) => ({
+      agentId,
+      criteria: Object.entries(cmap).map(([label, v]) => ({
+        label, score: Math.round(v.total / v.count), weight: v.weight,
+      })).sort((a, b) => b.score - a.score),
     }));
+    // Flat list for backwards compat (radar, etc.)
+    const meetCriteria = meetCriteriaByAgent.flatMap(g => g.criteria);
 
     // Criteria averages for WhatsApp
     const waCriteriaMap: Record<string, { total: number; count: number; weight: number }> = {};
@@ -250,7 +260,7 @@ export default function PerformancePage() {
       reunioes: v.count,
     }));
 
-    return { u, avgMeetingScore, avgWaScore, overallScore, meetCriteria, waCriteria, trend, radarData, meetEvals, waEvals };
+    return { u, avgMeetingScore, avgWaScore, overallScore, meetCriteria, meetCriteriaByAgent, waCriteria, trend, radarData, meetEvals, waEvals };
   };
 
   // ── Team performance ──────────────────────────────────────────────────────
@@ -387,7 +397,7 @@ export default function PerformancePage() {
 
       {/* ════════════════ PERSON VIEW ════════════════════════════════════════ */}
       {mode === 'person' && userPerf && (() => {
-        const { u, avgMeetingScore, avgWaScore, overallScore, meetCriteria, waCriteria, trend, radarData, meetEvals, waEvals } = userPerf;
+        const { u, avgMeetingScore, avgWaScore, overallScore, meetCriteria, meetCriteriaByAgent, waCriteria, trend, radarData, meetEvals, waEvals } = userPerf;
         const teamName = teams.find(t => t.id === u.teamId)?.name;
         return (
           <div className="space-y-5">
@@ -472,15 +482,27 @@ export default function PerformancePage() {
 
             {/* Meeting + WhatsApp breakdowns */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {meetCriteria.length > 0 && (
+              {meetCriteriaByAgent.length > 0 && (
                 <div className="glass-card p-4">
                   <p className="text-xs font-semibold mb-3 flex items-center gap-1.5">
                     <Video className="w-3.5 h-3.5 text-primary" /> Detalhamento — Reuniões
                     <span className="text-[10px] text-muted-foreground ml-1">({meetEvals.length} avaliações)</span>
                   </p>
-                  <div className="space-y-2.5">
-                    {meetCriteria.map(c => (
-                      <MiniBar key={c.label} label={c.label} score={c.score} weight={c.weight} />
+                  <div className="space-y-4">
+                    {meetCriteriaByAgent.map((group, gi) => (
+                      <div key={group.agentId}>
+                        {meetCriteriaByAgent.length > 1 && (
+                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                            <Brain className="w-3 h-3" />
+                            {group.agentId === '_default' ? 'Avaliação Padrão' : `Agente ${gi + 1}`}
+                          </p>
+                        )}
+                        <div className="space-y-2">
+                          {group.criteria.map(c => (
+                            <MiniBar key={c.label} label={c.label} score={c.score} weight={c.weight} />
+                          ))}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -546,14 +568,16 @@ export default function PerformancePage() {
                 </p>
                 {(() => {
                   const durations = meetEvals
-                    .map(e => (e.payload as any)?.duracao_minutos || 0)
+                    .map(e => meetingDurations[e.entidade_id] || 0)
                     .filter(d => d > 0);
                   if (durations.length === 0) return <p className="text-xs text-muted-foreground">Sem dados de duração</p>;
                   const avg = Math.round(durations.reduce((a, b) => a + b, 0) / durations.length);
+                  const min = Math.min(...durations);
+                  const max = Math.max(...durations);
                   return (
                     <div>
                       <p className="text-2xl font-bold font-mono">{avg} <span className="text-sm text-muted-foreground font-normal">min</span></p>
-                      <p className="text-[10px] text-muted-foreground mt-1">{durations.length} reuniões com duração registrada</p>
+                      <p className="text-[10px] text-muted-foreground mt-1">{durations.length} reuniões · min {min}min · máx {max}min</p>
                     </div>
                   );
                 })()}
@@ -635,25 +659,33 @@ export default function PerformancePage() {
                 <p className="text-xs font-semibold mb-3 flex items-center gap-1.5">
                   <Trophy className="w-3.5 h-3.5 text-primary" /> Ranking de Vendedores
                 </p>
-                <div className="space-y-1.5">
-                  {visibleUsers
-                    .map(vu => {
-                      const perf = buildUserPerf(vu.id);
-                      return perf ? { ...vu, score: perf.overallScore ?? 0, meetings: perf.meetEvals.length } : null;
-                    })
+                {(() => {
+                  const ranked = visibleUsers
+                    .map(vu => { const perf = buildUserPerf(vu.id); return perf ? { ...vu, score: perf.overallScore ?? 0, meetings: perf.meetEvals.length } : null; })
                     .filter(Boolean)
-                    .sort((a, b) => (b!.score) - (a!.score))
-                    .map((vu, idx) => (
-                      <div key={vu!.id} className="flex items-center gap-3 py-2 border-b border-border/50 last:border-0">
-                        <span className={cn('w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0',
-                          idx === 0 ? 'bg-warning/20 text-warning' : idx === 1 ? 'bg-muted text-foreground' : idx === 2 ? 'bg-orange-500/20 text-orange-500' : 'bg-muted/50 text-muted-foreground'
-                        )}>{idx + 1}</span>
-                        <span className="text-xs flex-1 truncate">{vu!.name}</span>
-                        <span className="text-[10px] text-muted-foreground">{vu!.meetings} reuniões</span>
-                        <span className={cn('font-bold font-mono text-xs', scoreColor(vu!.score))}>{vu!.score || '—'}</span>
+                    .sort((a, b) => (b!.score) - (a!.score));
+                  return (
+                    <>
+                      <div className="space-y-1.5">
+                        {ranked.slice(0, rankingLimit).map((vu, idx) => (
+                          <div key={vu!.id} className="flex items-center gap-3 py-2 border-b border-border/50 last:border-0">
+                            <span className={cn('w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0',
+                              idx === 0 ? 'bg-warning/20 text-warning' : idx === 1 ? 'bg-muted text-foreground' : idx === 2 ? 'bg-orange-500/20 text-orange-500' : 'bg-muted/50 text-muted-foreground'
+                            )}>{idx + 1}</span>
+                            <span className="text-xs flex-1 truncate">{vu!.name}</span>
+                            <span className="text-[10px] text-muted-foreground">{vu!.meetings} reuniões</span>
+                            <span className={cn('font-bold font-mono text-xs', scoreColor(vu!.score))}>{vu!.score || '—'}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                </div>
+                      {ranked.length > rankingLimit && (
+                        <button onClick={() => setRankingLimit(l => l + 5)} className="w-full text-center text-xs text-primary hover:underline mt-3 py-1.5">
+                          Ver mais ({ranked.length - rankingLimit} restantes)
+                        </button>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             )}
           </div>
