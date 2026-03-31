@@ -165,9 +165,17 @@ export default function BulkSendModal({
     setLogs(data || []);
   }, [account?.id]);
 
+  // Load logs whenever modal opens (any step)
   useEffect(() => {
-    if (open && state.step === 'upload') loadLogs();
-  }, [open, state.step, loadLogs]);
+    if (open) loadLogs();
+  }, [open, loadLogs]);
+
+  // Auto-refresh logs every 10s while modal is open
+  useEffect(() => {
+    if (!open) return;
+    const t = setInterval(loadLogs, 10_000);
+    return () => clearInterval(t);
+  }, [open, loadLogs]);
 
   // Refresh status of a saved log by querying wamids from meta_inbox_messages
   const refreshLogStatus = useCallback(async (log: any) => {

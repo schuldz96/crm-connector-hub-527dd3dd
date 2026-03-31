@@ -58,15 +58,19 @@ export default function DashboardPage() {
   const currentMonth = now.getMonth();
   const currentYear = now.getFullYear();
 
-  const meetingsThisMonth = useMemo(() =>
+  const meetingsThisMonthAll = useMemo(() =>
     meetings.filter(m => {
       const d = new Date(m.data_reuniao);
       return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-    }).length,
+    }),
   [meetings, currentMonth, currentYear]);
 
+  const meetingsThisMonth = meetingsThisMonthAll.length;
+  const meetingsWithTranscript = useMemo(() => meetingsThisMonthAll.filter(m => m.transcricao && m.transcricao.length > 50).length, [meetingsThisMonthAll]);
+  const meetingsEvaluated = useMemo(() => meetingsThisMonthAll.filter(m => m.analisada_por_ia).length, [meetingsThisMonthAll]);
+
   const avgScoreMeet = useMemo(() => {
-    const withScore = meetings.filter(m => typeof m.score === 'number' && m.score !== null);
+    const withScore = meetings.filter(m => typeof m.score === 'number' && m.score !== null && m.score > 0);
     if (!withScore.length) return 0;
     return Number((withScore.reduce((sum, m) => sum + (m.score || 0), 0) / withScore.length).toFixed(1));
   }, [meetings]);
@@ -139,13 +143,13 @@ export default function DashboardPage() {
   }, [visibleInstances]);
 
   // ── Recent meetings ────────────────────────────────────────────────
-  const recentMeetings = useMemo(() => meetings.slice(0, 8), [meetings]);
+  const recentMeetings = useMemo(() => meetings.slice(0, 20), [meetings]);
 
   const monthLabel = now.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).replace('.', '');
 
   const kpiCards = [
-    { label: 'Reuniões este mês', value: String(meetingsThisMonth), icon: Video, color: 'violet', unit: '' },
-    { label: 'Score Meets', value: avgScoreMeet ? String(avgScoreMeet) : '—', icon: Star, color: 'lavender', unit: avgScoreMeet ? 'pts' : '' },
+    { label: 'Reuniões este mês', value: String(meetingsThisMonth), icon: Video, color: 'violet', unit: '', sub: `${meetingsWithTranscript} transcritas · ${meetingsEvaluated} avaliadas` },
+    { label: 'Score Meets (Sandler)', value: avgScoreMeet ? String(avgScoreMeet) : '—', icon: Star, color: 'lavender', unit: avgScoreMeet ? 'pts' : '' },
     { label: 'Score WhatsApp', value: '—', icon: MessageSquare, color: 'purple', unit: '' },
     { label: 'WhatsApp conectados', value: String(instancesConnected), icon: Wifi, color: 'green', unit: `/ ${visibleInstances.length}` },
   ];
@@ -195,6 +199,7 @@ export default function DashboardPage() {
                 {kpi.unit && <span className="text-sm font-normal text-muted-foreground ml-1">{kpi.unit}</span>}
               </p>
               <p className="text-xs text-muted-foreground">{kpi.label}</p>
+              {kpi.sub && <p className="text-[10px] text-muted-foreground/70 mt-0.5">{kpi.sub}</p>}
             </div>
           </div>
         ))}
@@ -322,7 +327,7 @@ export default function DashboardPage() {
               Ver todas
             </Button>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
             {recentMeetings.map((m) => (
               <div key={m.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => navigate('/meetings')}>
                 <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
