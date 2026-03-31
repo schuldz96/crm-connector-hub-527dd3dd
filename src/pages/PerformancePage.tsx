@@ -218,6 +218,10 @@ export default function PerformancePage() {
     }
   };
 
+  // Sandler agent ID (shared between buildUserPerf and buildTeamPerf)
+  const sandlerAgentEntry = useMemo(() => Object.entries(agentNames).find(([, name]) => name.toLowerCase().includes('sandler')), [agentNames]);
+  const sandlerAgentId = sandlerAgentEntry?.[0];
+
   const buildUserPerf = (userId: string) => {
     const u = users.find(x => x.id === userId);
     if (!u) return null;
@@ -227,8 +231,6 @@ export default function PerformancePage() {
     const waEvals = userEvals.filter(e => e.tipo_contexto === 'whatsapp');
 
     // Sandler is the principal methodology — use for scores/KPIs
-    const sandlerAgentName = Object.entries(agentNames).find(([, name]) => name.toLowerCase().includes('sandler'));
-    const sandlerAgentId = sandlerAgentName?.[0];
     const meetEvals = sandlerAgentId
       ? allMeetEvals.filter(e => (e as any).agente_avaliador_id === sandlerAgentId)
       : allMeetEvals;
