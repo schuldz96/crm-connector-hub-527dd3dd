@@ -1,5 +1,6 @@
 import '@/lib/globalPolyfill';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -482,6 +483,7 @@ function NewConversationDialog({
 export default function InboxPage() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [accounts, setAccounts] = useState<MetaInboxAccount[]>([]);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [selectedAccount, setSelectedAccount] = useState<MetaInboxAccount | null>(null);
@@ -546,7 +548,10 @@ export default function InboxPage() {
 
       setAccounts(filtered);
       if (filtered.length > 0 && !selectedAccount) {
-        setSelectedAccount(filtered[0]);
+        // Check URL for inbox param
+        const inboxParam = searchParams.get('inbox');
+        const match = inboxParam ? filtered.find(a => a.phone_number_id === inboxParam || a.id === inboxParam) : null;
+        setSelectedAccount(match || filtered[0]);
       }
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Erro ao carregar contas', description: e.message });
@@ -568,7 +573,20 @@ export default function InboxPage() {
     finally { setLoadingConvs(false); }
   }, [selectedAccount?.id]);
 
-  useEffect(() => { loadConvs(); setSelectedConv(null); setMessages([]); }, [loadConvs]);
+  useEffect(() => {
+    loadConvs();
+    // Don't clear selection if coming from URL
+    if (!searchParams.get('phone')) { setSelectedConv(null); setMessages([]); }
+  }, [loadConvs]);
+
+  // Auto-select conversation from URL params
+  useEffect(() => {
+    const phone = searchParams.get('phone');
+    if (phone && conversations.length > 0 && !selectedConv) {
+      const match = conversations.find(c => c.contact_phone === phone);
+      if (match) setSelectedConv(match);
+    }
+  }, [conversations, searchParams]);
 
   // Poll conversations every 5s — merge instead of replace to preserve scroll position
   useEffect(() => {
@@ -1072,7 +1090,14 @@ export default function InboxPage() {
             </div>
           ) : filteredConvs.map(conv => (
             <div key={conv.id}
-              onClick={() => { setSelectedConv(conv); markConversationRead(conv.id, selectedAccount?.id); }}
+              onClick={() => {
+                setSelectedConv(conv);
+                markConversationRead(conv.id, selectedAccount?.id);
+                const params: Record<string, string> = {};
+                if (selectedAccount) params.inbox = selectedAccount.phone_number_id || selectedAccount.id;
+                params.phone = conv.contact_phone;
+                setSearchParams(params, { replace: true });
+              }}
               className={cn('flex items-start gap-2.5 px-3 py-3 cursor-pointer border-b border-border/50 transition-colors',
                 selectedConv?.id === conv.id ? 'bg-primary/5' : 'hover:bg-muted/40')}>
               <AvatarInitials name={conv.contact_name || conv.contact_phone} />
