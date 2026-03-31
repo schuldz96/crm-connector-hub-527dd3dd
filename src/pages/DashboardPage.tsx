@@ -99,17 +99,17 @@ export default function DashboardPage() {
       const d = new Date(m.data_reuniao);
       return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
     }),
-  [meetings, currentMonth, currentYear]);
+  [filteredMeetings, currentMonth, currentYear]);
 
   const meetingsThisMonth = meetingsThisMonthAll.length;
   const meetingsWithTranscript = useMemo(() => meetingsThisMonthAll.filter(m => m.transcricao && m.transcricao.length > 50).length, [meetingsThisMonthAll]);
   const meetingsEvaluated = useMemo(() => meetingsThisMonthAll.filter(m => m.analisada_por_ia).length, [meetingsThisMonthAll]);
 
   const avgScoreMeet = useMemo(() => {
-    const withScore = filteredMeetings.filter(m => typeof m.score === 'number' && m.score !== null && m.score > 0);
+    const withScore = meetingsThisMonthAll.filter(m => typeof m.score === 'number' && m.score !== null && m.score > 0);
     if (!withScore.length) return 0;
     return Number((withScore.reduce((sum, m) => sum + (m.score || 0), 0) / withScore.length).toFixed(1));
-  }, [meetings]);
+  }, [meetingsThisMonthAll]);
 
   // ── WhatsApp Instances (role-based) ───────────────────────────────
   const visibleInstances = useMemo(() => {
