@@ -614,10 +614,15 @@ export default function MeetingsPage() {
 
   const filtered = visibleMeetings.filter(m => {
     const s = search.toLowerCase();
+    const participantMatch = (m.participantes || []).some((p: any) =>
+      (p.email || '').toLowerCase().includes(s) ||
+      (p.name || '').toLowerCase().includes(s)
+    );
     const matchSearch =
       m.titulo.toLowerCase().includes(s) ||
       (m.cliente_nome || '').toLowerCase().includes(s) ||
-      (m.vendedor_nome || '').toLowerCase().includes(s);
+      (m.vendedor_nome || '').toLowerCase().includes(s) ||
+      participantMatch;
     const matchTransc = transcFilter === 'all'
       || (transcFilter === 'com' && !!m.transcricao)
       || (transcFilter === 'sem' && !m.transcricao);
