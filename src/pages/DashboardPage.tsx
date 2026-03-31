@@ -217,16 +217,26 @@ export default function DashboardPage() {
             <>
               <SearchableSelect
                 value={filterTeam === 'all' ? '' : filterTeam}
-                onChange={v => { setFilterTeam(v || 'all'); setFilterSeller('all'); }}
+                onChange={v => { setFilterTeam(v || 'all'); if (v) { /* keep seller if belongs to team */ const seller = dbUsers.find(u => u.id === filterSeller); if (seller && seller.time_id !== v) setFilterSeller('all'); } else { setFilterSeller('all'); } }}
                 placeholder="Todas equipes"
-                options={dbTeams.sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).map(t => ({ value: t.id, label: t.nome }))}
+                options={(() => {
+                  let teams = dbTeams;
+                  if (filterSeller !== 'all') {
+                    const sellerUser = dbUsers.find(u => u.id === filterSeller);
+                    if (sellerUser?.time_id) teams = teams.filter(t => t.id === sellerUser.time_id);
+                  }
+                  return teams.sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).map(t => ({ value: t.id, label: t.nome }));
+                })()}
                 className="min-w-[160px]"
                 size="sm"
                 allowClear
               />
               <SearchableSelect
                 value={filterSeller === 'all' ? '' : filterSeller}
-                onChange={v => setFilterSeller(v || 'all')}
+                onChange={v => {
+                  setFilterSeller(v || 'all');
+                  if (v) { const u = dbUsers.find(x => x.id === v); if (u?.time_id && filterTeam === 'all') setFilterTeam(u.time_id); }
+                }}
                 placeholder="Todos vendedores"
                 searchPlaceholder="Pesquisar vendedor..."
                 options={dbUsers
