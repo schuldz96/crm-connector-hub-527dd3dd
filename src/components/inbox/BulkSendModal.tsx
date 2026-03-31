@@ -729,7 +729,8 @@ export default function BulkSendModal({
                   <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Histórico de disparos</p>
                   <div className="space-y-1.5">
                     {logs.map(log => {
-                      const status = log.sent_count >= log.total_rows ? 'Concluído' : log.failed_count > 0 ? 'Com erros' : 'Em andamento';
+                      const isDone = log.finished_at || (log.sent_count + log.failed_count) >= log.total_rows;
+                      const status = isDone ? (log.failed_count > 0 ? 'Com erros' : 'Concluído') : 'Em andamento';
                       const statusCls = status === 'Concluído' ? 'text-green-500' : status === 'Com erros' ? 'text-warning' : 'text-primary';
                       return (
                         <button key={log.id} onClick={() => setSelectedLog(log)}
