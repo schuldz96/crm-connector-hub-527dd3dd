@@ -322,71 +322,27 @@ export default function CRMPipelineSettingsPage() {
           <button onClick={() => navigate(-1)} className="text-muted-foreground hover:text-foreground">
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <h1 className="text-lg font-semibold">Objetos</h1>
+          <h1 className="text-lg font-semibold">Pipelines</h1>
         </div>
 
         {/* Object selector */}
-        <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center gap-3">
           <span className="text-sm text-muted-foreground">Selecione um objeto:</span>
           <Select value={objectType} onValueChange={v => navigate(`/crm/0-6?type=${v}`)}>
             <SelectTrigger className="w-48 h-9">
-              <div className="flex items-center gap-2">
-                <ObjIcon className="w-4 h-4" />
-                <SelectValue />
-              </div>
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {OBJECT_TYPES.map(o => (
-                <SelectItem key={o.id} value={o.id}>
-                  <div className="flex items-center gap-2">
-                    <o.icon className="w-4 h-4" />
-                    {o.label}
-                  </div>
-                </SelectItem>
+                <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-        </div>
-
-        {/* Top tabs */}
-        <div className="flex gap-0 border-b border-border -mb-px">
-          {['Configuração', 'Associações', 'Pipelines', 'Personalização de registros', 'Visualizar personalização', 'Personalização do índice'].map((tab, idx) => (
-            <button
-              key={tab}
-              className={cn(
-                'px-4 py-2.5 text-sm transition-colors border-b-2 -mb-px',
-                idx === 2
-                  ? 'border-foreground text-foreground font-medium'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              )}
-            >
-              {tab}
-            </button>
-          ))}
         </div>
       </div>
 
       {/* Content */}
       <div className="flex-1 overflow-auto px-6 py-6">
-        <h2 className="text-base font-semibold mb-4">
-          Personalizar todos os pipelines de {objectType === 'deal' ? 'Negócio' : 'Ticket'}
-        </h2>
-
-        {/* Color display options */}
-        <div className="mb-6">
-          <p className="text-sm text-muted-foreground mb-2">Defina as cores de exibição do pipeline</p>
-          <div className="flex gap-2">
-            <button className="px-3 py-1.5 text-xs border border-border rounded-md text-muted-foreground hover:bg-muted">Padrão (sem cor)</button>
-            <button className="px-3 py-1.5 text-xs border border-foreground rounded-md font-medium flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-primary" /> Texto com ponto colorido
-            </button>
-            <button className="px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md font-medium">Texto em selo colorido</button>
-          </div>
-        </div>
-
-        <h2 className="text-base font-semibold mb-4">
-          Personalizar pipelines individuais de {objectType === 'deal' ? 'Negócio' : 'Ticket'}
-        </h2>
 
         {/* Pipeline selector + actions */}
         <div className="flex items-center justify-between mb-4">
