@@ -382,7 +382,34 @@ export default function PerformancePage() {
       label, score: Math.round(v.total / v.count), weight: v.weight,
     })).sort((a, b) => b.score - a.score);
 
-    return { team, members, avgOverall, totalMeetings, totalWaAnalyses, teamCriteriaByAgent, teamWaCriteria, allTeamMeetEvals };
+    // Radar data (Sandler criteria or first agent)
+    const sandlerGroup = teamCriteriaByAgent.find(g => g.agentName.toLowerCase().includes('sandler')) || teamCriteriaByAgent[0];
+    const teamRadarData = sandlerGroup?.criteria.slice(0, 8).map(c => ({ subject: c.label.length > 12 ? c.label.slice(0, 12) + '…' : c.label, A: c.score })) || null;
+
+    // Trend (Sandler evals, aggregated by day with carry-forward)
+    const sandlerEvals = sandlerAgentId ? allTeamMeetEvals.filter(e => (e as any).agente_avaliador_id === sandlerAgentId) : allTeamMeetEvals;
+    const teamTrendByDay: Record<string, { total: number; count: number }> = {};
+    for (const e of sandlerEvals.filter(ev => ev.criado_em)) {
+      const dayKey = new Date(e.criado_em).toISOString().split('T')[0];
+      if (!teamTrendByDay[dayKey]) teamTrendByDay[dayKey] = { total: 0, count: 0 };
+      teamTrendByDay[dayKey].total += (e.score || 0);
+      teamTrendByDay[dayKey].count++;
+    }
+    const teamTrend: { date: string; score: number }[] = [];
+    const todayD = new Date();
+    let teamLastScore = avgOverall || 0;
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(todayD); d.setDate(d.getDate() - i);
+      const key = d.toISOString().split('T')[0];
+      const label = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      if (teamTrendByDay[key]) { teamLastScore = Math.round(teamTrendByDay[key].total / teamTrendByDay[key].count); }
+      teamTrend.push({ date: label, score: teamLastScore });
+    }
+
+    // Avg meeting score (Sandler only)
+    const teamAvgMeetScore = sandlerEvals.length ? Math.round(sandlerEvals.reduce((a, e) => a + (e.score || 0), 0) / sandlerEvals.length) : null;
+
+    return { team, members, avgOverall, totalMeetings, totalWaAnalyses, teamCriteriaByAgent, teamWaCriteria, allTeamMeetEvals, teamRadarData, teamTrend, teamAvgMeetScore };
   };
 
   const effectiveUserId = role === 'member' ? (user?.id ?? selectedUserId) : selectedUserId;
@@ -831,7 +858,7 @@ export default function PerformancePage() {
 
       {/* ════════════════ TEAM VIEW ═══════════════════════════════════════════ */}
       {mode === 'team' && teamPerf && (() => {
-        const { team, members, avgOverall, totalMeetings, totalWaAnalyses, teamCriteriaByAgent, teamWaCriteria, allTeamMeetEvals } = teamPerf;
+        const { team, members, avgOverall, totalMeetings, totalWaAnalyses, teamCriteriaByAgent, teamWaCriteria, allTeamMeetEvals, teamRadarData, teamTrend, teamAvgMeetScore } = teamPerf;
         const supervisor = users.find(u => u.id === team.supervisorId);
 
         const barData = members
@@ -875,11 +902,12 @@ export default function PerformancePage() {
               )}
             </div>
 
-            {/* KPI cards */}
-            <div className="grid grid-cols-3 gap-3">
-              <ScoreCard label="Score Médio Geral" value={avgOverall ?? '—'} icon={Award} sub="média de todos os membros" />
-              <ScoreCard label="Reuniões Avaliadas" value={totalMeetings} icon={Video} sub="com scorecard" />
-              <ScoreCard label="Análises WhatsApp" value={totalWaAnalyses} icon={Brain} sub="conversas analisadas por IA" />
+            {/* KPI cards — same as person view */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <ScoreCard label="Score Médio Reuniões" value={teamAvgMeetScore ?? '—'} icon={Video} sub={`${totalMeetings} reuniões avaliadas`} />
+              <ScoreCard label="Score Médio WhatsApp" value={totalWaAnalyses > 0 ? Math.round(members.filter(m => m.avgWaScore).reduce((a, m) => a + (m.avgWaScore || 0), 0) / (members.filter(m => m.avgWaScore).length || 1)) : '—'} icon={MessageSquare} sub={`${totalWaAnalyses} conversas avaliadas`} />
+              <ScoreCard label="Total Avaliações" value={totalMeetings + totalWaAnalyses} icon={Calendar} sub="reuniões + WhatsApp" />
+              <ScoreCard label="Score Global" value={avgOverall ?? '—'} icon={Award} sub="média do time" />
             </div>
 
             {/* Comparison chart */}
@@ -901,6 +929,40 @@ export default function PerformancePage() {
                 </ResponsiveContainer>
               </div>
             )}
+
+            {/* Radar + Trend — same as person view */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {teamRadarData && teamRadarData.length > 0 && (
+                <div className="glass-card p-4 lg:col-span-1">
+                  <p className="text-xs font-semibold mb-3 flex items-center gap-1.5">
+                    <Video className="w-3.5 h-3.5 text-primary" /> Critérios de Reunião
+                  </p>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <RadarChart data={teamRadarData}>
+                      <PolarGrid stroke="hsl(var(--border))" />
+                      <PolarAngleAxis dataKey="subject" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} />
+                      <Radar dataKey="A" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.2} strokeWidth={2} />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+              {teamTrend.length > 1 && (
+                <div className="glass-card p-4 lg:col-span-2">
+                  <p className="text-xs font-semibold mb-3 flex items-center gap-1.5">
+                    <TrendingUp className="w-3.5 h-3.5 text-accent" /> Evolução do Score em Reuniões
+                  </p>
+                  <ResponsiveContainer width="100%" height={200}>
+                    <LineChart data={teamTrend}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} />
+                      <YAxis domain={[0, 100]} tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} />
+                      <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 11 }} />
+                      <Line type="monotone" dataKey="score" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ fill: 'hsl(var(--primary))', r: 3 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
 
             {/* Criteria breakdown — same as person view */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
