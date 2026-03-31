@@ -143,7 +143,7 @@ export default function DashboardPage() {
   }, [visibleInstances]);
 
   // ── Recent meetings ────────────────────────────────────────────────
-  const recentMeetings = useMemo(() => meetings.slice(0, 20), [meetings]);
+  const recentMeetings = useMemo(() => meetings.slice(0, 15), [meetings]);
 
   const monthLabel = now.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).replace('.', '');
 
@@ -296,9 +296,9 @@ export default function DashboardPage() {
               Ver todos
             </Button>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-1.5">
             {topSellers.map((seller, i) => (
-              <div key={seller.name} className="flex items-center gap-3">
+              <div key={seller.name} className="flex items-center gap-2">
                 <span className={`text-sm font-bold w-5 text-center ${i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-amber-600' : 'text-muted-foreground'}`}>
                   {i + 1}
                 </span>
@@ -327,7 +327,7 @@ export default function DashboardPage() {
               Ver todas
             </Button>
           </div>
-          <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
+          <div className="space-y-1.5 max-h-[340px] overflow-y-auto pr-1">
             {recentMeetings.map((m) => (
               <div key={m.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => navigate('/meetings')}>
                 <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
