@@ -1210,31 +1210,47 @@ async function findConferenceByRecordingSourceFileId(sourceFileId, excludeConfer
 }
 
 async function resolveConferenceRecording({ conference, ownerCandidates, bufferedSince }) {
-  if (conference.recording_copied_file_id || conference.recording_source_file_id) {
+  if (conference.recording_copied_file_id) {
     return { updated: false, reused: true };
   }
 
   let files = [];
   let selectedOwner = ownerCandidates[0];
 
-  for (const ownerEmail of ownerCandidates) {
-    selectedOwner = ownerEmail;
-    if (conference.meeting_code) {
-      files = await withRetry(`listRecordingsForUser(code:${conference.meeting_code} owner:${ownerEmail})`, () =>
-        listRecordingsForUser(ownerEmail, bufferedSince, { meetingCode: conference.meeting_code })
-      );
-      if (files.length === 0) {
-        files = await withRetry(`listRecordingsForUser(fallback-without-code owner:${ownerEmail})`, () =>
+  if (conference.recording_source_file_id) {
+    files = [
+      {
+        id: conference.recording_source_file_id,
+        name: conference.recording_name || null,
+        mimeType: conference.recording_mime_type || null,
+        size: conference.recording_size_bytes || null,
+        webViewLink: conference.recording_web_view_link || null,
+        webContentLink: conference.recording_web_content_link || null,
+        createdTime: conference.ended_at || conference.started_at || null,
+      },
+    ];
+  }
+
+  if (files.length === 0) {
+    for (const ownerEmail of ownerCandidates) {
+      selectedOwner = ownerEmail;
+      if (conference.meeting_code) {
+        files = await withRetry(`listRecordingsForUser(code:${conference.meeting_code} owner:${ownerEmail})`, () =>
+          listRecordingsForUser(ownerEmail, bufferedSince, { meetingCode: conference.meeting_code })
+        );
+        if (files.length === 0) {
+          files = await withRetry(`listRecordingsForUser(fallback-without-code owner:${ownerEmail})`, () =>
+            listRecordingsForUser(ownerEmail, bufferedSince)
+          );
+        }
+      } else {
+        files = await withRetry(`listRecordingsForUser(no-meeting-code owner:${ownerEmail})`, () =>
           listRecordingsForUser(ownerEmail, bufferedSince)
         );
       }
-    } else {
-      files = await withRetry(`listRecordingsForUser(no-meeting-code owner:${ownerEmail})`, () =>
-        listRecordingsForUser(ownerEmail, bufferedSince)
-      );
-    }
 
-    if (files.length > 0) break;
+      if (files.length > 0) break;
+    }
   }
 
   const sorted = files
