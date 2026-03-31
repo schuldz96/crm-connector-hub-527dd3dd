@@ -196,9 +196,12 @@ export default function PerformancePage() {
   }, [visibleTeams, selectedTeamId]);
 
   // ── Build user performance from evaluations ───────────────────────────────
+  const [allEvalsForMeeting, setAllEvalsForMeeting] = useState<StoredEvaluation[]>([]);
+
   const openEvalDetail = async (ev: StoredEvaluation) => {
     setSelectedEval(ev);
     setSelectedMeeting(null);
+    setAllEvalsForMeeting([]);
     if (ev.tipo_contexto === 'reuniao' && ev.entidade_id) {
       setLoadingMeeting(true);
       try {
@@ -206,6 +209,9 @@ export default function PerformancePage() {
           .select('id,titulo,transcricao,duracao_minutos,data_reuniao,participantes,status')
           .eq('id', ev.entidade_id).maybeSingle();
         setSelectedMeeting(data);
+        // Load all evaluations for this meeting (all agents)
+        const otherEvals = evaluations.filter(e => e.entidade_id === ev.entidade_id && e.tipo_contexto === 'reuniao');
+        setAllEvalsForMeeting(otherEvals);
       } catch { /* ignore */ }
       finally { setLoadingMeeting(false); }
     }
@@ -216,8 +222,15 @@ export default function PerformancePage() {
     if (!u) return null;
 
     const userEvals = evaluations.filter(e => e.vendedor_id === userId);
-    const meetEvals = userEvals.filter(e => e.tipo_contexto === 'reuniao');
+    const allMeetEvals = userEvals.filter(e => e.tipo_contexto === 'reuniao');
     const waEvals = userEvals.filter(e => e.tipo_contexto === 'whatsapp');
+
+    // Sandler is the principal methodology — use for scores/KPIs
+    const sandlerAgentName = Object.entries(agentNames).find(([, name]) => name.toLowerCase().includes('sandler'));
+    const sandlerAgentId = sandlerAgentName?.[0];
+    const meetEvals = sandlerAgentId
+      ? allMeetEvals.filter(e => (e as any).agente_avaliador_id === sandlerAgentId)
+      : allMeetEvals;
 
     const avgMeetingScore = meetEvals.length
       ? Math.round(meetEvals.reduce((a, e) => a + (e.score || 0), 0) / meetEvals.length)
@@ -229,9 +242,9 @@ export default function PerformancePage() {
     const parts = [avgMeetingScore, avgWaScore].filter(Boolean) as number[];
     const overallScore = parts.length ? Math.round(parts.reduce((a, b) => a + b, 0) / parts.length) : null;
 
-    // Criteria averages for meetings — grouped by agent (methodology)
+    // Criteria averages for meetings — grouped by agent (methodology) — uses ALL evals
     const meetByAgent: Record<string, { criteria: Record<string, { total: number; count: number; weight: number }> }> = {};
-    for (const e of meetEvals) {
+    for (const e of allMeetEvals) {
       const agentKey = (e as any).agente_avaliador_id || '_default';
       if (!meetByAgent[agentKey]) meetByAgent[agentKey] = { criteria: {} };
       for (const c of (e.criterios || []) as any[]) {
@@ -936,17 +949,52 @@ export default function PerformancePage() {
                 </div>
               )}
 
-              {/* Critérios */}
+              {/* Critérios por agente/metodologia */}
               <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Critérios de Avaliação</p>
-                <div className="space-y-2">
-                  {((selectedEval.criterios || []) as any[]).sort((a, b) => (b.score || 0) - (a.score || 0)).map((c, i) => (
-                    <div key={i} className="p-2 rounded-lg border border-border/50">
-                      <MiniBar label={c.label} score={c.score || 0} weight={c.weight} />
-                      {c.feedback && <p className="text-[10px] text-muted-foreground mt-1 ml-0.5 italic">"{c.feedback}"</p>}
-                    </div>
-                  ))}
-                </div>
+                {allEvalsForMeeting.length > 1 ? (
+                  <div className="space-y-4">
+                    {allEvalsForMeeting
+                      .sort((a, b) => {
+                        const aName = agentNames[(a as any).agente_avaliador_id] || '';
+                        const bName = agentNames[(b as any).agente_avaliador_id] || '';
+                        const aS = aName.toLowerCase().includes('sandler') ? 0 : 1;
+                        const bS = bName.toLowerCase().includes('sandler') ? 0 : 1;
+                        return aS - bS || aName.localeCompare(bName);
+                      })
+                      .map(ev => {
+                        const name = agentNames[(ev as any).agente_avaliador_id] || 'Avaliação';
+                        const isSandler = name.toLowerCase().includes('sandler');
+                        return (
+                          <div key={ev.id} className={cn('rounded-lg border p-3', isSandler ? 'border-primary/30 bg-primary/5' : 'border-border/50')}>
+                            <div className="flex items-center gap-2 mb-2">
+                              <Brain className="w-3 h-3 text-muted-foreground" />
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{name}</span>
+                              <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full border font-semibold', isSandler ? 'bg-primary/10 text-primary border-primary/20' : 'bg-muted text-muted-foreground border-border')}>{isSandler ? 'Principal' : 'Complementar'}</span>
+                              <span className={cn('ml-auto text-sm font-bold font-mono', scoreColor(ev.score || 0))}>{ev.score}</span>
+                            </div>
+                            <div className="space-y-1.5">
+                              {((ev.criterios || []) as any[]).sort((a, b) => (b.score || 0) - (a.score || 0)).map((c, i) => (
+                                <div key={i}>
+                                  <MiniBar label={c.label} score={c.score || 0} weight={c.weight} />
+                                  {c.feedback && <p className="text-[10px] text-muted-foreground mt-0.5 ml-0.5 italic">"{c.feedback}"</p>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {((selectedEval.criterios || []) as any[]).sort((a, b) => (b.score || 0) - (a.score || 0)).map((c, i) => (
+                      <div key={i} className="p-2 rounded-lg border border-border/50">
+                        <MiniBar label={c.label} score={c.score || 0} weight={c.weight} />
+                        {c.feedback && <p className="text-[10px] text-muted-foreground mt-1 ml-0.5 italic">"{c.feedback}"</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Participantes */}
