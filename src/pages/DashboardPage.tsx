@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo, type CSSProperties } from 'react';
+import { useState, useEffect, useMemo, useCallback, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
+import SearchableSelect from '@/components/ui/searchable-select';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -66,10 +67,16 @@ export default function DashboardPage() {
   // Apply seller/team filters
   const filteredMeetings = useMemo(() => {
     let list = meetings;
-    if (filterTeam !== 'all') list = list.filter(m => m.time_id === filterTeam);
-    if (filterSeller !== 'all') list = list.filter(m => m.vendedor_id === filterSeller);
+    if (filterTeam !== 'all') {
+      // Filter by team: match meeting's time_id OR vendedor's time_id
+      const teamUserIds = new Set(dbUsers.filter(u => u.time_id === filterTeam).map(u => u.id));
+      list = list.filter(m => m.time_id === filterTeam || (m.vendedor_id && teamUserIds.has(m.vendedor_id)));
+    }
+    if (filterSeller !== 'all') {
+      list = list.filter(m => m.vendedor_id === filterSeller);
+    }
     return list;
-  }, [meetings, filterSeller, filterTeam]);
+  }, [meetings, filterSeller, filterTeam, dbUsers]);
 
   // ── Month filter ────────────────────────────────────────────────────
   const now = new Date();
@@ -195,7 +202,7 @@ export default function DashboardPage() {
             Aqui está o resumo de performance da sua equipe hoje.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 relative z-20">
           <div className="flex items-center border border-border rounded-lg overflow-hidden">
             <button onClick={() => goMonth(-1)} className="px-2 h-8 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-xs">&lt;</button>
             <span className="px-3 h-8 flex items-center gap-1.5 text-xs font-medium">
@@ -206,21 +213,28 @@ export default function DashboardPage() {
           </div>
           {canFilter && (
             <>
-              <select value={filterTeam} onChange={e => { setFilterTeam(e.target.value); setFilterSeller('all'); }}
-                className="h-8 px-2 text-xs border border-border rounded-lg bg-secondary text-foreground">
-                <option value="all">Todas equipes</option>
-                {dbTeams.sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).map(t => (
-                  <option key={t.id} value={t.id}>{t.nome}</option>
-                ))}
-              </select>
-              <select value={filterSeller} onChange={e => setFilterSeller(e.target.value)}
-                className="h-8 px-2 text-xs border border-border rounded-lg bg-secondary text-foreground">
-                <option value="all">Todos vendedores</option>
-                {dbUsers
+              <SearchableSelect
+                value={filterTeam === 'all' ? '' : filterTeam}
+                onChange={v => { setFilterTeam(v || 'all'); setFilterSeller('all'); }}
+                placeholder="Todas equipes"
+                options={dbTeams.sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).map(t => ({ value: t.id, label: t.nome }))}
+                className="min-w-[160px]"
+                size="sm"
+                allowClear
+              />
+              <SearchableSelect
+                value={filterSeller === 'all' ? '' : filterSeller}
+                onChange={v => setFilterSeller(v || 'all')}
+                placeholder="Todos vendedores"
+                searchPlaceholder="Pesquisar vendedor..."
+                options={dbUsers
                   .filter(u => u.papel === 'vendedor' && (filterTeam === 'all' || u.time_id === filterTeam))
                   .sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
-                  .map(u => <option key={u.id} value={u.id}>{u.nome}</option>)}
-              </select>
+                  .map(u => ({ value: u.id, label: u.nome }))}
+                className="min-w-[200px]"
+                size="sm"
+                allowClear
+              />
             </>
           )}
         </div>
