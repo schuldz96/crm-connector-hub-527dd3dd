@@ -1394,17 +1394,20 @@ export default function MeetingsPage() {
                     ? parseTranscriptParticipation(selectedMeeting.transcricao, participantEmails)
                     : [];
 
-                  const participantsWithPct = transcriptParticipation.length > 0
-                    ? transcriptParticipation.map(p => ({
-                        name: p.name,
-                        email: p.email || null,
-                        pct: p.percent,
-                      })).sort((a, b) => b.pct - a.pct)
-                    : (selectedMeeting.participantes || []).map((p: any) => ({
-                        name: p.name || p.email?.split('@')[0] || '?',
-                        email: p.email || null,
-                        pct: 0,
-                      }));
+                  const fromTranscript = transcriptParticipation.map(p => ({
+                    name: p.name, email: p.email || null, pct: p.percent,
+                  }));
+                  // Add registered participants who didn't speak (0%)
+                  const spokenNames = new Set(fromTranscript.map(p => (p.name || '').toLowerCase()));
+                  const spokenEmails = new Set(fromTranscript.map(p => (p.email || '').toLowerCase()).filter(Boolean));
+                  const silent = (selectedMeeting.participantes || [])
+                    .filter((p: any) => {
+                      const name = (p.name || p.email?.split('@')[0] || '').toLowerCase();
+                      const email = (p.email || '').toLowerCase();
+                      return !spokenNames.has(name) && !spokenEmails.has(email);
+                    })
+                    .map((p: any) => ({ name: p.name || p.email?.split('@')[0] || '?', email: p.email || null, pct: 0 }));
+                  const participantsWithPct = [...fromTranscript, ...silent].sort((a, b) => b.pct - a.pct);
 
                   const totalPct = participantsWithPct.reduce((sum: number, p: any) => sum + p.pct, 0);
 
