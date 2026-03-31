@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import type { ElementType } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -62,6 +62,16 @@ export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean
   const navigate = useNavigate();
   const [profileOpen, setProfileOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [hoverItem, setHoverItem] = useState<string | null>(null);
+  const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleMouseEnter = useCallback((path: string) => {
+    if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
+    setHoverItem(path);
+  }, []);
+  const handleMouseLeave = useCallback(() => {
+    hoverTimeout.current = setTimeout(() => setHoverItem(null), 150);
+  }, []);
 
   const isActive = (path: string) => location.pathname === path.split('?')[0];
   const isChildActive = (item: NavItem) =>
@@ -122,11 +132,19 @@ export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean
           </p>
         )}
         {visibleItems.map((item) => {
-          // Items with children (collapsible group)
-          if (item.children && item.children.length > 0) {
+          const hasChildren = item.children && item.children.length > 0;
+          const isHovered = hoverItem === item.path;
+
+          // Items with children — hover flyout
+          if (hasChildren) {
             const isOpen = expandedGroups[item.path] ?? isChildActive(item);
             return (
-              <div key={item.path}>
+              <div
+                key={item.path}
+                className="relative"
+                onMouseEnter={() => handleMouseEnter(item.path)}
+                onMouseLeave={handleMouseLeave}
+              >
                 <div
                   className={cn('nav-item', isChildActive(item) && 'active')}
                   onClick={() => {
@@ -136,7 +154,6 @@ export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean
                       toggleGroup(item.path);
                     }
                   }}
-                  title={collapsed ? item.label : undefined}
                 >
                   <item.icon className="w-4 h-4 flex-shrink-0" />
                   {!collapsed && (
@@ -149,9 +166,37 @@ export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean
                     </>
                   )}
                 </div>
+
+                {/* Flyout popup on hover */}
+                {isHovered && collapsed && (
+                  <div
+                    className="absolute left-full top-0 ml-2 z-50 min-w-[180px] py-2 rounded-lg border border-border bg-card shadow-xl"
+                    onMouseEnter={() => handleMouseEnter(item.path)}
+                    onMouseLeave={handleMouseLeave}
+                  >
+                    <p className="text-xs font-semibold text-foreground px-3 pb-1.5 border-b border-border mb-1">{item.label}</p>
+                    {item.children!.map((child) => (
+                      <button
+                        key={child.path}
+                        className={cn(
+                          'flex items-center gap-2 w-full px-3 py-1.5 text-xs transition-colors',
+                          isActive(child.path)
+                            ? 'bg-primary/10 text-primary font-medium'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                        )}
+                        onClick={() => { navigate(child.path); setHoverItem(null); }}
+                      >
+                        <child.icon className="w-3.5 h-3.5" />
+                        {child.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Expanded children (when sidebar is open) */}
                 {!collapsed && isOpen && (
                   <div className="ml-4 pl-2 border-l border-sidebar-border/50 space-y-0.5 mt-0.5">
-                    {item.children.map((child) => (
+                    {item.children!.map((child) => (
                       <div
                         key={child.path}
                         className={cn('nav-item text-[13px]', isActive(child.path) && 'active')}
@@ -167,27 +212,42 @@ export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean
             );
           }
 
-          // Regular items
+          // Regular items — hover tooltip when collapsed
           return (
             <div
               key={item.path}
-              className={cn('nav-item', isActive(item.path) && 'active')}
-              onClick={() => navigate(item.path)}
-              title={collapsed ? item.label : undefined}
+              className="relative"
+              onMouseEnter={() => collapsed ? handleMouseEnter(item.path) : undefined}
+              onMouseLeave={() => collapsed ? handleMouseLeave() : undefined}
             >
-              <item.icon className="w-4 h-4 flex-shrink-0" />
-              {!collapsed && (
-                <>
-                  <span className="flex-1 truncate">{item.label}</span>
-                  {item.badge && (
-                    <Badge
-                      className="h-4 min-w-[18px] px-1 text-[10px] font-bold"
-                      style={{ background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }}
-                    >
-                      {item.badge}
-                    </Badge>
-                  )}
-                </>
+              <div
+                className={cn('nav-item', isActive(item.path) && 'active')}
+                onClick={() => navigate(item.path)}
+              >
+                <item.icon className="w-4 h-4 flex-shrink-0" />
+                {!collapsed && (
+                  <>
+                    <span className="flex-1 truncate">{item.label}</span>
+                    {item.badge && (
+                      <Badge
+                        className="h-4 min-w-[18px] px-1 text-[10px] font-bold"
+                        style={{ background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }}
+                      >
+                        {item.badge}
+                      </Badge>
+                    )}
+                  </>
+                )}
+              </div>
+              {/* Tooltip on hover when collapsed */}
+              {isHovered && collapsed && (
+                <div
+                  className="absolute left-full top-0 ml-2 z-50 px-3 py-1.5 rounded-md border border-border bg-card shadow-lg text-xs font-medium text-foreground whitespace-nowrap"
+                  onMouseEnter={() => handleMouseEnter(item.path)}
+                  onMouseLeave={handleMouseLeave}
+                >
+                  {item.label}
+                </div>
               )}
             </div>
           );

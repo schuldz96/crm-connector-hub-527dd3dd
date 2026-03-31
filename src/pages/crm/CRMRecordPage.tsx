@@ -198,11 +198,16 @@ export default function CRMRecordPage() {
 
   // ---- Handlers ----
   const handleBack = () => {
-    const paths: Record<CrmObjectType, string> = {
-      contact: '/crm/0-1', company: '/crm/0-2',
-      deal: '/crm/0-3', ticket: '/crm/0-4',
-    };
-    navigate(paths[objectType]);
+    // Use browser history to preserve URL params (e.g. pipeline filter)
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      const paths: Record<CrmObjectType, string> = {
+        contact: '/crm/0-1', company: '/crm/0-2',
+        deal: '/crm/0-3', ticket: '/crm/0-4',
+      };
+      navigate(paths[objectType]);
+    }
   };
 
   const handleStartEditName = () => {
