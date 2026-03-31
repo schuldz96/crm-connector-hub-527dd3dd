@@ -144,11 +144,12 @@ export default function CRMTicketsPage() {
     : null) || pipelines[0];
   const pipelineId = pipeline?.id || '';
 
+  const pipelineNomeInterno = pipeline?.nome_interno;
   useEffect(() => {
-    if (pipeline && !pipelineParam) {
-      setSearchParams({ pipeline: String(pipeline.nome_interno) }, { replace: true });
+    if (pipelineNomeInterno && !searchParams.get('pipeline')) {
+      setSearchParams({ pipeline: String(pipelineNomeInterno) }, { replace: true });
     }
-  }, [pipeline, pipelineParam, setSearchParams]);
+  }, [pipelineNomeInterno]);
 
   const selectPipeline = (p: typeof pipeline) => {
     if (!p) return;

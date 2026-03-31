@@ -130,11 +130,12 @@ export default function CRMDealsPage() {
   const pipelineId = pipeline?.id || '';
 
   // Auto-set pipeline in URL when loaded
+  const pipelineNomeInterno = pipeline?.nome_interno;
   useEffect(() => {
-    if (pipeline && !pipelineParam) {
-      setSearchParams({ pipeline: String(pipeline.nome_interno) }, { replace: true });
+    if (pipelineNomeInterno && !searchParams.get('pipeline')) {
+      setSearchParams({ pipeline: String(pipelineNomeInterno) }, { replace: true });
     }
-  }, [pipeline, pipelineParam, setSearchParams]);
+  }, [pipelineNomeInterno]);
 
   const selectPipeline = (p: typeof pipeline) => {
     if (!p) return;

@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
   Search, Plus, Filter, ExternalLink, MoreHorizontal, X,
-  ChevronLeft, ChevronRight, Download, Contact, Settings2,
+  ChevronLeft, ChevronRight, ChevronDown, Download, Contact, Settings2,
   ArrowUpDown, BarChart3, Copy, Table2, SlidersHorizontal, Loader2,
 } from 'lucide-react';
 import {
@@ -15,7 +15,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { useCrmContacts, useCreateContact } from '@/hooks/useCrm';
+import { useCrmContacts, useCreateContact, useSaasUsers } from '@/hooks/useCrm';
 import { useToast } from '@/hooks/use-toast';
 import type { ContactStatus } from '@/types/crm';
 
@@ -25,6 +25,50 @@ const STATUS_CONFIG: Record<ContactStatus, { label: string; class: string }> = {
   customer:  { label: 'Cliente',     class: 'bg-success/15 text-success' },
   churned:   { label: 'Churned',     class: 'bg-destructive/15 text-destructive' },
 };
+
+type FilterDef = { key: string; label: string; type: 'select' | 'text'; options?: { value: string; label: string; sub?: string }[] };
+
+const DATE_OPTIONS = [
+  { value: 'hoje', label: 'Hoje', sub: 'Todos de hoje' },
+  { value: 'ontem', label: 'Ontem', sub: 'Dia anterior de 24 horas' },
+  { value: 'esta_semana', label: 'Esta semana', sub: 'Segunda a domingo' },
+  { value: 'semana_passada', label: 'Semana passada', sub: 'Últimos 7 dias' },
+  { value: 'este_mes', label: 'Este mês', sub: 'Mês atual' },
+  { value: 'mes_passado', label: 'Mês passado', sub: 'Últimos 30 dias' },
+  { value: 'este_ano', label: 'Este ano', sub: 'Ano atual' },
+];
+
+function getDateRange(preset: string): { start: Date; end: Date } {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+  switch (preset) {
+    case 'hoje': return { start: today, end: tomorrow };
+    case 'ontem': { const d = new Date(today); d.setDate(d.getDate() - 1); return { start: d, end: today }; }
+    case 'esta_semana': { const d = new Date(today); d.setDate(d.getDate() - d.getDay() + 1); return { start: d, end: tomorrow }; }
+    case 'semana_passada': { const d = new Date(today); d.setDate(d.getDate() - 7); return { start: d, end: tomorrow }; }
+    case 'este_mes': return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: tomorrow };
+    case 'mes_passado': { const d = new Date(today); d.setDate(d.getDate() - 30); return { start: d, end: tomorrow }; }
+    case 'este_ano': return { start: new Date(now.getFullYear(), 0, 1), end: tomorrow };
+    default: return { start: new Date(2000, 0, 1), end: tomorrow };
+  }
+}
+
+const CONTACT_FILTERS: FilterDef[] = [
+  { key: 'proprietario_id', label: 'Proprietário do contato', type: 'select' },
+  { key: 'criado_em', label: 'Data de criação', type: 'select', options: DATE_OPTIONS },
+  { key: 'status', label: 'Status do contato', type: 'select', options: [
+    { value: 'lead', label: 'Lead' }, { value: 'qualified', label: 'Qualificado' },
+    { value: 'customer', label: 'Cliente' }, { value: 'churned', label: 'Churned' },
+  ]},
+  { key: 'fonte', label: 'Fonte', type: 'select', options: [
+    { value: 'website', label: 'Website' }, { value: 'linkedin', label: 'LinkedIn' },
+    { value: 'referencia', label: 'Referência' }, { value: 'campanha', label: 'Campanha' },
+    { value: 'whatsapp', label: 'WhatsApp' }, { value: 'email', label: 'E-mail' },
+    { value: 'telefone', label: 'Telefone' }, { value: 'evento', label: 'Evento' },
+  ]},
+  { key: 'cargo', label: 'Cargo', type: 'text' },
+];
 
 const TABS = [
   { id: 'all', label: 'Todos os contatos' },
@@ -54,6 +98,11 @@ export default function CRMContactsPage() {
   const [newTelefone, setNewTelefone] = useState('');
   const [newCargo, setNewCargo] = useState('');
   const createContact = useCreateContact();
+  const { data: saasUsers = [] } = useSaasUsers();
+  const [showFilters, setShowFilters] = useState(true);
+  const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
+  const [openChip, setOpenChip] = useState<string | null>(null);
+  const [chipSearch, setChipSearch] = useState('');
 
   const { data: result, isLoading } = useCrmContacts({
     search: search || undefined,
@@ -64,7 +113,21 @@ export default function CRMContactsPage() {
     orderDir: 'desc',
   });
 
-  const contacts = result?.data || [];
+  const contacts = useMemo(() => {
+    let list = result?.data || [];
+    for (const [key, val] of Object.entries(activeFilters)) {
+      if (!val) continue;
+      if (key === 'proprietario_id') list = list.filter(c => c.proprietario_id === val);
+      else if (key === 'status') list = list.filter(c => c.status === val);
+      else if (key === 'fonte') list = list.filter(c => c.fonte === val);
+      else if (key === 'cargo') list = list.filter(c => (c as any).cargo?.toLowerCase().includes(val.toLowerCase()));
+      else if (key === 'criado_em') {
+        const { start, end } = getDateRange(val);
+        list = list.filter(c => { const t = new Date(c.criado_em).getTime(); return t >= start.getTime() && t < end.getTime(); });
+      }
+    }
+    return list;
+  }, [result?.data, activeFilters]);
   const total = result?.total || 0;
   const totalPages = result?.totalPages || 1;
 
@@ -170,7 +233,7 @@ export default function CRMContactsPage() {
           <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
             Editar colunas
           </Button>
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs font-medium">
+          <Button variant="outline" size="sm" className={cn("h-8 gap-1.5 text-xs font-medium", showFilters && "bg-muted")} onClick={() => setShowFilters(f => !f)}>
             <Filter className="w-3.5 h-3.5" /> Filtros
           </Button>
           <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
@@ -189,25 +252,90 @@ export default function CRMContactsPage() {
       </div>
 
       {/* Filter chips row */}
-      <div className="flex items-center gap-3 px-4 py-2 border-b border-border bg-card flex-shrink-0 text-xs">
-        <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground font-medium">
-          Proprietário do contato <ChevronRight className="w-3 h-3 rotate-90" />
-        </button>
-        <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground font-medium">
-          Data de criação <ChevronRight className="w-3 h-3 rotate-90" />
-        </button>
-        <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground font-medium">
-          Data da última atividade <ChevronRight className="w-3 h-3 rotate-90" />
-        </button>
-        <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground font-medium">
-          Status do lead <ChevronRight className="w-3 h-3 rotate-90" />
-        </button>
-        <button className="text-muted-foreground hover:text-foreground font-medium">+ Mais</button>
-        <div className="w-px h-4 bg-border" />
-        <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground font-medium">
-          <SlidersHorizontal className="w-3 h-3" /> Filtros avançados
-        </button>
-      </div>
+      {showFilters && (
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-card flex-shrink-0 text-xs flex-wrap">
+          {CONTACT_FILTERS.map(f => {
+            const isOpen = openChip === f.key;
+            const hasValue = !!activeFilters[f.key];
+            let options = f.options || [];
+            if (f.key === 'proprietario_id') options = saasUsers.map((u: any) => ({ value: u.id, label: u.nome }));
+            const selectedLabel = hasValue ? (f.type === 'text' ? activeFilters[f.key] : options.find(o => o.value === activeFilters[f.key])?.label) : null;
+
+            return (
+              <div key={f.key} className="relative">
+                <button
+                  onClick={() => { setOpenChip(isOpen ? null : f.key); setChipSearch(''); }}
+                  className={cn(
+                    'flex items-center gap-1 font-medium px-2 py-1 rounded-md transition-colors',
+                    hasValue ? 'bg-primary/15 text-primary border border-primary/30' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  )}
+                >
+                  {f.label}{selectedLabel ? `: ${selectedLabel}` : ''} <ChevronDown className="w-3 h-3" />
+                  {hasValue && (
+                    <span onClick={(e) => { e.stopPropagation(); setActiveFilters(prev => { const n = { ...prev }; delete n[f.key]; return n; }); setOpenChip(null); }}
+                      className="ml-0.5 hover:text-destructive"><X className="w-3 h-3" /></span>
+                  )}
+                </button>
+                {isOpen && (
+                  <div className="absolute top-full left-0 mt-1 z-30 bg-card border border-border rounded-lg shadow-lg min-w-[200px] max-h-60 overflow-y-auto">
+                    {(f.type === 'select' && options.length > 0) ? (() => {
+                      const filtered = chipSearch ? options.filter(o => o.label.toLowerCase().includes(chipSearch.toLowerCase())) : options;
+                      return (
+                      <div className="py-1">
+                        {options.length > 5 && (
+                          <div className="px-2 pb-1 border-b border-border mb-1">
+                            <div className="relative">
+                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+                              <Input className="pl-7 text-xs h-7" placeholder="Pesquisar..." value={chipSearch} onChange={e => setChipSearch(e.target.value)} autoFocus />
+                            </div>
+                          </div>
+                        )}
+                        <button onClick={() => { setActiveFilters(prev => { const n = { ...prev }; delete n[f.key]; return n; }); setOpenChip(null); }}
+                          className={cn('w-full text-left px-3 py-1.5 text-xs hover:bg-muted', !hasValue && 'font-medium')}>
+                          Todos
+                        </button>
+                        <div className="max-h-48 overflow-y-auto">
+                          {filtered.map(o => (
+                            <button key={o.value} onClick={() => { setActiveFilters(prev => ({ ...prev, [f.key]: o.value })); setOpenChip(null); }}
+                              className={cn('w-full text-left px-3 py-1.5 text-xs hover:bg-muted', activeFilters[f.key] === o.value && 'bg-muted font-medium')}>
+                              <span>{o.label}</span>
+                              {o.sub && <span className="block text-[10px] text-muted-foreground">{o.sub}</span>}
+                            </button>
+                          ))}
+                          {filtered.length === 0 && <p className="px-3 py-2 text-xs text-muted-foreground">Nenhum resultado</p>}
+                        </div>
+                      </div>);
+                    })() : f.type === 'text' ? (
+                      <div className="p-2">
+                        <Input className="text-xs h-8" placeholder={`Filtrar por ${f.label.toLowerCase()}...`}
+                          value={activeFilters[f.key] || ''}
+                          onChange={e => setActiveFilters(prev => e.target.value ? { ...prev, [f.key]: e.target.value } : (() => { const n = { ...prev }; delete n[f.key]; return n; })())}
+                          onKeyDown={e => e.key === 'Enter' && setOpenChip(null)}
+                          autoFocus />
+                      </div>
+                    ) : (
+                      <div className="p-2 text-xs text-muted-foreground">Em breve</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          <button className="text-muted-foreground hover:text-foreground font-medium px-2 py-1">+ Mais</button>
+          <div className="w-px h-4 bg-border" />
+          <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground font-medium px-2 py-1">
+            <SlidersHorizontal className="w-3 h-3" /> Filtros avançados
+          </button>
+          {Object.keys(activeFilters).length > 0 && (
+            <>
+              <div className="w-px h-4 bg-border" />
+              <button onClick={() => setActiveFilters({})} className="text-destructive hover:text-destructive/80 font-medium px-2 py-1">
+                Limpar filtros
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {/* Table */}
       <div className="flex-1 overflow-auto">
