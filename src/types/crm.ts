@@ -140,7 +140,7 @@ export interface CrmTicket {
 export interface CrmPipeline {
   id: string;
   empresa_id: string;
-  registro_id: string;
+  nome_interno: number;
   nome: string;
   tipo: 'deal' | 'ticket';
   ativo: boolean;
@@ -153,6 +153,7 @@ export interface CrmPipeline {
 export interface CrmPipelineStage {
   id: string;
   pipeline_id: string;
+  nome_interno: number;
   nome: string;
   cor: string;
   ordem: number;

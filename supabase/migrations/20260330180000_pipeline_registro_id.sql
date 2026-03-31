@@ -1,37 +1,40 @@
--- Add internal registration ID to pipelines (format: X12345678Y - 1 letter + 8 digits + 1 letter)
-ALTER TABLE saas.crm_pipelines ADD COLUMN IF NOT EXISTS registro_id text;
+-- Add nome_interno (numeric 9-digit ID) to pipelines and stages
 
--- Function to auto-generate registro_id
-CREATE OR REPLACE FUNCTION saas.gerar_registro_id_pipeline()
+-- Pipelines
+ALTER TABLE saas.crm_pipelines DROP COLUMN IF EXISTS registro_id CASCADE;
+ALTER TABLE saas.crm_pipelines ADD COLUMN IF NOT EXISTS nome_interno bigint;
+
+-- Stages
+ALTER TABLE saas.crm_pipeline_estagios ADD COLUMN IF NOT EXISTS nome_interno bigint;
+
+-- Auto-generation function (9-digit random numeric ID)
+CREATE OR REPLACE FUNCTION saas.gerar_nome_interno()
 RETURNS trigger AS $$
-DECLARE
-  letra_inicio char(1);
-  letra_fim char(1);
-  numeros text;
 BEGIN
-  letra_inicio := chr(65 + floor(random() * 26)::int);
-  letra_fim := chr(65 + floor(random() * 26)::int);
-  numeros := lpad(floor(random() * 100000000)::text, 8, '0');
-  NEW.registro_id := letra_inicio || numeros || letra_fim;
+  NEW.nome_interno := floor(random() * 900000000 + 100000000)::bigint;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger for auto-generation on insert
-DROP TRIGGER IF EXISTS trg_pipeline_registro_id ON saas.crm_pipelines;
-CREATE TRIGGER trg_pipeline_registro_id
+-- Triggers
+DROP TRIGGER IF EXISTS trg_pipeline_nome_interno ON saas.crm_pipelines;
+CREATE TRIGGER trg_pipeline_nome_interno
   BEFORE INSERT ON saas.crm_pipelines
-  FOR EACH ROW
-  WHEN (NEW.registro_id IS NULL)
-  EXECUTE FUNCTION saas.gerar_registro_id_pipeline();
+  FOR EACH ROW WHEN (NEW.nome_interno IS NULL)
+  EXECUTE FUNCTION saas.gerar_nome_interno();
 
--- Generate for existing pipelines
-UPDATE saas.crm_pipelines
-SET registro_id = chr(65 + floor(random() * 26)::int)
-  || lpad(floor(random() * 100000000)::text, 8, '0')
-  || chr(65 + floor(random() * 26)::int)
-WHERE registro_id IS NULL;
+DROP TRIGGER IF EXISTS trg_estagio_nome_interno ON saas.crm_pipeline_estagios;
+CREATE TRIGGER trg_estagio_nome_interno
+  BEFORE INSERT ON saas.crm_pipeline_estagios
+  FOR EACH ROW WHEN (NEW.nome_interno IS NULL)
+  EXECUTE FUNCTION saas.gerar_nome_interno();
 
--- Enforce uniqueness
-ALTER TABLE saas.crm_pipelines ALTER COLUMN registro_id SET NOT NULL;
-CREATE UNIQUE INDEX IF NOT EXISTS crm_pipelines_registro_id_key ON saas.crm_pipelines(registro_id);
+-- Populate existing records
+UPDATE saas.crm_pipelines SET nome_interno = floor(random() * 900000000 + 100000000)::bigint WHERE nome_interno IS NULL;
+UPDATE saas.crm_pipeline_estagios SET nome_interno = floor(random() * 900000000 + 100000000)::bigint WHERE nome_interno IS NULL;
+
+-- Enforce constraints
+ALTER TABLE saas.crm_pipelines ALTER COLUMN nome_interno SET NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS crm_pipelines_nome_interno_key ON saas.crm_pipelines(nome_interno);
+ALTER TABLE saas.crm_pipeline_estagios ALTER COLUMN nome_interno SET NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS crm_pipeline_estagios_nome_interno_key ON saas.crm_pipeline_estagios(nome_interno);

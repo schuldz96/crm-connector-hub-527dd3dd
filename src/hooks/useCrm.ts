@@ -335,3 +335,14 @@ export function useDeleteAssociation() {
     },
   });
 }
+
+// ========================
+// Usuários do sistema (proprietários)
+// ========================
+export function useSaasUsers() {
+  return useQuery({
+    queryKey: ['saas.users'],
+    queryFn: () => crm.listSaasUsers(),
+    staleTime: 5 * 60_000,
+  });
+}

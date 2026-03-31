@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -16,9 +16,15 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import StageAIConfigModal, { type StageAIConfig } from '@/components/crm/StageAIConfigModal';
-import { useCrmPipelines, useCrmTicketsByPipeline, useCreateTicket, useUpdateTicket } from '@/hooks/useCrm';
+import { useCrmPipelines, useCrmTicketsByPipeline, useCreateTicket, useUpdateTicket, useSaasUsers } from '@/hooks/useCrm';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import type { CrmTicket, CrmPipelineStage, TicketPriority } from '@/types/crm';
+
+const TICKET_FILTER_CHIPS = [
+  'Proprietário do ticket', 'Data de criação', 'Prioridade',
+  'Status', 'Etapa do ticket', 'Categoria', 'Plataforma',
+];
 
 const TABS = [
   { id: 'all', label: 'Todos os tickets' },
@@ -51,7 +57,10 @@ function daysSince(date: string) {
 
 export default function CRMTicketsPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useAuth();
   const { toast } = useToast();
+  const { data: saasUsers = [] } = useSaasUsers();
   const [activeTab, setActiveTab] = useState('all');
   const [search, setSearch] = useState('');
   const [viewMode, setViewMode] = useState<'board' | 'table'>('board');
@@ -59,6 +68,15 @@ export default function CRMTicketsPage() {
   const [aiConfigStage, setAiConfigStage] = useState<{ id: string; name: string } | null>(null);
   const [stageAIConfigs, setStageAIConfigs] = useState<Record<string, StageAIConfig>>({});
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showFilters, setShowFilters] = useState(true);
+  const [showMetrics, setShowMetrics] = useState(false);
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [advFilterSearch, setAdvFilterSearch] = useState('');
+  const [advFilterAdding, setAdvFilterAdding] = useState(false);
+  const [advFilterGroups, setAdvFilterGroups] = useState<{ property: string; operator: string; value: string }[][]>([]);
+  const [sortField, setSortField] = useState<'criado_em' | 'atualizado_em'>('criado_em');
+  const [sortDirection, setSortDirection] = useState<'desc' | 'asc'>('desc');
 
   // Create ticket form
   const [newTitle, setNewTitle] = useState('');
@@ -72,16 +90,45 @@ export default function CRMTicketsPage() {
   const [dragOverStageId, setDragOverStageId] = useState<string | null>(null);
 
   const { data: pipelines = [], isLoading: loadingPipelines } = useCrmPipelines('ticket');
-  const [activePipelineId, setActivePipelineId] = useState<string | null>(null);
 
-  const pipeline = pipelines.find(p => p.id === activePipelineId) || pipelines[0];
+  // Resolve pipeline from URL param (nome_interno) or default to first
+  const pipelineParam = searchParams.get('pipeline');
+  const pipeline = (pipelineParam
+    ? pipelines.find(p => String(p.nome_interno) === pipelineParam)
+    : null) || pipelines[0];
   const pipelineId = pipeline?.id || '';
+
+  const selectPipeline = (p: typeof pipeline) => {
+    if (!p) return;
+    setSearchParams({ pipeline: String(p.nome_interno) }, { replace: true });
+  };
 
   const { data: allTickets = [], isLoading: loadingTickets } = useCrmTicketsByPipeline(pipelineId);
 
-  const filteredTickets = useMemo(() =>
-    search ? allTickets.filter(t => t.titulo.toLowerCase().includes(search.toLowerCase())) : allTickets,
-    [allTickets, search]);
+  // Find current user's saas ID for "Meus tickets" filter
+  const myUserId = useMemo(() => {
+    if (!user?.email) return null;
+    const match = saasUsers.find(u => u.email.toLowerCase() === user.email.toLowerCase());
+    return match?.id || null;
+  }, [user?.email, saasUsers]);
+
+  const filteredTickets = useMemo(() => {
+    let list = allTickets;
+    if (activeTab === 'mine' && myUserId) {
+      list = list.filter(t => t.proprietario_id === myUserId);
+    } else if (activeTab === 'unassigned') {
+      list = list.filter(t => !t.proprietario_id);
+    }
+    if (search) {
+      list = list.filter(t => t.titulo.toLowerCase().includes(search.toLowerCase()));
+    }
+    list = [...list].sort((a, b) => {
+      const aVal = new Date(a[sortField]).getTime();
+      const bVal = new Date(b[sortField]).getTime();
+      return sortDirection === 'desc' ? bVal - aVal : aVal - bVal;
+    });
+    return list;
+  }, [allTickets, search, activeTab, myUserId, sortField, sortDirection]);
 
   const ticketsByStage = useMemo(() => {
     const map: Record<string, CrmTicket[]> = {};
@@ -162,21 +209,25 @@ export default function CRMTicketsPage() {
           <Input placeholder="Pesquisar" value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-8 text-sm" />
         </div>
         <div className="flex items-center gap-1.5">
-          {/* View mode toggle */}
-          <div className="flex border border-border rounded-md overflow-hidden">
-            <button
-              onClick={() => setViewMode('table')}
-              className={cn('px-2.5 py-1.5 text-xs flex items-center gap-1', viewMode === 'table' ? 'bg-muted font-medium' : 'hover:bg-muted/50')}
-            >
-              <Table2 className="w-3.5 h-3.5" /> Exibição de tabela
-            </button>
-            <button
-              onClick={() => setViewMode('board')}
-              className={cn('px-2.5 py-1.5 text-xs flex items-center gap-1 border-l border-border', viewMode === 'board' ? 'bg-muted font-medium' : 'hover:bg-muted/50')}
-            >
-              <Kanban className="w-3.5 h-3.5" /> Exibição de quadro
-            </button>
-          </div>
+          {/* View mode dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                {viewMode === 'board' ? <Kanban className="w-3.5 h-3.5" /> : <Table2 className="w-3.5 h-3.5" />}
+                {viewMode === 'board' ? 'Exibição de quadro' : 'Exibição de tabela'}
+                <ChevronDown className="w-3 h-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48">
+              <p className="text-[11px] text-muted-foreground font-semibold px-2 py-1">Tipo de exibição</p>
+              <DropdownMenuItem onClick={() => setViewMode('table')} className={cn(viewMode === 'table' && 'bg-muted font-medium')}>
+                <Table2 className="w-3.5 h-3.5 mr-2" /> Exibição de tabela
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setViewMode('board')} className={cn(viewMode === 'board' && 'bg-muted font-medium')}>
+                <Kanban className="w-3.5 h-3.5 mr-2" /> Exibição de quadro
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button variant="ghost" size="icon" className="h-8 w-8"><Settings2 className="w-3.5 h-3.5" /></Button>
           <div className="w-px h-5 bg-border mx-1" />
           <DropdownMenu open={pipelineDropdown} onOpenChange={setPipelineDropdown}>
@@ -187,45 +238,77 @@ export default function CRMTicketsPage() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64">
               {pipelines.map(p => (
-                <DropdownMenuItem key={p.id} onClick={() => { setActivePipelineId(p.id); setPipelineDropdown(false); }}
-                  className={cn(p.id === pipelineId && 'bg-muted font-medium')}>{p.nome}</DropdownMenuItem>
+                <DropdownMenuItem key={p.id} onClick={() => { selectPipeline(p); setPipelineDropdown(false); }}
+                  className={cn(p.id === pipelineId && 'bg-muted font-medium')}>
+                  <span className="flex-1">{p.nome}</span>
+                  <span className="text-[10px] text-muted-foreground font-mono ml-2">{p.nome_interno}</span>
+                </DropdownMenuItem>
               ))}
               <div className="border-t border-border mt-1 pt-1 px-2 pb-1">
-                <button
-                  onClick={() => navigate(`/crm/0-6?type=ticket&pipeline=${pipelineId}`)}
-                  className="text-xs text-primary hover:underline flex items-center gap-1"
-                >
+                <button onClick={() => navigate(`/crm/0-6?type=ticket&pipeline=${pipelineId}`)}
+                  className="text-xs text-primary hover:underline flex items-center gap-1">
                   Editar pipeline <ChevronRight className="w-3 h-3" />
                 </button>
               </div>
             </DropdownMenuContent>
           </DropdownMenu>
           <div className="w-px h-5 bg-border mx-1" />
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs font-medium"><Filter className="w-3.5 h-3.5" /> Filtros</Button>
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs"><ArrowUpDown className="w-3.5 h-3.5" /> Classificar</Button>
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs"><BarChart3 className="w-3.5 h-3.5" /> Métrica</Button>
+          <Button variant="outline" size="sm" className={cn("h-8 gap-1.5 text-xs font-medium", showFilters && "bg-muted")} onClick={() => setShowFilters(f => !f)}><Filter className="w-3.5 h-3.5" /> Filtros</Button>
+          <DropdownMenu open={showSortMenu} onOpenChange={setShowSortMenu}>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs"><ArrowUpDown className="w-3.5 h-3.5" /> Classificar</Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <p className="text-[11px] text-muted-foreground font-semibold px-2 py-1">Classificar por</p>
+              {([['criado_em', 'Data de criação'], ['atualizado_em', 'Última modificação']] as const).map(([key, label]) => (
+                <DropdownMenuItem key={key} onClick={() => setSortField(key)} className={cn(sortField === key && 'bg-muted font-medium')}>{label}</DropdownMenuItem>
+              ))}
+              <div className="border-t border-border my-1" />
+              <div className="flex gap-1 px-2 py-1">
+                <button onClick={() => { setSortDirection('desc'); setShowSortMenu(false); }} className={cn('flex-1 text-xs py-1 rounded', sortDirection === 'desc' ? 'bg-foreground text-background font-medium' : 'hover:bg-muted')}>Mais recente</button>
+                <button onClick={() => { setSortDirection('asc'); setShowSortMenu(false); }} className={cn('flex-1 text-xs py-1 rounded', sortDirection === 'asc' ? 'bg-foreground text-background font-medium' : 'hover:bg-muted')}>Mais antigo</button>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button variant="outline" size="sm" className={cn("h-8 gap-1.5 text-xs", showMetrics && "bg-muted")} onClick={() => setShowMetrics(m => !m)}><BarChart3 className="w-3.5 h-3.5" /> Métrica</Button>
           <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs"><Download className="w-3.5 h-3.5" /> Exportar</Button>
           <Button variant="ghost" size="icon" className="h-8 w-8"><Copy className="w-3.5 h-3.5" /></Button>
         </div>
       </div>
 
       {/* Filter chips row */}
-      <div className="flex items-center gap-3 px-4 py-2 border-b border-border bg-card flex-shrink-0 text-xs">
-        <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground font-medium">
-          Proprietário do ticket <ChevronRight className="w-3 h-3 rotate-90" />
-        </button>
-        <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground font-medium">
-          Data de criação <ChevronRight className="w-3 h-3 rotate-90" />
-        </button>
-        <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground font-medium">
-          Prioridade <ChevronRight className="w-3 h-3 rotate-90" />
-        </button>
-        <button className="text-muted-foreground hover:text-foreground font-medium">+ Mais</button>
-        <div className="w-px h-4 bg-border" />
-        <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground font-medium">
-          <SlidersHorizontal className="w-3 h-3" /> Filtros avançados
-        </button>
-      </div>
+      {showFilters && (
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-card flex-shrink-0 text-xs flex-wrap">
+          {TICKET_FILTER_CHIPS.map(chip => (
+            <button key={chip} className="flex items-center gap-1 text-muted-foreground hover:text-foreground font-medium px-2 py-1 rounded-md hover:bg-muted transition-colors">
+              {chip} <ChevronDown className="w-3 h-3" />
+            </button>
+          ))}
+          <button className="text-muted-foreground hover:text-foreground font-medium px-2 py-1">+ Mais</button>
+          <div className="w-px h-4 bg-border" />
+          <button onClick={() => setShowAdvancedFilters(true)} className="flex items-center gap-1 text-muted-foreground hover:text-foreground font-medium px-2 py-1">
+            <SlidersHorizontal className="w-3 h-3" /> Filtros avançados
+          </button>
+        </div>
+      )}
+
+      {/* Metrics row */}
+      {showMetrics && filteredTickets.length > 0 && (
+        <div className="flex items-stretch gap-0 border-b border-border bg-card flex-shrink-0 overflow-x-auto">
+          {[
+            { label: 'TOTAL DE TICKETS', value: String(filteredTickets.length) },
+            { label: 'ABERTOS', value: String(filteredTickets.filter(t => t.status === 'aberto').length) },
+            { label: 'EM ANDAMENTO', value: String(filteredTickets.filter(t => t.status === 'em_andamento').length) },
+            { label: 'RESOLVIDOS', value: String(filteredTickets.filter(t => t.status === 'resolvido' || t.status === 'fechado').length) },
+            { label: 'URGENTES', value: String(filteredTickets.filter(t => t.prioridade === 'urgent' || t.prioridade === 'high').length) },
+          ].map((m, i) => (
+            <div key={i} className="flex-1 min-w-[140px] px-4 py-3 text-center border-r border-border last:border-r-0">
+              <p className="text-[10px] font-bold text-muted-foreground tracking-wider uppercase">{m.label}</p>
+              <p className="text-lg font-bold text-foreground mt-0.5">{m.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Content area */}
       <div className="flex-1 overflow-auto">
@@ -377,6 +460,90 @@ export default function CRMTicketsPage() {
           </table>
         )}
       </div>
+
+      {/* Advanced Filters Panel */}
+      {showAdvancedFilters && (
+        <div className="fixed inset-0 z-50 flex items-start justify-end">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowAdvancedFilters(false)} />
+          <div className="relative w-[420px] h-full bg-card border-l border-border shadow-xl overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <h2 className="text-base font-semibold">Todos os filtros</h2>
+              <button onClick={() => setShowAdvancedFilters(false)}><X className="w-5 h-5 text-muted-foreground" /></button>
+            </div>
+            <div className="px-6 py-4">
+              <p className="text-sm font-semibold mb-4">Filtros avançados</p>
+              {advFilterGroups.length === 0 && !advFilterAdding && (
+                <div className="text-center py-6">
+                  <p className="text-sm text-muted-foreground mb-3">Esta exibição não tem filtros avançados.</p>
+                  <Button variant="outline" size="sm" onClick={() => setAdvFilterAdding(true)}>
+                    <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar filtro
+                  </Button>
+                </div>
+              )}
+              {advFilterGroups.map((group, gi) => (
+                <div key={gi} className="border border-border rounded-lg p-3 mb-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold">Agrupar {gi + 1}</span>
+                    <button onClick={() => setAdvFilterGroups(g => g.filter((_, i) => i !== gi))} className="text-muted-foreground hover:text-destructive"><X className="w-3.5 h-3.5" /></button>
+                  </div>
+                  {group.map((filter, fi) => (
+                    <div key={fi} className="space-y-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <select className="flex-1 text-xs border border-border rounded px-2 py-1.5 bg-background" value={filter.property}
+                          onChange={e => { const ng = [...advFilterGroups]; ng[gi] = [...ng[gi]]; ng[gi][fi] = { ...filter, property: e.target.value }; setAdvFilterGroups(ng); }}>
+                          {TICKET_FILTER_CHIPS.map(p => <option key={p} value={p}>{p}</option>)}
+                        </select>
+                        <button onClick={() => { const ng = [...advFilterGroups]; ng[gi] = ng[gi].filter((_, i) => i !== fi); if (ng[gi].length === 0) ng.splice(gi, 1); setAdvFilterGroups(ng); }}><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
+                      </div>
+                      <select className="w-full text-xs border border-border rounded px-2 py-1.5 bg-background" value={filter.operator}
+                        onChange={e => { const ng = [...advFilterGroups]; ng[gi] = [...ng[gi]]; ng[gi][fi] = { ...filter, operator: e.target.value }; setAdvFilterGroups(ng); }}>
+                        <option value="any">é qualquer um de</option>
+                        <option value="none">não é nenhum de</option>
+                        <option value="known">é conhecido</option>
+                        <option value="unknown">é desconhecido</option>
+                      </select>
+                      {(filter.operator === 'any' || filter.operator === 'none') && (
+                        <Input className="text-xs h-8" placeholder="Pesquisar..." value={filter.value}
+                          onChange={e => { const ng = [...advFilterGroups]; ng[gi] = [...ng[gi]]; ng[gi][fi] = { ...filter, value: e.target.value }; setAdvFilterGroups(ng); }} />
+                      )}
+                      {fi < group.length - 1 && <p className="text-[10px] text-muted-foreground font-medium">e</p>}
+                    </div>
+                  ))}
+                  <Button variant="outline" size="sm" className="text-xs mt-1" onClick={() => { const ng = [...advFilterGroups]; ng[gi] = [...ng[gi], { property: TICKET_FILTER_CHIPS[0], operator: 'any', value: '' }]; setAdvFilterGroups(ng); }}>
+                    <Plus className="w-3 h-3 mr-1" /> Adicionar filtro
+                  </Button>
+                </div>
+              ))}
+              {advFilterAdding && (
+                <div className="border border-border rounded-lg p-3 mb-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold">Adicionar filtro</span>
+                    <button onClick={() => { setAdvFilterAdding(false); setAdvFilterSearch(''); }} className="text-xs text-muted-foreground hover:text-foreground">Cancelar</button>
+                  </div>
+                  <div className="relative mb-2">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                    <Input className="pl-8 text-xs h-8" placeholder="Pesquisar em Ticket propriedades" value={advFilterSearch} onChange={e => setAdvFilterSearch(e.target.value)} autoFocus />
+                  </div>
+                  <div className="max-h-48 overflow-y-auto space-y-0.5">
+                    {TICKET_FILTER_CHIPS.filter(p => !advFilterSearch || p.toLowerCase().includes(advFilterSearch.toLowerCase())).map(p => (
+                      <button key={p} onClick={() => { setAdvFilterGroups(g => [...g, [{ property: p, operator: 'any', value: '' }]]); setAdvFilterAdding(false); setAdvFilterSearch(''); }}
+                        className="w-full text-left text-xs px-2 py-1.5 rounded hover:bg-muted transition-colors text-foreground">{p}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {advFilterGroups.length > 0 && !advFilterAdding && (
+                <div className="flex items-center gap-2 mt-2">
+                  <Badge variant="outline" className="text-[10px]">ou</Badge>
+                  <Button variant="outline" size="sm" className="text-xs" onClick={() => setAdvFilterAdding(true)}>
+                    <Plus className="w-3 h-3 mr-1" /> Adicionar grupo de filtros
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create Ticket Modal */}
       {showCreateModal && (

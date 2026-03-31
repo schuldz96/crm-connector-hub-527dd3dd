@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -12,7 +12,7 @@ import {
   Briefcase, Contact, Ticket, Factory, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useCrmPipelines } from '@/hooks/useCrm';
+import { useCrmPipelines, useSaasUsers } from '@/hooks/useCrm';
 import type { CrmObjectType } from '@/types/crm';
 
 // ========================
@@ -135,16 +135,22 @@ type SortDir = 'asc' | 'desc';
 
 export default function CRMPropertiesPage() {
   const navigate = useNavigate();
-  const [objectType, setObjectType] = useState<CrmObjectType>('deal');
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [groupFilter, setGroupFilter] = useState<string>('all');
   const [sortKey, setSortKey] = useState<SortKey>('label');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
+  // Object type from URL (?object=deal)
+  const urlObject = searchParams.get('object') as CrmObjectType | null;
+  const objectType: CrmObjectType = urlObject && ['deal', 'contact', 'company', 'ticket'].includes(urlObject) ? urlObject : 'deal';
+  const setObjectType = (v: CrmObjectType) => { setSearchParams({ object: v }, { replace: true }); setGroupFilter('all'); setSearch(''); };
+
   const properties = PROPERTIES[objectType];
   const selectedOption = OBJECT_TYPE_OPTIONS.find(o => o.value === objectType)!;
   const hasPipeline = objectType === 'deal' || objectType === 'ticket';
   const { data: pipelines = [] } = useCrmPipelines(hasPipeline ? (objectType === 'deal' ? 'deal' : 'ticket') : 'deal');
+  const { data: saasUsers = [] } = useSaasUsers();
 
   const groups = useMemo(() => {
     const set = new Set(properties.map(p => p.group));
@@ -210,7 +216,7 @@ export default function CRMPropertiesPage() {
       <div className="flex items-center justify-between px-6 py-3 border-b border-border bg-card flex-shrink-0">
         <div className="flex items-center gap-3">
           <span className="text-sm text-muted-foreground font-medium">Selecione um objeto:</span>
-          <Select value={objectType} onValueChange={(v) => { setObjectType(v as CrmObjectType); setGroupFilter('all'); setSearch(''); }}>
+          <Select value={objectType} onValueChange={(v) => setObjectType(v as CrmObjectType)}>
             <SelectTrigger className="w-[260px] h-9">
               <SelectValue />
             </SelectTrigger>
@@ -338,30 +344,63 @@ export default function CRMPropertiesPage() {
           </tbody>
         </table>
 
-        {/* Pipeline registry IDs section */}
+        {/* Pipeline + stages with nome_interno */}
         {hasPipeline && pipelines.length > 0 && (
           <div className="border-t border-border px-6 py-4">
             <h3 className="text-sm font-semibold text-foreground mb-3">
               Pipelines vinculados — {objectType === 'deal' ? 'Negócios' : 'Tickets'}
             </h3>
-            <div className="grid gap-2">
+            <div className="space-y-3">
               {pipelines.map(p => (
-                <div key={p.id} className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-border bg-muted/20 hover:bg-muted/40 transition-colors">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground truncate">{p.nome}</p>
-                    <p className="text-[11px] text-muted-foreground">{p.estagios?.length || 0} etapas</p>
+                <div key={p.id} className="rounded-lg border border-border overflow-hidden">
+                  <div className="flex items-center gap-3 px-4 py-2.5 bg-muted/20">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{p.nome}</p>
+                      <p className="text-[11px] text-muted-foreground">{p.estagios?.length || 0} etapas</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-[10px] text-muted-foreground">Nome interno:</span>
+                      <Badge variant="outline" className="font-mono text-xs">{p.nome_interno}</Badge>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-[10px] text-muted-foreground">ID do Registro:</span>
-                    <Badge variant="outline" className="font-mono text-xs tracking-wider">
-                      {p.registro_id}
-                    </Badge>
-                  </div>
+                  {p.estagios && p.estagios.length > 0 && (
+                    <div className="px-4 py-2 space-y-1 bg-card">
+                      {p.estagios.map(e => (
+                        <div key={e.id} className="flex items-center justify-between py-1 text-xs">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: e.cor }} />
+                            <span className="text-muted-foreground">{e.nome}</span>
+                          </div>
+                          <span className="font-mono text-muted-foreground/70">{e.nome_interno}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
           </div>
         )}
+
+        {/* Usuários do sistema (proprietários) */}
+        <div className="border-t border-border px-6 py-4">
+          <h3 className="text-sm font-semibold text-foreground mb-3">
+            Usuários do sistema (Proprietários)
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {saasUsers.map(u => (
+              <div key={u.id} className="flex items-center gap-2 px-3 py-2 rounded-md border border-border/50 bg-muted/10 text-xs">
+                <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-semibold text-primary flex-shrink-0">
+                  {u.nome?.charAt(0)?.toUpperCase() || '?'}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-foreground font-medium truncate">{u.nome}</p>
+                  <p className="text-muted-foreground truncate">{u.email}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

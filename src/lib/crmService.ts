@@ -435,3 +435,24 @@ export async function getAssociatedRecords(objectType: CrmObjectType, objectId: 
 
   return { contacts, companies, deals, tickets, associations: grouped };
 }
+
+// ========================
+// USUÁRIOS DO SISTEMA (para selects de proprietário)
+// ========================
+export interface SaasUser {
+  id: string;
+  nome: string;
+  email: string;
+  papel: string;
+}
+
+export async function listSaasUsers(): Promise<SaasUser[]> {
+  const empresaId = await getSaasEmpresaId();
+  const { data, error } = await saas()
+    .from('usuarios')
+    .select('id, nome, email, papel')
+    .eq('empresa_id', empresaId)
+    .order('nome', { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
