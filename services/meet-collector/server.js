@@ -4,6 +4,7 @@ const { google } = require('googleapis');
 const express = require('express');
 const path = require('path');
 const { Pool } = require('pg');
+const { Readable } = require('stream');
 
 const PORT = Number(process.env.PORT || 3333);
 const KEYFILE = process.env.KEYFILE || path.join(__dirname, 'service-account.json');
@@ -616,6 +617,58 @@ async function copyFileToDestinationFromOwner({ userEmail, sourceFileId, title, 
   });
 
   return copied.data || null;
+}
+
+async function downloadDriveFileAsUser(userEmail, fileId) {
+  const auth = authAsUser(userEmail, DRIVE_SCOPES);
+  const client = await auth.getClient();
+  const tokenResponse = await client.getAccessToken();
+  const token = typeof tokenResponse === 'string' ? tokenResponse : tokenResponse?.token;
+
+  if (!token) {
+    throw new Error('Não foi possível obter token OAuth para download da gravação');
+  }
+
+  const url = `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    const message = await res.text().catch(() => '');
+    throw new Error(`Falha ao baixar gravação (${res.status}): ${message || 'sem detalhes'}`);
+  }
+
+  const bytes = Buffer.from(await res.arrayBuffer());
+  return bytes;
+}
+
+async function uploadBinaryToDestinationAsServiceAccount({ title, mimeType, content, sourceId, owner, sourceType }) {
+  requireEnvValue('DESTINATION_FOLDER_ID', DESTINATION_FOLDER_ID);
+
+  const auth = authAsServiceAccount(DRIVE_SCOPES);
+  const drive = google.drive({ version: 'v3', auth });
+
+  const created = await drive.files.create({
+    requestBody: {
+      name: title,
+      mimeType: mimeType || 'application/octet-stream',
+      parents: [DESTINATION_FOLDER_ID],
+      appProperties: {
+        sourceId,
+        sourceType,
+        sourceOwner: owner,
+      },
+    },
+    media: {
+      mimeType: mimeType || 'application/octet-stream',
+      body: Readable.from(content),
+    },
+    supportsAllDrives: true,
+    fields: 'id,name,mimeType,size,webViewLink,webContentLink',
+  });
+
+  return created.data || null;
 }
 
 async function runCollector({ sinceIso, email }) {
@@ -1243,6 +1296,31 @@ async function resolveConferenceRecording({ conference, ownerCandidates, buffere
       }
     } catch (copyError) {
       console.log(`[run-conference] não foi possível copiar gravação para pasta destino (source=${selected.id}): ${copyError.message}`);
+
+      // Fallback: download como owner e upload com service account na pasta destino.
+      try {
+        const bytes = await withRetry(`downloadDriveFileAsUser(recording:${selected.id})`, () =>
+          downloadDriveFileAsUser(selectedOwner, selected.id)
+        );
+
+        copiedFile = await withRetry(`uploadBinaryToDestinationAsServiceAccount(recording:${selected.id})`, () =>
+          uploadBinaryToDestinationAsServiceAccount({
+            title: selected.name || `Gravacao ${conference.meeting_code || conference.conference_key}`,
+            mimeType: selected.mimeType || metadata?.mimeType || 'video/mp4',
+            content: bytes,
+            sourceId: selected.id,
+            owner: selectedOwner,
+            sourceType: 'recording',
+          })
+        );
+
+        if (copiedFile) {
+          metadata = copiedFile;
+          console.log(`[run-conference] fallback upload gravação concluído conference_key=${conference.conference_key} copied=${copiedFile.id}`);
+        }
+      } catch (fallbackError) {
+        console.log(`[run-conference] fallback upload de gravação falhou (source=${selected.id}): ${fallbackError.message}`);
+      }
     }
 
     await markConferenceRecordingData({
