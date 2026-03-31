@@ -640,17 +640,24 @@ export default function PerformancePage() {
                   <Clock className="w-3.5 h-3.5 text-accent" /> Tempo Médio da Call
                 </p>
                 {(() => {
-                  const durations = meetEvals
-                    .map(e => meetingDurations[e.entidade_id] || 0)
-                    .filter(d => d > 0);
-                  if (durations.length === 0) return <p className="text-xs text-muted-foreground">Sem dados de duração</p>;
-                  const avg = Math.round(durations.reduce((a, b) => a + b, 0) / durations.length);
-                  const min = Math.min(...durations);
-                  const max = Math.max(...durations);
+                  const items = meetEvals
+                    .map(e => ({ id: e.id, dur: meetingDurations[e.entidade_id] || 0, title: (e as any).resumo?.slice(0, 40) || new Date(e.criado_em).toLocaleDateString('pt-BR'), date: new Date(e.criado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) }))
+                    .filter(d => d.dur > 0)
+                    .sort((a, b) => b.dur - a.dur);
+                  if (items.length === 0) return <p className="text-xs text-muted-foreground">Sem dados de duração</p>;
+                  const avg = Math.round(items.reduce((a, b) => a + b.dur, 0) / items.length);
                   return (
                     <div>
                       <p className="text-2xl font-bold font-mono">{avg} <span className="text-sm text-muted-foreground font-normal">min</span></p>
-                      <p className="text-[10px] text-muted-foreground mt-1">{durations.length} reuniões · min {min}min · máx {max}min</p>
+                      <p className="text-[10px] text-muted-foreground mb-2">{items.length} reuniões · min {items[items.length - 1].dur}min · máx {items[0].dur}min</p>
+                      <div className="max-h-[100px] overflow-y-auto space-y-0.5 pr-1">
+                        {items.map(d => (
+                          <div key={d.id} className="flex items-center justify-between text-[10px]">
+                            <span className="truncate text-muted-foreground flex-1 mr-2">{d.date} — {d.title}</span>
+                            <span className={cn('font-mono font-bold flex-shrink-0', d.dur > avg * 1.5 ? 'text-warning' : d.dur < avg * 0.5 ? 'text-primary' : 'text-foreground')}>{d.dur}min</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   );
                 })()}
