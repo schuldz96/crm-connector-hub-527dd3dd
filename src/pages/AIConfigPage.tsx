@@ -9,7 +9,7 @@ import {
   Crown, GitBranch, Users, FileText, Upload, ChevronDown, ChevronRight,
   Power, PowerOff, Copy, Pencil, ZoomIn, ZoomOut, Maximize2, Minus,
   Heart, Clock, History, ChevronUp,
-  BookOpen, Zap, Phone
+  BookOpen, Zap, Phone, Shield
 } from 'lucide-react';
 import { loadRecentChainLogs } from '@/lib/evaluationService';
 import { cn } from '@/lib/utils';
@@ -1152,6 +1152,8 @@ export default function AIConfigPage() {
   const [addingCriteria, setAddingCriteria] = useState(false);
   const [meetingPrompt, setMeetingPrompt] = useState<string>(DEFAULT_MEETING_PROMPT);
   const [whatsappPrompt, setWhatsappPrompt] = useState<string>(DEFAULT_WHATSAPP_PROMPT);
+  const [forbiddenWords, setForbiddenWords] = useState<string[]>([]);
+  const [newForbiddenWord, setNewForbiddenWord] = useState('');
 
   // Multi-agent state (meetings)
   const [agents, setAgents] = useState<AgentNode[]>([]);
@@ -1433,6 +1435,7 @@ Avalie cada critério abaixo e retorne APENAS JSON válido (sem markdown):
       if (cfg && cfg.criterios.length > 0) {
         setMeetingCriteria(cfg.criterios);
         if (cfg.prompt_sistema) setMeetingPrompt(cfg.prompt_sistema);
+        if ((cfg as any).palavras_proibidas) setForbiddenWords((cfg as any).palavras_proibidas);
       } else {
         const stored = loadFromStorage(AI_CONFIG_STORAGE.MEETINGS_CRITERIA, null);
         if (stored) setMeetingCriteria(stored);
@@ -1444,6 +1447,7 @@ Avalie cada critério abaixo e retorne APENAS JSON válido (sem markdown):
       if (cfg && cfg.criterios.length > 0) {
         setWhatsappCriteria(cfg.criterios);
         if (cfg.prompt_sistema) setWhatsappPrompt(cfg.prompt_sistema);
+        if (cfg.palavras_proibidas?.length && !forbiddenWords.length) setForbiddenWords(cfg.palavras_proibidas);
       } else {
         const stored = loadFromStorage(AI_CONFIG_STORAGE.WHATSAPP_CRITERIA, null);
         if (stored) setWhatsappCriteria(stored);
@@ -1492,12 +1496,11 @@ Avalie cada critério abaixo e retorne APENAS JSON válido (sem markdown):
     // Persist to DB
     try {
       if (activeType === 'meetings') {
-        await saveAIConfig('meetings', meetingCriteria, meetingPrompt);
-        // Also keep localStorage for backwards compat
+        await saveAIConfig('meetings', meetingCriteria, meetingPrompt, forbiddenWords);
         localStorage.setItem(AI_CONFIG_STORAGE.MEETINGS_CRITERIA, JSON.stringify(meetingCriteria));
         localStorage.setItem(AI_CONFIG_STORAGE.MEETINGS_PROMPT, JSON.stringify(meetingPrompt));
       } else {
-        await saveAIConfig('whatsapp', whatsappCriteria, whatsappPrompt);
+        await saveAIConfig('whatsapp', whatsappCriteria, whatsappPrompt, forbiddenWords);
         localStorage.setItem(AI_CONFIG_STORAGE.WHATSAPP_CRITERIA, JSON.stringify(whatsappCriteria));
         localStorage.setItem(AI_CONFIG_STORAGE.WHATSAPP_PROMPT, JSON.stringify(whatsappPrompt));
       }
@@ -1576,6 +1579,52 @@ Avalie cada critério abaixo e retorne APENAS JSON válido (sem markdown):
             {t.label}
           </button>
         ))}
+      </div>
+
+      {/* ═══ Palavras Proibidas (shared across both modules) ═══ */}
+      <div className="glass-card p-4 rounded-xl mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="text-sm font-semibold flex items-center gap-1.5">
+              <Shield className="w-4 h-4 text-destructive" /> Palavras Proibidas
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Palavras ou frases que o vendedor/BDR não pode usar. A IA detectará e alertará na avaliação.
+            </p>
+          </div>
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted border border-border font-mono">{forbiddenWords.length}</span>
+        </div>
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {forbiddenWords.map((w, i) => (
+            <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-destructive/10 border border-destructive/20 text-xs text-destructive">
+              {w}
+              <button onClick={() => setForbiddenWords(prev => prev.filter((_, j) => j !== i))} className="hover:text-destructive/80">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+          {forbiddenWords.length === 0 && <p className="text-xs text-muted-foreground italic">Nenhuma palavra proibida configurada</p>}
+        </div>
+        <div className="flex gap-2">
+          <Input
+            value={newForbiddenWord}
+            onChange={e => setNewForbiddenWord(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && newForbiddenWord.trim()) {
+                setForbiddenWords(prev => [...prev, newForbiddenWord.trim()]);
+                setNewForbiddenWord('');
+              }
+            }}
+            placeholder="Ex: desconto, gratuito, garantia..."
+            className="h-8 text-xs flex-1"
+          />
+          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => {
+            if (newForbiddenWord.trim()) {
+              setForbiddenWords(prev => [...prev, newForbiddenWord.trim()]);
+              setNewForbiddenWord('');
+            }
+          }}>Adicionar</Button>
+        </div>
       </div>
 
       {/* ═══ MEETINGS TAB: Zoomable Canvas ═══ */}

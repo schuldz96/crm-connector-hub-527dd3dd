@@ -236,14 +236,19 @@ export default function PerformancePage() {
     // Radar data from meeting criteria
     const radarData = meetCriteria.length ? meetCriteria.map(c => ({ subject: c.label, A: c.score })) : null;
 
-    // Score trend for meetings (by date)
-    const trend = meetEvals
-      .filter(e => e.criado_em)
-      .sort((a, b) => new Date(a.criado_em).getTime() - new Date(b.criado_em).getTime())
-      .map(e => ({
-        date: new Date(e.criado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-        score: e.score || 0,
-      }));
+    // Score trend for meetings (averaged by day)
+    const trendByDay: Record<string, { total: number; count: number }> = {};
+    for (const e of meetEvals.filter(ev => ev.criado_em)) {
+      const day = new Date(e.criado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      if (!trendByDay[day]) trendByDay[day] = { total: 0, count: 0 };
+      trendByDay[day].total += (e.score || 0);
+      trendByDay[day].count++;
+    }
+    const trend = Object.entries(trendByDay).map(([date, v]) => ({
+      date,
+      score: Math.round(v.total / v.count),
+      reunioes: v.count,
+    }));
 
     return { u, avgMeetingScore, avgWaScore, overallScore, meetCriteria, waCriteria, trend, radarData, meetEvals, waEvals };
   };
@@ -595,10 +600,11 @@ export default function PerformancePage() {
                 ) : (
                   <div className="space-y-1.5">
                     {[...meetEvals].sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 5).map(e => (
-                      <div key={e.id} className="flex items-center justify-between text-xs py-1.5 border-b border-border/50 last:border-0">
-                        <span className="truncate text-muted-foreground">{(e as any).resumo?.slice(0, 60) || `Reunião ${new Date(e.criado_em).toLocaleDateString('pt-BR')}`}</span>
-                        <span className={cn('font-bold font-mono ml-2', scoreColor(e.score || 0))}>{e.score}</span>
-                      </div>
+                      <a key={e.id} href={`/meetings?highlight=${e.entidade_id}`}
+                        className="flex items-center justify-between text-xs py-1.5 border-b border-border/50 last:border-0 hover:bg-muted/30 rounded px-1 -mx-1 transition-colors cursor-pointer">
+                        <span className="truncate text-primary hover:underline">{(e as any).resumo?.slice(0, 60) || `Reunião ${new Date(e.criado_em).toLocaleDateString('pt-BR')}`}</span>
+                        <span className={cn('font-bold font-mono ml-2 flex-shrink-0', scoreColor(e.score || 0))}>{e.score}</span>
+                      </a>
                     ))}
                   </div>
                 )}
