@@ -225,10 +225,17 @@ export default function PerformancePage() {
     }
     const meetCriteriaByAgent = Object.entries(meetByAgent).map(([agentId, { criteria: cmap }]) => ({
       agentId,
+      agentName: agentNames[agentId] || '',
       criteria: Object.entries(cmap).map(([label, v]) => ({
         label, score: Math.round(v.total / v.count), weight: v.weight,
       })).sort((a, b) => b.score - a.score),
-    }));
+    })).sort((a, b) => {
+      // Sandler first (principal), then alphabetical
+      const aIsSandler = a.agentName.toLowerCase().includes('sandler') ? 0 : 1;
+      const bIsSandler = b.agentName.toLowerCase().includes('sandler') ? 0 : 1;
+      if (aIsSandler !== bIsSandler) return aIsSandler - bIsSandler;
+      return a.agentName.localeCompare(b.agentName, 'pt-BR');
+    });
     // Flat list deduplicated by label (averaged) for radar
     const flatMap: Record<string, { total: number; count: number; weight: number }> = {};
     for (const g of meetCriteriaByAgent) {
@@ -388,10 +395,11 @@ export default function PerformancePage() {
               value={selectedUserId}
               onChange={setSelectedUserId}
               placeholder="Selecione um analista..."
-              options={visibleUsers.filter(u => u.role === 'member').sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map(u => ({
-                value: u.id,
-                label: u.name,
-              }))}
+              options={visibleUsers.filter(u => u.role === 'member').sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map(u => {
+                const perf = buildUserPerf(u.id);
+                const score = perf?.overallScore;
+                return { value: u.id, label: score !== null && score !== undefined ? `${u.name} · ${score}` : u.name };
+              })}
               className="min-w-[240px]"
             />
           )
@@ -509,12 +517,20 @@ export default function PerformancePage() {
                   <div className="space-y-4">
                     {meetCriteriaByAgent.map((group, gi) => (
                       <div key={group.agentId}>
-                        {meetCriteriaByAgent.length > 1 && (
-                          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                            <Brain className="w-3 h-3" />
-                            {group.agentId === '_default' ? 'Avaliação Padrão' : (agentNames[group.agentId] || `Agente ${gi + 1}`)}
-                          </p>
-                        )}
+                        {meetCriteriaByAgent.length > 1 && (() => {
+                          const name = group.agentId === '_default' ? 'Avaliação Padrão' : (agentNames[group.agentId] || `Agente ${gi + 1}`);
+                          const isSandler = name.toLowerCase().includes('sandler');
+                          return (
+                            <div className="flex items-center gap-2 mb-2">
+                              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                <Brain className="w-3 h-3" /> {name}
+                              </p>
+                              <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full border font-semibold', isSandler ? 'bg-primary/10 text-primary border-primary/20' : 'bg-muted text-muted-foreground border-border')}>
+                                {isSandler ? 'Principal' : 'Complementar'}
+                              </span>
+                            </div>
+                          );
+                        })()}
                         <div className="space-y-2">
                           {group.criteria.map(c => (
                             <MiniBar key={c.label} label={c.label} score={c.score} weight={c.weight} />
