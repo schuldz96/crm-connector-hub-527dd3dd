@@ -61,6 +61,9 @@ const PROPERTIES: Record<CrmObjectType, PropertyDefinition[]> = {
     { key: 'tags',            label: 'Tags',                       fieldType: 'text',     group: 'Informações do negócio', description: 'Tags para categorizar o negócio',             readOnly: false },
     { key: 'criado_em',       label: 'Data de Criação',            fieldType: 'date',     group: 'Informações do sistema', description: 'Data em que o registro foi criado',           readOnly: true },
     { key: 'atualizado_em',   label: 'Data de Última Modificação', fieldType: 'date',     group: 'Informações do sistema', description: 'Data da última atualização do registro',      readOnly: true },
+    { key: 'assoc_contatos',  label: 'Contatos associados',        fieldType: 'number',   group: 'Associações',            description: 'Quantidade de contatos associados ao negócio', readOnly: true },
+    { key: 'assoc_empresas',  label: 'Empresas associadas',        fieldType: 'number',   group: 'Associações',            description: 'Quantidade de empresas associadas ao negócio', readOnly: true },
+    { key: 'assoc_tickets',   label: 'Tickets associados',         fieldType: 'number',   group: 'Associações',            description: 'Quantidade de tickets associados ao negócio',  readOnly: true },
   ],
   contact: [
     { key: 'numero_registro', label: 'ID do Registro',             fieldType: 'auto',   group: 'Informações do contato', description: 'Identificador único do contato',              readOnly: true },
@@ -75,6 +78,9 @@ const PROPERTIES: Record<CrmObjectType, PropertyDefinition[]> = {
     { key: 'tags',            label: 'Tags',                       fieldType: 'text',   group: 'Informações do contato', description: 'Tags para categorizar o contato',             readOnly: false },
     { key: 'criado_em',       label: 'Data de Criação',            fieldType: 'date',   group: 'Informações do sistema', description: 'Data em que o registro foi criado',           readOnly: true },
     { key: 'atualizado_em',   label: 'Data de Última Modificação', fieldType: 'date',   group: 'Informações do sistema', description: 'Data da última atualização do registro',      readOnly: true },
+    { key: 'assoc_negocios',  label: 'Negócios associados',        fieldType: 'number', group: 'Associações',            description: 'Quantidade de negócios associados ao contato', readOnly: true },
+    { key: 'assoc_empresas',  label: 'Empresas associadas',        fieldType: 'number', group: 'Associações',            description: 'Quantidade de empresas associadas ao contato', readOnly: true },
+    { key: 'assoc_tickets',   label: 'Tickets associados',         fieldType: 'number', group: 'Associações',            description: 'Quantidade de tickets associados ao contato',  readOnly: true },
   ],
   company: [
     { key: 'numero_registro', label: 'ID do Registro',             fieldType: 'auto',  group: 'Informações da empresa', description: 'Identificador único da empresa',              readOnly: true },
@@ -93,6 +99,9 @@ const PROPERTIES: Record<CrmObjectType, PropertyDefinition[]> = {
     { key: 'tags',            label: 'Tags',                       fieldType: 'text',  group: 'Informações da empresa', description: 'Tags para categorizar a empresa',             readOnly: false },
     { key: 'criado_em',       label: 'Data de Criação',            fieldType: 'date',  group: 'Informações do sistema', description: 'Data em que o registro foi criado',           readOnly: true },
     { key: 'atualizado_em',   label: 'Data de Última Modificação', fieldType: 'date',  group: 'Informações do sistema', description: 'Data da última atualização do registro',      readOnly: true },
+    { key: 'assoc_contatos',  label: 'Contatos associados',        fieldType: 'number', group: 'Associações',            description: 'Quantidade de contatos associados à empresa',  readOnly: true },
+    { key: 'assoc_negocios',  label: 'Negócios associados',        fieldType: 'number', group: 'Associações',            description: 'Quantidade de negócios associados à empresa',  readOnly: true },
+    { key: 'assoc_tickets',   label: 'Tickets associados',         fieldType: 'number', group: 'Associações',            description: 'Quantidade de tickets associados à empresa',   readOnly: true },
   ],
   ticket: [
     { key: 'numero_registro', label: 'ID do Registro',             fieldType: 'auto',   group: 'Informações do ticket', description: 'Identificador único do ticket',               readOnly: true },
@@ -108,6 +117,9 @@ const PROPERTIES: Record<CrmObjectType, PropertyDefinition[]> = {
     { key: 'tags',            label: 'Tags',                       fieldType: 'text',   group: 'Informações do ticket', description: 'Tags para categorizar o ticket',              readOnly: false },
     { key: 'criado_em',       label: 'Data de Criação',            fieldType: 'date',   group: 'Informações do sistema', description: 'Data em que o registro foi criado',           readOnly: true },
     { key: 'atualizado_em',   label: 'Data de Última Modificação', fieldType: 'date',   group: 'Informações do sistema', description: 'Data da última atualização do registro',      readOnly: true },
+    { key: 'assoc_contatos',  label: 'Contatos associados',        fieldType: 'number', group: 'Associações',            description: 'Quantidade de contatos associados ao ticket',  readOnly: true },
+    { key: 'assoc_negocios',  label: 'Negócios associados',        fieldType: 'number', group: 'Associações',            description: 'Quantidade de negócios associados ao ticket',  readOnly: true },
+    { key: 'assoc_empresas',  label: 'Empresas associadas',        fieldType: 'number', group: 'Associações',            description: 'Quantidade de empresas associadas ao ticket',  readOnly: true },
   ],
 };
 
@@ -146,10 +158,27 @@ export default function CRMPropertiesPage() {
   const objectType: CrmObjectType = urlObject && ['deal', 'contact', 'company', 'ticket'].includes(urlObject) ? urlObject : 'deal';
   const setObjectType = (v: CrmObjectType) => { setSearchParams({ object: v }, { replace: true }); setGroupFilter('all'); setSearch(''); };
 
-  const properties = PROPERTIES[objectType];
+  const baseProperties = PROPERTIES[objectType];
   const selectedOption = OBJECT_TYPE_OPTIONS.find(o => o.value === objectType)!;
   const hasPipeline = objectType === 'deal' || objectType === 'ticket';
   const { data: pipelines = [] } = useCrmPipelines(hasPipeline ? (objectType === 'deal' ? 'deal' : 'ticket') : 'deal');
+
+  // Generate dynamic stage properties (date entered/exited/time for each stage)
+  const properties = useMemo(() => {
+    if (!hasPipeline || pipelines.length === 0) return baseProperties;
+    const stageProps: PropertyDefinition[] = [];
+    for (const pip of pipelines) {
+      for (const stage of (pip.estagios || [])) {
+        const suffix = `${stage.nome} (${pip.nome})`;
+        stageProps.push(
+          { key: `date_entered_${stage.id}`, label: `Data de entrada "${suffix}"`, fieldType: 'date', group: 'Histórico de etapas', description: `Data em que o registro entrou na etapa ${stage.nome}`, readOnly: true },
+          { key: `date_exited_${stage.id}`, label: `Data de saída "${suffix}"`, fieldType: 'date', group: 'Histórico de etapas', description: `Data em que o registro saiu da etapa ${stage.nome}`, readOnly: true },
+          { key: `time_stage_${stage.id}`, label: `Tempo na etapa "${suffix}"`, fieldType: 'number', group: 'Histórico de etapas', description: `Tempo em minutos que o registro ficou na etapa ${stage.nome}`, readOnly: true },
+        );
+      }
+    }
+    return [...baseProperties, ...stageProps];
+  }, [baseProperties, hasPipeline, pipelines]);
   const { data: saasUsers = [] } = useSaasUsers();
 
   const groups = useMemo(() => {
