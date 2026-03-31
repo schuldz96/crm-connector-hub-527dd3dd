@@ -296,21 +296,21 @@ export default function DashboardPage() {
               Ver todos
             </Button>
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-1 max-h-[300px] overflow-y-auto pr-1">
             {topSellers.map((seller, i) => (
-              <div key={seller.name} className="flex items-center gap-2">
-                <span className={`text-sm font-bold w-5 text-center ${i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-amber-600' : 'text-muted-foreground'}`}>
+              <div key={seller.name} className="flex items-center gap-2 py-1">
+                <span className={`text-xs font-bold w-4 text-center flex-shrink-0 ${i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-amber-600' : 'text-muted-foreground'}`}>
                   {i + 1}
                 </span>
-                <img src={seller.avatar} alt={seller.name} className="w-8 h-8 rounded-full border border-border" />
+                <img src={seller.avatar} alt={seller.name} className="w-7 h-7 rounded-full border border-border flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{seller.name}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
+                  <p className="text-xs font-medium truncate">{seller.name}</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
                     <Progress value={seller.score} className="h-1 flex-1" />
-                    <span className="text-xs text-muted-foreground">{seller.score || '—'}</span>
+                    <span className="text-[10px] text-muted-foreground font-mono">{seller.score || '—'}</span>
                   </div>
                 </div>
-                <span className="text-xs text-muted-foreground">{seller.meetings} meet{seller.meetings !== 1 ? 's' : ''}</span>
+                <span className="text-[10px] text-muted-foreground flex-shrink-0">{seller.meetings} meet{seller.meetings !== 1 ? 's' : ''}</span>
               </div>
             ))}
             {topSellers.length === 0 && (
@@ -327,7 +327,7 @@ export default function DashboardPage() {
               Ver todas
             </Button>
           </div>
-          <div className="space-y-1.5 max-h-[340px] overflow-y-auto pr-1">
+          <div className="space-y-1 max-h-[300px] overflow-y-auto pr-1">
             {recentMeetings.map((m) => (
               <div key={m.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer" onClick={() => navigate('/meetings')}>
                 <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
