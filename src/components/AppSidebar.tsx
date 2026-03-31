@@ -12,7 +12,7 @@ import {
   BarChart3, Zap, ChevronLeft, ChevronRight,
   LogOut, ChevronDown, Building2, Shield, Plug2,
   GraduationCap, SlidersHorizontal, User, Target, Activity, Inbox,
-  Contact, Briefcase, Ticket, Factory,
+  Contact, Briefcase, Ticket, Factory, List,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -42,6 +42,7 @@ const NAV_ITEMS: NavItem[] = [
       { path: '/crm/deals',      label: 'Negócios',  icon: Briefcase, resource: 'crm' },
       { path: '/crm/tickets',    label: 'Tickets',   icon: Ticket,    resource: 'crm' },
       { path: '/crm/companies',  label: 'Empresas',  icon: Factory,   resource: 'crm' },
+      { path: '/crm/properties', label: 'Propriedades', icon: List,   resource: 'crm' },
     ],
   },
   { path: '/teams',        label: 'Times',            icon: Target,          resource: 'teams' },

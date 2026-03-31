@@ -32,6 +32,7 @@ import CRMDealsPage from "@/pages/crm/CRMDealsPage";
 import CRMTicketsPage from "@/pages/crm/CRMTicketsPage";
 import CRMCompaniesPage from "@/pages/crm/CRMCompaniesPage";
 import CRMPipelineSettingsPage from "@/pages/crm/CRMPipelineSettingsPage";
+import CRMPropertiesPage from "@/pages/crm/CRMPropertiesPage";
 import CRMRecordPage from "@/pages/crm/CRMRecordPage";
 import NotFound from "@/pages/NotFound";
 
@@ -102,6 +103,7 @@ function ProtectedRoutes() {
         <Route path="/crm/tickets"             element={R(<CRMTicketsPage />,        { resource: 'crm' })} />
         <Route path="/objects/0-4/views/*"     element={R(<CRMTicketsPage />,        { resource: 'crm' })} />
         <Route path="/crm/pipeline-settings"   element={R(<CRMPipelineSettingsPage />, { resource: 'crm' })} />
+        <Route path="/crm/properties"          element={R(<CRMPropertiesPage />,       { resource: 'crm' })} />
         <Route path="/record/:typeId/:numero"  element={R(<CRMRecordPage />,         { resource: 'crm' })} />
 
         {/* Fallback */}
