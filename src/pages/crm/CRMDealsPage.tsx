@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/select';
 import {
   Search, Plus, Filter, ChevronDown, ChevronRight, MoreHorizontal, X,
-  Briefcase, User, Download, Table2,
+  Briefcase, User, Download, Table2, Trash2, UserPlus, Pencil,
   ArrowUpDown, BarChart3, Copy, Settings2, SlidersHorizontal, Kanban, Bot, Loader2,
 } from 'lucide-react';
 import {
@@ -97,6 +97,10 @@ export default function CRMDealsPage() {
   const [stageAIConfigs, setStageAIConfigs] = useState<Record<string, StageAIConfig>>({});
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showFilters, setShowFilters] = useState(true);
+  const [selectedDeals, setSelectedDeals] = useState<Set<string>>(new Set());
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assignUserId, setAssignUserId] = useState('');
+  const [bulkAction, setBulkAction] = useState(false);
   const [showMetrics, setShowMetrics] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -193,6 +197,45 @@ export default function CRMDealsPage() {
 
   const isLoading = loadingPipelines || loadingDeals;
   const stages: CrmPipelineStage[] = pipeline?.estagios || [];
+
+  const toggleSelectDeal = (id: string) => {
+    setSelectedDeals(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
+
+  const selectAllDeals = () => {
+    if (selectedDeals.size === filteredDeals.length) setSelectedDeals(new Set());
+    else setSelectedDeals(new Set(filteredDeals.map(d => d.id)));
+  };
+
+  const bulkDelete = async () => {
+    if (selectedDeals.size === 0) return;
+    setBulkAction(true);
+    try {
+      const ids = Array.from(selectedDeals);
+      for (const id of ids) {
+        await updateDeal.mutateAsync({ id, deletado_em: new Date().toISOString() } as any);
+      }
+      toast({ title: `${ids.length} negócio(s) excluído(s)` });
+      setSelectedDeals(new Set());
+    } catch { toast({ title: 'Erro ao excluir', variant: 'destructive' }); }
+    finally { setBulkAction(false); }
+  };
+
+  const bulkAssign = async () => {
+    if (!assignUserId || selectedDeals.size === 0) return;
+    setBulkAction(true);
+    try {
+      const ids = Array.from(selectedDeals);
+      for (const id of ids) {
+        await updateDeal.mutateAsync({ id, proprietario_id: assignUserId });
+      }
+      toast({ title: `${ids.length} negócio(s) atribuído(s)` });
+      setSelectedDeals(new Set());
+      setShowAssignModal(false);
+      setAssignUserId('');
+    } catch { toast({ title: 'Erro ao atribuir', variant: 'destructive' }); }
+    finally { setBulkAction(false); }
+  };
 
   const handleCreateDeal = async () => {
     if (!newDealName.trim()) return;
@@ -523,7 +566,9 @@ export default function CRMDealsPage() {
                     'flex-1 overflow-y-auto border-x border-border p-1.5 space-y-1.5 max-h-[calc(100vh-320px)] transition-colors',
                     isOver ? 'bg-primary/5 border-primary/30' : 'bg-muted/5'
                   )}>
-                    {stageDeals.map(deal => (
+                    {stageDeals.map(deal => {
+                      const isSelected = selectedDeals.has(deal.id);
+                      return (
                       <div
                         key={deal.id}
                         draggable
@@ -538,9 +583,12 @@ export default function CRMDealsPage() {
                           dragItemRef.current = null;
                         }}
                         onClick={() => navigate(`/crm/record/0-3/${deal.numero_registro}`)}
-                        className="bg-card border border-border rounded-lg p-3 space-y-1.5 hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing"
+                        className={cn('bg-card border rounded-lg p-3 space-y-1.5 hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing group/card relative', isSelected ? 'border-primary/50 bg-primary/5' : 'border-border')}
                       >
-                        <p className="text-[13px] font-semibold text-primary hover:underline leading-tight">{deal.nome}</p>
+                        <div className={cn('absolute top-2 right-2 z-10', isSelected ? 'opacity-100' : 'opacity-0 group-hover/card:opacity-100')} onClick={e => { e.stopPropagation(); toggleSelectDeal(deal.id); }}>
+                          <input type="checkbox" checked={isSelected} readOnly className="rounded border-border cursor-pointer" />
+                        </div>
+                        <p className="text-[13px] font-semibold text-primary hover:underline leading-tight pr-6">{deal.nome}</p>
                         <p className="text-xs text-muted-foreground">Valor: {formatCurrency(Number(deal.valor || 0))}</p>
                         {deal.plataforma && <p className="text-xs text-muted-foreground">Plataforma: {deal.plataforma}</p>}
                         {deal.tags.length > 0 && (
@@ -552,7 +600,7 @@ export default function CRMDealsPage() {
                         )}
                         <p className="text-[10px] text-muted-foreground font-mono">{deal.numero_registro}</p>
                       </div>
-                    ))}
+                    );})}
                   </div>
                   <div className="px-3 py-2 text-[10px] text-muted-foreground border border-border rounded-b-lg bg-muted/30 space-y-0.5">
                     <p>{formatCurrency(totalValue)} | Valor total</p>
@@ -773,6 +821,64 @@ export default function CRMDealsPage() {
                 Criar
               </Button>
               <Button variant="outline" onClick={() => setShowCreateModal(false)}>Cancelar</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Actions Bar */}
+      {selectedDeals.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-card border-t border-border shadow-lg px-6 py-2.5 flex items-center gap-3">
+          <span className="text-sm font-medium">{selectedDeals.size} negócio(s) selecionado(s)</span>
+          <button onClick={selectAllDeals} className="text-xs text-primary hover:underline">
+            Selecionar todos os(as) {filteredDeals.length} negócios
+          </button>
+          <div className="w-px h-5 bg-border" />
+          <button onClick={() => setShowAssignModal(true)} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted">
+            <UserPlus className="w-3.5 h-3.5" /> Atribuir
+          </button>
+          <button onClick={() => { const name = prompt('Editar nome dos negócios selecionados:'); if (name) { Array.from(selectedDeals).forEach(id => updateDeal.mutate({ id, nome: name })); toast({ title: 'Negócios atualizados' }); setSelectedDeals(new Set()); }}}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted">
+            <Pencil className="w-3.5 h-3.5" /> Editar
+          </button>
+          <button onClick={bulkDelete} disabled={bulkAction}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive px-2 py-1 rounded hover:bg-destructive/10">
+            <Trash2 className="w-3.5 h-3.5" /> Excluir
+          </button>
+          <div className="flex-1" />
+          <button onClick={() => setSelectedDeals(new Set())} className="text-xs text-muted-foreground hover:text-foreground">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Assign Modal */}
+      {showAssignModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowAssignModal(false)} />
+          <div className="relative w-[380px] bg-card border border-border rounded-xl shadow-xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="text-base font-semibold">Atribuir proprietário</h2>
+              <p className="text-xs text-muted-foreground mt-1">{selectedDeals.size} negócio(s) selecionado(s)</p>
+            </div>
+            <div className="px-6 py-4 max-h-72 overflow-y-auto space-y-1">
+              {saasUsers.map(u => (
+                <button key={u.id} onClick={() => setAssignUserId(u.id)}
+                  className={cn('w-full text-left px-3 py-2 rounded-md text-sm flex items-center gap-2 transition-colors',
+                    assignUserId === u.id ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted text-foreground')}>
+                  <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-[10px] font-semibold flex-shrink-0">
+                    {u.nome?.charAt(0)?.toUpperCase()}
+                  </div>
+                  {u.nome}
+                </button>
+              ))}
+            </div>
+            <div className="px-6 py-4 border-t border-border flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowAssignModal(false)}>Cancelar</Button>
+              <Button size="sm" onClick={bulkAssign} disabled={!assignUserId || bulkAction}>
+                {bulkAction ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+                Atribuir
+              </Button>
             </div>
           </div>
         </div>
