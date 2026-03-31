@@ -229,8 +229,18 @@ export default function PerformancePage() {
         label, score: Math.round(v.total / v.count), weight: v.weight,
       })).sort((a, b) => b.score - a.score),
     }));
-    // Flat list for backwards compat (radar, etc.)
-    const meetCriteria = meetCriteriaByAgent.flatMap(g => g.criteria);
+    // Flat list deduplicated by label (averaged) for radar
+    const flatMap: Record<string, { total: number; count: number; weight: number }> = {};
+    for (const g of meetCriteriaByAgent) {
+      for (const c of g.criteria) {
+        if (!flatMap[c.label]) flatMap[c.label] = { total: 0, count: 0, weight: c.weight };
+        flatMap[c.label].total += c.score;
+        flatMap[c.label].count++;
+      }
+    }
+    const meetCriteria = Object.entries(flatMap).map(([label, v]) => ({
+      label, score: Math.round(v.total / v.count), weight: v.weight,
+    })).sort((a, b) => b.score - a.score);
 
     // Criteria averages for WhatsApp
     const waCriteriaMap: Record<string, { total: number; count: number; weight: number }> = {};
@@ -248,7 +258,7 @@ export default function PerformancePage() {
     }));
 
     // Radar data from meeting criteria
-    const radarData = meetCriteria.length ? meetCriteria.map(c => ({ subject: c.label, A: c.score })) : null;
+    const radarData = meetCriteria.length ? meetCriteria.slice(0, 8).map(c => ({ subject: c.label.length > 12 ? c.label.slice(0, 12) + '…' : c.label, A: c.score })) : null;
 
     // Score trend for meetings (averaged by day)
     const trendByDay: Record<string, { total: number; count: number; ts: number }> = {};
@@ -378,7 +388,7 @@ export default function PerformancePage() {
               value={selectedUserId}
               onChange={setSelectedUserId}
               placeholder="Selecione um analista..."
-              options={visibleUsers.filter(u => u.role === 'member').map(u => ({
+              options={visibleUsers.filter(u => u.role === 'member').sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map(u => ({
                 value: u.id,
                 label: u.name,
               }))}
