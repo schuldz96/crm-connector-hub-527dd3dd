@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import StageAIConfigModal, { type StageAIConfig } from '@/components/crm/StageAIConfigModal';
-import { useCrmPipelines, useCrmTicketsByPipeline, useCreateTicket } from '@/hooks/useCrm';
+import { useCrmPipelines, useCrmTicketsByPipeline, useCreateTicket, useUpdateTicket } from '@/hooks/useCrm';
 import { useToast } from '@/hooks/use-toast';
 import type { CrmTicket, CrmPipelineStage, TicketPriority } from '@/types/crm';
 
@@ -65,6 +65,11 @@ export default function CRMTicketsPage() {
   const [newPriority, setNewPriority] = useState<TicketPriority>('medium');
   const [newStage, setNewStage] = useState('');
   const createTicket = useCreateTicket();
+  const updateTicket = useUpdateTicket();
+
+  // Drag-and-drop state
+  const dragItemRef = useRef<{ ticketId: string; fromStageId: string } | null>(null);
+  const [dragOverStageId, setDragOverStageId] = useState<string | null>(null);
 
   const { data: pipelines = [], isLoading: loadingPipelines } = useCrmPipelines('ticket');
   const [activePipelineId, setActivePipelineId] = useState<string | null>(null);
@@ -234,12 +239,28 @@ export default function CRMTicketsPage() {
             <p className="text-sm">Nenhum pipeline configurado</p>
           </div>
         ) : viewMode === 'board' ? (
-          /* ========== KANBAN VIEW ========== */
+          /* ========== KANBAN VIEW (drag-and-drop) ========== */
           <div className="flex gap-3 min-w-max h-full p-4">
             {stages.map(stage => {
               const stageTickets = ticketsByStage[stage.id] || [];
+              const isOver = dragOverStageId === stage.id;
               return (
-                <div key={stage.id} className="w-[260px] flex flex-col flex-shrink-0">
+                <div
+                  key={stage.id}
+                  className="w-[260px] flex flex-col flex-shrink-0"
+                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverStageId(stage.id); }}
+                  onDragLeave={() => { if (dragOverStageId === stage.id) setDragOverStageId(null); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragOverStageId(null);
+                    const ref = dragItemRef.current;
+                    if (ref && ref.fromStageId !== stage.id) {
+                      updateTicket.mutate({ id: ref.ticketId, estagio_id: stage.id });
+                      toast({ title: `Ticket movido para ${stage.nome}` });
+                    }
+                    dragItemRef.current = null;
+                  }}
+                >
                   <div className="flex items-center justify-between px-3 py-2 bg-muted/50 rounded-t-lg border border-border border-b-0">
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="text-xs font-semibold text-foreground truncate">{stage.nome}</span>
@@ -258,14 +279,28 @@ export default function CRMTicketsPage() {
                       {stageAIConfigs[stage.id]?.active && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
                     </button>
                   </div>
-                  <div className="flex-1 overflow-y-auto border-x border-border bg-muted/5 p-1.5 space-y-1.5 max-h-[calc(100vh-320px)]">
+                  <div className={cn(
+                    'flex-1 overflow-y-auto border-x border-border p-1.5 space-y-1.5 max-h-[calc(100vh-320px)] transition-colors',
+                    isOver ? 'bg-primary/5 border-primary/30' : 'bg-muted/5'
+                  )}>
                     {stageTickets.map(ticket => {
                       const pri = PRIORITY_CONFIG[ticket.prioridade];
                       return (
                         <div
                           key={ticket.id}
+                          draggable
+                          onDragStart={(e) => {
+                            dragItemRef.current = { ticketId: ticket.id, fromStageId: stage.id };
+                            e.dataTransfer.effectAllowed = 'move';
+                            (e.currentTarget as HTMLElement).style.opacity = '0.5';
+                          }}
+                          onDragEnd={(e) => {
+                            (e.currentTarget as HTMLElement).style.opacity = '1';
+                            setDragOverStageId(null);
+                            dragItemRef.current = null;
+                          }}
                           onClick={() => navigate(`/record/0-4/${ticket.numero_registro}`)}
-                          className="bg-card border border-border rounded-lg p-3 space-y-1.5 hover:shadow-md transition-shadow cursor-pointer"
+                          className="bg-card border border-border rounded-lg p-3 space-y-1.5 hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing"
                         >
                           <p className="text-[13px] font-semibold text-primary hover:underline leading-tight">{ticket.titulo}</p>
                           <p className="text-xs text-muted-foreground">{daysSince(ticket.criado_em)}</p>
