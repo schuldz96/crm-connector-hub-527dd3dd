@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,9 +21,19 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import type { CrmTicket, CrmPipelineStage, TicketPriority } from '@/types/crm';
 
-const TICKET_FILTER_CHIPS = [
-  'Proprietário do ticket', 'Data de criação', 'Prioridade',
-  'Status', 'Etapa do ticket', 'Categoria', 'Plataforma',
+type FilterDef = { key: string; label: string; type: 'select' | 'date' | 'text'; options?: { value: string; label: string }[] };
+const TICKET_FILTERS: FilterDef[] = [
+  { key: 'proprietario_id', label: 'Proprietário do ticket', type: 'select' },
+  { key: 'criado_em', label: 'Data de criação', type: 'date' },
+  { key: 'prioridade', label: 'Prioridade', type: 'select', options: [
+    { value: 'low', label: 'Baixa' }, { value: 'medium', label: 'Média' }, { value: 'high', label: 'Alta' }, { value: 'urgent', label: 'Urgente' },
+  ]},
+  { key: 'status', label: 'Status', type: 'select', options: [
+    { value: 'aberto', label: 'Aberto' }, { value: 'em_andamento', label: 'Em andamento' }, { value: 'aguardando', label: 'Aguardando' }, { value: 'resolvido', label: 'Resolvido' }, { value: 'fechado', label: 'Fechado' },
+  ]},
+  { key: 'estagio_id', label: 'Etapa do ticket', type: 'select' },
+  { key: 'categoria', label: 'Categoria', type: 'text' },
+  { key: 'plataforma', label: 'Plataforma', type: 'text' },
 ];
 
 const TABS = [
@@ -72,6 +82,8 @@ export default function CRMTicketsPage() {
   const [showMetrics, setShowMetrics] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
+  const [openChip, setOpenChip] = useState<string | null>(null);
   const [advFilterSearch, setAdvFilterSearch] = useState('');
   const [advFilterAdding, setAdvFilterAdding] = useState(false);
   const [advFilterGroups, setAdvFilterGroups] = useState<{ property: string; operator: string; value: string }[][]>([]);
@@ -98,6 +110,12 @@ export default function CRMTicketsPage() {
     : null) || pipelines[0];
   const pipelineId = pipeline?.id || '';
 
+  useEffect(() => {
+    if (pipeline && !pipelineParam) {
+      setSearchParams({ pipeline: String(pipeline.nome_interno) }, { replace: true });
+    }
+  }, [pipeline, pipelineParam, setSearchParams]);
+
   const selectPipeline = (p: typeof pipeline) => {
     if (!p) return;
     setSearchParams({ pipeline: String(p.nome_interno) }, { replace: true });
@@ -122,13 +140,22 @@ export default function CRMTicketsPage() {
     if (search) {
       list = list.filter(t => t.titulo.toLowerCase().includes(search.toLowerCase()));
     }
+    for (const [key, val] of Object.entries(activeFilters)) {
+      if (!val) continue;
+      if (key === 'status') list = list.filter(t => t.status === val);
+      if (key === 'prioridade') list = list.filter(t => t.prioridade === val);
+      if (key === 'estagio_id') list = list.filter(t => t.estagio_id === val);
+      if (key === 'proprietario_id') list = list.filter(t => t.proprietario_id === val);
+      if (key === 'categoria') list = list.filter(t => t.categoria?.toLowerCase().includes(val.toLowerCase()));
+      if (key === 'plataforma') list = list.filter(t => t.plataforma?.toLowerCase().includes(val.toLowerCase()));
+    }
     list = [...list].sort((a, b) => {
       const aVal = new Date(a[sortField]).getTime();
       const bVal = new Date(b[sortField]).getTime();
       return sortDirection === 'desc' ? bVal - aVal : aVal - bVal;
     });
     return list;
-  }, [allTickets, search, activeTab, myUserId, sortField, sortDirection]);
+  }, [allTickets, search, activeTab, myUserId, sortField, sortDirection, activeFilters]);
 
   const ticketsByStage = useMemo(() => {
     const map: Record<string, CrmTicket[]> = {};
@@ -228,8 +255,6 @@ export default function CRMTicketsPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button variant="ghost" size="icon" className="h-8 w-8"><Settings2 className="w-3.5 h-3.5" /></Button>
-          <div className="w-px h-5 bg-border mx-1" />
           <DropdownMenu open={pipelineDropdown} onOpenChange={setPipelineDropdown}>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
@@ -240,8 +265,7 @@ export default function CRMTicketsPage() {
               {pipelines.map(p => (
                 <DropdownMenuItem key={p.id} onClick={() => { selectPipeline(p); setPipelineDropdown(false); }}
                   className={cn(p.id === pipelineId && 'bg-muted font-medium')}>
-                  <span className="flex-1">{p.nome}</span>
-                  <span className="text-[10px] text-muted-foreground font-mono ml-2">{p.nome_interno}</span>
+                  {p.nome}
                 </DropdownMenuItem>
               ))}
               <div className="border-t border-border mt-1 pt-1 px-2 pb-1">
@@ -279,16 +303,61 @@ export default function CRMTicketsPage() {
       {/* Filter chips row */}
       {showFilters && (
         <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-card flex-shrink-0 text-xs flex-wrap">
-          {TICKET_FILTER_CHIPS.map(chip => (
-            <button key={chip} className="flex items-center gap-1 text-muted-foreground hover:text-foreground font-medium px-2 py-1 rounded-md hover:bg-muted transition-colors">
-              {chip} <ChevronDown className="w-3 h-3" />
-            </button>
-          ))}
+          {TICKET_FILTERS.map(f => {
+            const isOpen = openChip === f.key;
+            const hasValue = !!activeFilters[f.key];
+            let options = f.options || [];
+            if (f.key === 'proprietario_id') options = saasUsers.map(u => ({ value: u.id, label: u.nome }));
+            if (f.key === 'estagio_id') options = stages.map(s => ({ value: s.id, label: s.nome }));
+            const selectedLabel = hasValue ? options.find(o => o.value === activeFilters[f.key])?.label : null;
+            return (
+              <div key={f.key} className="relative">
+                <button onClick={() => setOpenChip(isOpen ? null : f.key)}
+                  className={cn('flex items-center gap-1 font-medium px-2 py-1 rounded-md transition-colors',
+                    hasValue ? 'bg-primary/15 text-primary border border-primary/30' : 'text-muted-foreground hover:text-foreground hover:bg-muted')}>
+                  {f.label}{selectedLabel ? `: ${selectedLabel}` : ''} <ChevronDown className="w-3 h-3" />
+                  {hasValue && (
+                    <span onClick={(e) => { e.stopPropagation(); setActiveFilters(prev => { const n = { ...prev }; delete n[f.key]; return n; }); setOpenChip(null); }}
+                      className="ml-0.5 hover:text-destructive"><X className="w-3 h-3" /></span>
+                  )}
+                </button>
+                {isOpen && (
+                  <div className="absolute top-full left-0 mt-1 z-30 bg-card border border-border rounded-lg shadow-lg min-w-[200px] max-h-60 overflow-y-auto">
+                    {(f.type === 'select' && options.length > 0) ? (
+                      <div className="py-1">
+                        <button onClick={() => { setActiveFilters(prev => { const n = { ...prev }; delete n[f.key]; return n; }); setOpenChip(null); }}
+                          className={cn('w-full text-left px-4 py-1.5 text-xs hover:bg-muted', !hasValue && 'font-medium')}>Todos</button>
+                        {options.map(o => (
+                          <button key={o.value} onClick={() => { setActiveFilters(prev => ({ ...prev, [f.key]: o.value })); setOpenChip(null); }}
+                            className={cn('w-full text-left px-4 py-1.5 text-xs hover:bg-muted', activeFilters[f.key] === o.value && 'bg-muted font-medium')}>{o.label}</button>
+                        ))}
+                      </div>
+                    ) : f.type === 'text' ? (
+                      <div className="p-2">
+                        <Input className="text-xs h-8" placeholder={`Filtrar por ${f.label.toLowerCase()}...`}
+                          value={activeFilters[f.key] || ''}
+                          onChange={e => setActiveFilters(prev => e.target.value ? { ...prev, [f.key]: e.target.value } : (() => { const n = { ...prev }; delete n[f.key]; return n; })())}
+                          onKeyDown={e => e.key === 'Enter' && setOpenChip(null)} autoFocus />
+                      </div>
+                    ) : (
+                      <div className="p-2 text-xs text-muted-foreground">Em breve</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
           <button className="text-muted-foreground hover:text-foreground font-medium px-2 py-1">+ Mais</button>
           <div className="w-px h-4 bg-border" />
           <button onClick={() => setShowAdvancedFilters(true)} className="flex items-center gap-1 text-muted-foreground hover:text-foreground font-medium px-2 py-1">
             <SlidersHorizontal className="w-3 h-3" /> Filtros avançados
           </button>
+          {Object.keys(activeFilters).length > 0 && (
+            <>
+              <div className="w-px h-4 bg-border" />
+              <button onClick={() => setActiveFilters({})} className="text-destructive hover:text-destructive/80 font-medium px-2 py-1">Limpar filtros</button>
+            </>
+          )}
         </div>
       )}
 
