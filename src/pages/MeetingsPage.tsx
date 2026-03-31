@@ -358,6 +358,7 @@ export default function MeetingsPage() {
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editCommentText, setEditCommentText] = useState('');
   const [loadingComments, setLoadingComments] = useState(false);
+  const [commentsLoaded, setCommentsLoaded] = useState<string | null>(null);
 
   const saas = () => (supabase as any).schema('saas');
 
@@ -366,6 +367,7 @@ export default function MeetingsPage() {
     try {
       const { data } = await saas().from('comentarios_reuniao').select('*').eq('reuniao_id', meetingId).order('criado_em', { ascending: false });
       setComments(data || []);
+      setCommentsLoaded(meetingId);
     } catch { setComments([]); }
     finally { setLoadingComments(false); }
   };
@@ -1435,8 +1437,8 @@ export default function MeetingsPage() {
 
                 {/* Comments tab */}
                 {detailTab === 'comments' && (() => {
-                  // Load comments when tab opens
-                  if (comments.length === 0 && !loadingComments && selectedMeeting) {
+                  // Load comments when tab opens (only once per meeting)
+                  if (commentsLoaded !== selectedMeeting?.id && !loadingComments && selectedMeeting) {
                     loadComments(selectedMeeting.id);
                   }
                   return (
