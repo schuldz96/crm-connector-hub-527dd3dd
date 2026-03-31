@@ -135,24 +135,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Email + password — validates against allowed users list
+  // Brute-force protection: max 5 attempts per 15 minutes
+  const loginAttemptsRef = React.useRef<{ count: number; lastAttempt: number }>({ count: 0, lastAttempt: 0 });
+
   const login = async (email: string, password: string) => {
     setIsLoading(true);
-    await new Promise(r => setTimeout(r, 500));
+
+    // Rate limit check
+    const now = Date.now();
+    const attempts = loginAttemptsRef.current;
+    if (now - attempts.lastAttempt > 15 * 60 * 1000) {
+      attempts.count = 0; // Reset after 15 minutes
+    }
+    if (attempts.count >= 5) {
+      setIsLoading(false);
+      throw new Error('Muitas tentativas de login. Aguarde 15 minutos.');
+    }
+
+    await new Promise(r => setTimeout(r, 800 + Math.random() * 400)); // Variable delay to prevent timing attacks
     try {
       const normalized = email.trim().toLowerCase();
 
       if (!isAppmaxEmail(normalized)) {
+        attempts.count++;
+        attempts.lastAttempt = now;
         throw new Error('Apenas e-mails @appmax.com.br são permitidos.');
       }
 
       const allowedMatch = await getAllowedUserByEmail(normalized);
       if (!allowedMatch) {
-        throw new Error('Usuário não autorizado.');
+        attempts.count++;
+        attempts.lastAttempt = now;
+        throw new Error('Credenciais inválidas.'); // Generic message to prevent user enumeration
       }
 
       const hashedInput = await hashPasswordForLogin(password);
       if (!allowedMatch.password || (allowedMatch.password !== hashedInput && allowedMatch.password !== password)) {
-        throw new Error('Credenciais inválidas. Verifique seu e-mail e senha.');
+        attempts.count++;
+        attempts.lastAttempt = now;
+        throw new Error('Credenciais inválidas.');
       }
 
       const u = buildUser(
@@ -251,8 +272,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return userIdx <= minIdx;
   };
 
+  // CRM access: restricted by email whitelist (enforced at auth level, not just sidebar)
+  const CRM_ALLOWED_EMAILS = ['marcos.schuldz@appmax.com.br', 'yuri.santos@appmax.com.br'];
+
   const canAccess = (resource: string) => {
     if (!user) return false;
+    // CRM: email-restricted regardless of role
+    if (resource === 'crm') {
+      return CRM_ALLOWED_EMAILS.includes(user.email?.toLowerCase() || '');
+    }
     if (user.role === 'admin') return true;
     return roleCanAccess(user.role, resource as any);
   };

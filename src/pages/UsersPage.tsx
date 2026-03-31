@@ -251,7 +251,7 @@ function ConfirmModal({
           </DialogTitle>
         </DialogHeader>
         <div className="py-2 space-y-4">
-          <p className="text-sm text-muted-foreground" dangerouslySetInnerHTML={{ __html: desc }} />
+          <p className="text-sm text-muted-foreground" dangerouslySetInnerHTML={{ __html: desc.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/&lt;strong&gt;/g, '<strong>').replace(/&lt;\/strong&gt;/g, '</strong>') }} />
           <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border">
             <img src={user.avatar} alt={user.name} className="w-9 h-9 rounded-full border border-border" />
             <div>
