@@ -430,6 +430,20 @@ export async function loadTeamsForPerformance(): Promise<any[]> {
   return data || [];
 }
 
+// ─── Load agent names (for methodology labels) ─────────────────────────────────
+export async function loadAgentNames(): Promise<Record<string, string>> {
+  const empresaId = await getSaasEmpresaId();
+  const { data, error } = await (supabase as any)
+    .schema('saas')
+    .from('agentes_ia')
+    .select('id,nome')
+    .eq('empresa_id', empresaId);
+  if (error) return {};
+  const map: Record<string, string> = {};
+  for (const a of (data || [])) map[a.id] = a.nome;
+  return map;
+}
+
 // ─── Load meeting durations (for avg call time metric) ────────────────────────
 export async function loadMeetingDurations(): Promise<Record<string, number>> {
   const empresaId = await getSaasEmpresaId();

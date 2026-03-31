@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, LineChart, Line, Legend } from 'recharts';
 import { useAuth } from '@/contexts/AuthContext';
-import { loadEvaluations, loadUsersForPerformance, loadTeamsForPerformance, loadMeetingDurations, type StoredEvaluation } from '@/lib/evaluationService';
+import { loadEvaluations, loadUsersForPerformance, loadTeamsForPerformance, loadMeetingDurations, loadAgentNames, type StoredEvaluation } from '@/lib/evaluationService';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function scoreColor(s: number) {
@@ -101,17 +101,20 @@ export default function PerformancePage() {
   const [dbTeams, setDbTeams] = useState<any[]>([]);
   const [evaluations, setEvaluations] = useState<StoredEvaluation[]>([]);
   const [meetingDurations, setMeetingDurations] = useState<Record<string, number>>({});
+  const [agentNames, setAgentNames] = useState<Record<string, string>>({});
   const [selectedEval, setSelectedEval] = useState<StoredEvaluation | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const [users, teams, evals, durations] = await Promise.all([
+    const [users, teams, evals, durations, agents] = await Promise.all([
       loadUsersForPerformance(),
       loadTeamsForPerformance(),
       loadEvaluations(),
       loadMeetingDurations(),
+      loadAgentNames(),
     ]);
     setMeetingDurations(durations);
+    setAgentNames(agents);
     setDbUsers(users);
     setDbTeams(teams);
 
@@ -248,18 +251,22 @@ export default function PerformancePage() {
     const radarData = meetCriteria.length ? meetCriteria.map(c => ({ subject: c.label, A: c.score })) : null;
 
     // Score trend for meetings (averaged by day)
-    const trendByDay: Record<string, { total: number; count: number }> = {};
+    const trendByDay: Record<string, { total: number; count: number; ts: number }> = {};
     for (const e of meetEvals.filter(ev => ev.criado_em)) {
-      const day = new Date(e.criado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-      if (!trendByDay[day]) trendByDay[day] = { total: 0, count: 0 };
-      trendByDay[day].total += (e.score || 0);
-      trendByDay[day].count++;
+      const d = new Date(e.criado_em);
+      const dayKey = d.toISOString().split('T')[0]; // YYYY-MM-DD for sorting
+      const dayLabel = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      if (!trendByDay[dayKey]) trendByDay[dayKey] = { total: 0, count: 0, ts: new Date(dayKey).getTime() };
+      trendByDay[dayKey].total += (e.score || 0);
+      trendByDay[dayKey].count++;
     }
-    const trend = Object.entries(trendByDay).map(([date, v]) => ({
-      date,
-      score: Math.round(v.total / v.count),
-      reunioes: v.count,
-    }));
+    const trend = Object.entries(trendByDay)
+      .sort(([, a], [, b]) => a.ts - b.ts) // oldest first
+      .map(([key, v]) => ({
+        date: new Date(key).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+        score: Math.round(v.total / v.count),
+        reunioes: v.count,
+      }));
 
     return { u, avgMeetingScore, avgWaScore, overallScore, meetCriteria, meetCriteriaByAgent, waCriteria, trend, radarData, meetEvals, waEvals };
   };
@@ -371,9 +378,9 @@ export default function PerformancePage() {
               value={selectedUserId}
               onChange={setSelectedUserId}
               placeholder="Selecione um analista..."
-              options={visibleUsers.map(u => ({
+              options={visibleUsers.filter(u => u.role === 'member').map(u => ({
                 value: u.id,
-                label: `${u.name} — ${u.role === 'member' ? 'Analista' : u.role === 'supervisor' ? 'Supervisor' : u.role === 'director' ? 'Diretor' : u.role}`,
+                label: u.name,
               }))}
               className="min-w-[240px]"
             />
@@ -495,7 +502,7 @@ export default function PerformancePage() {
                         {meetCriteriaByAgent.length > 1 && (
                           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
                             <Brain className="w-3 h-3" />
-                            {group.agentId === '_default' ? 'Avaliação Padrão' : `Agente ${gi + 1}`}
+                            {group.agentId === '_default' ? 'Avaliação Padrão' : (agentNames[group.agentId] || `Agente ${gi + 1}`)}
                           </p>
                         )}
                         <div className="space-y-2">
