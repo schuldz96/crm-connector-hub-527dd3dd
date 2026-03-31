@@ -194,7 +194,7 @@ export default function CRMCompaniesPage() {
             </thead>
             <tbody>
               {companies.map(company => (
-                <tr key={company.id} onClick={() => navigate(`/record/0-2/${company.numero_registro}`)} className="border-b border-border hover:bg-muted/20 transition-colors group cursor-pointer">
+                <tr key={company.id} onClick={() => navigate(`/crm/record/0-2/${company.numero_registro}`)} className="border-b border-border hover:bg-muted/20 transition-colors group cursor-pointer">
                   <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}><input type="checkbox" className="rounded border-border" /></td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-2">

@@ -180,7 +180,7 @@ export default function CRMDealsPage() {
               ))}
               <div className="border-t border-border mt-1 pt-1 px-2 pb-1">
                 <button
-                  onClick={() => navigate(`/crm/pipeline-settings?type=deal&pipeline=${pipelineId}`)}
+                  onClick={() => navigate(`/crm/0-6?type=deal&pipeline=${pipelineId}`)}
                   className="text-xs text-primary hover:underline flex items-center gap-1"
                 >
                   Editar pipeline <ChevronRight className="w-3 h-3" />
@@ -292,7 +292,7 @@ export default function CRMDealsPage() {
                           setDragOverStageId(null);
                           dragItemRef.current = null;
                         }}
-                        onClick={() => navigate(`/record/0-3/${deal.numero_registro}`)}
+                        onClick={() => navigate(`/crm/record/0-3/${deal.numero_registro}`)}
                         className="bg-card border border-border rounded-lg p-3 space-y-1.5 hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing"
                       >
                         <p className="text-[13px] font-semibold text-primary hover:underline leading-tight">{deal.nome}</p>
@@ -337,7 +337,7 @@ export default function CRMDealsPage() {
                 return (
                   <tr
                     key={deal.id}
-                    onClick={() => navigate(`/record/0-3/${deal.numero_registro}`)}
+                    onClick={() => navigate(`/crm/record/0-3/${deal.numero_registro}`)}
                     className="border-b border-border hover:bg-muted/20 transition-colors cursor-pointer group"
                   >
                     <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>

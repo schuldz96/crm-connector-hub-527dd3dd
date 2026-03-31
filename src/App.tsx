@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { AuthProvider, useAuth, getDefaultRoute } from "@/contexts/AuthContext";
 import { AppConfigProvider } from "@/contexts/AppConfigContext";
@@ -54,6 +54,11 @@ const R = (el: React.ReactNode, opts: { resource?: string; minRole?: string }) =
   </RequireRole>
 );
 
+function LegacyRecordRedirect() {
+  const { typeId, numero } = useParams();
+  return <Navigate to={`/crm/record/${typeId}/${numero}`} replace />;
+}
+
 function ProtectedRoutes() {
   const { isAuthenticated, isLoading, user } = useAuth();
 
@@ -93,18 +98,27 @@ function ProtectedRoutes() {
         <Route path="/ai-config"    element={R(<AIConfigPage />,     { resource: 'ai-config' })} />
         <Route path="/admin"        element={R(<AdminPage />,        { resource: 'admin' })} />
 
-        {/* CRM — exige recurso 'crm' */}
-        <Route path="/crm/contacts"           element={R(<CRMContactsPage />,       { resource: 'crm' })} />
-        <Route path="/objects/0-1/views/*"     element={R(<CRMContactsPage />,       { resource: 'crm' })} />
-        <Route path="/crm/companies"           element={R(<CRMCompaniesPage />,      { resource: 'crm' })} />
-        <Route path="/objects/0-2/views/*"     element={R(<CRMCompaniesPage />,      { resource: 'crm' })} />
-        <Route path="/crm/deals"               element={R(<CRMDealsPage />,          { resource: 'crm' })} />
-        <Route path="/objects/0-3/views/*"     element={R(<CRMDealsPage />,          { resource: 'crm' })} />
-        <Route path="/crm/tickets"             element={R(<CRMTicketsPage />,        { resource: 'crm' })} />
-        <Route path="/objects/0-4/views/*"     element={R(<CRMTicketsPage />,        { resource: 'crm' })} />
-        <Route path="/crm/pipeline-settings"   element={R(<CRMPipelineSettingsPage />, { resource: 'crm' })} />
-        <Route path="/crm/properties"          element={R(<CRMPropertiesPage />,       { resource: 'crm' })} />
-        <Route path="/record/:typeId/:numero"  element={R(<CRMRecordPage />,         { resource: 'crm' })} />
+        {/* CRM — URLs primárias: /crm/0-{N}/{view} (padrão HubSpot) */}
+        <Route path="/crm/0-1"                 element={R(<CRMContactsPage />,         { resource: 'crm' })} />
+        <Route path="/crm/0-2"                 element={R(<CRMCompaniesPage />,        { resource: 'crm' })} />
+        <Route path="/crm/0-3"                 element={R(<CRMDealsPage />,            { resource: 'crm' })} />
+        <Route path="/crm/0-4"                 element={R(<CRMTicketsPage />,          { resource: 'crm' })} />
+        <Route path="/crm/0-5"                 element={R(<CRMPropertiesPage />,       { resource: 'crm' })} />
+        <Route path="/crm/0-6"                 element={R(<CRMPipelineSettingsPage />, { resource: 'crm' })} />
+        <Route path="/crm/record/:typeId/:numero" element={R(<CRMRecordPage />,       { resource: 'crm' })} />
+
+        {/* CRM — redirects legados para manter compatibilidade */}
+        <Route path="/crm/contacts"            element={<Navigate to="/crm/0-1" replace />} />
+        <Route path="/crm/companies"           element={<Navigate to="/crm/0-2" replace />} />
+        <Route path="/crm/deals"               element={<Navigate to="/crm/0-3" replace />} />
+        <Route path="/crm/tickets"             element={<Navigate to="/crm/0-4" replace />} />
+        <Route path="/crm/properties"          element={<Navigate to="/crm/0-5" replace />} />
+        <Route path="/crm/pipeline-settings"   element={<Navigate to="/crm/0-6" replace />} />
+        <Route path="/objects/0-1/views/*"     element={<Navigate to="/crm/0-1" replace />} />
+        <Route path="/objects/0-2/views/*"     element={<Navigate to="/crm/0-2" replace />} />
+        <Route path="/objects/0-3/views/*"     element={<Navigate to="/crm/0-3" replace />} />
+        <Route path="/objects/0-4/views/*"     element={<Navigate to="/crm/0-4" replace />} />
+        <Route path="/record/:typeId/:numero"  element={<LegacyRecordRedirect />} />
 
         {/* Fallback */}
         <Route path="/"             element={<Navigate to={getDefaultRoute(user?.role)} replace />} />

@@ -12,6 +12,7 @@ import {
   Briefcase, Contact, Ticket, Factory, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useCrmPipelines } from '@/hooks/useCrm';
 import type { CrmObjectType } from '@/types/crm';
 
 // ========================
@@ -142,6 +143,8 @@ export default function CRMPropertiesPage() {
 
   const properties = PROPERTIES[objectType];
   const selectedOption = OBJECT_TYPE_OPTIONS.find(o => o.value === objectType)!;
+  const hasPipeline = objectType === 'deal' || objectType === 'ticket';
+  const { data: pipelines = [] } = useCrmPipelines(hasPipeline ? (objectType === 'deal' ? 'deal' : 'ticket') : 'deal');
 
   const groups = useMemo(() => {
     const set = new Set(properties.map(p => p.group));
@@ -334,6 +337,31 @@ export default function CRMPropertiesPage() {
             )}
           </tbody>
         </table>
+
+        {/* Pipeline registry IDs section */}
+        {hasPipeline && pipelines.length > 0 && (
+          <div className="border-t border-border px-6 py-4">
+            <h3 className="text-sm font-semibold text-foreground mb-3">
+              Pipelines vinculados — {objectType === 'deal' ? 'Negócios' : 'Tickets'}
+            </h3>
+            <div className="grid gap-2">
+              {pipelines.map(p => (
+                <div key={p.id} className="flex items-center gap-3 px-4 py-2.5 rounded-lg border border-border bg-muted/20 hover:bg-muted/40 transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{p.nome}</p>
+                    <p className="text-[11px] text-muted-foreground">{p.estagios?.length || 0} etapas</p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-[10px] text-muted-foreground">ID do Registro:</span>
+                    <Badge variant="outline" className="font-mono text-xs tracking-wider">
+                      {p.registro_id}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

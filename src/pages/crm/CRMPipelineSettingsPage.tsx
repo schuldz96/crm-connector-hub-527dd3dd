@@ -245,7 +245,7 @@ export default function CRMPipelineSettingsPage() {
         {/* Object selector */}
         <div className="flex items-center gap-3 mb-4">
           <span className="text-sm text-muted-foreground">Selecione um objeto:</span>
-          <Select value={objectType} onValueChange={v => navigate(`/crm/pipeline-settings?type=${v}`)}>
+          <Select value={objectType} onValueChange={v => navigate(`/crm/0-6?type=${v}`)}>
             <SelectTrigger className="w-48 h-9">
               <div className="flex items-center gap-2">
                 <ObjIcon className="w-4 h-4" />

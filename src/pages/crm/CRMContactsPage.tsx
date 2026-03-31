@@ -242,7 +242,7 @@ export default function CRMContactsPage() {
               {contacts.map(contact => {
                 const st = STATUS_CONFIG[contact.status];
                 return (
-                  <tr key={contact.id} onClick={() => navigate(`/record/0-1/${contact.numero_registro}`)} className="border-b border-border hover:bg-muted/20 transition-colors group cursor-pointer">
+                  <tr key={contact.id} onClick={() => navigate(`/crm/record/0-1/${contact.numero_registro}`)} className="border-b border-border hover:bg-muted/20 transition-colors group cursor-pointer">
                     <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
                       <input type="checkbox" className="rounded border-border" />
                     </td>

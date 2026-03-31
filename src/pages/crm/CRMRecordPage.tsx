@@ -199,8 +199,8 @@ export default function CRMRecordPage() {
   // ---- Handlers ----
   const handleBack = () => {
     const paths: Record<CrmObjectType, string> = {
-      contact: '/crm/contacts', company: '/crm/companies',
-      deal: '/crm/deals', ticket: '/crm/tickets',
+      contact: '/crm/0-1', company: '/crm/0-2',
+      deal: '/crm/0-3', ticket: '/crm/0-4',
     };
     navigate(paths[objectType]);
   };
