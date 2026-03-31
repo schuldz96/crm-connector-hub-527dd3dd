@@ -235,7 +235,8 @@ export default function DashboardPage() {
                 value={filterSeller === 'all' ? '' : filterSeller}
                 onChange={v => {
                   setFilterSeller(v || 'all');
-                  if (v) { const u = dbUsers.find(x => x.id === v); if (u?.time_id && filterTeam === 'all') setFilterTeam(u.time_id); }
+                  if (v) { const u = dbUsers.find(x => x.id === v); if (u?.time_id) setFilterTeam(u.time_id); }
+                  else { setFilterTeam('all'); }
                 }}
                 placeholder="Todos vendedores"
                 searchPlaceholder="Pesquisar vendedor..."
