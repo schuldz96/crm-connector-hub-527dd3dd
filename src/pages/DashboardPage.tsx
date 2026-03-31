@@ -186,10 +186,6 @@ export default function DashboardPage() {
             </span>
             <button onClick={() => goMonth(1)} className="px-2 h-8 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors text-xs">&gt;</button>
           </div>
-          <Button size="sm" className="text-xs h-8 bg-gradient-primary" onClick={() => navigate('/reports')}>
-            <Zap className="w-3.5 h-3.5 mr-1.5" />
-            Gerar Relatório IA
-          </Button>
         </div>
       </div>
 

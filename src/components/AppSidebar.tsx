@@ -47,7 +47,6 @@ const NAV_ITEMS: NavItem[] = [
   },
   { path: '/teams',        label: 'Times',            icon: Target,          resource: 'teams' },
   { path: '/users',        label: 'Usuários',         icon: Users,           resource: 'users' },
-  { path: '/reports',      label: 'Relatórios',       icon: BarChart3,       resource: 'reports' },
   { path: '/integrations', label: 'Integrações',      icon: Plug2,           resource: 'integrations' },
   { path: '/automations',  label: 'Automações',       icon: Bell,            resource: 'automations' },
   { path: '/ai-config',    label: 'Config. IA',       icon: SlidersHorizontal, resource: 'ai-config' },
