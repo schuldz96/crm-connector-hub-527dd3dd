@@ -16,6 +16,7 @@ import {
   FileText, Image, Music, Video, Save,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useEvolutionInstances } from '@/hooks/useEvolutionInstances';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -39,6 +40,8 @@ interface QuestionItem {
   id: string;
   question: string;
   description: string;
+  required: boolean;
+  propertyKey?: string;
 }
 
 export interface StageAIConfig {
@@ -132,6 +135,14 @@ export default function StageAIConfigModal({
 }: StageAIConfigModalProps) {
   const [activeTab, setActiveTab] = useState('ia');
   const [config, setConfig] = useState<StageAIConfig>({ ...DEFAULT_CONFIG, ...initialConfig });
+  const { instances } = useEvolutionInstances();
+
+  // Filter instances by provider
+  const filteredInstances = config.provider === 'evolution'
+    ? instances.filter(i => i.connectionStatus === 'open')
+    : config.provider === 'meta'
+    ? instances.filter(i => i.name?.toLowerCase().includes('meta') || i.name?.toLowerCase().includes('waba'))
+    : instances;
 
   const update = <K extends keyof StageAIConfig>(key: K, value: StageAIConfig[K]) =>
     setConfig(prev => ({ ...prev, [key]: value }));
@@ -250,30 +261,45 @@ export default function StageAIConfigModal({
 
                 <div>
                   <label className="text-sm font-medium text-foreground mb-1.5 block">Provedor</label>
-                  <Select value={config.provider} onValueChange={v => update('provider', v)}>
+                  <Select value={config.provider} onValueChange={v => { update('provider', v); update('instance', ''); }}>
                     <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="evolution">Evolution API</SelectItem>
-                      <SelectItem value="meta">Meta WhatsApp</SelectItem>
-                      <SelectItem value="openai">OpenAI Direct</SelectItem>
+                      <SelectItem value="meta">Meta WhatsApp (WABA)</SelectItem>
+                      <SelectItem value="owner">Proprietário do registro</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-foreground mb-1.5 block">Instância conectada</label>
-                  <Select value={config.instance} onValueChange={v => update('instance', v)}>
-                    <SelectTrigger className="h-10"><SelectValue placeholder="Selecione uma instância..." /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="instance-1">Cobranças B2C 🟢</SelectItem>
-                      <SelectItem value="instance-2">Atendimento Appmax 🟢</SelectItem>
-                      <SelectItem value="instance-3">Vendas Appmax 🔴</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {config.instance && (
-                    <p className="text-xs text-muted-foreground mt-1">Instância da Evolution API conectada</p>
+                  {config.provider === 'owner' && (
+                    <p className="text-xs text-muted-foreground mt-1.5 p-2 rounded bg-muted/50">
+                      A IA usará a instância vinculada ao proprietário do negócio/ticket. Se o proprietário não tiver instância, a IA não executará ação.
+                    </p>
                   )}
                 </div>
+
+                {config.provider !== 'owner' && (
+                  <div>
+                    <label className="text-sm font-medium text-foreground mb-1.5 block">Instância conectada</label>
+                    <Select value={config.instance} onValueChange={v => update('instance', v)}>
+                      <SelectTrigger className="h-10"><SelectValue placeholder="Selecione uma instância..." /></SelectTrigger>
+                      <SelectContent>
+                        {filteredInstances.length === 0 ? (
+                          <SelectItem value="_none" disabled>Nenhuma instância disponível</SelectItem>
+                        ) : (
+                          filteredInstances.map(inst => (
+                            <SelectItem key={inst.id || inst.name} value={inst.name}>
+                              {inst.name} {inst.connectionStatus === 'open' ? '🟢' : inst.connectionStatus === 'connecting' ? '🟡' : '🔴'}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                    {config.instance && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Instância {config.provider === 'meta' ? 'Meta WABA' : 'Evolution API'} conectada
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 <div className="flex items-center gap-2">
                   <Switch checked={config.active} onCheckedChange={v => update('active', v)} />
@@ -323,44 +349,55 @@ export default function StageAIConfigModal({
 
                 {config.welcomeEnabled && (
                   <>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>Use variáveis:</span>
-                      {['{{name}}', '{{first_name}}', '{{phone}}'].map(v => (
-                        <Badge key={v} variant="outline" className="text-[10px] font-mono cursor-pointer hover:bg-muted"
-                          onClick={() => update('welcomeText', config.welcomeText + ' ' + v)}>
-                          {v}
-                        </Badge>
-                      ))}
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-medium text-foreground mb-1.5 block">Tipo</label>
-                      <div className="grid grid-cols-4 gap-2">
-                        {WELCOME_TYPES.map(t => (
-                          <button
-                            key={t.id}
-                            onClick={() => update('welcomeType', t.id)}
-                            className={cn(
-                              'flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition-colors',
-                              config.welcomeType === t.id
-                                ? 'border-primary bg-primary/10 text-primary'
-                                : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'
-                            )}
-                          >
-                            <t.icon className="w-3.5 h-3.5" /> {t.label}
-                          </button>
-                        ))}
+                    {config.provider === 'meta' ? (
+                      /* Meta WABA: template-based welcome */
+                      <div className="space-y-3">
+                        <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                          <Info className="w-3.5 h-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
+                          <p className="text-xs text-muted-foreground">Meta WABA exige que a primeira mensagem use um <strong>template aprovado</strong>. Configure o nome do template e os parâmetros.</p>
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-foreground mb-1.5 block">Nome do Template</label>
+                          <Input value={config.welcomeText.startsWith('template:') ? config.welcomeText.replace('template:', '') : ''} onChange={e => update('welcomeText', 'template:' + e.target.value)} placeholder="Ex: hello_world, welcome_lead" className="h-9 text-sm font-mono" />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-foreground mb-1.5 block">Variáveis do Template (uma por linha)</label>
+                          <Textarea placeholder="{{1}} = Nome do contato&#10;{{2}} = Nome da empresa" className="min-h-[60px] resize-y text-xs font-mono" />
+                          <p className="text-[10px] text-muted-foreground mt-1">Use variáveis do sistema: {'{{first_name}}'}, {'{{company}}'}, {'{{phone}}'}</p>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      /* Evolution / Owner: free-text welcome */
+                      <>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span>Use variáveis:</span>
+                          {['{{name}}', '{{first_name}}', '{{phone}}'].map(v => (
+                            <Badge key={v} variant="outline" className="text-[10px] font-mono cursor-pointer hover:bg-muted"
+                              onClick={() => update('welcomeText', config.welcomeText + ' ' + v)}>
+                              {v}
+                            </Badge>
+                          ))}
+                        </div>
 
-                    <div>
-                      <label className="text-xs font-medium text-foreground mb-1.5 block">Texto</label>
-                      <Textarea
-                        value={config.welcomeText}
-                        onChange={e => update('welcomeText', e.target.value)}
-                        className="min-h-[80px] resize-y"
-                      />
-                    </div>
+                        <div>
+                          <label className="text-xs font-medium text-foreground mb-1.5 block">Tipo</label>
+                          <div className="grid grid-cols-4 gap-2">
+                            {WELCOME_TYPES.map(t => (
+                              <button key={t.id} onClick={() => update('welcomeType', t.id)}
+                                className={cn('flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition-colors',
+                                  config.welcomeType === t.id ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted')}>
+                                <t.icon className="w-3.5 h-3.5" /> {t.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-medium text-foreground mb-1.5 block">Texto</label>
+                          <Textarea value={config.welcomeText} onChange={e => update('welcomeText', e.target.value)} className="min-h-[80px] resize-y" />
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
               </div>
@@ -437,48 +474,46 @@ export default function StageAIConfigModal({
           {/* ═══ Perguntas Tab ═══ */}
           {activeTab === 'questions' && (
             <>
-              {/* Info banner */}
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-primary/10 border border-primary/20">
-                <Info className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="text-sm font-medium text-foreground">Avaliação Automática Ativada</p>
-                  <p className="text-xs text-muted-foreground">A IA avaliará cada mensagem e marcará perguntas como concluídas automaticamente</p>
+              {/* Auto-evaluation toggle */}
+              <div className="flex items-center justify-between p-3 rounded-lg bg-primary/10 border border-primary/20">
+                <div className="flex items-start gap-3">
+                  <Info className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Avaliação Automática</p>
+                    <p className="text-xs text-muted-foreground">A IA avalia cada mensagem e marca perguntas como concluídas</p>
+                  </div>
                 </div>
+                <Switch checked={config.autoEvaluation} onCheckedChange={v => update('autoEvaluation', v)} />
               </div>
 
-              <div className="border border-border rounded-lg p-4 space-y-3">
+              <div className="space-y-3">
                 {config.questions.map((q, idx) => (
-                  <div key={q.id} className="space-y-2 pb-3 border-b border-border last:border-0 last:pb-0">
+                  <div key={q.id} className="border border-border rounded-lg p-3 space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-muted-foreground">Pergunta {idx + 1}</span>
+                      <div className="flex items-center gap-2">
+                        <GripVertical className="w-3.5 h-3.5 text-muted-foreground/40" />
+                        <span className="text-xs font-semibold text-muted-foreground">Pergunta {idx + 1}</span>
+                        <Badge variant={q.required ? 'default' : 'outline'} className={cn('text-[10px] cursor-pointer', q.required ? 'bg-destructive/80' : '')}
+                          onClick={() => update('questions', config.questions.map(item => item.id === q.id ? { ...item, required: !item.required } : item))}>
+                          {q.required ? 'Obrigatória' : 'Opcional'}
+                        </Badge>
+                      </div>
                       <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => removeQuestion(q.id)}>
                         <Trash2 className="w-3 h-3 text-destructive" />
                       </Button>
                     </div>
+                    <Input value={q.question} onChange={e => updateQuestion(q.id, 'question', e.target.value)} placeholder="Ex: Qual é o faturamento mensal da sua empresa?" className="h-9 text-sm" />
+                    <Input value={q.description} onChange={e => updateQuestion(q.id, 'description', e.target.value)} placeholder="Descrição / critério de avaliação (opcional)" className="h-8 text-xs" />
                     <div>
-                      <label className="text-xs font-medium text-foreground mb-1 block">Pergunta</label>
-                      <Input
-                        value={q.question}
-                        onChange={e => updateQuestion(q.id, 'question', e.target.value)}
-                        placeholder="Digite uma nova pergunta..."
-                        className="h-9"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-foreground mb-1 block">Descrição (opcional)</label>
-                      <Input
-                        value={q.description}
-                        onChange={e => updateQuestion(q.id, 'description', e.target.value)}
-                        placeholder="Ex: Ajuda a IA a entender melhor..."
-                        className="h-9"
-                      />
+                      <label className="text-[10px] text-muted-foreground">Salvar resposta na propriedade:</label>
+                      <Input value={q.propertyKey || ''} onChange={e => update('questions', config.questions.map(item => item.id === q.id ? { ...item, propertyKey: e.target.value } : item))} placeholder="Ex: faturamento_mensal" className="h-7 text-xs font-mono mt-0.5" />
                     </div>
                   </div>
                 ))}
 
-                <button onClick={addQuestion} className="text-sm text-primary hover:underline flex items-center gap-1">
-                  <Plus className="w-3.5 h-3.5" /> Adicionar
-                </button>
+                <Button variant="outline" onClick={() => update('questions', [...config.questions, { id: crypto.randomUUID(), question: '', description: '', required: true }])} className="w-full">
+                  <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar pergunta
+                </Button>
               </div>
             </>
           )}
