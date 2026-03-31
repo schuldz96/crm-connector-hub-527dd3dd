@@ -21,11 +21,44 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import type { CrmDeal, CrmPipelineStage } from '@/types/crm';
 
-type FilterDef = { key: string; label: string; type: 'select' | 'date' | 'text'; options?: { value: string; label: string }[] };
+type FilterDef = { key: string; label: string; type: 'select' | 'text'; options?: { value: string; label: string; sub?: string }[] };
+
+const DATE_OPTIONS = [
+  { value: 'hoje', label: 'Hoje', sub: 'Todos de hoje' },
+  { value: 'ontem', label: 'Ontem', sub: 'Dia anterior de 24 horas' },
+  { value: 'esta_semana', label: 'Esta semana', sub: 'Segunda a domingo' },
+  { value: 'semana_passada', label: 'Semana passada', sub: 'Últimos 7 dias' },
+  { value: 'este_mes', label: 'Este mês', sub: 'Mês atual' },
+  { value: 'mes_passado', label: 'Mês passado', sub: 'Últimos 30 dias' },
+  { value: 'este_trimestre', label: 'Este trimestre', sub: 'Trimestre atual' },
+  { value: 'este_ano', label: 'Este ano', sub: 'Ano atual' },
+  { value: 'mais_30_dias', label: 'Mais de 30 dias', sub: 'Criado há mais de 30 dias' },
+  { value: 'mais_90_dias', label: 'Mais de 90 dias', sub: 'Criado há mais de 90 dias' },
+];
+
+function getDateRange(preset: string): { start: Date; end: Date } {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
+  switch (preset) {
+    case 'hoje': return { start: today, end: tomorrow };
+    case 'ontem': { const d = new Date(today); d.setDate(d.getDate() - 1); return { start: d, end: today }; }
+    case 'esta_semana': { const d = new Date(today); d.setDate(d.getDate() - d.getDay() + 1); return { start: d, end: tomorrow }; }
+    case 'semana_passada': { const d = new Date(today); d.setDate(d.getDate() - 7); return { start: d, end: tomorrow }; }
+    case 'este_mes': return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: tomorrow };
+    case 'mes_passado': { const d = new Date(today); d.setDate(d.getDate() - 30); return { start: d, end: tomorrow }; }
+    case 'este_trimestre': { const q = Math.floor(now.getMonth() / 3) * 3; return { start: new Date(now.getFullYear(), q, 1), end: tomorrow }; }
+    case 'este_ano': return { start: new Date(now.getFullYear(), 0, 1), end: tomorrow };
+    case 'mais_30_dias': { const d = new Date(today); d.setDate(d.getDate() - 30); return { start: new Date(2000, 0, 1), end: d }; }
+    case 'mais_90_dias': { const d = new Date(today); d.setDate(d.getDate() - 90); return { start: new Date(2000, 0, 1), end: d }; }
+    default: return { start: new Date(2000, 0, 1), end: tomorrow };
+  }
+}
+
 const DEAL_FILTERS: FilterDef[] = [
   { key: 'proprietario_id', label: 'Proprietário do negócio', type: 'select' },
-  { key: 'criado_em', label: 'Data de criação', type: 'date' },
-  { key: 'data_fechamento', label: 'Data de fechamento', type: 'date' },
+  { key: 'criado_em', label: 'Data de criação', type: 'select', options: DATE_OPTIONS },
+  { key: 'data_fechamento', label: 'Data de fechamento', type: 'select', options: DATE_OPTIONS },
   { key: 'valor', label: 'Valor', type: 'text' },
   { key: 'estagio_id', label: 'Etapa do negócio', type: 'select' },
   { key: 'plataforma', label: 'Plataforma', type: 'text' },
@@ -69,6 +102,7 @@ export default function CRMDealsPage() {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const [openChip, setOpenChip] = useState<string | null>(null);
+  const [chipSearch, setChipSearch] = useState('');
   const [advFilterSearch, setAdvFilterSearch] = useState('');
   const [advFilterAdding, setAdvFilterAdding] = useState(false);
   const [advFilterGroups, setAdvFilterGroups] = useState<{ property: string; operator: string; value: string }[][]>([]);
@@ -131,6 +165,13 @@ export default function CRMDealsPage() {
       else if (key === 'estagio_id') list = list.filter(d => d.estagio_id === val);
       else if (key === 'proprietario_id') list = list.filter(d => d.proprietario_id === val);
       else if (key === 'plataforma') list = list.filter(d => d.plataforma?.toLowerCase().includes(val.toLowerCase()));
+      else if (key === 'criado_em') {
+        const { start, end } = getDateRange(val);
+        list = list.filter(d => { const t = new Date(d.criado_em).getTime(); return t >= start.getTime() && t < end.getTime(); });
+      } else if (key === 'data_fechamento') {
+        const { start, end } = getDateRange(val);
+        list = list.filter(d => { if (!d.data_fechamento_prevista) return false; const t = new Date(d.data_fechamento_prevista).getTime(); return t >= start.getTime() && t < end.getTime(); });
+      }
     }
     list = [...list].sort((a, b) => {
       const aVal = sortField === 'valor' ? Number(a.valor || 0) : new Date(a[sortField]).getTime();
@@ -304,7 +345,7 @@ export default function CRMDealsPage() {
             return (
               <div key={f.key} className="relative">
                 <button
-                  onClick={() => setOpenChip(isOpen ? null : f.key)}
+                  onClick={() => { setOpenChip(isOpen ? null : f.key); setChipSearch(''); }}
                   className={cn(
                     'flex items-center gap-1 font-medium px-2 py-1 rounded-md transition-colors',
                     hasValue ? 'bg-primary/15 text-primary border border-primary/30' : 'text-muted-foreground hover:text-foreground hover:bg-muted'
@@ -318,22 +359,34 @@ export default function CRMDealsPage() {
                 </button>
                 {isOpen && (
                   <div className="absolute top-full left-0 mt-1 z-30 bg-card border border-border rounded-lg shadow-lg min-w-[200px] max-h-60 overflow-y-auto">
-                    {(f.type === 'select' && options.length > 0) ? (
+                    {(f.type === 'select' && options.length > 0) ? (() => {
+                      const filtered = chipSearch ? options.filter(o => o.label.toLowerCase().includes(chipSearch.toLowerCase())) : options;
+                      return (
                       <div className="py-1">
-                        <div className="px-2 py-1">
-                          <button onClick={() => { setActiveFilters(prev => { const n = { ...prev }; delete n[f.key]; return n; }); setOpenChip(null); }}
-                            className={cn('w-full text-left px-2 py-1.5 rounded text-xs hover:bg-muted', !hasValue && 'font-medium')}>
-                            Todos
-                          </button>
+                        {options.length > 5 && (
+                          <div className="px-2 pb-1 border-b border-border mb-1">
+                            <div className="relative">
+                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+                              <Input className="pl-7 text-xs h-7" placeholder="Pesquisar..." value={chipSearch} onChange={e => setChipSearch(e.target.value)} autoFocus />
+                            </div>
+                          </div>
+                        )}
+                        <button onClick={() => { setActiveFilters(prev => { const n = { ...prev }; delete n[f.key]; return n; }); setOpenChip(null); }}
+                          className={cn('w-full text-left px-3 py-1.5 text-xs hover:bg-muted', !hasValue && 'font-medium')}>
+                          Todos
+                        </button>
+                        <div className="max-h-48 overflow-y-auto">
+                          {filtered.map(o => (
+                            <button key={o.value} onClick={() => { setActiveFilters(prev => ({ ...prev, [f.key]: o.value })); setOpenChip(null); }}
+                              className={cn('w-full text-left px-3 py-1.5 text-xs hover:bg-muted', activeFilters[f.key] === o.value && 'bg-muted font-medium')}>
+                              <span>{o.label}</span>
+                              {o.sub && <span className="block text-[10px] text-muted-foreground">{o.sub}</span>}
+                            </button>
+                          ))}
+                          {filtered.length === 0 && <p className="px-3 py-2 text-xs text-muted-foreground">Nenhum resultado</p>}
                         </div>
-                        {options.map(o => (
-                          <button key={o.value} onClick={() => { setActiveFilters(prev => ({ ...prev, [f.key]: o.value })); setOpenChip(null); }}
-                            className={cn('w-full text-left px-4 py-1.5 text-xs hover:bg-muted', activeFilters[f.key] === o.value && 'bg-muted font-medium')}>
-                            {o.label}
-                          </button>
-                        ))}
-                      </div>
-                    ) : f.type === 'text' ? (
+                      </div>);
+                    })() : f.type === 'text' ? (
                       <div className="p-2">
                         <Input className="text-xs h-8" placeholder={`Filtrar por ${f.label.toLowerCase()}...`}
                           value={activeFilters[f.key] || ''}
