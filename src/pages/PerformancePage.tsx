@@ -341,7 +341,48 @@ export default function PerformancePage() {
     const totalMeetings = members.reduce((a, m) => a + m.meetEvals.length, 0);
     const totalWaAnalyses = members.reduce((a, m) => a + m.waEvals.length, 0);
 
-    return { team, members, avgOverall, totalMeetings, totalWaAnalyses };
+    // Aggregate criteria from all members (same as person view)
+    const allTeamMeetEvals = members.flatMap(m => m.meetEvals);
+    const allTeamWaEvals = members.flatMap(m => m.waEvals);
+
+    // Criteria by agent
+    const teamByAgent: Record<string, { criteria: Record<string, { total: number; count: number; weight: number }> }> = {};
+    for (const ev of allTeamMeetEvals) {
+      const agentKey = (ev as any).agente_avaliador_id || '_default';
+      if (!teamByAgent[agentKey]) teamByAgent[agentKey] = { criteria: {} };
+      for (const c of ((ev.criterios || []) as any[])) {
+        const map = teamByAgent[agentKey].criteria;
+        if (!map[c.label]) map[c.label] = { total: 0, count: 0, weight: c.weight || 0 };
+        map[c.label].total += c.score;
+        map[c.label].count++;
+      }
+    }
+    const teamCriteriaByAgent = Object.entries(teamByAgent).map(([agentId, { criteria: cmap }]) => ({
+      agentId,
+      agentName: agentNames[agentId] || '',
+      criteria: Object.entries(cmap).map(([label, v]) => ({
+        label, score: Math.round(v.total / v.count), weight: v.weight,
+      })).sort((a, b) => b.score - a.score),
+    })).sort((a, b) => {
+      const aS = a.agentName.toLowerCase().includes('sandler') ? 0 : 1;
+      const bS = b.agentName.toLowerCase().includes('sandler') ? 0 : 1;
+      return aS - bS || a.agentName.localeCompare(b.agentName);
+    });
+
+    // WhatsApp criteria
+    const teamWaCriteriaMap: Record<string, { total: number; count: number; weight: number }> = {};
+    for (const ev of allTeamWaEvals) {
+      for (const c of ((ev.criterios || []) as any[])) {
+        if (!teamWaCriteriaMap[c.label]) teamWaCriteriaMap[c.label] = { total: 0, count: 0, weight: c.weight || 0 };
+        teamWaCriteriaMap[c.label].total += c.score;
+        teamWaCriteriaMap[c.label].count++;
+      }
+    }
+    const teamWaCriteria = Object.entries(teamWaCriteriaMap).map(([label, v]) => ({
+      label, score: Math.round(v.total / v.count), weight: v.weight,
+    })).sort((a, b) => b.score - a.score);
+
+    return { team, members, avgOverall, totalMeetings, totalWaAnalyses, teamCriteriaByAgent, teamWaCriteria, allTeamMeetEvals };
   };
 
   const effectiveUserId = role === 'member' ? (user?.id ?? selectedUserId) : selectedUserId;
@@ -790,7 +831,7 @@ export default function PerformancePage() {
 
       {/* ════════════════ TEAM VIEW ═══════════════════════════════════════════ */}
       {mode === 'team' && teamPerf && (() => {
-        const { team, members, avgOverall, totalMeetings, totalWaAnalyses } = teamPerf;
+        const { team, members, avgOverall, totalMeetings, totalWaAnalyses, teamCriteriaByAgent, teamWaCriteria, allTeamMeetEvals } = teamPerf;
         const supervisor = users.find(u => u.id === team.supervisorId);
 
         const barData = members
@@ -858,6 +899,83 @@ export default function PerformancePage() {
                     <Bar dataKey="WhatsApp" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Criteria breakdown — same as person view */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {teamCriteriaByAgent.length > 0 && (
+                <div className="glass-card p-4">
+                  <p className="text-xs font-semibold mb-3 flex items-center gap-1.5">
+                    <Video className="w-3.5 h-3.5 text-primary" /> Detalhamento — Reuniões
+                    <span className="text-[10px] text-muted-foreground ml-1">({totalMeetings} avaliações)</span>
+                  </p>
+                  <div className="space-y-4">
+                    {teamCriteriaByAgent.map((group, gi) => (
+                      <div key={group.agentId}>
+                        {teamCriteriaByAgent.length > 1 && (() => {
+                          const name = group.agentId === '_default' ? 'Avaliação Padrão' : (agentNames[group.agentId] || `Agente ${gi + 1}`);
+                          const isSandler = name.toLowerCase().includes('sandler');
+                          return (
+                            <div className="flex items-center gap-2 mb-2">
+                              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                                <Brain className="w-3 h-3" /> {name}
+                              </p>
+                              <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full border font-semibold', isSandler ? 'bg-primary/10 text-primary border-primary/20' : 'bg-muted text-muted-foreground border-border')}>
+                                {isSandler ? 'Principal' : 'Complementar'}
+                              </span>
+                            </div>
+                          );
+                        })()}
+                        <div className="space-y-2">
+                          {group.criteria.map(c => (
+                            <MiniBar key={c.label} label={c.label} score={c.score} weight={c.weight} />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {teamWaCriteria.length > 0 ? (
+                <div className="glass-card p-4">
+                  <p className="text-xs font-semibold mb-3 flex items-center gap-1.5">
+                    <MessageSquare className="w-3.5 h-3.5 text-success" /> Detalhamento — WhatsApp
+                    <span className="text-[10px] text-muted-foreground ml-1">({totalWaAnalyses} avaliações)</span>
+                  </p>
+                  <div className="space-y-2.5">
+                    {teamWaCriteria.map(c => (
+                      <MiniBar key={c.label} label={c.label} score={c.score} weight={c.weight} />
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="glass-card p-4 flex flex-col items-center justify-center gap-2 text-center">
+                  <Brain className="w-8 h-8 opacity-15" />
+                  <p className="text-xs text-muted-foreground">Nenhuma avaliação de WhatsApp</p>
+                </div>
+              )}
+            </div>
+
+            {/* Best meetings of the team */}
+            {allTeamMeetEvals.length > 0 && (
+              <div className="glass-card p-4">
+                <p className="text-xs font-semibold mb-3 flex items-center gap-1.5">
+                  <Trophy className="w-3.5 h-3.5 text-warning" /> Melhores Reuniões do Time
+                </p>
+                <div className="space-y-1.5">
+                  {[...allTeamMeetEvals].sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 5).map(e => {
+                    const seller = users.find(u => u.id === e.vendedor_id);
+                    return (
+                      <button key={e.id} onClick={() => openEvalDetail(e)}
+                        className="flex items-center justify-between text-xs py-1.5 border-b border-border/50 last:border-0 hover:bg-muted/30 rounded px-1 -mx-1 transition-colors cursor-pointer w-full text-left">
+                        <span className="truncate text-primary hover:underline flex-1">{seller ? `${seller.name.split(' ')[0]}: ` : ''}{(e as any).resumo?.slice(0, 50) || `Reunião ${new Date(e.criado_em).toLocaleDateString('pt-BR')}`}</span>
+                        <span className={cn('font-bold font-mono ml-2 flex-shrink-0', scoreColor(e.score || 0))}>{e.score}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
