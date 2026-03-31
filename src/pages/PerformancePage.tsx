@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { TrendingUp, Users, User, MessageSquare, Video, Brain, ChevronDown, Award, BarChart3, Calendar, Lock, Loader2, Filter } from 'lucide-react';
+import { TrendingUp, Users, User, MessageSquare, Video, Brain, ChevronDown, Award, BarChart3, Calendar, Lock, Loader2, Filter, AlertCircle, Trophy, Clock, Shield, Mic } from 'lucide-react';
 import SearchableSelect from '@/components/ui/searchable-select';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -329,7 +329,7 @@ export default function PerformancePage() {
       )}
 
       {/* ── Selector strip ── */}
-      <div className="glass-card p-3 mb-5 flex items-center gap-3 flex-wrap">
+      <div className="glass-card p-3 mb-5 flex items-center gap-3 flex-wrap relative z-20">
         {canSeeTeam && (
           <div className="flex gap-1 p-0.5 bg-secondary rounded-lg border border-border">
             {(['person', 'team'] as const).map(m => (
@@ -501,6 +501,155 @@ export default function PerformancePage() {
                 </div>
               )}
             </div>
+
+            {/* ── New Metrics Section ── */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Talk Ratio */}
+              <div className="glass-card p-4">
+                <p className="text-xs font-semibold mb-3 flex items-center gap-1.5">
+                  <Mic className="w-3.5 h-3.5 text-primary" /> Relação de Fala
+                </p>
+                {(() => {
+                  const participations = meetEvals
+                    .map(e => (e.payload as any)?.participation)
+                    .filter(Boolean);
+                  if (participations.length === 0) return <p className="text-xs text-muted-foreground">Sem dados de transcrição</p>;
+                  const avgSeller = Math.round(participations.reduce((s: number, p: any) => s + (p.seller || p.vendedor || 50), 0) / participations.length);
+                  const avgLead = 100 - avgSeller;
+                  return (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-6 rounded-full overflow-hidden flex bg-muted">
+                          <div className="h-full bg-primary/60 flex items-center justify-center text-[10px] font-bold text-primary-foreground" style={{ width: `${avgSeller}%` }}>{avgSeller}%</div>
+                          <div className="h-full bg-success/60 flex items-center justify-center text-[10px] font-bold text-success-foreground" style={{ width: `${avgLead}%` }}>{avgLead}%</div>
+                        </div>
+                      </div>
+                      <div className="flex justify-between text-[10px] text-muted-foreground">
+                        <span>Vendedor: {avgSeller}%</span>
+                        <span>Lead: {avgLead}%</span>
+                      </div>
+                      {avgSeller > 65 && <p className="text-[10px] text-warning flex items-center gap-1"><AlertCircle className="w-3 h-3" /> Excesso de fala — baixa escuta ativa</p>}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Avg Call Duration */}
+              <div className="glass-card p-4">
+                <p className="text-xs font-semibold mb-3 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-accent" /> Tempo Médio da Call
+                </p>
+                {(() => {
+                  const durations = meetEvals
+                    .map(e => (e.payload as any)?.duracao_minutos || 0)
+                    .filter(d => d > 0);
+                  if (durations.length === 0) return <p className="text-xs text-muted-foreground">Sem dados de duração</p>;
+                  const avg = Math.round(durations.reduce((a, b) => a + b, 0) / durations.length);
+                  return (
+                    <div>
+                      <p className="text-2xl font-bold font-mono">{avg} <span className="text-sm text-muted-foreground font-normal">min</span></p>
+                      <p className="text-[10px] text-muted-foreground mt-1">{durations.length} reuniões com duração registrada</p>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Deviation Alerts */}
+              <div className="glass-card p-4">
+                <p className="text-xs font-semibold mb-3 flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 text-destructive" /> Alertas de Desvio
+                </p>
+                {(() => {
+                  const alerts: string[] = [];
+                  for (const c of meetCriteria) {
+                    if (c.score < 50) alerts.push(`${c.label}: score ${c.score} (crítico)`);
+                  }
+                  for (const c of waCriteria) {
+                    if (c.score < 50) alerts.push(`WhatsApp ${c.label}: score ${c.score}`);
+                  }
+                  if (avgMeetingScore !== null && avgMeetingScore < 50) alerts.push('Score médio de reuniões abaixo de 50');
+                  if (avgWaScore !== null && avgWaScore < 50) alerts.push('Score médio WhatsApp abaixo de 50');
+                  if (alerts.length === 0) return <p className="text-xs text-success flex items-center gap-1"><Shield className="w-3 h-3" /> Nenhum desvio detectado</p>;
+                  return (
+                    <div className="space-y-1.5">
+                      {alerts.map((a, i) => (
+                        <div key={i} className="flex items-start gap-1.5 text-xs text-destructive">
+                          <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                          <span>{a}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Best meetings & conversations */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="glass-card p-4">
+                <p className="text-xs font-semibold mb-3 flex items-center gap-1.5">
+                  <Trophy className="w-3.5 h-3.5 text-warning" /> Melhores Reuniões
+                </p>
+                {meetEvals.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Sem reuniões avaliadas</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {[...meetEvals].sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 5).map(e => (
+                      <div key={e.id} className="flex items-center justify-between text-xs py-1.5 border-b border-border/50 last:border-0">
+                        <span className="truncate text-muted-foreground">{(e as any).resumo?.slice(0, 60) || `Reunião ${new Date(e.criado_em).toLocaleDateString('pt-BR')}`}</span>
+                        <span className={cn('font-bold font-mono ml-2', scoreColor(e.score || 0))}>{e.score}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="glass-card p-4">
+                <p className="text-xs font-semibold mb-3 flex items-center gap-1.5">
+                  <Trophy className="w-3.5 h-3.5 text-success" /> Melhores Conversas WhatsApp
+                </p>
+                {waEvals.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Sem conversas avaliadas</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {[...waEvals].sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 5).map(e => (
+                      <div key={e.id} className="flex items-center justify-between text-xs py-1.5 border-b border-border/50 last:border-0">
+                        <span className="truncate text-muted-foreground">{e.contato_telefone || (e as any).resumo?.slice(0, 60) || 'Conversa'}</span>
+                        <span className={cn('font-bold font-mono ml-2', scoreColor(e.score || 0))}>{e.score}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Ranking (visible to supervisors+) */}
+            {canSeeTeam && visibleUsers.length > 1 && (
+              <div className="glass-card p-4">
+                <p className="text-xs font-semibold mb-3 flex items-center gap-1.5">
+                  <Trophy className="w-3.5 h-3.5 text-primary" /> Ranking de Vendedores
+                </p>
+                <div className="space-y-1.5">
+                  {visibleUsers
+                    .map(vu => {
+                      const perf = buildUserPerf(vu.id);
+                      return perf ? { ...vu, score: perf.overallScore ?? 0, meetings: perf.meetEvals.length } : null;
+                    })
+                    .filter(Boolean)
+                    .sort((a, b) => (b!.score) - (a!.score))
+                    .map((vu, idx) => (
+                      <div key={vu!.id} className="flex items-center gap-3 py-2 border-b border-border/50 last:border-0">
+                        <span className={cn('w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0',
+                          idx === 0 ? 'bg-warning/20 text-warning' : idx === 1 ? 'bg-muted text-foreground' : idx === 2 ? 'bg-orange-500/20 text-orange-500' : 'bg-muted/50 text-muted-foreground'
+                        )}>{idx + 1}</span>
+                        <span className="text-xs flex-1 truncate">{vu!.name}</span>
+                        <span className="text-[10px] text-muted-foreground">{vu!.meetings} reuniões</span>
+                        <span className={cn('font-bold font-mono text-xs', scoreColor(vu!.score))}>{vu!.score || '—'}</span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
           </div>
         );
       })()}

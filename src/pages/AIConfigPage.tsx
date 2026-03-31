@@ -39,6 +39,7 @@ export interface EvalCriteria {
   weight: number;
   examples: string[];
   positiveSignals: string[];
+  neutralSignals: string[];
   negativeSignals: string[];
 }
 
@@ -48,6 +49,7 @@ export const DEFAULT_MEETING_CRITERIA: EvalCriteria[] = [
     description: 'Conexão emocional e abertura do cliente durante a conversa',
     examples: ['Apresentação amigável', 'Tom de voz adequado', 'Personalização do pitch'],
     positiveSignals: ['Cliente compartilha informações voluntariamente', 'Tom descontraído e aberto'],
+    neutralSignals: ['Conversa cordial mas superficial', 'Cliente educado porém reservado'],
     negativeSignals: ['Silêncios longos no início', 'Tom defensivo do cliente'],
   },
   {
@@ -55,6 +57,7 @@ export const DEFAULT_MEETING_CRITERIA: EvalCriteria[] = [
     description: 'Qualidade e profundidade das perguntas de qualificação',
     examples: ['Perguntas abertas SPIN', 'Identificação de budget', 'Mapeamento de decisores'],
     positiveSignals: ['Cliente descreve dores com detalhes', 'Timeline identificada'],
+    neutralSignals: ['Perguntas feitas mas sem aprofundamento', 'Budget mencionado vagamente'],
     negativeSignals: ['Vai para demo sem qualificar', 'Não identifica economic buyer'],
   },
   {
@@ -62,6 +65,7 @@ export const DEFAULT_MEETING_CRITERIA: EvalCriteria[] = [
     description: 'Clareza e impacto da proposta de valor apresentada',
     examples: ['Alinhamento com dores descobertas', 'Cases relevantes', 'ROI quantificado'],
     positiveSignals: ['Cliente faz perguntas de aprofundamento', 'Solicita proposta comercial'],
+    neutralSignals: ['Apresentação clara mas sem conexão com dores', 'Cliente acompanha sem engajar'],
     negativeSignals: ['Demo genérica', 'Sem conexão com dores identificadas'],
   },
   {
@@ -69,6 +73,7 @@ export const DEFAULT_MEETING_CRITERIA: EvalCriteria[] = [
     description: 'Capacidade de tratar resistências sem defensividade',
     examples: ['Ancoragem de valor', 'Perguntas de esclarecimento', 'Reformulação da objeção'],
     positiveSignals: ['Objeção transformada em pergunta', 'Cliente satisfeito com resposta'],
+    neutralSignals: ['Objeção reconhecida mas sem tratamento completo', 'Resposta parcial'],
     negativeSignals: ['Desconto imediato', 'Resposta defensiva', 'Evitar a objeção'],
   },
   {
@@ -76,6 +81,7 @@ export const DEFAULT_MEETING_CRITERIA: EvalCriteria[] = [
     description: 'Clareza no fechamento e comprometimento com próximas ações',
     examples: ['Data e hora definidos', 'Responsáveis mapeados', 'Prazo de decisão acordado'],
     positiveSignals: ['Próxima reunião agendada na call', 'Cliente confirma envolvimento do decisor'],
+    neutralSignals: ['Próximo passo mencionado mas sem data', 'Follow-up genérico combinado'],
     negativeSignals: ['Sair sem data definida', 'Vago nos próximos passos'],
   },
 ];
@@ -86,6 +92,7 @@ export const DEFAULT_WHATSAPP_CRITERIA: EvalCriteria[] = [
     description: 'Velocidade e consistência nas respostas ao lead',
     examples: ['Resposta em menos de 5 minutos', 'Manter ritmo da conversa'],
     positiveSignals: ['Resposta rápida e contextualizada', 'Horário adequado'],
+    neutralSignals: ['Resposta dentro do prazo mas sem personalização', 'Tempo ok mas inconsistente'],
     negativeSignals: ['Demora acima de 30 min em horário comercial', 'Mensagem fora de contexto'],
   },
   {
@@ -93,6 +100,7 @@ export const DEFAULT_WHATSAPP_CRITERIA: EvalCriteria[] = [
     description: 'Capacidade de manter o lead engajado e avançar a conversa',
     examples: ['Perguntas abertas', 'Conteúdo de valor', 'Personalização da abordagem'],
     positiveSignals: ['Lead responde com entusiasmo', 'Solicita mais informações'],
+    neutralSignals: ['Lead responde mas sem proatividade', 'Conversa mantida sem avanço claro'],
     negativeSignals: ['Respostas monossilábicas do lead', 'Lead deixa de responder'],
   },
   {
@@ -100,6 +108,7 @@ export const DEFAULT_WHATSAPP_CRITERIA: EvalCriteria[] = [
     description: 'Identificação de perfil, budget e timing via chat',
     examples: ['Identificar empresa e cargo', 'Mapear necessidade principal', 'Verificar decisor'],
     positiveSignals: ['Lead confirma fit com produto', 'Urgência identificada'],
+    neutralSignals: ['Perfil identificado parcialmente', 'Budget não confirmado mas indícios positivos'],
     negativeSignals: ['Lead sem budget ou timing', 'Perfil fora do ICP'],
   },
   {
@@ -107,6 +116,7 @@ export const DEFAULT_WHATSAPP_CRITERIA: EvalCriteria[] = [
     description: 'Clareza nas chamadas para ação e avanço do pipeline',
     examples: ['Propor reunião via link', 'Enviar material relevante', 'Confirmar próxima ação'],
     positiveSignals: ['Lead aceita agendar reunião', 'Solicita proposta'],
+    neutralSignals: ['CTA feito mas lead não confirmou', 'Próximo passo vago mas existente'],
     negativeSignals: ['Conversa termina sem CTA', 'Lead esfria sem direcionamento'],
   },
   {
@@ -114,6 +124,7 @@ export const DEFAULT_WHATSAPP_CRITERIA: EvalCriteria[] = [
     description: 'Adequação do vocabulário e tom ao perfil do lead',
     examples: ['Linguagem adequada ao cargo', 'Sem erros de português', 'Tom consultivo'],
     positiveSignals: ['Lead responde no mesmo tom', 'Vocabulário técnico adequado'],
+    neutralSignals: ['Tom adequado mas genérico', 'Sem erros mas sem personalização'],
     negativeSignals: ['Excesso de emojis', 'Erros de digitação frequentes', 'Tom muito formal ou informal'],
   },
 ];
@@ -172,6 +183,17 @@ function CriteriaCard({
                 </div>
               </div>
               <div>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Sinais Médios</p>
+                <div className="space-y-1">
+                  {(criteria.neutralSignals || []).map((s, i) => (
+                    <div key={i} className="flex items-start gap-1.5">
+                      <Minus className="w-3 h-3 text-muted-foreground mt-0.5 flex-shrink-0" />
+                      <p className="text-xs text-muted-foreground">{s}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Sinais Negativos</p>
                 <div className="space-y-1">
                   {criteria.negativeSignals.map((s, i) => (
@@ -221,6 +243,7 @@ function CriteriaModal({
     negativeSignals: [],
   });
   const [newPositive, setNewPositive] = useState('');
+  const [newNeutral, setNewNeutral] = useState('');
   const [newNegative, setNewNegative] = useState('');
   const [newExample, setNewExample] = useState('');
 
@@ -279,6 +302,28 @@ function CriteriaModal({
                 onKeyDown={e => { if (e.key === 'Enter' && newPositive.trim()) { setForm(f => ({ ...f, positiveSignals: [...f.positiveSignals, newPositive.trim()] })); setNewPositive(''); } }}
                 placeholder="Adicionar sinal positivo..." className="h-8 text-xs bg-secondary border-border" />
               <Button size="sm" variant="outline" className="h-8 text-xs border-border" onClick={() => { if (newPositive.trim()) { setForm(f => ({ ...f, positiveSignals: [...f.positiveSignals, newPositive.trim()] })); setNewPositive(''); } }}>+</Button>
+            </div>
+          </div>
+
+          {/* Neutral signals */}
+          <div>
+            <label className="text-xs font-medium block mb-1.5 text-muted-foreground">Sinais Médios</label>
+            <div className="space-y-1 mb-2">
+              {(form.neutralSignals || []).map((s, i) => (
+                <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-muted/30 border border-border text-xs">
+                  <Minus className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                  <span className="flex-1">{s}</span>
+                  <button onClick={() => setForm(f => ({ ...f, neutralSignals: (f.neutralSignals || []).filter((_, j) => j !== i) }))}>
+                    <X className="w-3 h-3 text-muted-foreground" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Input value={newNeutral} onChange={e => setNewNeutral(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && newNeutral.trim()) { setForm(f => ({ ...f, neutralSignals: [...(f.neutralSignals || []), newNeutral.trim()] })); setNewNeutral(''); } }}
+                placeholder="Adicionar sinal médio..." className="h-8 text-xs bg-secondary border-border" />
+              <Button size="sm" variant="outline" className="h-8 text-xs border-border" onClick={() => { if (newNeutral.trim()) { setForm(f => ({ ...f, neutralSignals: [...(f.neutralSignals || []), newNeutral.trim()] })); setNewNeutral(''); } }}>+</Button>
             </div>
           </div>
 
