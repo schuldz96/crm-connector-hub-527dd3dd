@@ -227,15 +227,15 @@ export function parseTranscriptParticipation(
     percent: Math.round((chars / totalChars) * 100),
   }));
 
-  const sum = rawResults.reduce((acc, row) => acc + row.percent, 0);
-  if (sum !== 100 && rawResults.length > 0) {
-    const sorted = [...rawResults].sort((a, b) => b.chars - a.chars);
+  // Ensure minimum 1% for anyone who spoke, then normalize to 100%
+  const withMin = rawResults.filter(r => r.chars > 0).map(r => ({ ...r, percent: Math.max(1, r.percent) }));
+  const sum = withMin.reduce((acc, r) => acc + r.percent, 0);
+  if (sum !== 100 && withMin.length > 0) {
+    const sorted = [...withMin].sort((a, b) => b.chars - a.chars);
     sorted[0].percent += (100 - sum);
   }
 
-  return rawResults
-    .filter((row) => row.percent > 0)
-    .map((row) => ({ email: row.email, name: row.name, percent: row.percent }));
+  return withMin.map(r => ({ email: r.email, name: r.name, percent: r.percent }));
 }
 
 // ─── Evaluate a meeting ──────────────────────────────────────────────────────
