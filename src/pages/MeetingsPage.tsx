@@ -1410,7 +1410,7 @@ export default function MeetingsPage() {
 
                   return (
                     <div className="space-y-2">
-                      {transcriptNames.length > 0 && (
+                      {transcriptParticipation.length > 0 && (
                         <div className="text-[10px] text-muted-foreground px-1">
                           Participantes extraídos da transcrição.
                         </div>
