@@ -1398,13 +1398,23 @@ export default function MeetingsPage() {
                     name: p.name, email: p.email || null, pct: p.percent,
                   }));
                   // Add registered participants who didn't speak (0%)
-                  const spokenNames = new Set(fromTranscript.map(p => (p.name || '').toLowerCase()));
-                  const spokenEmails = new Set(fromTranscript.map(p => (p.email || '').toLowerCase()).filter(Boolean));
+                  // Use fuzzy token matching to avoid duplicates
+                  const tokenize = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[\s._-]+/).filter(t => t.length >= 3);
+                  const transcriptTokens = fromTranscript.map(p => ({
+                    ...p,
+                    tokens: tokenize(p.name),
+                    emailLower: (p.email || '').toLowerCase(),
+                  }));
                   const silent = (selectedMeeting.participantes || [])
                     .filter((p: any) => {
-                      const name = (p.name || p.email?.split('@')[0] || '').toLowerCase();
-                      const email = (p.email || '').toLowerCase();
-                      return !spokenNames.has(name) && !spokenEmails.has(email);
+                      const regName = p.name || p.email?.split('@')[0] || '';
+                      const regEmail = (p.email || '').toLowerCase();
+                      const regTokens = tokenize(regName);
+                      // Check if any transcript participant matches by email or shared name tokens
+                      return !transcriptTokens.some(tp =>
+                        (regEmail && tp.emailLower === regEmail) ||
+                        regTokens.some(rt => tp.tokens.includes(rt))
+                      );
                     })
                     .map((p: any) => ({ name: p.name || p.email?.split('@')[0] || '?', email: p.email || null, pct: 0 }));
                   const participantsWithPct = [...fromTranscript, ...silent].sort((a, b) => b.pct - a.pct);
