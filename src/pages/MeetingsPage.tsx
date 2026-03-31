@@ -6,7 +6,7 @@ import {
   User, Building2, ExternalLink, Sparkles, X,
   TrendingUp, TrendingDown, Lightbulb, AlertTriangle,
   CheckCircle2, Target, MessageSquare, RefreshCw, Loader2, Users, Key, Heart, Trash2,
-  Plus, Upload, FileText, ClipboardCheck, Pencil,
+  Plus, Upload, FileText, ClipboardCheck, Pencil, ChevronDown,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
@@ -354,6 +354,7 @@ export default function MeetingsPage() {
   const [scoreFilter, setScoreFilter] = useState('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [openFilter, setOpenFilter] = useState<string | null>(null);
   const [showManualMeeting, setShowManualMeeting] = useState(false);
   const [selectedMeeting, setSelectedMeeting] = useState<DbMeeting | null>(null);
   const [detailTab, setDetailTab] = useState<'info' | 'transcript' | 'participants' | 'comments'>('info');
@@ -731,67 +732,89 @@ export default function MeetingsPage() {
                 className="pl-9 h-8 text-xs bg-secondary border-border"
               />
             </div>
-            <div className="flex gap-1.5 flex-wrap">
-              {['all', 'com', 'sem'].map(s => (
-                <button
-                  key={s}
-                  onClick={() => setTranscFilter(s)}
-                  className={cn(
-                    'text-xs px-3 py-1.5 rounded-lg border transition-all',
-                    transcFilter === s
-                      ? 'bg-primary/15 border-primary/30 text-primary font-medium'
-                      : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
-                  )}
-                >
-                  {{ all: 'Todas', com: 'Com transcrição', sem: 'Sem transcrição' }[s]}
+            {/* Uniform dropdown filters */}
+            {[
+              { id: 'transc', label: 'Transcrição', value: transcFilter, options: [{ key: 'all', label: 'Todas' }, { key: 'com', label: 'Com transcrição' }, { key: 'sem', label: 'Sem transcrição' }], set: setTranscFilter, activeLabel: transcFilter === 'all' ? null : transcFilter === 'com' ? 'Com transcrição' : 'Sem transcrição' },
+              { id: 'status', label: 'Status', value: statusFilter, options: [{ key: 'all', label: 'Todos' }, { key: 'sem', label: 'Sem status' }, { key: 'concluida', label: 'Concluída' }, { key: 'no_show', label: 'No-show' }], set: setStatusFilter, activeLabel: statusFilter === 'all' ? null : statusFilter === 'sem' ? 'Sem status' : statusFilter === 'concluida' ? 'Concluída' : 'No-show' },
+              { id: 'score', label: 'Score', value: scoreFilter, options: [{ key: 'all', label: 'Todos' }, { key: 'high', label: '70+ (Bom)' }, { key: 'mid', label: '50-69 (Regular)' }, { key: 'low', label: '1-49 (Crítico)' }, { key: 'none', label: 'Sem score' }], set: setScoreFilter, activeLabel: scoreFilter === 'all' ? null : scoreFilter === 'high' ? '70+' : scoreFilter === 'mid' ? '50-69' : scoreFilter === 'low' ? '<50' : 'Sem score' },
+            ].map(f => (
+              <div key={f.id} className="relative">
+                <button onClick={() => setOpenFilter(openFilter === f.id ? null : f.id)}
+                  className={cn('h-8 px-3 text-xs rounded-lg border transition-all flex items-center gap-1.5',
+                    f.activeLabel ? 'bg-primary/15 border-primary/30 text-primary font-medium' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted')}>
+                  {f.activeLabel ? `${f.label}: ${f.activeLabel}` : f.label}
+                  <ChevronDown className="w-3 h-3" />
                 </button>
-              ))}
+                {openFilter === f.id && (
+                  <div className="absolute top-full left-0 mt-1 z-30 bg-card border border-border rounded-lg shadow-lg min-w-[160px] py-1">
+                    {f.options.map(o => (
+                      <button key={o.key} onClick={() => { f.set(o.key); setOpenFilter(null); }}
+                        className={cn('w-full text-left px-3 py-1.5 text-xs hover:bg-muted transition-colors', f.value === o.key && 'bg-muted font-medium')}>
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* Owner dropdown with search */}
+            <div className="relative">
+              <button onClick={() => setOpenFilter(openFilter === 'owner' ? null : 'owner')}
+                className={cn('h-8 px-3 text-xs rounded-lg border transition-all flex items-center gap-1.5',
+                  ownerFilter !== 'all' ? 'bg-primary/15 border-primary/30 text-primary font-medium' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted')}>
+                {ownerFilter !== 'all' ? `Owner: ${visibleMeetings.find(m => m.vendedor_id === ownerFilter)?.vendedor_nome || '...'}` : 'Owner'}
+                <ChevronDown className="w-3 h-3" />
+              </button>
+              {openFilter === 'owner' && (
+                <div className="absolute top-full left-0 mt-1 z-30 bg-card border border-border rounded-lg shadow-lg min-w-[200px] max-h-60 overflow-y-auto">
+                  <div className="p-1.5 border-b border-border">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+                      <input placeholder="Pesquisar..." className="w-full pl-7 h-7 text-xs border border-border rounded bg-background px-2"
+                        onChange={e => { const el = e.target; el.dataset.search = e.target.value; el.parentElement?.parentElement?.parentElement?.querySelectorAll('[data-owner]').forEach((b: any) => { b.style.display = b.dataset.owner?.toLowerCase().includes(el.dataset.search?.toLowerCase() || '') ? '' : 'none'; }); }} />
+                    </div>
+                  </div>
+                  <button onClick={() => { setOwnerFilter('all'); setOpenFilter(null); }}
+                    className={cn('w-full text-left px-3 py-1.5 text-xs hover:bg-muted', ownerFilter === 'all' && 'bg-muted font-medium')}>Todos</button>
+                  {[...new Map(visibleMeetings.map(m => [m.vendedor_id, m.vendedor_nome])).entries()]
+                    .filter(([id]) => id)
+                    .sort(([,a],[,b]) => (a || '').localeCompare(b || ''))
+                    .map(([id, name]) => (
+                      <button key={id} data-owner={name} onClick={() => { setOwnerFilter(id!); setOpenFilter(null); }}
+                        className={cn('w-full text-left px-3 py-1.5 text-xs hover:bg-muted', ownerFilter === id && 'bg-muted font-medium')}>{name || 'Sem nome'}</button>
+                    ))}
+                </div>
+              )}
             </div>
-            <div className="flex gap-1.5 flex-wrap">
-              {[
-                { key: 'all', label: 'Todos status' },
-                { key: 'sem', label: 'Sem status' },
-                { key: 'concluida', label: 'Concluída' },
-                { key: 'no_show', label: 'No-show' },
-              ].map(s => (
-                <button
-                  key={s.key}
-                  onClick={() => setStatusFilter(s.key)}
-                  className={cn(
-                    'text-xs px-3 py-1.5 rounded-lg border transition-all',
-                    statusFilter === s.key
-                      ? 'bg-primary/15 border-primary/30 text-primary font-medium'
-                      : 'border-border text-muted-foreground hover:bg-muted hover:text-foreground'
-                  )}
-                >
-                  {s.label}
-                </button>
-              ))}
+
+            {/* Date dropdown */}
+            <div className="relative">
+              <button onClick={() => setOpenFilter(openFilter === 'date' ? null : 'date')}
+                className={cn('h-8 px-3 text-xs rounded-lg border transition-all flex items-center gap-1.5',
+                  (dateFrom || dateTo) ? 'bg-primary/15 border-primary/30 text-primary font-medium' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted')}>
+                {(dateFrom || dateTo) ? `${dateFrom || '...'} a ${dateTo || '...'}` : 'Data'}
+                <Calendar className="w-3 h-3" />
+              </button>
+              {openFilter === 'date' && (
+                <div className="absolute top-full right-0 mt-1 z-30 bg-card border border-border rounded-lg shadow-lg p-3 space-y-2 min-w-[240px]">
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block mb-1">De</label>
+                    <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+                      className="w-full h-8 px-2 text-xs border border-border rounded bg-background" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-muted-foreground block mb-1">Até</label>
+                    <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+                      className="w-full h-8 px-2 text-xs border border-border rounded bg-background" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => { setDateFrom(''); setDateTo(''); setOpenFilter(null); }} className="flex-1 text-xs py-1 rounded border border-border hover:bg-muted">Limpar</button>
+                    <button onClick={() => setOpenFilter(null)} className="flex-1 text-xs py-1 rounded bg-primary text-primary-foreground">Aplicar</button>
+                  </div>
+                </div>
+              )}
             </div>
-            {/* Owner filter */}
-            <select value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}
-              className="h-8 px-2 text-xs border border-border rounded-lg bg-secondary text-foreground">
-              <option value="all">Todos owners</option>
-              {[...new Map(visibleMeetings.map(m => [m.vendedor_id, m.vendedor_nome])).entries()]
-                .filter(([id]) => id)
-                .sort(([,a],[,b]) => (a || '').localeCompare(b || ''))
-                .map(([id, name]) => <option key={id} value={id!}>{name || 'Sem nome'}</option>)}
-            </select>
-            {/* Score filter */}
-            <select value={scoreFilter} onChange={e => setScoreFilter(e.target.value)}
-              className="h-8 px-2 text-xs border border-border rounded-lg bg-secondary text-foreground">
-              <option value="all">Todos scores</option>
-              <option value="high">70+ (Bom)</option>
-              <option value="mid">50-69 (Regular)</option>
-              <option value="low">1-49 (Crítico)</option>
-              <option value="none">Sem score</option>
-            </select>
-            {/* Date range */}
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-              className="h-8 px-2 text-xs border border-border rounded-lg bg-secondary text-foreground" />
-            <span className="text-xs text-muted-foreground">a</span>
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-              className="h-8 px-2 text-xs border border-border rounded-lg bg-secondary text-foreground" />
           </div>
 
           {loading ? (
