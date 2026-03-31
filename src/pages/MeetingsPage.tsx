@@ -1411,10 +1411,14 @@ export default function MeetingsPage() {
                       const regEmail = (p.email || '').toLowerCase();
                       const regTokens = tokenize(regName);
                       // Check if any transcript participant matches by email or shared name tokens
-                      return !transcriptTokens.some(tp =>
-                        (regEmail && tp.emailLower === regEmail) ||
-                        regTokens.some(rt => tp.tokens.includes(rt))
-                      );
+                      // Require: email match, OR 2+ shared tokens, OR 1 shared token >= 5 chars (avoid "Thiago" vs "Thiago" different person)
+                      return !transcriptTokens.some(tp => {
+                        if (regEmail && tp.emailLower === regEmail) return true;
+                        const shared = regTokens.filter(rt => tp.tokens.includes(rt));
+                        if (shared.length >= 2) return true;
+                        if (shared.length === 1 && shared[0].length >= 5) return true;
+                        return false;
+                      });
                     })
                     .map((p: any) => ({ name: p.name || p.email?.split('@')[0] || '?', email: p.email || null, pct: 0 }));
                   const participantsWithPct = [...fromTranscript, ...silent].sort((a, b) => b.pct - a.pct);
