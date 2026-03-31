@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, LineChart, Line, Legend } from 'recharts';
 import { useAuth } from '@/contexts/AuthContext';
 import { loadEvaluations, loadUsersForPerformance, loadTeamsForPerformance, loadMeetingDurations, loadAgentNames, type StoredEvaluation } from '@/lib/evaluationService';
+import { supabase } from '@/integrations/supabase/client';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function scoreColor(s: number) {
@@ -103,6 +104,8 @@ export default function PerformancePage() {
   const [meetingDurations, setMeetingDurations] = useState<Record<string, number>>({});
   const [agentNames, setAgentNames] = useState<Record<string, string>>({});
   const [selectedEval, setSelectedEval] = useState<StoredEvaluation | null>(null);
+  const [selectedMeeting, setSelectedMeeting] = useState<any>(null);
+  const [loadingMeeting, setLoadingMeeting] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -193,6 +196,21 @@ export default function PerformancePage() {
   }, [visibleTeams, selectedTeamId]);
 
   // ── Build user performance from evaluations ───────────────────────────────
+  const openEvalDetail = async (ev: StoredEvaluation) => {
+    setSelectedEval(ev);
+    setSelectedMeeting(null);
+    if (ev.tipo_contexto === 'reuniao' && ev.entidade_id) {
+      setLoadingMeeting(true);
+      try {
+        const { data } = await (supabase as any).schema('saas').from('reunioes')
+          .select('id,titulo,transcricao,duracao_minutos,data_reuniao,participantes,status')
+          .eq('id', ev.entidade_id).maybeSingle();
+        setSelectedMeeting(data);
+      } catch { /* ignore */ }
+      finally { setLoadingMeeting(false); }
+    }
+  };
+
   const buildUserPerf = (userId: string) => {
     const u = users.find(x => x.id === userId);
     if (!u) return null;
@@ -659,7 +677,7 @@ export default function PerformancePage() {
                 ) : (
                   <div className="space-y-1.5">
                     {[...meetEvals].sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 5).map(e => (
-                      <button key={e.id} onClick={() => setSelectedEval(e)}
+                      <button key={e.id} onClick={() => openEvalDetail(e)}
                         className="flex items-center justify-between text-xs py-1.5 border-b border-border/50 last:border-0 hover:bg-muted/30 rounded px-1 -mx-1 transition-colors cursor-pointer w-full text-left">
                         <span className="truncate text-primary hover:underline">{(e as any).resumo?.slice(0, 60) || `Reunião ${new Date(e.criado_em).toLocaleDateString('pt-BR')}`}</span>
                         <span className={cn('font-bold font-mono ml-2 flex-shrink-0', scoreColor(e.score || 0))}>{e.score}</span>
@@ -862,29 +880,40 @@ export default function PerformancePage() {
 
       {/* Evaluation Detail Modal */}
       {selectedEval && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setSelectedEval(null)} />
-          <div className="relative w-[600px] max-h-[80vh] bg-card border border-border rounded-xl shadow-2xl overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[5vh]">
+          <div className="absolute inset-0 bg-black/50" onClick={() => { setSelectedEval(null); setSelectedMeeting(null); }} />
+          <div className="relative w-[700px] max-h-[90vh] bg-card border border-border rounded-xl shadow-2xl overflow-y-auto">
+            {/* Header */}
             <div className="sticky top-0 bg-card border-b border-border px-6 py-4 flex items-center justify-between z-10">
-              <div>
-                <h2 className="text-base font-semibold">Detalhes da Avaliação</h2>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {new Date(selectedEval.criado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                </p>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-base font-semibold truncate">
+                  {selectedMeeting?.titulo || (selectedEval.payload as any)?.titulo || 'Detalhes da Avaliação'}
+                </h2>
+                <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                  <span>{new Date(selectedEval.criado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                  {selectedMeeting?.duracao_minutos > 0 && (
+                    <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> {selectedMeeting.duracao_minutos} min</span>
+                  )}
+                  {selectedMeeting?.status && (
+                    <span className="px-1.5 py-0.5 rounded bg-muted text-[10px] font-medium">{selectedMeeting.status}</span>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-shrink-0">
                 <div className={cn('w-14 h-14 rounded-full border-4 flex items-center justify-center', (selectedEval.score || 0) >= 70 ? 'border-success' : (selectedEval.score || 0) >= 50 ? 'border-warning' : 'border-destructive')}>
                   <span className={cn('text-xl font-bold font-mono', scoreColor(selectedEval.score || 0))}>{selectedEval.score}</span>
                 </div>
-                <button onClick={() => setSelectedEval(null)} className="text-muted-foreground hover:text-foreground">
-                  <span className="text-xl">&times;</span>
+                <button onClick={() => { setSelectedEval(null); setSelectedMeeting(null); }} className="text-muted-foreground hover:text-foreground">
+                  <span className="text-2xl leading-none">&times;</span>
                 </button>
               </div>
             </div>
-            <div className="px-6 py-4 space-y-4">
+
+            <div className="px-6 py-4 space-y-5">
+              {/* Resumo + Insights */}
               {(selectedEval as any).resumo && (
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Resumo</p>
+                <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
+                  <p className="text-xs font-semibold text-primary mb-1">Resumo da IA</p>
                   <p className="text-sm text-foreground">{(selectedEval as any).resumo}</p>
                 </div>
               )}
@@ -894,25 +923,59 @@ export default function PerformancePage() {
                   <p className="text-sm text-muted-foreground">{(selectedEval.payload as any).insights}</p>
                 </div>
               )}
+
+              {/* Critical Alerts */}
               {(selectedEval.payload as any)?.criticalAlerts?.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-destructive uppercase tracking-wider mb-1">Alertas Críticos</p>
-                  {((selectedEval.payload as any).criticalAlerts as string[]).map((a, i) => (
-                    <div key={i} className="flex items-start gap-1.5 text-xs text-destructive"><AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" /> {a}</div>
-                  ))}
+                <div className="p-3 rounded-lg bg-destructive/5 border border-destructive/10">
+                  <p className="text-xs font-semibold text-destructive mb-1.5">Alertas Críticos</p>
+                  <div className="space-y-1">
+                    {((selectedEval.payload as any).criticalAlerts as string[]).map((a, i) => (
+                      <div key={i} className="flex items-start gap-1.5 text-xs text-destructive"><AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" /> {a}</div>
+                    ))}
+                  </div>
                 </div>
               )}
+
+              {/* Critérios */}
               <div>
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Critérios</p>
-                <div className="space-y-2.5">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Critérios de Avaliação</p>
+                <div className="space-y-2">
                   {((selectedEval.criterios || []) as any[]).sort((a, b) => (b.score || 0) - (a.score || 0)).map((c, i) => (
-                    <div key={i}>
+                    <div key={i} className="p-2 rounded-lg border border-border/50">
                       <MiniBar label={c.label} score={c.score || 0} weight={c.weight} />
-                      {c.feedback && <p className="text-[10px] text-muted-foreground mt-0.5 ml-0.5">{c.feedback}</p>}
+                      {c.feedback && <p className="text-[10px] text-muted-foreground mt-1 ml-0.5 italic">"{c.feedback}"</p>}
                     </div>
                   ))}
                 </div>
               </div>
+
+              {/* Participantes */}
+              {selectedMeeting?.participantes && (Array.isArray(selectedMeeting.participantes) ? selectedMeeting.participantes : []).length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Participantes</p>
+                  <div className="flex flex-wrap gap-2">
+                    {(selectedMeeting.participantes as any[]).map((p: any, i: number) => (
+                      <span key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted/50 border border-border text-xs">
+                        <Users className="w-3 h-3 text-muted-foreground" />
+                        {typeof p === 'string' ? p : p.email || p.nome || 'Participante'}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Transcrição */}
+              {loadingMeeting ? (
+                <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+              ) : selectedMeeting?.transcricao ? (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Transcrição</p>
+                  <div className="max-h-[300px] overflow-y-auto p-3 rounded-lg bg-muted/30 border border-border text-xs font-mono leading-relaxed whitespace-pre-wrap text-muted-foreground">
+                    {selectedMeeting.transcricao.slice(0, 5000)}
+                    {selectedMeeting.transcricao.length > 5000 && '\n\n... (truncado)'}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
