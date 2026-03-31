@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -833,6 +834,7 @@ function MessageContent({
 export default function WhatsAppPage() {
   const { user, hasRole } = useAuth();
   const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isAdmin = hasRole(['admin', 'ceo', 'director', 'manager', 'coordinator', 'supervisor']);
   const { instances: evoInstances, loading: evoLoading, refetch: refetchEvo } = useEvolutionInstances();
   const { tokens, models } = useAppConfig();
@@ -888,10 +890,12 @@ export default function WhatsAppPage() {
   // ── Column 1: selected instance ────────────────────────────────────────────
   const [activeInstance, setActiveInstance] = useState<EvolutionInstance | null>(null);
 
-  // Auto-select first instance
+  // Auto-select instance (from URL or first)
   useEffect(() => {
     if (visibleInstances.length > 0 && !activeInstance) {
-      setActiveInstance(visibleInstances[0]);
+      const instParam = searchParams.get('instance');
+      const match = instParam ? visibleInstances.find(i => i.name === instParam) : null;
+      setActiveInstance(match || visibleInstances[0]);
     }
   }, [visibleInstances.length]);
 
@@ -1186,6 +1190,16 @@ export default function WhatsAppPage() {
     setMessages([]);
   }, [activeInstance?.name]);
 
+  // Auto-select chat from URL params
+  useEffect(() => {
+    const phoneParam = searchParams.get('phone');
+    if (phoneParam && chats.length > 0 && !activeChat) {
+      const jid = phoneParam.includes('@') ? phoneParam : phoneParam + '@s.whatsapp.net';
+      const match = chats.find(c => c.id === jid || c.id.startsWith(phoneParam));
+      if (match) setActiveChat(match);
+    }
+  }, [chats, searchParams]);
+
   // Poll chat list every 10s to update unread counts and new conversations
   useEffect(() => {
     if (!activeInstance || activeInstance.connectionStatus !== 'open') return;
@@ -1387,12 +1401,17 @@ export default function WhatsAppPage() {
     return el.scrollHeight - el.scrollTop - el.clientHeight < 120;
   }, []);
 
+  const prevMsgLenRef = useRef(0);
   useEffect(() => {
     const chatChanged = activeChat?.id !== prevChatIdRef.current;
     prevChatIdRef.current = activeChat?.id ?? null;
-    // Always scroll on chat switch; on poll updates only if already near bottom
-    if (chatChanged || isNearBottom()) {
-      messagesEndRef.current?.scrollIntoView({ behavior: chatChanged ? 'auto' : 'smooth' });
+    const msgCountChanged = messages.length !== prevMsgLenRef.current;
+    prevMsgLenRef.current = messages.length;
+    // Always scroll on chat switch; on new messages only if near bottom
+    if (chatChanged) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+    } else if (msgCountChanged && isNearBottom()) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, activeChat?.id]);
 
@@ -1824,6 +1843,10 @@ export default function WhatsAppPage() {
                   setActiveChat(chat);
                   markChatSeen(chat.id, chat.lastMessageTs || Math.floor(Date.now() / 1000));
                   setChats(prev => prev.map(c => c.id === chat.id ? { ...c, unread: 0 } : c));
+                  const params: Record<string, string> = {};
+                  if (activeInstance) params.instance = activeInstance.name;
+                  params.phone = chat.id.replace('@s.whatsapp.net', '');
+                  setSearchParams(params, { replace: true });
                 }}
                 className={cn(
                   'w-full flex items-start gap-2.5 px-3 py-3 text-left border-b border-border/40 transition-colors',

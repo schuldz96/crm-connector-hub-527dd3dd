@@ -648,8 +648,18 @@ export default function InboxPage() {
     return () => clearInterval(t);
   }, [selectedConv?.id]);
 
-  // Auto-scroll
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+  // Auto-scroll: only when new messages arrive and user is near bottom
+  const prevMsgCountRef = useRef(0);
+  useEffect(() => {
+    if (messages.length !== prevMsgCountRef.current) {
+      const container = messagesEndRef.current?.parentElement;
+      const isNearBottom = !container || (container.scrollHeight - container.scrollTop - container.clientHeight < 150);
+      if (isNearBottom || prevMsgCountRef.current === 0) {
+        messagesEndRef.current?.scrollIntoView({ behavior: prevMsgCountRef.current === 0 ? 'auto' : 'smooth' });
+      }
+      prevMsgCountRef.current = messages.length;
+    }
+  }, [messages]);
 
   // ── 24h window check ───────────────────────────────────
   const within24h = selectedConv ? isWithin24hWindow(selectedConv.last_inbound_ts) : false;
