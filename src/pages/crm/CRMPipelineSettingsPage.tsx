@@ -242,6 +242,8 @@ export default function CRMPipelineSettingsPage() {
   const [reorderMode, setReorderMode] = useState(false);
   const [reorderList, setReorderList] = useState<{ id: string; nome: string; ordem: number }[]>([]);
   const [savingReorder, setSavingReorder] = useState(false);
+  const dragReorderIdx = useRef<number | null>(null);
+  const [dragReorderOverIdx, setDragReorderOverIdx] = useState<number | null>(null);
 
   const startReorder = () => {
     setReorderList(pipelines.map(p => ({ id: p.id, nome: p.nome, ordem: p.ordem })));
@@ -649,8 +651,30 @@ export default function CRMPipelineSettingsPage() {
             </div>
             <div className="px-6 py-4 space-y-1 max-h-[400px] overflow-y-auto">
               {reorderList.map((p, idx) => (
-                <div key={p.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border bg-muted/20 hover:bg-muted/40">
-                  <GripVertical className="w-4 h-4 text-muted-foreground/40 flex-shrink-0" />
+                <div
+                  key={p.id}
+                  draggable
+                  onDragStart={() => { dragReorderIdx.current = idx; }}
+                  onDragOver={(e) => { e.preventDefault(); setDragReorderOverIdx(idx); }}
+                  onDragLeave={() => { if (dragReorderOverIdx === idx) setDragReorderOverIdx(null); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const from = dragReorderIdx.current;
+                    if (from !== null && from !== idx) {
+                      setReorderList(prev => {
+                        const arr = [...prev];
+                        const [moved] = arr.splice(from, 1);
+                        arr.splice(idx, 0, moved);
+                        return arr.map((item, i) => ({ ...item, ordem: i }));
+                      });
+                    }
+                    dragReorderIdx.current = null;
+                    setDragReorderOverIdx(null);
+                  }}
+                  onDragEnd={() => { dragReorderIdx.current = null; setDragReorderOverIdx(null); }}
+                  className={cn('flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border bg-muted/20 hover:bg-muted/40 transition-colors', dragReorderOverIdx === idx && 'bg-primary/10 border-primary/30')}
+                >
+                  <GripVertical className="w-4 h-4 text-muted-foreground/40 flex-shrink-0 cursor-grab active:cursor-grabbing" />
                   <span className="flex-1 text-sm font-medium">{p.nome}</span>
                   <div className="flex items-center gap-1">
                     <button
