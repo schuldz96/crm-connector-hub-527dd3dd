@@ -180,6 +180,7 @@ export default function PerformancePage() {
 
   const [mode, setMode] = useState<'team' | 'person'>('person');
   const [rankingLimit, setRankingLimit] = useState(5);
+  const [selectedAgentIdx, setSelectedAgentIdx] = useState(0); // 0 = Sandler (first/principal)
   const [selectedTeamId, setSelectedTeamId] = useState<string>('');
   const [selectedUserId, setSelectedUserId] = useState<string>('');
 
@@ -621,31 +622,35 @@ export default function PerformancePage() {
                     <Video className="w-3.5 h-3.5 text-primary" /> Detalhamento — Reuniões
                     <span className="text-[10px] text-muted-foreground ml-1">({meetEvals.length} avaliações)</span>
                   </p>
-                  <div className="space-y-4">
-                    {meetCriteriaByAgent.map((group, gi) => (
-                      <div key={group.agentId}>
-                        {meetCriteriaByAgent.length > 1 && (() => {
-                          const name = group.agentId === '_default' ? 'Avaliação Padrão' : (agentNames[group.agentId] || `Agente ${gi + 1}`);
-                          const isSandler = name.toLowerCase().includes('sandler');
-                          return (
-                            <div className="flex items-center gap-2 mb-2">
-                              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                                <Brain className="w-3 h-3" /> {name}
-                              </p>
-                              <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full border font-semibold', isSandler ? 'bg-primary/10 text-primary border-primary/20' : 'bg-muted text-muted-foreground border-border')}>
-                                {isSandler ? 'Principal' : 'Complementar'}
-                              </span>
-                            </div>
-                          );
-                        })()}
-                        <div className="space-y-2">
-                          {group.criteria.map(c => (
-                            <MiniBar key={c.label} label={c.label} score={c.score} weight={c.weight} />
-                          ))}
-                        </div>
+                  {/* Agent/methodology selector buttons */}
+                  {meetCriteriaByAgent.length > 1 && (
+                    <div className="flex gap-1 mb-3 flex-wrap">
+                      {meetCriteriaByAgent.map((group, gi) => {
+                        const name = group.agentId === '_default' ? 'Padrão' : (agentNames[group.agentId] || `Agente ${gi + 1}`).replace('[Closer In] ', '');
+                        const isSandler = (agentNames[group.agentId] || '').toLowerCase().includes('sandler');
+                        return (
+                          <button key={group.agentId} onClick={() => setSelectedAgentIdx(gi)}
+                            className={cn('text-[10px] px-2.5 py-1 rounded-full border font-medium transition-all flex items-center gap-1',
+                              selectedAgentIdx === gi ? 'bg-primary/15 border-primary/30 text-primary' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted')}>
+                            {name}
+                            {isSandler && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {/* Show selected agent criteria */}
+                  {(() => {
+                    const group = meetCriteriaByAgent[selectedAgentIdx] || meetCriteriaByAgent[0];
+                    if (!group) return null;
+                    return (
+                      <div className="space-y-2">
+                        {group.criteria.map(c => (
+                          <MiniBar key={c.label} label={c.label} score={c.score} weight={c.weight} />
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -972,31 +977,33 @@ export default function PerformancePage() {
                     <Video className="w-3.5 h-3.5 text-primary" /> Detalhamento — Reuniões
                     <span className="text-[10px] text-muted-foreground ml-1">({totalMeetings} avaliações)</span>
                   </p>
-                  <div className="space-y-4">
-                    {teamCriteriaByAgent.map((group, gi) => (
-                      <div key={group.agentId}>
-                        {teamCriteriaByAgent.length > 1 && (() => {
-                          const name = group.agentId === '_default' ? 'Avaliação Padrão' : (agentNames[group.agentId] || `Agente ${gi + 1}`);
-                          const isSandler = name.toLowerCase().includes('sandler');
-                          return (
-                            <div className="flex items-center gap-2 mb-2">
-                              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                                <Brain className="w-3 h-3" /> {name}
-                              </p>
-                              <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full border font-semibold', isSandler ? 'bg-primary/10 text-primary border-primary/20' : 'bg-muted text-muted-foreground border-border')}>
-                                {isSandler ? 'Principal' : 'Complementar'}
-                              </span>
-                            </div>
-                          );
-                        })()}
-                        <div className="space-y-2">
-                          {group.criteria.map(c => (
-                            <MiniBar key={c.label} label={c.label} score={c.score} weight={c.weight} />
-                          ))}
-                        </div>
+                  {teamCriteriaByAgent.length > 1 && (
+                    <div className="flex gap-1 mb-3 flex-wrap">
+                      {teamCriteriaByAgent.map((group, gi) => {
+                        const name = group.agentId === '_default' ? 'Padrão' : (agentNames[group.agentId] || `Agente ${gi + 1}`).replace('[Closer In] ', '');
+                        const isSandler = (agentNames[group.agentId] || '').toLowerCase().includes('sandler');
+                        return (
+                          <button key={group.agentId} onClick={() => setSelectedAgentIdx(gi)}
+                            className={cn('text-[10px] px-2.5 py-1 rounded-full border font-medium transition-all flex items-center gap-1',
+                              selectedAgentIdx === gi ? 'bg-primary/15 border-primary/30 text-primary' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted')}>
+                            {name}
+                            {isSandler && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {(() => {
+                    const group = teamCriteriaByAgent[selectedAgentIdx] || teamCriteriaByAgent[0];
+                    if (!group) return null;
+                    return (
+                      <div className="space-y-2">
+                        {group.criteria.map(c => (
+                          <MiniBar key={c.label} label={c.label} score={c.score} weight={c.weight} />
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })()}
                 </div>
               )}
 
