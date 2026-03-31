@@ -398,14 +398,6 @@ export default function CRMPipelineSettingsPage() {
           </div>
         </div>
 
-        {/* Cabeçalho/Rodapé link */}
-        <div className="mb-4">
-          <button className="text-sm text-primary hover:underline font-medium">Definir cabeçalho/rodapé do painel</button>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Configure sua exibição padrão para o cabeçalho/rodapé do painel de {objectType === 'deal' ? 'negócio' : 'ticket'} que será exibido para todos os usuários.
-          </p>
-        </div>
-
         {/* Sub-tabs */}
         <div className="flex gap-0 border-b border-border mb-4">
           {TABS.map(tab => (
