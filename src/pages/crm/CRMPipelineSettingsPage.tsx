@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -125,6 +125,24 @@ export default function CRMPipelineSettingsPage() {
     setHasChanges(true);
   };
 
+  // Stage drag-and-drop reorder
+  const dragStageIdx = useRef<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+
+  const handleStageDrop = (dropIdx: number) => {
+    const fromIdx = dragStageIdx.current;
+    if (fromIdx === null || fromIdx === dropIdx) return;
+    setStages(prev => {
+      const arr = [...prev];
+      const [moved] = arr.splice(fromIdx, 1);
+      arr.splice(dropIdx, 0, moved);
+      return arr.map((s, i) => ({ ...s, ordem: i }));
+    });
+    setHasChanges(true);
+    dragStageIdx.current = null;
+    setDragOverIdx(null);
+  };
+
   const saveChanges = async () => {
     if (!selectedPipeline) return;
     setSaving(true);
@@ -218,6 +236,71 @@ export default function CRMPipelineSettingsPage() {
       toast({ title: 'Pipeline renomeado' });
     } catch (err) {
       toast({ title: 'Erro', description: String(err), variant: 'destructive' });
+    }
+  };
+
+  const [reorderMode, setReorderMode] = useState(false);
+  const [reorderList, setReorderList] = useState<{ id: string; nome: string; ordem: number }[]>([]);
+  const [savingReorder, setSavingReorder] = useState(false);
+
+  const startReorder = () => {
+    setReorderList(pipelines.map(p => ({ id: p.id, nome: p.nome, ordem: p.ordem })));
+    setReorderMode(true);
+  };
+
+  const moveReorder = (idx: number, dir: -1 | 1) => {
+    const next = idx + dir;
+    if (next < 0 || next >= reorderList.length) return;
+    setReorderList(prev => {
+      const arr = [...prev];
+      [arr[idx], arr[next]] = [arr[next], arr[idx]];
+      return arr.map((p, i) => ({ ...p, ordem: i }));
+    });
+  };
+
+  const saveReorder = async () => {
+    setSavingReorder(true);
+    try {
+      for (const p of reorderList) {
+        await saas().from('crm_pipelines').update({ ordem: p.ordem }).eq('id', p.id);
+      }
+      await refetch();
+      setReorderMode(false);
+      toast({ title: 'Ordem dos pipelines salva' });
+    } catch (err) {
+      toast({ title: 'Erro', description: String(err), variant: 'destructive' });
+    } finally {
+      setSavingReorder(false);
+    }
+  };
+
+  const clonePipeline = async () => {
+    if (!selectedPipeline) return;
+    try {
+      const empresaId = await getSaasEmpresaId();
+      const { data, error } = await saas().from('crm_pipelines').insert({
+        empresa_id: empresaId,
+        nome: `${selectedPipeline.nome} (cópia)`,
+        tipo: objectType,
+        ordem: pipelines.length,
+      }).select().single();
+      if (error) throw error;
+      // Clone stages
+      if (selectedPipeline.estagios && selectedPipeline.estagios.length > 0) {
+        const clonedStages = selectedPipeline.estagios.map(s => ({
+          pipeline_id: data.id,
+          nome: s.nome,
+          cor: s.cor,
+          probabilidade: s.probabilidade,
+          ordem: s.ordem,
+        }));
+        await saas().from('crm_pipeline_estagios').insert(clonedStages);
+      }
+      await refetch();
+      setSelectedPipelineId(data.id);
+      toast({ title: 'Pipeline clonado com sucesso' });
+    } catch (err) {
+      toast({ title: 'Erro ao clonar', description: String(err), variant: 'destructive' });
     }
   };
 
@@ -349,9 +432,9 @@ export default function CRMPipelineSettingsPage() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={renamePipeline}>Renomear este pipeline</DropdownMenuItem>
-                <DropdownMenuItem>Reordenar pipelines</DropdownMenuItem>
+                <DropdownMenuItem onClick={startReorder}>Reordenar pipelines</DropdownMenuItem>
                 <DropdownMenuItem>Gerenciar acesso</DropdownMenuItem>
-                <DropdownMenuItem>Clonar esse pipeline</DropdownMenuItem>
+                <DropdownMenuItem onClick={clonePipeline}>Clonar esse pipeline</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={deletePipeline} className="text-destructive">Excluir este pipeline</DropdownMenuItem>
               </DropdownMenuContent>
@@ -403,7 +486,16 @@ export default function CRMPipelineSettingsPage() {
               </thead>
               <tbody>
                 {stages.map((stage, idx) => (
-                  <tr key={stage.id} className="border-b border-border group hover:bg-muted/20">
+                  <tr
+                    key={stage.id}
+                    draggable
+                    onDragStart={() => { dragStageIdx.current = idx; }}
+                    onDragOver={(e) => { e.preventDefault(); setDragOverIdx(idx); }}
+                    onDragLeave={() => { if (dragOverIdx === idx) setDragOverIdx(null); }}
+                    onDrop={(e) => { e.preventDefault(); handleStageDrop(idx); }}
+                    onDragEnd={() => { dragStageIdx.current = null; setDragOverIdx(null); }}
+                    className={cn('border-b border-border group hover:bg-muted/20', dragOverIdx === idx && 'bg-primary/5 border-primary/30')}
+                  >
                     <td className="px-1 py-3">
                       <GripVertical className="w-4 h-4 text-muted-foreground/40 cursor-grab" />
                     </td>
@@ -595,6 +687,52 @@ export default function CRMPipelineSettingsPage() {
           </div>
         )}
       </div>
+
+      {/* Reorder Pipelines Modal */}
+      {reorderMode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setReorderMode(false)} />
+          <div className="relative w-[440px] bg-card border border-border rounded-xl shadow-xl overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+              <h2 className="text-base font-semibold">Reordenar pipelines</h2>
+              <button onClick={() => setReorderMode(false)} className="text-muted-foreground hover:text-foreground">
+                <span className="text-lg">&times;</span>
+              </button>
+            </div>
+            <div className="px-6 py-4 space-y-1 max-h-[400px] overflow-y-auto">
+              {reorderList.map((p, idx) => (
+                <div key={p.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border bg-muted/20 hover:bg-muted/40">
+                  <GripVertical className="w-4 h-4 text-muted-foreground/40 flex-shrink-0" />
+                  <span className="flex-1 text-sm font-medium">{p.nome}</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      disabled={idx === 0}
+                      onClick={() => moveReorder(idx, -1)}
+                      className={cn('w-6 h-6 rounded flex items-center justify-center text-xs', idx === 0 ? 'text-muted-foreground/30' : 'text-muted-foreground hover:bg-muted')}
+                    >
+                      ▲
+                    </button>
+                    <button
+                      disabled={idx === reorderList.length - 1}
+                      onClick={() => moveReorder(idx, 1)}
+                      className={cn('w-6 h-6 rounded flex items-center justify-center text-xs', idx === reorderList.length - 1 ? 'text-muted-foreground/30' : 'text-muted-foreground hover:bg-muted')}
+                    >
+                      ▼
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="px-6 py-4 border-t border-border flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setReorderMode(false)}>Cancelar</Button>
+              <Button size="sm" onClick={saveReorder} disabled={savingReorder}>
+                {savingReorder ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+                Salvar ordem
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
