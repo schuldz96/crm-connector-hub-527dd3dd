@@ -70,10 +70,15 @@ export default function CRMPipelineSettingsPage() {
   const { toast } = useToast();
 
   const objectType = (searchParams.get('type') || 'deal') as 'deal' | 'ticket';
-  const pipelineIdParam = searchParams.get('pipeline');
+  const pipelineParam = searchParams.get('pipeline');
 
   const { data: pipelines = [], isLoading, refetch } = useCrmPipelines(objectType);
-  const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(pipelineIdParam);
+
+  // Resolve pipeline from nome_interno param or UUID fallback
+  const resolvedPipelineId = pipelineParam
+    ? (pipelines.find(p => String(p.nome_interno) === pipelineParam)?.id || pipelines.find(p => p.id === pipelineParam)?.id || null)
+    : null;
+  const [selectedPipelineId, setSelectedPipelineId] = useState<string | null>(resolvedPipelineId);
   const [stages, setStages] = useState<EditableStage[]>([]);
   const [activeTab, setActiveTab] = useState('config');
   const [saving, setSaving] = useState(false);
@@ -96,12 +101,16 @@ export default function CRMPipelineSettingsPage() {
     }
   }, [selectedPipeline?.id]);
 
-  // Auto-select first pipeline
+  // Auto-select pipeline from URL param or first available
   useEffect(() => {
-    if (!selectedPipelineId && pipelines.length > 0) {
-      setSelectedPipelineId(pipelines[0].id);
+    if (pipelines.length > 0) {
+      if (pipelineParam) {
+        const match = pipelines.find(p => String(p.nome_interno) === pipelineParam) || pipelines.find(p => p.id === pipelineParam);
+        if (match) { setSelectedPipelineId(match.id); return; }
+      }
+      if (!selectedPipelineId) setSelectedPipelineId(pipelines[0].id);
     }
-  }, [pipelines, selectedPipelineId]);
+  }, [pipelines, pipelineParam]);
 
   const updateStage = (idx: number, field: keyof EditableStage, value: string | number) => {
     setStages(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s));

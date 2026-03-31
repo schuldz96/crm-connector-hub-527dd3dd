@@ -308,7 +308,7 @@ export default function CRMTicketsPage() {
                 </DropdownMenuItem>
               ))}
               <div className="border-t border-border mt-1 pt-1 px-2 pb-1">
-                <button onClick={() => navigate(`/crm/0-6?type=ticket&pipeline=${pipelineId}`)}
+                <button onClick={() => navigate(`/crm/0-6?type=ticket&pipeline=${pipeline?.nome_interno || ''}`)}
                   className="text-xs text-primary hover:underline flex items-center gap-1">
                   Editar pipeline <ChevronRight className="w-3 h-3" />
                 </button>
