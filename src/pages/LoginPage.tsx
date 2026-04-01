@@ -116,7 +116,7 @@ export default function LoginPage() {
           </div>
         </div>
         <div className="relative z-10 flex items-center gap-6 text-xs text-muted-foreground">
-          <span>© 2026 Appmax</span>
+          <span>© 2026 Hubmax</span>
           <span>·</span>
           <span>Privacidade</span>
           <span>·</span>
