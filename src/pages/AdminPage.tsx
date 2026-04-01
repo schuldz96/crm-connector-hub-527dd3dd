@@ -1622,7 +1622,7 @@ export default function AdminPage() {
                       </label>
                       <Input
                         type="email"
-                        placeholder="noreply@hubmax.com.br"
+                        placeholder="noreply@appmax.com.br"
                         value={emailConfig.senderEmail}
                         onChange={(e) => setEmailConfig(prev => ({ ...prev, senderEmail: e.target.value }))}
                       />

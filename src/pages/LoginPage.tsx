@@ -215,7 +215,7 @@ export default function LoginPage() {
               <ShieldCheck className="w-3.5 h-3.5 text-primary" /> Acesso restrito
             </p>
             <p className="text-[11px] text-muted-foreground leading-relaxed">
-              Esta plataforma é exclusiva para colaboradores com e-mail <strong>@hubmax.com.br</strong>. Contas de outros domínios serão bloqueadas automaticamente.
+              Esta plataforma é exclusiva para colaboradores com e-mail <strong>@appmax.com.br</strong>. Contas de outros domínios serão bloqueadas automaticamente.
             </p>
           </div>
         </div>
