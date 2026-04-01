@@ -1306,30 +1306,87 @@ Avalie cada critério abaixo e retorne APENAS JSON válido (sem markdown):
     },
     produto: {
       nome: 'Agente Produto',
-      descricao: 'Avalia o conhecimento e posicionamento do produto na reunião/conversa',
-      prompt: `Você é um especialista em análise de posicionamento de produto em reuniões de vendas.
+      descricao: 'Avalia posicionamento de produto, aderência ao playbook e comunicação de valor na reunião',
+      prompt: `Você é uma IA especialista em Produto e Go-To-Market da Appmax.
+Sua função é avaliar reuniões (calls de vendas, diagnóstico ou demonstração) com base no playbook oficial de produto da empresa.
+Você deve agir como um auditor rigoroso de qualidade de discurso comercial e aderência ao modelo de produto.
 
-PRODUTO: Appmax — Plataforma de performance para e-commerce (Fintech/Subadquirência)
-- Gateway de pagamento + Multiadquirência + Antifraude híbrido (IA + humano)
-- Recuperação inteligente de vendas via WhatsApp + IA
-- Foco em PERFORMANCE (aprovação, conversão, faturamento), não em taxa
+## CONTEXTO OBRIGATÓRIO DO PRODUTO (BASE DE VERDADE)
+A Appmax é uma plataforma de performance para e-commerce que:
+- Processa pagamentos
+- Maximiza conversão
+- Aumenta faturamento
+- Gera previsibilidade financeira
+Ela NÃO é: um gateway simples, uma solução focada em menor taxa.
 
-REGRAS DE AVALIAÇÃO:
-1. O vendedor DEVE conectar funcionalidade → problema → impacto financeiro
-2. O vendedor NÃO deve focar em features sem explicar valor
-3. O vendedor NÃO deve comparar apenas por taxa
-4. Sinais de fit do cliente: reclama de baixa aprovação, perda de vendas, abandono de carrinho, busca escala
-5. Sinais de baixo fit: foco exclusivo em taxa, baixo volume, não percebe impacto financeiro
+## PRINCÍPIO CENTRAL (REGRA MAIS IMPORTANTE)
+O produto DEVE ser comunicado como GERADOR DE FATURAMENTO.
+NUNCA como tecnologia ou conjunto de funcionalidades.
+Se isso falhar, a reunião está ERRADA, independentemente do restante.
 
-BOAS FRASES: "Não compete por taxa, compete por performance", "Taxa baixa sem performance gera prejuízo", "Aumentar faturamento real"
-FRASES A EVITAR: "Somos mais baratos", "Temos várias funcionalidades", "É só um gateway"
+## PILARES QUE DEVEM ESTAR PRESENTES NA REUNIÃO
 
-Avalie cada critério e retorne APENAS JSON válido:
+1. PROBLEMAS QUE O PRODUTO RESOLVE
+Verifique se explorou: baixa taxa de aprovação, perda de vendas (abandono de carrinho), fraude/falsos positivos, falta de previsibilidade financeira.
+Se nenhum apareceu claramente → erro grave.
+
+2. CONEXÃO OBRIGATÓRIA (Framework central)
+Toda explicação deve seguir: FUNCIONALIDADE → PROBLEMA → IMPACTO FINANCEIRO
+Ex: Multiadquirência → aumenta aprovação → mais vendas aprovadas
+Só funcionalidade → ERRO | Só problema sem impacto → INCOMPLETO | Só impacto sem explicação → FRACO
+
+3. IMPACTO FINANCEIRO (obrigatório)
+Deve mencionar: aumento de receita, recuperação de vendas, redução de perdas, aumento de conversão, redução de risco.
+Se impacto financeiro não foi explicitado → erro crítico.
+
+4. POSICIONAMENTO CORRETO
+Deve reforçar: plataforma de performance, foco em faturamento.
+NÃO pode posicionar como: gateway, ferramenta, solução técnica.
+
+5. USO CORRETO DAS FUNCIONALIDADES
+Funcionalidades devem aparecer como MEIO, nunca como fim:
+Gateway → meio | Antifraude → meio | Multiadquirência → meio | Recuperação via WhatsApp → meio
+Se apresentadas como destaque principal → erro.
+
+6. DIAGNÓSTICO DE CLIENTE (ICP)
+Verificar se houve: volume relevante, busca por escala, dores reais de performance.
+Evitar: clientes focados apenas em taxa, baixo volume.
+
+7. LEITURA DE SINAIS DE FIT
+Positivos: reclama de aprovação baixa, perda de vendas, busca crescimento.
+Negativos: só quer preço, não vê impacto financeiro.
+Avalie se o vendedor percebeu isso.
+
+8. NARRATIVA UTILIZADA
+Boa: Problema → perda financeira → solução → ganho
+Ruim: lista de funcionalidades, explicação técnica isolada, discurso genérico.
+
+9. DIFERENCIAÇÃO COMPETITIVA
+Deve ficar claro: Appmax compete por performance, não por taxa.
+
+10. ERROS CRÍTICOS DO PLAYBOOK
+Marcar se ocorreram: foco em funcionalidade, comparação por preço/taxa, falta de impacto financeiro, explicação técnica sem contexto, posicionamento errado do produto.
+
+## REGRAS DE AVALIAÇÃO
+- Seja crítico (não complacente)
+- Priorize impacto financeiro sempre
+- Se a reunião for técnica → considere ruim
+- Se não houver problema claro → considere ruim
+- Se houver foco em taxa → considere erro grave
+
+## RESUMO FINAL
+Responda em uma frase: "Essa reunião vendeu tecnologia ou faturamento?"
+Se for tecnologia → está errada.
+
+Avalie cada critério e retorne APENAS JSON válido (sem markdown):
 {
   "totalScore": <0-100>,
-  "summary": "<resumo 2-3 frases sobre posicionamento do produto>",
-  "insights": "<insights sobre como melhorar o pitch>",
-  "criticalAlerts": ["<alertas se houve erro grave de posicionamento>"],
+  "summary": "<resumo 2-3 frases>",
+  "insights": "<oportunidades de melhoria práticas>",
+  "criticalAlerts": ["<erros graves do playbook>"],
+  "reescritaFalas": ["<trechos ruins reescritos como versão ideal>"],
+  "classificacaoFinal": "<Alinhado|Parcialmente alinhado|Desalinhado>",
+  "vendeuTecnologiaOuFaturamento": "<Tecnologia|Faturamento>",
   "criteriaScores": [
     { "id": "<id>", "label": "<nome>", "weight": <peso>, "score": <0-100>, "feedback": "<feedback específico>" }
   ]
@@ -1366,11 +1423,12 @@ Avalie cada critério e retorne APENAS JSON válido:
         { id: 'preocupado', label: 'Preocupado', weight: 20, description: 'Dúvidas, incertezas sobre a solução ou investimento', examples: ['Perguntas sobre risco', 'Hesitação'], positiveSignals: [], neutralSignals: [], negativeSignals: ['Muitas perguntas de segurança', 'Pedidos de garantia', 'Menção a experiências ruins'] },
         { id: 'frustrado', label: 'Frustrado', weight: 20, description: 'Frustração, insatisfação ou impaciência do cliente', examples: ['Reclamações', 'Tom impaciente'], positiveSignals: [], neutralSignals: [], negativeSignals: ['Reclamações explícitas', 'Tom elevado', 'Ameaça de cancelamento'] },
       ] : tipo === 'produto' ? [
-        { id: 'posicionamento', label: 'Posicionamento de Valor', weight: 25, description: 'Conecta funcionalidade com problema real e impacto financeiro do cliente', examples: ['Menciona aumento de aprovação', 'Quantifica recuperação de vendas'], positiveSignals: ['Conecta feature com resultado financeiro', 'Usa dados de impacto', 'Posiciona performance acima de taxa'], neutralSignals: ['Menciona benefícios mas sem quantificar'], negativeSignals: ['Foca em feature sem conectar valor', 'Compara apenas por taxa', 'Diz "somos mais baratos"'] },
-        { id: 'conhecimento_produto', label: 'Conhecimento do Produto', weight: 20, description: 'Demonstra domínio sobre funcionalidades, diferenciais e limitações', examples: ['Explica multiadquirência', 'Descreve antifraude híbrido', 'Menciona recuperação via WhatsApp'], positiveSignals: ['Explica como funciona tecnicamente', 'Conhece limitações e posiciona bem'], neutralSignals: ['Conhecimento superficial mas correto'], negativeSignals: ['Informação incorreta', 'Não sabe responder dúvida técnica', 'Confunde funcionalidades'] },
-        { id: 'identificacao_fit', label: 'Identificação de Fit', weight: 20, description: 'Identifica sinais de que o cliente é ou não ICP', examples: ['Pergunta sobre volume de transações', 'Identifica dor de aprovação'], positiveSignals: ['Identifica dor real do cliente', 'Reconhece sinais de fit', 'Qualifica volume e segmento'], neutralSignals: ['Faz perguntas genéricas de qualificação'], negativeSignals: ['Ignora sinais de baixo fit', 'Não qualifica perfil', 'Força venda para cliente sem fit'] },
-        { id: 'tratamento_objecoes_produto', label: 'Objeções de Produto', weight: 20, description: 'Trata objeções sobre taxa, concorrência e funcionalidade com foco em valor', examples: ['Cliente questiona taxa', 'Compara com concorrente'], positiveSignals: ['Redireciona de taxa para performance', 'Usa frases-chave corretas', 'Apresenta ROI'], neutralSignals: ['Responde mas sem redirecionar para valor'], negativeSignals: ['Oferece desconto imediato', 'Aceita comparação por taxa', 'Fica defensivo'] },
-        { id: 'impacto_financeiro', label: 'Comunicação de Impacto Financeiro', weight: 15, description: 'Quantifica e comunica o impacto financeiro da solução para o cliente', examples: ['Menciona aumento de X% em aprovação', 'Cita recuperação de 10-25% vendas'], positiveSignals: ['Quantifica ganho potencial', 'Usa exemplos reais', 'Mostra ROI claro'], neutralSignals: ['Menciona ganho sem quantificar'], negativeSignals: ['Não menciona impacto financeiro', 'Fala apenas de funcionalidades'] },
+        { id: 'diagnostico_problema', label: 'Diagnóstico de Problema', weight: 20, description: 'Explorou problemas centrais: baixa aprovação, perda de vendas, fraude, falta de previsibilidade', examples: ['Perguntou sobre taxa de aprovação', 'Identificou abandono de carrinho'], positiveSignals: ['Problema real identificado e aprofundado', 'Cliente confirmou a dor'], neutralSignals: ['Problema mencionado superficialmente'], negativeSignals: ['Nenhum problema explorado', 'Foi direto para funcionalidades'] },
+        { id: 'conexao_impacto', label: 'Conexão Problema → Impacto', weight: 20, description: 'Seguiu framework: FUNCIONALIDADE → PROBLEMA → IMPACTO FINANCEIRO', examples: ['Multiadquirência → aprovação → mais vendas'], positiveSignals: ['Conexão clara funcionalidade-problema-impacto', 'Quantificou ganho'], neutralSignals: ['Mencionou problema e impacto mas sem conectar com funcionalidade'], negativeSignals: ['Só funcionalidade sem impacto', 'Só problema sem solução', 'Explicação técnica isolada'] },
+        { id: 'foco_valor', label: 'Foco em Valor Financeiro', weight: 20, description: 'Comunicou impacto financeiro: aumento receita, recuperação vendas, redução perdas, conversão', examples: ['Recuperação de 10-25% vendas perdidas', 'Aumento de aprovação = mais faturamento'], positiveSignals: ['Impacto financeiro explícito e quantificado', 'ROI claro'], neutralSignals: ['Mencionou valor mas sem quantificar'], negativeSignals: ['Sem menção a impacto financeiro', 'Focou em taxa/preço', 'Discurso técnico'] },
+        { id: 'posicionamento', label: 'Posicionamento do Produto', weight: 15, description: 'Posicionou como plataforma de performance/faturamento, não como gateway/ferramenta', examples: ['Compete por performance não por taxa'], positiveSignals: ['Plataforma de performance', 'Gerador de faturamento', 'Funcionalidades como MEIO'], neutralSignals: ['Posicionamento ambíguo'], negativeSignals: ['Posicionou como gateway', 'Como ferramenta técnica', 'Focou em funcionalidades como FIM'] },
+        { id: 'narrativa', label: 'Qualidade da Narrativa', weight: 15, description: 'Seguiu: Problema → perda financeira → solução → ganho. Evitou lista de features', examples: ['Hoje você está perdendo dinheiro por X, a Appmax resolve com Y gerando Z'], positiveSignals: ['Narrativa consultiva', 'Storytelling com impacto', 'Frases-chave do playbook'], neutralSignals: ['Narrativa ok mas genérica'], negativeSignals: ['Lista de funcionalidades', 'Discurso genérico', 'Comparação por preço'] },
+        { id: 'identificacao_fit', label: 'Identificação de Fit/ICP', weight: 10, description: 'Identificou sinais de fit (volume, escala, dores reais) ou baixo fit (foco em taxa, baixo volume)', examples: ['Perguntou volume de transações', 'Identificou busca por crescimento'], positiveSignals: ['Sinais de fit identificados', 'Qualificou ICP corretamente'], neutralSignals: ['Qualificação superficial'], negativeSignals: ['Ignorou sinais de baixo fit', 'Não qualificou perfil'] },
       ] : [],
       modelo_ia: 'gpt-4o-mini',
       temperatura: 0,
