@@ -3,13 +3,15 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
   ArrowLeft, Search, ArrowUpDown, SlidersHorizontal,
   Hash, Type, Calendar, DollarSign, Phone, Mail, FileText, Building2,
-  Briefcase, Contact, Ticket, Factory, ChevronDown, ChevronUp,
+  Briefcase, Contact, Ticket, Factory, ChevronDown, ChevronUp, X,
+  Settings, Shield, Eye, ListChecks,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCrmPipelines, useSaasUsers } from '@/hooks/useCrm';
@@ -224,8 +226,206 @@ export default function CRMPropertiesPage() {
       : <ChevronDown className="w-3 h-3 text-foreground" />;
   };
 
+  // ─── Property Detail Panel ───────────────────────
+  const [selectedProp, setSelectedProp] = useState<PropertyDefinition | null>(null);
+  const [detailTab, setDetailTab] = useState<'details' | 'field' | 'rules' | 'access'>('details');
+
+  const DETAIL_TABS = [
+    { id: 'details' as const, label: 'Detalhes', icon: Settings },
+    { id: 'field' as const, label: 'Tipo de campo', icon: ListChecks },
+    { id: 'rules' as const, label: 'Regras', icon: SlidersHorizontal },
+    { id: 'access' as const, label: 'Gerenciar acesso', icon: Shield },
+  ];
+
+  const selectedMeta = selectedProp ? FIELD_TYPE_META[selectedProp.fieldType] : null;
+  const objectLabel = OBJECT_TYPE_OPTIONS.find(o => o.value === objectType)?.label.replace('Propriedades de ', '') || '';
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
+
+      {/* ── Property Detail Drawer ── */}
+      {selectedProp && (
+        <div className="fixed inset-0 z-50 flex">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/50" onClick={() => setSelectedProp(null)} />
+
+          {/* Panel */}
+          <div className="relative ml-auto w-full max-w-3xl bg-background border-l border-border flex flex-col animate-in slide-in-from-right-5 duration-200">
+            {/* Header bar */}
+            <div className="bg-muted/50 border-b border-border px-6 py-4 text-center">
+              <h2 className="text-sm font-semibold">{selectedProp.label}</h2>
+              <p className="text-[11px] text-muted-foreground">{objectLabel}</p>
+              <Button variant="ghost" size="icon" className="absolute top-3 right-3 h-8 w-8" onClick={() => setSelectedProp(null)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            <div className="flex flex-1 overflow-hidden">
+              {/* Sidebar nav */}
+              <div className="w-48 border-r border-border p-4 flex-shrink-0 space-y-5">
+                <div>
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Gerenciar</p>
+                  <nav className="space-y-0.5">
+                    {DETAIL_TABS.map(tab => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setDetailTab(tab.id)}
+                        className={cn(
+                          'w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-xs transition-colors',
+                          detailTab === tab.id
+                            ? 'bg-primary/10 text-primary font-medium border-l-2 border-primary'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-muted/50',
+                        )}
+                      >
+                        <tab.icon className="w-3.5 h-3.5" />
+                        {tab.label}
+                      </button>
+                    ))}
+                  </nav>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {detailTab === 'details' && (
+                  <div className="max-w-md space-y-5">
+                    <div>
+                      <h3 className="text-base font-semibold mb-1">Detalhes da propriedade</h3>
+                      <p className="text-xs text-muted-foreground">Informações básicas sobre esta propriedade.</p>
+                    </div>
+                    <hr className="border-border/50" />
+                    <div>
+                      <label className="text-xs font-medium block mb-1.5">Rótulo da propriedade *</label>
+                      <Input value={selectedProp.label} readOnly={selectedProp.readOnly} className="h-9 text-sm" />
+                      <p className="text-[10px] text-muted-foreground mt-1">Nome interno: <span className="font-mono">{selectedProp.key}</span></p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium block mb-1.5">Tipo de objeto *</label>
+                      <Input value={objectLabel} readOnly className="h-9 text-sm bg-muted/30" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium block mb-1.5">Grupo *</label>
+                      <Input value={selectedProp.group} readOnly={selectedProp.readOnly} className="h-9 text-sm" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium block mb-1.5">Descrição</label>
+                      <Textarea value={selectedProp.description} readOnly={selectedProp.readOnly} className="text-sm min-h-[80px] resize-none" />
+                    </div>
+                  </div>
+                )}
+
+                {detailTab === 'field' && selectedMeta && (
+                  <div className="max-w-md space-y-5">
+                    <div>
+                      <h3 className="text-base font-semibold mb-1">Tipo de campo</h3>
+                      <p className="text-xs text-muted-foreground">Configuração do tipo de dado desta propriedade.</p>
+                    </div>
+                    <hr className="border-border/50" />
+                    <div>
+                      <label className="text-xs font-medium block mb-1.5">Tipo de campo *</label>
+                      <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-border bg-muted/30 text-sm">
+                        <selectedMeta.icon className="w-4 h-4 text-muted-foreground" />
+                        {selectedMeta.label}
+                      </div>
+                    </div>
+                    {selectedProp.fieldType === 'number' && (
+                      <div>
+                        <label className="text-xs font-medium block mb-1.5">Formato de número *</label>
+                        <Input value="Número não formatado" readOnly className="h-9 text-sm bg-muted/30" />
+                      </div>
+                    )}
+                    {selectedProp.fieldType === 'currency' && (
+                      <div>
+                        <label className="text-xs font-medium block mb-1.5">Moeda *</label>
+                        <Input value="BRL (Real)" readOnly className="h-9 text-sm bg-muted/30" />
+                      </div>
+                    )}
+                    {selectedProp.fieldType === 'select' && (
+                      <div>
+                        <label className="text-xs font-medium block mb-1.5">Opções</label>
+                        <p className="text-xs text-muted-foreground">As opções são definidas na configuração do pipeline (etapas).</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {detailTab === 'rules' && (
+                  <div className="max-w-md space-y-5">
+                    <div>
+                      <h3 className="text-base font-semibold mb-1">Regras de propriedade</h3>
+                      <p className="text-xs text-muted-foreground">Opções de visibilidade e validação.</p>
+                    </div>
+                    <hr className="border-border/50" />
+                    <div className="space-y-3">
+                      <p className="text-xs font-medium">Opções de visibilidade</p>
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input type="checkbox" defaultChecked className="mt-0.5 rounded" />
+                        <span className="text-sm">Mostrar propriedade nos formulários e fluxos</span>
+                      </label>
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input type="checkbox" className="mt-0.5 rounded" />
+                        <span className="text-sm">Mostrar nos resultados da pesquisa global</span>
+                      </label>
+                    </div>
+                    <hr className="border-border/50" />
+                    <div className="space-y-3">
+                      <p className="text-xs font-medium">Opções de validação</p>
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input type="checkbox" className="mt-0.5 rounded" />
+                        <div>
+                          <span className="text-sm block">Exigir valores únicos para esta propriedade</span>
+                        </div>
+                      </label>
+                      {(selectedProp.fieldType === 'number' || selectedProp.fieldType === 'currency') && (
+                        <>
+                          <label className="flex items-start gap-3 cursor-pointer">
+                            <input type="checkbox" className="mt-0.5 rounded" />
+                            <div>
+                              <span className="text-sm block">Definir limite de valor mínimo</span>
+                              <span className="text-[11px] text-muted-foreground">Evitar valores abaixo de um número especificado</span>
+                            </div>
+                          </label>
+                          <label className="flex items-start gap-3 cursor-pointer">
+                            <input type="checkbox" className="mt-0.5 rounded" />
+                            <div>
+                              <span className="text-sm block">Definir limite de valor máximo</span>
+                              <span className="text-[11px] text-muted-foreground">Evitar valores acima de um número especificado</span>
+                            </div>
+                          </label>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {detailTab === 'access' && (
+                  <div className="max-w-md space-y-5">
+                    <div>
+                      <h3 className="text-base font-semibold mb-1">Gerenciar o acesso à propriedade</h3>
+                      <p className="text-xs text-muted-foreground">Personalize o nível de acesso de usuários e equipes a esta propriedade.</p>
+                    </div>
+                    <hr className="border-border/50" />
+                    <div className="space-y-3">
+                      {[
+                        { value: 'admin', label: 'Privado apenas para administradores' },
+                        { value: 'edit', label: 'Permitir que todos vejam e editem' },
+                        { value: 'view', label: 'Permitir que todos vejam', default: true },
+                        { value: 'custom', label: 'Atribuir a usuários e equipes' },
+                      ].map(opt => (
+                        <label key={opt.value} className="flex items-center gap-3 cursor-pointer">
+                          <input type="radio" name="access" defaultChecked={opt.default} className="rounded-full" />
+                          <span className="text-sm">{opt.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-card flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -329,7 +529,8 @@ export default function CRMPropertiesPage() {
               return (
                 <tr
                   key={prop.key}
-                  className="border-b border-border/30 hover:bg-muted/20 transition-colors"
+                  className="border-b border-border/30 hover:bg-muted/20 transition-colors cursor-pointer"
+                  onClick={() => { setSelectedProp(prop); setDetailTab('details'); }}
                 >
                   <td className="pl-6 pr-4 py-2.5">
                     <span className="text-[13px] font-medium text-foreground leading-tight">{prop.label}</span>
