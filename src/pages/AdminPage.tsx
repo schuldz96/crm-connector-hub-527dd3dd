@@ -141,7 +141,7 @@ export default function AdminPage() {
     smtpPort: '587',
     smtpUser: '',
     smtpPassword: '',
-    senderName: 'Hubmax Revenue OS',
+    senderName: 'Appmax Revenue OS',
     senderEmail: '',
   });
   const [showEmailPassword, setShowEmailPassword] = useState(false);
