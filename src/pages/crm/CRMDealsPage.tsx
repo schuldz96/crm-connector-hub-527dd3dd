@@ -756,14 +756,14 @@ export default function CRMDealsPage() {
                   </div>
                   <div className="max-h-48 overflow-y-auto space-y-0.5">
                     {DEAL_FILTERS
-                      .filter(p => !advFilterSearch || p.toLowerCase().includes(advFilterSearch.toLowerCase()))
+                      .filter(p => !advFilterSearch || p.label.toLowerCase().includes(advFilterSearch.toLowerCase()))
                       .map(p => (
-                        <button key={p} onClick={() => {
-                          setAdvFilterGroups(g => [...g, [{ property: p, operator: 'any', value: '' }]]);
+                        <button key={p.key} onClick={() => {
+                          setAdvFilterGroups(g => [...g, [{ property: p.label, operator: 'any', value: '' }]]);
                           setAdvFilterAdding(false);
                           setAdvFilterSearch('');
                         }} className="w-full text-left text-xs px-2 py-1.5 rounded hover:bg-muted transition-colors text-foreground">
-                          {p}
+                          {p.label}
                         </button>
                       ))}
                   </div>
