@@ -699,7 +699,7 @@ export default function CRMDealsPage() {
                             ng[gi][fi] = { ...filter, property: e.target.value };
                             setAdvFilterGroups(ng);
                           }}>
-                          {DEAL_FILTER_CHIPS.map(p => <option key={p} value={p}>{p}</option>)}
+                          {DEAL_FILTERS.map(p => <option key={p.key} value={p.label}>{p.label}</option>)}
                         </select>
                         <button onClick={() => {
                           const ng = [...advFilterGroups];
