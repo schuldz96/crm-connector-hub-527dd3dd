@@ -179,7 +179,7 @@ export default function CRMPropertiesPage() {
     }
     return [...baseProperties, ...stageProps];
   }, [baseProperties, hasPipeline, pipelines]);
-  const { data: saasUsers = [] } = useSaasUsers();
+  // saasUsers removed — não exibir proprietários na aba de propriedades
 
   const groups = useMemo(() => {
     const set = new Set(properties.map(p => p.group));
@@ -411,25 +411,7 @@ export default function CRMPropertiesPage() {
           </div>
         )}
 
-        {/* Usuários do sistema (proprietários) */}
-        <div className="border-t border-border px-6 py-4">
-          <h3 className="text-sm font-semibold text-foreground mb-3">
-            Usuários do sistema (Proprietários)
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            {saasUsers.map(u => (
-              <div key={u.id} className="flex items-center gap-2 px-3 py-2 rounded-md border border-border/50 bg-muted/10 text-xs">
-                <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-semibold text-primary flex-shrink-0">
-                  {u.nome?.charAt(0)?.toUpperCase() || '?'}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-foreground font-medium truncate">{u.nome}</p>
-                  <p className="text-muted-foreground truncate">{u.email}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* Usuários do sistema removido — visível apenas na aba Usuários */}
       </div>
     </div>
   );
