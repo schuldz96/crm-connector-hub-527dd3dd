@@ -479,6 +479,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       update_inbox_metric: {
         Args: {
           p_account_id: string
