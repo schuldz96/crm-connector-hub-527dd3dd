@@ -734,7 +734,7 @@ export default function CRMDealsPage() {
                   ))}
                   <Button variant="outline" size="sm" className="text-xs mt-1" onClick={() => {
                     const ng = [...advFilterGroups];
-                    ng[gi] = [...ng[gi], { property: DEAL_FILTER_CHIPS[0], operator: 'any', value: '' }];
+                    ng[gi] = [...ng[gi], { property: DEAL_FILTERS[0]?.label ?? '', operator: 'any', value: '' }];
                     setAdvFilterGroups(ng);
                   }}>
                     <Plus className="w-3 h-3 mr-1" /> Adicionar filtro
