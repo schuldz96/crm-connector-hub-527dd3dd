@@ -14,7 +14,8 @@ interface Agent {
   icon: string;
   title: string;
   cargo: string;
-  dept?: string; // visual color hint
+  dept?: string;
+  desc: string; // tooltip — responsabilidades
 }
 
 interface OrgNode {
@@ -71,78 +72,73 @@ const DEPT_BORDER: Record<string, string> = {
 
 /* ── UNIFIED ORG TREE — Tudo junto ──────────────────────── */
 const FULL_ORG: OrgNode = {
-  agent: { id: 'aiox-master', name: 'Orion', icon: '👑', title: 'Master Orchestrator', cargo: 'CEO', dept: 'core' },
+  agent: { id: 'aiox-master', name: 'Orion', icon: '👑', title: 'Master Orchestrator', cargo: 'CEO', dept: 'core', desc: 'Orquestra todos os agentes, coordena workflows, governa o framework AIOX e toma decisões estratégicas do projeto.' },
   children: [
-    // ─── VP Produto ───
     {
-      agent: { id: 'pm', name: 'Morgan', icon: '📋', title: 'Product Manager', cargo: 'Diretor de Produto', dept: 'produto' },
+      agent: { id: 'pm', name: 'Morgan', icon: '📋', title: 'Product Manager', cargo: 'Diretor de Produto', dept: 'produto', desc: 'Define requisitos, escreve PRDs, gerencia épicos, conduz o spec pipeline e alinha stakeholders com a visão do produto.' },
       children: [
-        { agent: { id: 'po', name: 'Pax', icon: '🎯', title: 'Product Owner', cargo: 'Supervisor', dept: 'produto' } },
-        { agent: { id: 'sm', name: 'River', icon: '🌊', title: 'Scrum Master', cargo: 'Supervisor', dept: 'produto' } },
-        { agent: { id: 'analyst', name: 'Atlas', icon: '🔍', title: 'Business Analyst', cargo: 'Analista', dept: 'produto' } },
+        { agent: { id: 'po', name: 'Pax', icon: '🎯', title: 'Product Owner', cargo: 'Supervisor', dept: 'produto', desc: 'Valida stories com checklist de 10 pontos, prioriza o backlog, garante que cada entrega atende os critérios de aceitação.' } },
+        { agent: { id: 'sm', name: 'River', icon: '🌊', title: 'Scrum Master', cargo: 'Supervisor', dept: 'produto', desc: 'Cria user stories a partir de épicos/PRDs, facilita cerimônias e remove impedimentos do time.' } },
+        { agent: { id: 'analyst', name: 'Atlas', icon: '🔍', title: 'Business Analyst', cargo: 'Analista', dept: 'produto', desc: 'Pesquisa mercado, analisa concorrência, conduz brainstorming e deep research para embasar decisões de produto.' } },
       ],
     },
-    // ─── VP Tech ───
     {
-      agent: { id: 'architect', name: 'Aria', icon: '🏛️', title: 'System Architect', cargo: 'Diretor de Tecnologia', dept: 'tech' },
+      agent: { id: 'architect', name: 'Aria', icon: '🏛️', title: 'System Architect', cargo: 'Diretor de Tecnologia', dept: 'tech', desc: 'Define arquitetura do sistema, escolhe tecnologias, projeta integrações e garante escalabilidade e performance.' },
       children: [
-        { agent: { id: 'dev', name: 'Dex', icon: '💻', title: 'Full Stack Dev', cargo: 'Sênior', dept: 'tech' } },
-        { agent: { id: 'data-engineer', name: 'Dara', icon: '📊', title: 'Database Architect', cargo: 'Especialista', dept: 'tech' } },
-        { agent: { id: 'ux-design-expert', name: 'Uma', icon: '🎨', title: 'UX/UI Designer', cargo: 'Especialista', dept: 'tech' } },
-        { agent: { id: 'devops', name: 'Gage', icon: '⚡', title: 'DevOps Engineer', cargo: 'Especialista', dept: 'tech' } },
-        { agent: { id: 'squad-creator', name: 'Craft', icon: '🏗️', title: 'Squad Creator', cargo: 'Especialista', dept: 'tech' } },
+        { agent: { id: 'dev', name: 'Dex', icon: '💻', title: 'Full Stack Dev', cargo: 'Sênior', dept: 'tech', desc: 'Implementa features, escreve código React/TypeScript, cria edge functions, faz commits e mantém qualidade do código.' } },
+        { agent: { id: 'data-engineer', name: 'Dara', icon: '📊', title: 'Database Architect', cargo: 'Especialista', dept: 'tech', desc: 'Projeta schema PostgreSQL, cria migrations, configura RLS, otimiza queries e gerencia políticas de acesso ao banco.' } },
+        { agent: { id: 'ux-design-expert', name: 'Uma', icon: '🎨', title: 'UX/UI Designer', cargo: 'Especialista', dept: 'tech', desc: 'Desenha interfaces, define design system, cria fluxos de usuário e garante usabilidade e acessibilidade.' } },
+        { agent: { id: 'devops', name: 'Gage', icon: '⚡', title: 'DevOps Engineer', cargo: 'Especialista', dept: 'tech', desc: 'Gerencia CI/CD, faz git push e deploy, cria PRs, configura pipelines e gerencia releases em produção.' } },
+        { agent: { id: 'squad-creator', name: 'Craft', icon: '🏗️', title: 'Squad Creator', cargo: 'Especialista', dept: 'tech', desc: 'Cria, valida e publica squads de agentes especializados seguindo a arquitetura task-first do AIOX.' } },
       ],
     },
-    // ─── VP Qualidade ───
     {
-      agent: { id: 'qa', name: 'Quinn', icon: '✅', title: 'Test Architect', cargo: 'Diretor de Qualidade', dept: 'quality' },
+      agent: { id: 'qa', name: 'Quinn', icon: '✅', title: 'Test Architect', cargo: 'Diretor de Qualidade', dept: 'quality', desc: 'Executa QA gate (7 checks), valida build, revisa código, garante que cada entrega atende os padrões de qualidade.' },
     },
-    // ─── Squad Vendas ───
     {
-      agent: { id: 'coach', name: 'Coach', icon: '🎯', title: 'Sales Coach', cargo: 'Diretor Comercial', dept: 'vendas' },
+      agent: { id: 'coach', name: 'Coach', icon: '🎯', title: 'Sales Coach', cargo: 'Diretor Comercial', dept: 'vendas', desc: 'Orquestra avaliação de vendas com múltiplas metodologias. Recebe transcrições de reuniões/WhatsApp e coordena os agentes avaliadores.' },
       children: [
         {
-          agent: { id: 'sandler', name: 'Sandler', icon: '🔱', title: 'Sandler Selling', cargo: 'Gerente', dept: 'vendas' },
+          agent: { id: 'sandler', name: 'Sandler', icon: '🔱', title: 'Sandler Selling', cargo: 'Gerente', dept: 'vendas', desc: 'Avalia usando Sandler Selling System: pain funnel, bonding & rapport, up-front contracts, qualificação de dor e budget.' },
           children: [
-            { agent: { id: 'spin', name: 'SPIN', icon: '🌀', title: 'SPIN Selling', cargo: 'Supervisor', dept: 'vendas' } },
-            { agent: { id: 'meddic', name: 'MEDDIC', icon: '📊', title: 'MEDDIC', cargo: 'Supervisor', dept: 'vendas' } },
+            { agent: { id: 'spin', name: 'SPIN', icon: '🌀', title: 'SPIN Selling', cargo: 'Supervisor', dept: 'vendas', desc: 'Avalia perguntas de Situação, Problema, Implicação e Necessidade. Mede a qualidade da descoberta de dor do vendedor.' } },
+            { agent: { id: 'meddic', name: 'MEDDIC', icon: '📊', title: 'MEDDIC', cargo: 'Supervisor', dept: 'vendas', desc: 'Qualificação enterprise: Metrics, Economic Buyer, Decision Criteria, Decision Process, Identify Pain, Champion.' } },
           ],
         },
         {
-          agent: { id: 'challenger', name: 'Challenger', icon: '⚡', title: 'Challenger Sale', cargo: 'Gerente', dept: 'vendas' },
+          agent: { id: 'challenger', name: 'Challenger', icon: '⚡', title: 'Challenger Sale', cargo: 'Gerente', dept: 'vendas', desc: 'Avalia se o vendedor ensina algo novo, personaliza a abordagem e controla a conversa com assertividade construtiva.' },
           children: [
-            { agent: { id: 'gap', name: 'Gap', icon: '🔍', title: 'Gap Selling', cargo: 'Supervisor', dept: 'vendas' } },
-            { agent: { id: 'spiced', name: 'SPICED', icon: '🌶️', title: 'SPICED', cargo: 'Supervisor', dept: 'vendas' } },
+            { agent: { id: 'gap', name: 'Gap', icon: '🔍', title: 'Gap Selling', cargo: 'Supervisor', dept: 'vendas', desc: 'Analisa o gap entre estado atual e estado futuro desejado do cliente. Mede profundidade da descoberta de problemas.' } },
+            { agent: { id: 'spiced', name: 'SPICED', icon: '🌶️', title: 'SPICED', cargo: 'Supervisor', dept: 'vendas', desc: 'Framework Winning by Design: Situation, Pain, Impact, Critical Event, Decision. Foco em urgência e impacto.' } },
           ],
         },
         {
-          agent: { id: 'value-selling', name: 'Value', icon: '💎', title: 'Value Selling', cargo: 'Coordenador', dept: 'vendas' },
+          agent: { id: 'value-selling', name: 'Value', icon: '💎', title: 'Value Selling', cargo: 'Coordenador', dept: 'vendas', desc: 'Avalia se o vendedor articula valor de negócio (ROI, payback) em vez de apenas features técnicas.' },
           children: [
-            { agent: { id: 'command', name: 'Command', icon: '🎤', title: 'Command of Message', cargo: 'Analista', dept: 'vendas' } },
-            { agent: { id: 'miller-heiman', name: 'Miller H.', icon: '🗺️', title: 'Strategic Selling', cargo: 'Analista', dept: 'vendas' } },
-            { agent: { id: 'bant', name: 'BANT', icon: '✅', title: 'BANT', cargo: 'Analista', dept: 'vendas' } },
-            { agent: { id: 'neat', name: 'NEAT', icon: '🎯', title: 'NEAT', cargo: 'Analista', dept: 'vendas' } },
-            { agent: { id: 'snap', name: 'SNAP', icon: '⚡', title: 'SNAP', cargo: 'Analista', dept: 'vendas' } },
+            { agent: { id: 'command', name: 'Command', icon: '🎤', title: 'Command of Message', cargo: 'Analista', dept: 'vendas', desc: 'Avalia controle da narrativa de vendas: diferenciação, prova de valor, histórias de sucesso e tratamento de objeções.' } },
+            { agent: { id: 'miller-heiman', name: 'Miller H.', icon: '🗺️', title: 'Strategic Selling', cargo: 'Analista', dept: 'vendas', desc: 'Venda estratégica: mapeia influenciadores, economic buyer, coach interno e alinhamento político na conta.' } },
+            { agent: { id: 'bant', name: 'BANT', icon: '✅', title: 'BANT', cargo: 'Analista', dept: 'vendas', desc: 'Qualificação clássica: Budget (orçamento), Authority (decisor), Need (necessidade), Timeline (prazo de compra).' } },
+            { agent: { id: 'neat', name: 'NEAT', icon: '🎯', title: 'NEAT', cargo: 'Analista', dept: 'vendas', desc: 'Need (necessidade core), Economic impact (impacto financeiro), Access to authority (acesso ao decisor), Timeline (urgência).' } },
+            { agent: { id: 'snap', name: 'SNAP', icon: '⚡', title: 'SNAP', cargo: 'Analista', dept: 'vendas', desc: 'Venda para decisores ocupados: Simple (simples), iNvaluable (indispensável), Aligned (alinhado), Priority (prioridade).' } },
           ],
         },
       ],
     },
-    // ─── Squad Segurança ───
     {
-      agent: { id: 'security-architect', name: 'Sentinel', icon: '🧠', title: 'Security Architect', cargo: 'Diretor de Segurança', dept: 'seguranca' },
+      agent: { id: 'security-architect', name: 'Sentinel', icon: '🧠', title: 'Security Architect', cargo: 'Diretor de Segurança', dept: 'seguranca', desc: 'Define padrões de segurança, coordena threat modeling (STRIDE/PASTA), balanceia segurança vs usabilidade e planeja postura de segurança.' },
       children: [
         {
-          agent: { id: 'appsec-engineer', name: 'Shield', icon: '🛡️', title: 'AppSec Engineer', cargo: 'Gerente', dept: 'seguranca' },
+          agent: { id: 'appsec-engineer', name: 'Shield', icon: '🛡️', title: 'AppSec Engineer', cargo: 'Gerente', dept: 'seguranca', desc: 'Identifica vulnerabilidades no código, executa security reviews com OWASP ASVS, define padrões de código seguro.' },
           children: [
-            { agent: { id: 'red-team', name: 'Blade', icon: '⚔️', title: 'Red Team', cargo: 'Especialista', dept: 'seguranca' } },
-            { agent: { id: 'iam-specialist', name: 'Gatekeeper', icon: '🔐', title: 'IAM Specialist', cargo: 'Especialista', dept: 'seguranca' } },
+            { agent: { id: 'red-team', name: 'Blade', icon: '⚔️', title: 'Red Team', cargo: 'Especialista', dept: 'seguranca', desc: 'Pentester ofensivo: simula ataques reais, testa autenticação/APIs/permissões, busca IDOR, BOLA, escalação de privilégio.' } },
+            { agent: { id: 'iam-specialist', name: 'Gatekeeper', icon: '🔐', title: 'IAM Specialist', cargo: 'Especialista', dept: 'seguranca', desc: 'Audita controles de acesso, valida RLS do Supabase, testa isolamento multi-tenant e hierarquia de cargos (RBAC).' } },
           ],
         },
         {
-          agent: { id: 'devsecops', name: 'Forge', icon: '⚙️', title: 'DevSecOps', cargo: 'Gerente', dept: 'seguranca' },
+          agent: { id: 'devsecops', name: 'Forge', icon: '⚙️', title: 'DevSecOps', cargo: 'Gerente', dept: 'seguranca', desc: 'Segurança de pipeline CI/CD, gestão de segredos, hardening de infraestrutura, auditoria de dependências npm.' },
           children: [
-            { agent: { id: 'incident-responder', name: 'Vigil', icon: '🔍', title: 'Incident Responder', cargo: 'Especialista', dept: 'seguranca' } },
-            { agent: { id: 'compliance-lgpd', name: 'Guardian', icon: '📊', title: 'Compliance LGPD', cargo: 'Especialista', dept: 'seguranca' } },
+            { agent: { id: 'incident-responder', name: 'Vigil', icon: '🔍', title: 'Incident Responder', cargo: 'Especialista', dept: 'seguranca', desc: 'Responde a incidentes de segurança: contenção, investigação, root cause analysis, postmortem e notificação ANPD.' } },
+            { agent: { id: 'compliance-lgpd', name: 'Guardian', icon: '📊', title: 'Compliance LGPD', cargo: 'Especialista', dept: 'seguranca', desc: 'Audita conformidade LGPD: proteção de dados pessoais, bases legais, direitos do titular, políticas de retenção.' } },
           ],
         },
       ],
@@ -154,16 +150,28 @@ const FULL_ORG: OrgNode = {
 function OrgCard({ agent }: { agent: Agent }) {
   const cc = cargoColor(agent.cargo);
   const border = agent.dept ? DEPT_BORDER[agent.dept] || '' : '';
+  const [showTip, setShowTip] = useState(false);
   return (
-    <div className={cn(
-      'flex flex-col items-center gap-0.5 p-2 rounded-xl border bg-card/90 backdrop-blur-sm transition-all hover:shadow-lg hover:shadow-primary/5 cursor-default',
-      'min-w-[110px] max-w-[130px]',
-      border || 'border-border/60',
-    )}>
+    <div
+      className={cn(
+        'relative flex flex-col items-center gap-0.5 p-2 rounded-xl border bg-card/90 backdrop-blur-sm transition-all hover:shadow-lg hover:shadow-primary/5 cursor-default',
+        'min-w-[110px] max-w-[130px]',
+        border || 'border-border/60',
+      )}
+      onMouseEnter={() => setShowTip(true)}
+      onMouseLeave={() => setShowTip(false)}
+    >
       <span className="text-xl leading-none">{agent.icon}</span>
       <span className="text-[11px] font-bold text-center leading-tight mt-0.5">{agent.name}</span>
       <span className="text-[8px] text-muted-foreground text-center leading-tight">{agent.title}</span>
       <Badge variant="outline" className={cn('text-[7px] h-3.5 px-1 mt-0.5', cc)}>{agent.cargo}</Badge>
+      {showTip && agent.desc && (
+        <div className="absolute z-50 bottom-full mb-2 left-1/2 -translate-x-1/2 w-64 p-3 rounded-lg border border-border bg-popover text-popover-foreground shadow-xl text-[11px] leading-relaxed pointer-events-none animate-in fade-in-0 zoom-in-95 duration-150">
+          <div className="font-semibold mb-1">{agent.icon} {agent.name} — {agent.title}</div>
+          <p className="text-muted-foreground">{agent.desc}</p>
+          <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-border" />
+        </div>
+      )}
     </div>
   );
 }
