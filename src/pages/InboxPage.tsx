@@ -10,6 +10,7 @@ import {
   Loader2, RefreshCw, ChevronRight, Phone, Clock, Check,
   Paperclip, Image as ImageIcon, FileText, Mic, MicOff, LayoutTemplate,
   AlertTriangle, X, UserPlus, Trash2, RotateCcw, Archive, ArchiveRestore,
+  AlertTriangle, X, UserPlus, Trash2, RotateCcw, Archive, ArchiveRestore, Download,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';

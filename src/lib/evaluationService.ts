@@ -38,6 +38,7 @@ export interface StoredEvaluation {
   periodo_ref: string | null;
   entidade_id: string | null;
   criado_em: string;
+  payload?: any;
 }
 
 // ─── Evaluate a WhatsApp conversation ────────────────────────────────────────

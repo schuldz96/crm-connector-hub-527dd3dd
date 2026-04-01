@@ -755,7 +755,7 @@ export default function CRMDealsPage() {
                       value={advFilterSearch} onChange={e => setAdvFilterSearch(e.target.value)} autoFocus />
                   </div>
                   <div className="max-h-48 overflow-y-auto space-y-0.5">
-                    {DEAL_FILTER_CHIPS
+                    {DEAL_FILTERS
                       .filter(p => !advFilterSearch || p.toLowerCase().includes(advFilterSearch.toLowerCase()))
                       .map(p => (
                         <button key={p} onClick={() => {
