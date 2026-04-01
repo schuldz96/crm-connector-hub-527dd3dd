@@ -302,24 +302,24 @@ export default function CRMPropertiesPage() {
       <div className="flex-1 overflow-auto">
         <table className="w-full">
           <thead className="sticky top-0 bg-muted/50 backdrop-blur-sm z-10">
-            <tr className="text-xs text-muted-foreground border-b border-border">
-              <th className="text-left px-6 py-2.5 font-medium w-[320px]">
-                <button className="flex items-center gap-1.5 hover:text-foreground transition-colors" onClick={() => toggleSort('label')}>
+            <tr className="text-[11px] text-muted-foreground border-b border-border">
+              <th className="text-left pl-6 pr-4 py-2 font-medium">
+                <button className="flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => toggleSort('label')}>
                   Nome <SortIcon col="label" />
                 </button>
               </th>
-              <th className="text-left px-4 py-2.5 font-medium w-[160px]">
-                <button className="flex items-center gap-1.5 hover:text-foreground transition-colors" onClick={() => toggleSort('fieldType')}>
+              <th className="text-left px-4 py-2 font-medium w-[120px]">
+                <button className="flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => toggleSort('fieldType')}>
                   Tipo do campo <SortIcon col="fieldType" />
                 </button>
               </th>
-              <th className="text-left px-4 py-2.5 font-medium w-[200px]">
-                <button className="flex items-center gap-1.5 hover:text-foreground transition-colors" onClick={() => toggleSort('group')}>
+              <th className="text-left px-4 py-2 font-medium w-[160px]">
+                <button className="flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => toggleSort('group')}>
                   Grupo <SortIcon col="group" />
                 </button>
               </th>
-              <th className="text-left px-4 py-2.5 font-medium">Descrição</th>
-              <th className="text-center px-4 py-2.5 font-medium w-[100px]">Editável</th>
+              <th className="text-left px-4 py-2 font-medium">Descrição</th>
+              <th className="text-right pr-6 pl-4 py-2 font-medium w-[90px]">Editável</th>
             </tr>
           </thead>
           <tbody>
@@ -329,33 +329,30 @@ export default function CRMPropertiesPage() {
               return (
                 <tr
                   key={prop.key}
-                  className="border-b border-border/50 hover:bg-muted/30 transition-colors"
+                  className="border-b border-border/30 hover:bg-muted/20 transition-colors"
                 >
-                  <td className="px-6 py-3">
-                    <div>
-                      <span className="text-sm font-medium text-foreground">{prop.label}</span>
-                      {prop.description && <p className="text-[11px] text-muted-foreground mt-0.5">{prop.description}</p>}
-                    </div>
+                  <td className="pl-6 pr-4 py-2.5">
+                    <span className="text-[13px] font-medium text-foreground leading-tight">{prop.label}</span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2.5">
                     <div className="flex items-center gap-1.5">
-                      <Icon className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground">{meta.label}</span>
+                      <Icon className="w-3 h-3 text-muted-foreground/70" />
+                      <span className="text-[11px] text-muted-foreground">{meta.label}</span>
                     </div>
                   </td>
-                  <td className="px-4 py-3">
-                    <Badge variant="outline" className="text-[11px] font-normal">
+                  <td className="px-4 py-2.5">
+                    <Badge variant="outline" className="text-[10px] font-normal h-5">
                       {prop.group}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3">
-                    <span className="text-xs text-muted-foreground">{prop.description}</span>
+                  <td className="px-4 py-2.5">
+                    <span className="text-[11px] text-muted-foreground leading-tight">{prop.description}</span>
                   </td>
-                  <td className="px-4 py-3 text-center">
+                  <td className="pr-6 pl-4 py-2.5 text-right">
                     {prop.readOnly ? (
-                      <Badge variant="secondary" className="text-[10px]">Somente leitura</Badge>
+                      <Badge variant="secondary" className="text-[9px] h-5">Somente leitura</Badge>
                     ) : (
-                      <Badge className="text-[10px] bg-success/15 text-success border-success/30">Editável</Badge>
+                      <Badge className="text-[9px] h-5 bg-success/15 text-success border-success/30">Editável</Badge>
                     )}
                   </td>
                 </tr>
