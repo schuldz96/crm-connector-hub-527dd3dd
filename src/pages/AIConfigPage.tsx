@@ -873,7 +873,7 @@ function AgentConfigModal({
           )}
 
           {/* Criteria (avaliador + sentimental) */}
-          {(form.tipo === 'avaliador' || form.tipo === 'sentimental') && (
+          {(form.tipo === 'avaliador' || form.tipo === 'sentimental' || form.tipo === 'produto') && (
             <div>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
@@ -898,7 +898,7 @@ function AgentConfigModal({
           )}
 
           {/* Reference Files (avaliador + sentimental) */}
-          {(form.tipo === 'avaliador' || form.tipo === 'sentimental') && (
+          {(form.tipo === 'avaliador' || form.tipo === 'sentimental' || form.tipo === 'produto') && (
             <div>
               <label className="text-xs font-semibold block mb-2">
                 <FileText className="w-3.5 h-3.5 inline mr-1.5" />Arquivos de Referência
@@ -968,6 +968,7 @@ function ConnectorWithAdd({
     { tipo: 'classificador', label: 'Classificador', icon: GitBranch, color: 'text-orange-400' },
     { tipo: 'avaliador', label: 'Avaliador', icon: Users, color: 'text-blue-400' },
     { tipo: 'sentimental', label: 'Sentimental', icon: Heart, color: 'text-purple-400' },
+    { tipo: 'produto', label: 'Produto', icon: BookOpen, color: 'text-green-400' },
   ];
 
   return (
@@ -1022,6 +1023,7 @@ function AddSiblingButton({
     { tipo: 'classificador', label: 'Classificador', icon: GitBranch, color: 'text-orange-400' },
     { tipo: 'avaliador', label: 'Avaliador', icon: Users, color: 'text-blue-400' },
     { tipo: 'sentimental', label: 'Sentimental', icon: Heart, color: 'text-purple-400' },
+    { tipo: 'produto', label: 'Produto', icon: BookOpen, color: 'text-green-400' },
   ];
 
   return (
@@ -1302,6 +1304,37 @@ Avalie cada critério abaixo e retorne APENAS JSON válido (sem markdown):
   ]
 }`,
     },
+    produto: {
+      nome: 'Agente Produto',
+      descricao: 'Avalia o conhecimento e posicionamento do produto na reunião/conversa',
+      prompt: `Você é um especialista em análise de posicionamento de produto em reuniões de vendas.
+
+PRODUTO: Appmax — Plataforma de performance para e-commerce (Fintech/Subadquirência)
+- Gateway de pagamento + Multiadquirência + Antifraude híbrido (IA + humano)
+- Recuperação inteligente de vendas via WhatsApp + IA
+- Foco em PERFORMANCE (aprovação, conversão, faturamento), não em taxa
+
+REGRAS DE AVALIAÇÃO:
+1. O vendedor DEVE conectar funcionalidade → problema → impacto financeiro
+2. O vendedor NÃO deve focar em features sem explicar valor
+3. O vendedor NÃO deve comparar apenas por taxa
+4. Sinais de fit do cliente: reclama de baixa aprovação, perda de vendas, abandono de carrinho, busca escala
+5. Sinais de baixo fit: foco exclusivo em taxa, baixo volume, não percebe impacto financeiro
+
+BOAS FRASES: "Não compete por taxa, compete por performance", "Taxa baixa sem performance gera prejuízo", "Aumentar faturamento real"
+FRASES A EVITAR: "Somos mais baratos", "Temos várias funcionalidades", "É só um gateway"
+
+Avalie cada critério e retorne APENAS JSON válido:
+{
+  "totalScore": <0-100>,
+  "summary": "<resumo 2-3 frases sobre posicionamento do produto>",
+  "insights": "<insights sobre como melhorar o pitch>",
+  "criticalAlerts": ["<alertas se houve erro grave de posicionamento>"],
+  "criteriaScores": [
+    { "id": "<id>", "label": "<nome>", "weight": <peso>, "score": <0-100>, "feedback": "<feedback específico>" }
+  ]
+}`,
+    },
   };
 
   const handleAddAgent = async (parentId: string, tipo: AgentTipo, insertIndex?: number) => {
@@ -1327,11 +1360,17 @@ Avalie cada critério abaixo e retorne APENAS JSON válido (sem markdown):
       descricao: config.descricao,
       prompt_sistema: config.prompt,
       criterios: tipo === 'sentimental' ? [
-        { id: 'positivo', label: 'Positivo', weight: 20, description: 'Boa energia, rapport, interesse genuíno do cliente', examples: ['Tom entusiasmado', 'Perguntas de aprofundamento'], positiveSignals: ['Cliente engajado', 'Risadas naturais', 'Elogios à solução'], negativeSignals: [] },
-        { id: 'neutro', label: 'Neutro', weight: 20, description: 'Profissional, sem sinais claros positivos ou negativos', examples: ['Tom formal', 'Respostas objetivas'], positiveSignals: ['Conversa fluida', 'Respostas diretas'], negativeSignals: [] },
-        { id: 'negativo', label: 'Negativo', weight: 20, description: 'Resistência, desinteresse ou conflito', examples: ['Recusa em responder', 'Desinteresse'], positiveSignals: [], negativeSignals: ['Tom hostil', 'Interrupções frequentes', 'Respostas monossilábicas'] },
-        { id: 'preocupado', label: 'Preocupado', weight: 20, description: 'Dúvidas, incertezas sobre a solução ou investimento', examples: ['Perguntas sobre risco', 'Hesitação'], positiveSignals: [], negativeSignals: ['Muitas perguntas de segurança', 'Pedidos de garantia', 'Menção a experiências ruins'] },
-        { id: 'frustrado', label: 'Frustrado', weight: 20, description: 'Frustração, insatisfação ou impaciência do cliente', examples: ['Reclamações', 'Tom impaciente'], positiveSignals: [], negativeSignals: ['Reclamações explícitas', 'Tom elevado', 'Ameaça de cancelamento'] },
+        { id: 'positivo', label: 'Positivo', weight: 20, description: 'Boa energia, rapport, interesse genuíno do cliente', examples: ['Tom entusiasmado', 'Perguntas de aprofundamento'], positiveSignals: ['Cliente engajado', 'Risadas naturais', 'Elogios à solução'], neutralSignals: [], negativeSignals: [] },
+        { id: 'neutro', label: 'Neutro', weight: 20, description: 'Profissional, sem sinais claros positivos ou negativos', examples: ['Tom formal', 'Respostas objetivas'], positiveSignals: ['Conversa fluida', 'Respostas diretas'], neutralSignals: [], negativeSignals: [] },
+        { id: 'negativo', label: 'Negativo', weight: 20, description: 'Resistência, desinteresse ou conflito', examples: ['Recusa em responder', 'Desinteresse'], positiveSignals: [], neutralSignals: [], negativeSignals: ['Tom hostil', 'Interrupções frequentes', 'Respostas monossilábicas'] },
+        { id: 'preocupado', label: 'Preocupado', weight: 20, description: 'Dúvidas, incertezas sobre a solução ou investimento', examples: ['Perguntas sobre risco', 'Hesitação'], positiveSignals: [], neutralSignals: [], negativeSignals: ['Muitas perguntas de segurança', 'Pedidos de garantia', 'Menção a experiências ruins'] },
+        { id: 'frustrado', label: 'Frustrado', weight: 20, description: 'Frustração, insatisfação ou impaciência do cliente', examples: ['Reclamações', 'Tom impaciente'], positiveSignals: [], neutralSignals: [], negativeSignals: ['Reclamações explícitas', 'Tom elevado', 'Ameaça de cancelamento'] },
+      ] : tipo === 'produto' ? [
+        { id: 'posicionamento', label: 'Posicionamento de Valor', weight: 25, description: 'Conecta funcionalidade com problema real e impacto financeiro do cliente', examples: ['Menciona aumento de aprovação', 'Quantifica recuperação de vendas'], positiveSignals: ['Conecta feature com resultado financeiro', 'Usa dados de impacto', 'Posiciona performance acima de taxa'], neutralSignals: ['Menciona benefícios mas sem quantificar'], negativeSignals: ['Foca em feature sem conectar valor', 'Compara apenas por taxa', 'Diz "somos mais baratos"'] },
+        { id: 'conhecimento_produto', label: 'Conhecimento do Produto', weight: 20, description: 'Demonstra domínio sobre funcionalidades, diferenciais e limitações', examples: ['Explica multiadquirência', 'Descreve antifraude híbrido', 'Menciona recuperação via WhatsApp'], positiveSignals: ['Explica como funciona tecnicamente', 'Conhece limitações e posiciona bem'], neutralSignals: ['Conhecimento superficial mas correto'], negativeSignals: ['Informação incorreta', 'Não sabe responder dúvida técnica', 'Confunde funcionalidades'] },
+        { id: 'identificacao_fit', label: 'Identificação de Fit', weight: 20, description: 'Identifica sinais de que o cliente é ou não ICP', examples: ['Pergunta sobre volume de transações', 'Identifica dor de aprovação'], positiveSignals: ['Identifica dor real do cliente', 'Reconhece sinais de fit', 'Qualifica volume e segmento'], neutralSignals: ['Faz perguntas genéricas de qualificação'], negativeSignals: ['Ignora sinais de baixo fit', 'Não qualifica perfil', 'Força venda para cliente sem fit'] },
+        { id: 'tratamento_objecoes_produto', label: 'Objeções de Produto', weight: 20, description: 'Trata objeções sobre taxa, concorrência e funcionalidade com foco em valor', examples: ['Cliente questiona taxa', 'Compara com concorrente'], positiveSignals: ['Redireciona de taxa para performance', 'Usa frases-chave corretas', 'Apresenta ROI'], neutralSignals: ['Responde mas sem redirecionar para valor'], negativeSignals: ['Oferece desconto imediato', 'Aceita comparação por taxa', 'Fica defensivo'] },
+        { id: 'impacto_financeiro', label: 'Comunicação de Impacto Financeiro', weight: 15, description: 'Quantifica e comunica o impacto financeiro da solução para o cliente', examples: ['Menciona aumento de X% em aprovação', 'Cita recuperação de 10-25% vendas'], positiveSignals: ['Quantifica ganho potencial', 'Usa exemplos reais', 'Mostra ROI claro'], neutralSignals: ['Menciona ganho sem quantificar'], negativeSignals: ['Não menciona impacto financeiro', 'Fala apenas de funcionalidades'] },
       ] : [],
       modelo_ia: 'gpt-4o-mini',
       temperatura: 0,

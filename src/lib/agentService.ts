@@ -7,7 +7,7 @@ import { getSaasEmpresaId } from '@/lib/saas';
 import type { EvalCriteria } from '@/pages/AIConfigPage';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-export type AgentTipo = 'gerente' | 'classificador' | 'avaliador' | 'sentimental';
+export type AgentTipo = 'gerente' | 'classificador' | 'avaliador' | 'sentimental' | 'produto';
 
 export type AgentModulo = 'meetings' | 'whatsapp';
 
