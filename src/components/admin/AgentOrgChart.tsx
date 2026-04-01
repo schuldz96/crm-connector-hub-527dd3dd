@@ -490,7 +490,7 @@ Valores inteiros em BRL. Exemplo: "Dev Full-Stack Sênior":[18000,28000]` }],
               </div>
               <div className="p-3 rounded-lg border bg-primary/5 border-primary/30">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium">Com AIOX + Claude</span>
+                  <span className="text-xs font-medium">Com Claude Code</span>
                   <Badge className="text-[9px] h-4 bg-primary/20 text-primary border-primary/30">Real</Badge>
                 </div>
                 <div className="flex gap-3 mt-1">
