@@ -185,17 +185,12 @@ function TreeNode({ node }: { node: OrgNode }) {
 
 /* ── Estimation — Deterministic + AI salary lookup ──────── */
 
+// Auto-collected from git/filesystem before each build (scripts/collect-metrics.sh)
+import rawMetrics from '@/lib/projectMetrics.json';
+
 const METRICS = {
-  startDate: '2026-03-08',
-  daysElapsed: Math.ceil((Date.now() - new Date('2026-03-08').getTime()) / 86400000),
-  commits: 708,
-  loc: 37_918,
-  pages: 26,
-  edgeFunctions: 8,
-  migrations: 39,
-  agents: 32,
-  integrations: 4,
-  teamSize: 2,
+  ...rawMetrics,
+  daysElapsed: Math.ceil((Date.now() - new Date(rawMetrics.startDate).getTime()) / 86400000),
 };
 
 // Fixed team structure — derived from project inventory, NEVER changes with AI
@@ -524,9 +519,10 @@ Valores inteiros em BRL. Exemplo: "Dev Full-Stack Sênior":[18000,28000]` }],
 
         <div className="mt-4 p-3 rounded-lg bg-muted/30 border border-border/40">
           <p className="text-[10px] text-muted-foreground leading-relaxed">
-            <strong>Cálculo determinístico:</strong> Equipe e meses são fixos (derivados do inventário: {METRICS.loc.toLocaleString()} LOC, {METRICS.pages} páginas, {METRICS.migrations} migrations, {METRICS.agents} agentes).
-            Salários são pesquisáveis via IA (mercado SP, CLT). O botão "Atualizar salários" só muda os valores salariais — estrutura e meses nunca mudam.
-            Infra calculada por {PROJECT_MONTHS} meses (duração real do projeto desde {METRICS.startDate}).
+            <strong>Métricas coletadas automaticamente a cada build:</strong> {METRICS.loc.toLocaleString()} LOC, {METRICS.pages} páginas, {METRICS.components} componentes,
+            {METRICS.edgeFunctions} edge functions, {METRICS.migrations} migrations, {METRICS.agents} agentes, {METRICS.squads} squads.
+            Salários pesquisáveis via IA (mercado SP, CLT). Infra calculada por {PROJECT_MONTHS} meses (desde {METRICS.startDate}).
+            Coletado em: {rawMetrics.collectedAt ? new Date(rawMetrics.collectedAt).toLocaleString('pt-BR') : '—'}.
           </p>
         </div>
       </div>

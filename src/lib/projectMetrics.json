@@ -1,0 +1,17 @@
+{
+  "startDate": "2026-03-08",
+  "commits": 713,
+  "loc": 38044,
+  "pages": 26,
+  "components": 60,
+  "hooks": 4,
+  "contexts": 5,
+  "services": 20,
+  "edgeFunctions": 8,
+  "migrations": 39,
+  "agents": 32,
+  "squads": 2,
+  "integrations": 4,
+  "teamSize": 2,
+  "collectedAt": "2026-04-01T18:30:52Z"
+}

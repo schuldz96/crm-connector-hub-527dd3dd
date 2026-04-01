@@ -4,8 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "metrics": "bash scripts/collect-metrics.sh",
+    "dev": "bash scripts/collect-metrics.sh 2>/dev/null; vite",
+    "build": "bash scripts/collect-metrics.sh 2>/dev/null; vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
