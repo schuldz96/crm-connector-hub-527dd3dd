@@ -334,7 +334,7 @@ export default function CRMPropertiesPage() {
                   <td className="px-6 py-3">
                     <div>
                       <span className="text-sm font-medium text-foreground">{prop.label}</span>
-                      <p className="text-[11px] text-muted-foreground mt-0.5 font-mono">{prop.key}</p>
+                      {prop.description && <p className="text-[11px] text-muted-foreground mt-0.5">{prop.description}</p>}
                     </div>
                   </td>
                   <td className="px-4 py-3">
