@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -230,9 +230,17 @@ export default function AgentOrgChart() {
   const { tokens } = useAppConfig();
   const { toast } = useToast();
 
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    setZoom(z => Math.min(1.5, Math.max(0.3, z - e.deltaY * 0.001)));
+  // Native wheel listener to allow preventDefault (passive: false)
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const handler = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setZoom(z => Math.min(1.5, Math.max(0.3, z - e.deltaY * 0.001)));
+    };
+    el.addEventListener('wheel', handler, { passive: false });
+    return () => el.removeEventListener('wheel', handler);
   }, []);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -326,7 +334,6 @@ Valores em BRL. Devs sênior R$25–35k/mês, UX R$15–20k/mês, Supabase Pro ~
           dragging ? 'cursor-grabbing' : 'cursor-grab',
         )}
         style={{ height: 520 }}
-        onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}

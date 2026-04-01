@@ -363,19 +363,20 @@ export default function AdminPage() {
         <p className="text-sm text-muted-foreground">Configurações globais da plataforma</p>
       </div>
 
-      <div className="flex gap-6">
-        {/* Menu */}
-        <div className="w-56 flex-shrink-0">
-          <nav className="space-y-1">
+      <div className="flex gap-4 lg:gap-6">
+        {/* Menu — collapses to icons on narrow screens */}
+        <div className="w-12 lg:w-56 flex-shrink-0 transition-all">
+          <nav className="space-y-1 sticky top-4">
             {ADMIN_SECTIONS.map(s => (
               <button
                 key={s.id}
                 onClick={() => setSection(s.id)}
                 className={cn('w-full nav-item', section === s.id && 'active')}
+                title={s.label}
               >
                 <s.icon className="w-4 h-4 flex-shrink-0" />
-                <span>{s.label}</span>
-                {section !== s.id && <ChevronRight className="w-3 h-3 ml-auto text-muted-foreground/50" />}
+                <span className="hidden lg:inline">{s.label}</span>
+                {section !== s.id && <ChevronRight className="w-3 h-3 ml-auto text-muted-foreground/50 hidden lg:block" />}
               </button>
             ))}
           </nav>
