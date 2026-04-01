@@ -106,6 +106,14 @@ const CatBadge = ({ cat }: { cat: TemplateCategory }) => {
 };
 
 /* ── Template form ──────────────────────────────────── */
+type TemplateButtonType = 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER';
+interface TemplateButton {
+  type: TemplateButtonType;
+  text: string;
+  url?: string;
+  phone_number?: string;
+}
+
 interface TemplateFormData {
   name: string;
   category: TemplateCategory;
@@ -113,6 +121,7 @@ interface TemplateFormData {
   header_text: string;
   body_text: string;
   footer_text: string;
+  buttons: TemplateButton[];
 }
 
 const EMPTY_TEMPLATE: TemplateFormData = {
@@ -122,6 +131,7 @@ const EMPTY_TEMPLATE: TemplateFormData = {
   header_text: '',
   body_text: '',
   footer_text: '',
+  buttons: [],
 };
 
 /* ──────────────────────────────────────────────────── */
@@ -376,6 +386,18 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
         components.push({ type: 'FOOTER', text: templateForm.footer_text.trim() });
       }
 
+      if (templateForm.buttons.length > 0) {
+        components.push({
+          type: 'BUTTONS',
+          buttons: templateForm.buttons.map(b => {
+            const btn: Record<string, string> = { type: b.type, text: b.text };
+            if (b.type === 'URL' && b.url) btn.url = b.url;
+            if (b.type === 'PHONE_NUMBER' && b.phone_number) btn.phone_number = b.phone_number;
+            return btn;
+          }),
+        });
+      }
+
       const payload = {
         name: templateForm.name.trim().toLowerCase().replace(/\s+/g, '_'),
         category: templateForm.category,
@@ -556,6 +578,13 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
     const body = t.components.find(c => c.type === 'BODY')?.text || '';
     const header = t.components.find(c => c.type === 'HEADER')?.text || '';
     const footer = t.components.find(c => c.type === 'FOOTER')?.text || '';
+    const btnsComp = t.components.find(c => c.type === 'BUTTONS');
+    const buttons: TemplateButton[] = (btnsComp?.buttons || []).map(b => ({
+      type: b.type as TemplateButtonType,
+      text: b.text,
+      url: b.url || '',
+      phone_number: b.phone_number || '',
+    }));
     setTemplateForm({
       name: t.name,
       category: t.category,
@@ -563,6 +592,7 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
       header_text: header,
       body_text: body,
       footer_text: footer,
+      buttons,
     });
     setEditingTemplate(t);
     setShowTemplateForm(true);
@@ -826,6 +856,95 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
                   <div>
                     <label className="text-xs font-medium block mb-1">Rodapé (opcional)</label>
                     <Input value={templateForm.footer_text} onChange={e => setTemplateForm(f => ({ ...f, footer_text: e.target.value }))} placeholder="Não responda a esta mensagem" className="h-8 text-xs bg-background border-border" />
+                  </div>
+
+                  {/* Buttons section */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-medium">Botões (opcional)</label>
+                      {templateForm.buttons.length < 10 && (
+                        <select
+                          className="h-7 text-[10px] rounded-md border border-border bg-background px-1.5 cursor-pointer"
+                          value=""
+                          onChange={e => {
+                            const btnType = e.target.value as TemplateButtonType;
+                            if (!btnType) return;
+                            setTemplateForm(f => ({
+                              ...f,
+                              buttons: [...f.buttons, { type: btnType, text: '', url: '', phone_number: '' }],
+                            }));
+                            e.target.value = '';
+                          }}
+                        >
+                          <option value="">+ Adicionar botão</option>
+                          <option value="QUICK_REPLY">Resposta rápida</option>
+                          <option value="URL">Link (URL)</option>
+                          <option value="PHONE_NUMBER">Telefone</option>
+                        </select>
+                      )}
+                    </div>
+                    {templateForm.buttons.length > 0 && (
+                      <div className="space-y-2">
+                        {templateForm.buttons.map((btn, idx) => (
+                          <div key={idx} className="flex items-start gap-2 p-2 rounded-lg border border-border bg-background">
+                            <div className="flex-1 space-y-1.5">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-[9px] h-4 px-1 shrink-0">
+                                  {btn.type === 'QUICK_REPLY' ? 'Resposta rápida' : btn.type === 'URL' ? 'Link' : 'Telefone'}
+                                </Badge>
+                                <Input
+                                  value={btn.text}
+                                  onChange={e => {
+                                    const updated = [...templateForm.buttons];
+                                    updated[idx] = { ...updated[idx], text: e.target.value };
+                                    setTemplateForm(f => ({ ...f, buttons: updated }));
+                                  }}
+                                  placeholder="Texto do botão"
+                                  maxLength={25}
+                                  className="h-7 text-xs bg-background border-border"
+                                />
+                                <span className="text-[9px] text-muted-foreground shrink-0">{btn.text.length}/25</span>
+                              </div>
+                              {btn.type === 'URL' && (
+                                <Input
+                                  value={btn.url || ''}
+                                  onChange={e => {
+                                    const updated = [...templateForm.buttons];
+                                    updated[idx] = { ...updated[idx], url: e.target.value };
+                                    setTemplateForm(f => ({ ...f, buttons: updated }));
+                                  }}
+                                  placeholder="https://exemplo.com/{{1}}"
+                                  className="h-7 text-xs bg-background border-border"
+                                />
+                              )}
+                              {btn.type === 'PHONE_NUMBER' && (
+                                <Input
+                                  value={btn.phone_number || ''}
+                                  onChange={e => {
+                                    const updated = [...templateForm.buttons];
+                                    updated[idx] = { ...updated[idx], phone_number: e.target.value };
+                                    setTemplateForm(f => ({ ...f, buttons: updated }));
+                                  }}
+                                  placeholder="+5511999999999"
+                                  className="h-7 text-xs bg-background border-border"
+                                />
+                              )}
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                              onClick={() => setTemplateForm(f => ({ ...f, buttons: f.buttons.filter((_, i) => i !== idx) }))}
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {templateForm.buttons.length > 3 && (
+                      <p className="text-[10px] text-muted-foreground mt-1">Mais de 3 botões serão exibidos em lista no WhatsApp</p>
+                    )}
                   </div>
 
                   <div className="flex gap-2 pt-1">
