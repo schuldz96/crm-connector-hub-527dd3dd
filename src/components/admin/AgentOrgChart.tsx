@@ -201,8 +201,8 @@ const DEFAULT_ESTIMATES: Estimates = {
     { label: 'Total Estimado', min: 455_000, max: 660_000 },
   ],
   timeline: [
-    { label: 'Time tradicional', months: '8–12', people: '4–6' },
-    { label: 'Com AIOX + Claude', months: '2–3', people: '1–2', highlight: true },
+    { label: 'Time tradicional', months: '8–14', people: '5–8' },
+    { label: 'Com AIOX + Claude (real)', months: '~0.8', people: '2', highlight: true },
   ],
   saas: [
     { label: 'MRR (50–150 clientes)', min: 15_000, max: 45_000 },
@@ -261,25 +261,59 @@ export default function AgentOrgChart() {
 
   const resetView = useCallback(() => { setZoom(0.85); setPan({ x: 0, y: 0 }); }, []);
 
+  // Real project metrics from git history
+  const PROJECT_METRICS = {
+    startDate: '2026-03-08',
+    currentDate: new Date().toISOString().slice(0, 10),
+    daysElapsed: Math.ceil((Date.now() - new Date('2026-03-08').getTime()) / 86400000),
+    commits: 708,
+    linesOfCode: 37918,
+    pages: 26,
+    edgeFunctions: 8,
+    migrations: 39,
+    agents: 32,
+    team: '2 pessoas (Marcos + Yuri) + IA (Claude Code + Lovable)',
+    authors: 'gpt-engineer-app[bot]: 377 commits, Processos-appmax: 237, Maxter: 82, Yuri: 11',
+  };
+
   const generateEstimates = async () => {
     const token = tokens.meetings || tokens.whatsapp || tokens.training;
     if (!token) { toast({ variant: 'destructive', title: 'Token OpenAI não configurado', description: 'Configure em Config. IA.' }); return; }
     setGenerating(true);
     try {
+      const m = PROJECT_METRICS;
       const result = await callOpenAI(token, {
         model: 'gpt-4o-mini',
-        messages: [{ role: 'user', content: `Analise este projeto SaaS e gere estimativas em JSON.
+        messages: [{ role: 'user', content: `Analise este projeto SaaS REAL e gere estimativas precisas em JSON.
 
-Projeto: Smart Deal Coach — SaaS de coaching de vendas com IA.
-Stack: React 18 + TypeScript + Vite + Tailwind + Supabase (PostgreSQL + Edge Functions + RLS)
-Integrações: WhatsApp (Evolution API + Meta WABA), Google Meet, OpenAI
-Dados: ~85.000 linhas, 17 páginas, 8 edge functions, 14 migrations, 32 agentes IA, CRM completo, multi-tenant RBAC
+## DADOS REAIS DO PROJETO (git log)
+- Primeiro commit: ${m.startDate}
+- Hoje: ${m.currentDate}
+- Tempo de desenvolvimento: ${m.daysElapsed} dias (~${(m.daysElapsed / 30).toFixed(1)} meses)
+- Total de commits: ${m.commits}
+- Autores: ${m.authors}
+- Equipe REAL: ${m.team}
+- Linhas de código (src/): ${m.linesOfCode.toLocaleString()}
+- Páginas: ${m.pages}
+- Edge Functions: ${m.edgeFunctions}
+- Migrations SQL: ${m.migrations}
+- Agentes de IA: ${m.agents}
 
-Retorne APENAS JSON válido:
-{"cost":[{"label":"Desenvolvimento","min":N,"max":N},{"label":"UI/UX Design","min":N,"max":N},{"label":"Infraestrutura (12 meses)","min":N,"max":N},{"label":"IA / OpenAI (12 meses)","min":N,"max":N},{"label":"Total Estimado","min":N,"max":N}],"timeline":[{"label":"Time tradicional","months":"X–Y","people":"X–Y"},{"label":"Com AIOX + Claude","months":"X–Y","people":"X–Y","highlight":true}],"saas":[{"label":"MRR (50–150 clientes)","min":N,"max":N},{"label":"ARR projetado","min":N,"max":N},{"label":"Valuation (10x ARR)","min":N,"max":N}]}
+## SOBRE O PROJETO
+Smart Deal Coach — SaaS B2B de coaching de vendas com IA para Appmax.
+Stack: React 18 + TypeScript + Vite + Tailwind + shadcn/ui + Supabase (PostgreSQL + Edge Functions + Storage + RLS)
+Integrações: WhatsApp (Evolution API + Meta WABA), Google Meet (transcrição), OpenAI (gpt-4o-mini)
+Features: CRM completo (contatos, empresas, negócios, tickets, pipeline kanban), avaliação multi-agente de vendas (12 metodologias), inbox WhatsApp com templates Meta, multi-tenant com RBAC hierárquico, criptografia AES-256-GCM nos tokens, squad de segurança (7 agentes), squad de vendas (13 agentes).
 
-Valores em BRL. Devs sênior R$25–35k/mês, UX R$15–20k/mês, Supabase Pro ~R$150/mês, OpenAI ~R$1.500–3.000/mês. Valuation 10x ARR.` }],
-        temperature: 0.3, max_tokens: 800,
+## INSTRUÇÕES
+Estime quanto custaria se uma empresa contratasse um time tradicional para construir isso DO ZERO.
+O campo "Com AIOX + Claude" deve refletir o que REALMENTE aconteceu: ${m.daysElapsed} dias, 2 pessoas.
+
+Retorne APENAS JSON válido (sem markdown):
+{"cost":[{"label":"Desenvolvimento","min":N,"max":N},{"label":"UI/UX Design","min":N,"max":N},{"label":"Infraestrutura (12 meses)","min":N,"max":N},{"label":"IA / OpenAI (12 meses)","min":N,"max":N},{"label":"Total Estimado","min":N,"max":N}],"timeline":[{"label":"Time tradicional","months":"X–Y","people":"X–Y"},{"label":"Com AIOX + Claude (real)","months":"~${(m.daysElapsed / 30).toFixed(1)}","people":"2","highlight":true}],"saas":[{"label":"MRR (50–150 clientes)","min":N,"max":N},{"label":"ARR projetado","min":N,"max":N},{"label":"Valuation (10x ARR)","min":N,"max":N}]}
+
+Valores em BRL. Benchmark: devs sênior full-stack R$25–35k/mês, UX sênior R$15–20k/mês, PM R$18–25k/mês, Supabase Pro ~R$150/mês, OpenAI ~R$1.500–3.000/mês. Valuation: 10x ARR (SaaS early-stage).` }],
+        temperature: 0.3, max_tokens: 1000,
       });
       const content = result?.choices?.[0]?.message?.content || result?.content || '';
       const jsonStr = typeof content === 'string' ? content.replace(/```json?\n?/g, '').replace(/```/g, '').trim() : JSON.stringify(content);
@@ -399,8 +433,9 @@ Valores em BRL. Devs sênior R$25–35k/mês, UX R$15–20k/mês, Supabase Pro ~
 
         <div className="mt-4 p-3 rounded-lg bg-muted/30 border border-border/40">
           <p className="text-[10px] text-muted-foreground leading-relaxed">
-            <strong>Metodologia:</strong> Benchmarks SaaS B2B com IA. Devs sênior R$ 25–35k/mês, UX R$ 15–20k/mês, infra Supabase + OpenAI. Valuation 10x ARR.
-            ~85.000 linhas, 32 agentes IA, 17 páginas.{estimates.aiGenerated && ' Valores gerados por IA.'}
+            <strong>Dados reais do git:</strong> Início em 08/03/2026, 708 commits, 37.918 linhas de código, 26 páginas, 8 edge functions, 39 migrations, 32 agentes IA.
+            Equipe: 2 pessoas + IA (Claude Code + Lovable). Benchmarks: devs sênior R$ 25–35k/mês, UX R$ 15–20k/mês. Valuation 10x ARR.
+            {estimates.aiGenerated && ' Estimativas geradas por IA com base nos dados reais do projeto.'}
           </p>
         </div>
       </div>
