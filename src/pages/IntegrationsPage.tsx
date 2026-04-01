@@ -4,8 +4,9 @@ import {
   RefreshCw, Loader2, Smartphone, QrCode, MessageSquare,
   Phone, Wifi, WifiOff, X, CheckCircle2, XCircle,
   AlertTriangle, Activity, ArrowDown, ArrowUp, CheckCheck,
-  ExternalLink, Database
+  ExternalLink, Database, Link2,
 } from 'lucide-react';
+import HubSpotIntegration from '@/components/integrations/HubSpotIntegration';
 import { cn } from '@/lib/utils';
 import SearchableSelect from '@/components/ui/searchable-select';
 import { useToast } from '@/hooks/use-toast';
@@ -755,7 +756,7 @@ function DatabasePanel() {
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 export default function IntegrationsPage() {
-  const [tab, setTab] = useState<'whatsapp' | 'database' | 'logs'>('whatsapp');
+  const [tab, setTab] = useState<'whatsapp' | 'hubspot' | 'database' | 'logs'>('whatsapp');
 
   return (
     <div className="page-container animate-fade-in">
@@ -769,6 +770,7 @@ export default function IntegrationsPage() {
       <div className="flex gap-1 p-1 bg-secondary rounded-lg border border-border mb-6 w-fit">
         {[
           { key: 'whatsapp', label: 'WhatsApp',  icon: MessageSquare },
+          { key: 'hubspot',  label: 'HubSpot',   icon: Link2 },
           { key: 'database', label: 'Banco / Tokens', icon: Database },
           { key: 'logs',     label: 'Logs',      icon: Activity },
         ].map(t => {
@@ -785,6 +787,7 @@ export default function IntegrationsPage() {
       </div>
 
       {tab === 'whatsapp' && <EvolutionPanel />}
+      {tab === 'hubspot'  && <HubSpotIntegration />}
       {tab === 'database' && <DatabasePanel />}
       {tab === 'logs'     && <WebhookLogs />}
     </div>
