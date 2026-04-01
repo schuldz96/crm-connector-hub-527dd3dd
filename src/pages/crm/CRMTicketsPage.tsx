@@ -641,7 +641,7 @@ export default function CRMTicketsPage() {
                       {fi < group.length - 1 && <p className="text-[10px] text-muted-foreground font-medium">e</p>}
                     </div>
                   ))}
-                  <Button variant="outline" size="sm" className="text-xs mt-1" onClick={() => { const ng = [...advFilterGroups]; ng[gi] = [...ng[gi], { property: TICKET_FILTER_CHIPS[0], operator: 'any', value: '' }]; setAdvFilterGroups(ng); }}>
+                  <Button variant="outline" size="sm" className="text-xs mt-1" onClick={() => { const ng = [...advFilterGroups]; ng[gi] = [...ng[gi], { property: TICKET_FILTERS[0]?.label ?? '', operator: 'any', value: '' }]; setAdvFilterGroups(ng); }}>
                     <Plus className="w-3 h-3 mr-1" /> Adicionar filtro
                   </Button>
                 </div>
