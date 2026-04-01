@@ -313,7 +313,7 @@ export default function CRMPropertiesPage() {
                   Tipo do campo <SortIcon col="fieldType" />
                 </button>
               </th>
-              <th className="text-left px-4 py-2 font-medium w-[160px]">
+              <th className="text-left px-4 py-2 font-medium w-[180px]">
                 <button className="flex items-center gap-1 hover:text-foreground transition-colors" onClick={() => toggleSort('group')}>
                   Grupo <SortIcon col="group" />
                 </button>
@@ -341,7 +341,7 @@ export default function CRMPropertiesPage() {
                     </div>
                   </td>
                   <td className="px-4 py-2.5">
-                    <Badge variant="outline" className="text-[10px] font-normal h-5">
+                    <Badge variant="outline" className="text-[10px] font-normal h-5 whitespace-nowrap">
                       {prop.group}
                     </Badge>
                   </td>
