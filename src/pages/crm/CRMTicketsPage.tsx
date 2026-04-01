@@ -623,7 +623,7 @@ export default function CRMTicketsPage() {
                       <div className="flex items-center gap-2">
                         <select className="flex-1 text-xs border border-border rounded px-2 py-1.5 bg-background" value={filter.property}
                           onChange={e => { const ng = [...advFilterGroups]; ng[gi] = [...ng[gi]]; ng[gi][fi] = { ...filter, property: e.target.value }; setAdvFilterGroups(ng); }}>
-                          {TICKET_FILTER_CHIPS.map(p => <option key={p} value={p}>{p}</option>)}
+                          {TICKET_FILTERS.map(p => <option key={p.key} value={p.label}>{p.label}</option>)}
                         </select>
                         <button onClick={() => { const ng = [...advFilterGroups]; ng[gi] = ng[gi].filter((_, i) => i !== fi); if (ng[gi].length === 0) ng.splice(gi, 1); setAdvFilterGroups(ng); }}><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
                       </div>
