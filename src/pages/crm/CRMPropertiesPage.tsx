@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCrmPipelines, useSaasUsers } from '@/hooks/useCrm';
+import { loadTeams } from '@/lib/teamsService';
 import type { CrmObjectType } from '@/types/crm';
 
 // ========================
@@ -229,6 +230,14 @@ export default function CRMPropertiesPage() {
   // ─── Property Detail Panel ───────────────────────
   const [selectedProp, setSelectedProp] = useState<PropertyDefinition | null>(null);
   const [detailTab, setDetailTab] = useState<'details' | 'field' | 'rules' | 'access'>('details');
+  const [accessLevel, setAccessLevel] = useState<'admin' | 'edit' | 'view' | 'custom'>('view');
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
+  const [selectedTeamIds, setSelectedTeamIds] = useState<Set<string>>(new Set());
+  const [teams, setTeams] = useState<{ id: string; nome: string }[]>([]);
+  const { data: saasUsers = [] } = useSaasUsers();
+
+  // Load teams on mount
+  useState(() => { loadTeams().then(setTeams).catch(() => {}); });
 
   const DETAIL_TABS = [
     { id: 'details' as const, label: 'Detalhes', icon: Settings },
@@ -239,6 +248,7 @@ export default function CRMPropertiesPage() {
 
   const selectedMeta = selectedProp ? FIELD_TYPE_META[selectedProp.fieldType] : null;
   const objectLabel = OBJECT_TYPE_OPTIONS.find(o => o.value === objectType)?.label.replace('Propriedades de ', '') || '';
+  const isSystem = selectedProp?.readOnly ?? false;
 
   return (
     <div className="flex flex-col h-full relative">
@@ -287,6 +297,14 @@ export default function CRMPropertiesPage() {
 
               {/* Content */}
               <div className="flex-1 overflow-y-auto p-6">
+                {/* System property banner */}
+                {isSystem && detailTab !== 'access' && (
+                  <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 mb-5 flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-amber-500 shrink-0" />
+                    <p className="text-xs text-amber-200">Esta é uma propriedade do sistema e não pode ser editada. Você pode alterar o nível de acesso na aba "Gerenciar acesso".</p>
+                  </div>
+                )}
+
                 {detailTab === 'details' && (
                   <div className="max-w-md space-y-5">
                     <div>
@@ -296,20 +314,20 @@ export default function CRMPropertiesPage() {
                     <hr className="border-border/50" />
                     <div>
                       <label className="text-xs font-medium block mb-1.5">Rótulo da propriedade *</label>
-                      <Input value={selectedProp.label} readOnly={selectedProp.readOnly} className="h-9 text-sm" />
+                      <Input value={selectedProp.label} readOnly className={cn('h-9 text-sm', isSystem && 'bg-muted/30 opacity-70')} />
                       <p className="text-[10px] text-muted-foreground mt-1">Nome interno: <span className="font-mono">{selectedProp.key}</span></p>
                     </div>
                     <div>
                       <label className="text-xs font-medium block mb-1.5">Tipo de objeto *</label>
-                      <Input value={objectLabel} readOnly className="h-9 text-sm bg-muted/30" />
+                      <Input value={objectLabel} readOnly className="h-9 text-sm bg-muted/30 opacity-70" />
                     </div>
                     <div>
                       <label className="text-xs font-medium block mb-1.5">Grupo *</label>
-                      <Input value={selectedProp.group} readOnly={selectedProp.readOnly} className="h-9 text-sm" />
+                      <Input value={selectedProp.group} readOnly className={cn('h-9 text-sm', isSystem && 'bg-muted/30 opacity-70')} />
                     </div>
                     <div>
                       <label className="text-xs font-medium block mb-1.5">Descrição</label>
-                      <Textarea value={selectedProp.description} readOnly={selectedProp.readOnly} className="text-sm min-h-[80px] resize-none" />
+                      <Textarea value={selectedProp.description} readOnly className={cn('text-sm min-h-[80px] resize-none', isSystem && 'bg-muted/30 opacity-70')} />
                     </div>
                   </div>
                 )}
@@ -323,7 +341,7 @@ export default function CRMPropertiesPage() {
                     <hr className="border-border/50" />
                     <div>
                       <label className="text-xs font-medium block mb-1.5">Tipo de campo *</label>
-                      <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-border bg-muted/30 text-sm">
+                      <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-border bg-muted/30 text-sm opacity-70">
                         <selectedMeta.icon className="w-4 h-4 text-muted-foreground" />
                         {selectedMeta.label}
                       </div>
@@ -331,13 +349,13 @@ export default function CRMPropertiesPage() {
                     {selectedProp.fieldType === 'number' && (
                       <div>
                         <label className="text-xs font-medium block mb-1.5">Formato de número *</label>
-                        <Input value="Número não formatado" readOnly className="h-9 text-sm bg-muted/30" />
+                        <Input value="Número não formatado" readOnly className="h-9 text-sm bg-muted/30 opacity-70" />
                       </div>
                     )}
                     {selectedProp.fieldType === 'currency' && (
                       <div>
                         <label className="text-xs font-medium block mb-1.5">Moeda *</label>
-                        <Input value="BRL (Real)" readOnly className="h-9 text-sm bg-muted/30" />
+                        <Input value="BRL (Real)" readOnly className="h-9 text-sm bg-muted/30 opacity-70" />
                       </div>
                     )}
                     {selectedProp.fieldType === 'select' && (
@@ -356,37 +374,35 @@ export default function CRMPropertiesPage() {
                       <p className="text-xs text-muted-foreground">Opções de visibilidade e validação.</p>
                     </div>
                     <hr className="border-border/50" />
-                    <div className="space-y-3">
+                    <div className={cn('space-y-3', isSystem && 'opacity-50 pointer-events-none')}>
                       <p className="text-xs font-medium">Opções de visibilidade</p>
                       <label className="flex items-start gap-3 cursor-pointer">
-                        <input type="checkbox" defaultChecked className="mt-0.5 rounded" />
+                        <input type="checkbox" defaultChecked className="mt-0.5 rounded" disabled={isSystem} />
                         <span className="text-sm">Mostrar propriedade nos formulários e fluxos</span>
                       </label>
                       <label className="flex items-start gap-3 cursor-pointer">
-                        <input type="checkbox" className="mt-0.5 rounded" />
+                        <input type="checkbox" className="mt-0.5 rounded" disabled={isSystem} />
                         <span className="text-sm">Mostrar nos resultados da pesquisa global</span>
                       </label>
                     </div>
                     <hr className="border-border/50" />
-                    <div className="space-y-3">
+                    <div className={cn('space-y-3', isSystem && 'opacity-50 pointer-events-none')}>
                       <p className="text-xs font-medium">Opções de validação</p>
                       <label className="flex items-start gap-3 cursor-pointer">
-                        <input type="checkbox" className="mt-0.5 rounded" />
-                        <div>
-                          <span className="text-sm block">Exigir valores únicos para esta propriedade</span>
-                        </div>
+                        <input type="checkbox" className="mt-0.5 rounded" disabled={isSystem} />
+                        <span className="text-sm">Exigir valores únicos para esta propriedade</span>
                       </label>
                       {(selectedProp.fieldType === 'number' || selectedProp.fieldType === 'currency') && (
                         <>
                           <label className="flex items-start gap-3 cursor-pointer">
-                            <input type="checkbox" className="mt-0.5 rounded" />
+                            <input type="checkbox" className="mt-0.5 rounded" disabled={isSystem} />
                             <div>
                               <span className="text-sm block">Definir limite de valor mínimo</span>
                               <span className="text-[11px] text-muted-foreground">Evitar valores abaixo de um número especificado</span>
                             </div>
                           </label>
                           <label className="flex items-start gap-3 cursor-pointer">
-                            <input type="checkbox" className="mt-0.5 rounded" />
+                            <input type="checkbox" className="mt-0.5 rounded" disabled={isSystem} />
                             <div>
                               <span className="text-sm block">Definir limite de valor máximo</span>
                               <span className="text-[11px] text-muted-foreground">Evitar valores acima de um número especificado</span>
@@ -402,22 +418,96 @@ export default function CRMPropertiesPage() {
                   <div className="max-w-md space-y-5">
                     <div>
                       <h3 className="text-base font-semibold mb-1">Gerenciar o acesso à propriedade</h3>
-                      <p className="text-xs text-muted-foreground">Personalize o nível de acesso de usuários e equipes a esta propriedade.</p>
+                      <p className="text-xs text-muted-foreground">Personalize o nível de acesso de usuários e times a esta propriedade.</p>
                     </div>
                     <hr className="border-border/50" />
                     <div className="space-y-3">
-                      {[
-                        { value: 'admin', label: 'Privado apenas para administradores' },
-                        { value: 'edit', label: 'Permitir que todos vejam e editem' },
-                        { value: 'view', label: 'Permitir que todos vejam', default: true },
-                        { value: 'custom', label: 'Atribuir a usuários e equipes' },
-                      ].map(opt => (
-                        <label key={opt.value} className="flex items-center gap-3 cursor-pointer">
-                          <input type="radio" name="access" defaultChecked={opt.default} className="rounded-full" />
-                          <span className="text-sm">{opt.label}</span>
+                      {([
+                        { value: 'admin' as const, label: 'Privado apenas para administradores', desc: 'Somente usuários com cargo admin, ceo ou director podem ver e editar.' },
+                        { value: 'edit' as const, label: 'Permitir que todos vejam e editem', desc: 'Qualquer usuário do sistema pode visualizar e modificar.' },
+                        { value: 'view' as const, label: 'Permitir que todos vejam', desc: 'Todos podem visualizar, mas ninguém pode editar.' },
+                        { value: 'custom' as const, label: 'Atribuir a usuários e times específicos', desc: 'Selecione quais usuários e times têm acesso.' },
+                      ]).map(opt => (
+                        <label key={opt.value} className="flex items-start gap-3 cursor-pointer p-2 rounded-lg hover:bg-muted/30 transition-colors">
+                          <input
+                            type="radio"
+                            name="prop-access"
+                            checked={accessLevel === opt.value}
+                            onChange={() => setAccessLevel(opt.value)}
+                            className="mt-0.5"
+                          />
+                          <div>
+                            <span className="text-sm font-medium block">{opt.label}</span>
+                            <span className="text-[11px] text-muted-foreground">{opt.desc}</span>
+                          </div>
                         </label>
                       ))}
                     </div>
+
+                    {/* Custom: select users + teams */}
+                    {accessLevel === 'custom' && (
+                      <div className="space-y-4 pt-2">
+                        <hr className="border-border/50" />
+                        {/* Teams */}
+                        <div>
+                          <p className="text-xs font-medium mb-2">Times ({teams.length})</p>
+                          {teams.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">Nenhum time cadastrado</p>
+                          ) : (
+                            <div className="space-y-1 max-h-40 overflow-y-auto">
+                              {teams.map(t => (
+                                <label key={t.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-muted/30 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedTeamIds.has(t.id)}
+                                    onChange={() => setSelectedTeamIds(prev => {
+                                      const next = new Set(prev);
+                                      next.has(t.id) ? next.delete(t.id) : next.add(t.id);
+                                      return next;
+                                    })}
+                                    className="rounded"
+                                  />
+                                  <span className="text-sm">{t.nome}</span>
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        {/* Users */}
+                        <div>
+                          <p className="text-xs font-medium mb-2">Usuários ({saasUsers.length})</p>
+                          {saasUsers.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">Nenhum usuário cadastrado</p>
+                          ) : (
+                            <div className="space-y-1 max-h-48 overflow-y-auto">
+                              {saasUsers.map(u => (
+                                <label key={u.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-muted/30 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedUserIds.has(u.id)}
+                                    onChange={() => setSelectedUserIds(prev => {
+                                      const next = new Set(prev);
+                                      next.has(u.id) ? next.delete(u.id) : next.add(u.id);
+                                      return next;
+                                    })}
+                                    className="rounded"
+                                  />
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-semibold text-primary shrink-0">
+                                      {u.nome?.charAt(0)?.toUpperCase() || '?'}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <span className="text-sm block truncate">{u.nome}</span>
+                                      <span className="text-[10px] text-muted-foreground truncate block">{u.email}</span>
+                                    </div>
+                                  </div>
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
