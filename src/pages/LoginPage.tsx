@@ -99,7 +99,7 @@ export default function LoginPage() {
           <div className="mb-10">
             <h1 className="text-4xl font-display font-bold mb-4 leading-tight">
               Performance comercial<br />
-              <span className="gradient-text">com padrão Appmax.</span>
+              <span className="gradient-text">com padrão Hubmax.</span>
             </h1>
             <p className="text-muted-foreground text-lg">
               Operação, IA e gestão em uma plataforma com identidade da sua marca.
