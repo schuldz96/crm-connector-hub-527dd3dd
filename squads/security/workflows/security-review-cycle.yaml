@@ -1,0 +1,73 @@
+name: security-review-cycle
+version: 1.0.0
+description: "Ciclo completo de revisão de segurança — threat model → review → pentest → hardening → compliance"
+
+trigger:
+  - manual: "*run-security-review"
+  - event: "Nova feature em produção"
+  - schedule: "Mensal (recomendado)"
+
+phases:
+  1_threat_model:
+    agent: security-architect
+    task: threat-model
+    description: "Modelar ameaças da feature/componente"
+    output: "threat-model-report"
+    next: 2_security_review
+
+  2_security_review:
+    agent: appsec-engineer
+    task: security-review
+    description: "Code review de segurança com OWASP ASVS"
+    input: "threat-model-report"
+    output: "security-review-findings"
+    next: 3_pentest
+
+  3_pentest:
+    agent: red-team
+    task: pentest-scan
+    description: "Pentesting simulado nos pontos críticos"
+    input: "security-review-findings"
+    output: "pentest-report"
+    next: 4_access_audit
+
+  4_access_audit:
+    agent: iam-specialist
+    task: access-control-audit
+    description: "Auditar controles de acesso e permissões"
+    output: "access-audit-report"
+    next: 5_infra_hardening
+
+  5_infra_hardening:
+    agent: devsecops
+    task: infra-hardening
+    description: "Verificar e endurecer infraestrutura"
+    output: "hardening-report"
+    next: 6_compliance
+
+  6_compliance:
+    agent: compliance-lgpd
+    task: compliance-audit
+    description: "Verificar conformidade LGPD"
+    output: "compliance-report"
+    next: 7_consolidation
+
+  7_consolidation:
+    agent: security-architect
+    description: "Consolidar todos os relatórios em visão executiva"
+    inputs:
+      - "threat-model-report"
+      - "security-review-findings"
+      - "pentest-report"
+      - "access-audit-report"
+      - "hardening-report"
+      - "compliance-report"
+    output: "security-posture-report"
+    format: |
+      ## Security Posture Report
+      **Data:** ...
+      **Score geral:** X/100
+      **Achados críticos:** X
+      **Achados altos:** X
+      **Top 3 riscos:** ...
+      **Action items priorizados:** ...

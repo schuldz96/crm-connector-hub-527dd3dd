@@ -1,0 +1,113 @@
+name: security
+version: 1.0.0
+description: "Squad de segurança de sistemas — threat modeling, pentesting, DevSecOps, compliance LGPD, resposta a incidentes e gestão de identidade/acesso"
+author: Processos-appmax
+license: MIT
+slashPrefix: security
+
+aiox:
+  minVersion: "2.1.0"
+  type: squad
+
+components:
+  agents:
+    # Orquestrador / Visão Estratégica
+    - security-architect.md
+    # Core — Ciclo Ofensivo + Defensivo
+    - appsec-engineer.md
+    - red-team.md
+    - devsecops.md
+    # Governança
+    - compliance-lgpd.md
+    # Resposta e Identidade
+    - incident-responder.md
+    - iam-specialist.md
+
+  tasks:
+    # Análise e modelagem
+    - threat-model.md
+    - security-review.md
+    # Ofensivo
+    - pentest-scan.md
+    # Infraestrutura
+    - infra-hardening.md
+    # Governança
+    - compliance-audit.md
+    # Resposta a incidentes
+    - incident-response.md
+    # Identidade e acesso
+    - access-control-audit.md
+
+  workflows:
+    - security-review-cycle.yaml
+
+  checklists:
+    - owasp-asvs-l1.md
+    - pre-deploy-security.md
+    - incident-postmortem.md
+
+  templates: []
+  tools: []
+  scripts: []
+
+config:
+  extends: extend
+  coding-standards: config/coding-standards.md
+  tech-stack: config/tech-stack.md
+  source-tree: config/source-tree.md
+
+methodologies:
+  - name: STRIDE
+    used_by: [security-architect, appsec-engineer]
+    description: "Threat modeling — Spoofing, Tampering, Repudiation, Info Disclosure, DoS, Elevation"
+  - name: PASTA
+    used_by: [security-architect]
+    description: "Process for Attack Simulation and Threat Analysis (7 estágios, risk-centric)"
+  - name: OWASP Top 10
+    used_by: [appsec-engineer, red-team]
+    description: "Top 10 vulnerabilidades de aplicações web"
+  - name: OWASP ASVS
+    used_by: [appsec-engineer]
+    description: "Application Security Verification Standard (L1/L2/L3)"
+  - name: MITRE ATT&CK
+    used_by: [red-team, incident-responder]
+    description: "Tactics, Techniques & Procedures para ataques e detecção"
+  - name: DREAD
+    used_by: [appsec-engineer, red-team]
+    description: "Risk scoring — Damage, Reproducibility, Exploitability, Affected, Discoverability"
+  - name: CIS Benchmarks
+    used_by: [devsecops]
+    description: "Hardening de infraestrutura cloud, containers e OS"
+  - name: NIST CSF
+    used_by: [security-architect]
+    description: "Identify → Protect → Detect → Respond → Recover"
+  - name: LGPD + ISO 27701
+    used_by: [compliance-lgpd]
+    description: "Privacy by design, proteção de dados pessoais"
+
+scoring:
+  scale: "0-100"
+  dimensions:
+    - confidentiality: "Proteção de dados sensíveis"
+    - integrity: "Integridade de dados e código"
+    - availability: "Disponibilidade do sistema"
+    - compliance: "Conformidade regulatória"
+    - resilience: "Capacidade de recuperação"
+
+dependencies:
+  node: []
+  python: []
+  squads: []
+
+tags:
+  - security
+  - appsec
+  - pentest
+  - devsecops
+  - compliance
+  - lgpd
+  - incident-response
+  - iam
+  - owasp
+  - stride
+  - mitre-attack
