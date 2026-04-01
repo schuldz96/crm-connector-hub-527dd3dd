@@ -14,7 +14,7 @@ export const CONFIG = {
 
   // Evolution API (WhatsApp)
   EVOLUTION_API_URL: import.meta.env.VITE_EVOLUTION_API_URL || 'https://evolutionapic.contato-lojavirtual.com',
-  EVOLUTION_API_TOKEN: import.meta.env.VITE_EVOLUTION_API_TOKEN || '3ce7a42f9bd96ea526b2b0bc39a4faec',
+  EVOLUTION_API_TOKEN: import.meta.env.VITE_EVOLUTION_API_TOKEN || '',
 
   // OpenAI Tokens
   OPENAI_TOKEN_MEETINGS: import.meta.env.VITE_OPENAI_TOKEN_MEETINGS || '',

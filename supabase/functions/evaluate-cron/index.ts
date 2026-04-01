@@ -7,11 +7,12 @@
  */
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { decryptToken } from '../_shared/tokenCrypto.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const EVOLUTION_API_URL = Deno.env.get('EVOLUTION_API_URL') || 'https://evolutionapic.contato-lojavirtual.com';
-const EVOLUTION_API_TOKEN = Deno.env.get('EVOLUTION_API_TOKEN') || '3ce7a42f9bd96ea526b2b0bc39a4faec';
+const EVOLUTION_API_TOKEN = Deno.env.get('EVOLUTION_API_TOKEN') || '';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, { db: { schema: 'saas' } });
 
@@ -110,7 +111,8 @@ serve(async (req) => {
     const tokenMap: Record<string, { token: string; model: string }> = {};
     for (const t of tokens || []) {
       if (t.token_criptografado) {
-        tokenMap[t.modulo_codigo] = { token: t.token_criptografado, model: t.modelo || 'gpt-4o-mini' };
+        const decrypted = await decryptToken(t.token_criptografado);
+        tokenMap[t.modulo_codigo] = { token: decrypted, model: t.modelo || 'gpt-4o-mini' };
       }
     }
     log(`Tokens encontrados: ${Object.keys(tokenMap).join(', ')}`);

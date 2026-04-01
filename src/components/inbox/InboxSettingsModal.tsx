@@ -17,6 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { getSaasEmpresaId } from '@/lib/saas';
 import { useAuth } from '@/contexts/AuthContext';
+import { encryptToken } from '@/lib/tokenCrypto';
 import type { MetaInboxAccount } from '@/pages/InboxPage';
 
 /* ── Meta Template types ────────────────────────────── */
@@ -308,12 +309,13 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
     setSavingAccount(true);
     try {
       const empresaId = await getSaasEmpresaId();
+      const encryptedToken = await encryptToken(accountForm.access_token.trim());
       const payload = {
         empresa_id: empresaId,
         nome: accountForm.nome.trim(),
         phone_number_id: accountForm.phone_number_id.trim(),
         waba_id: accountForm.waba_id.trim() || null,
-        access_token: accountForm.access_token.trim(),
+        access_token: encryptedToken,
         token_type: accountForm.token_type,
         phone_display: accountForm.phone_display.trim() || null,
         status: 'active',

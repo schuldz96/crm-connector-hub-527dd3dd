@@ -168,9 +168,7 @@ Quando o usuário pedir para testar algo (ex: "testa o envio de áudio"):
 - Schema `public.*` — Meta inbox (conversations, messages, templates)
 
 ### Credenciais do banco (para migrations)
-```bash
-PGPASSWORD=s3E5Yszm7WPpjnWG psql "postgresql://postgres.lwusznsduxcqjjmbbobt@aws-1-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require"
-```
+Usar variáveis de ambiente do `.env` local. Nunca hardcodar credenciais em arquivos commitados.
 
 ### Edge Functions
 - `evaluate-cron` — avaliação automática de conversas/reuniões

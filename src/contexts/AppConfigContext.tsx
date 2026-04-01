@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { getSaasEmpresaId } from '@/lib/saas';
 import { CONFIG } from '@/lib/config';
+import { encryptToken, decryptToken } from '@/lib/tokenCrypto';
 
 // ─── Module IDs (must match NAV_ITEMS paths) ─────────────────────────────────
 export type ModuleId =
@@ -172,7 +173,7 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
             if (row.modulo_codigo in nextTokens) {
               // Only override if DB has a non-empty token (don't clear .env defaults)
               if (row.token_criptografado) {
-                (nextTokens as any)[row.modulo_codigo] = row.token_criptografado;
+                (nextTokens as any)[row.modulo_codigo] = await decryptToken(row.token_criptografado);
               }
               if (row.modelo) (nextModels as any)[row.modulo_codigo] = row.modelo;
             }
@@ -220,6 +221,7 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
     void (async () => {
       try {
         const empresaId = await getSaasEmpresaId();
+        const encrypted = await encryptToken(value);
         await (supabase as any)
           .schema('saas')
           .from('tokens_ia_modulo')
@@ -227,7 +229,7 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
             empresa_id: empresaId,
             modulo_codigo: module,
             provedor: 'openai',
-            token_criptografado: value,
+            token_criptografado: encrypted,
             modelo: models[module],
             ativo: true,
           }, { onConflict: 'empresa_id,modulo_codigo,provedor' });
@@ -240,6 +242,7 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
     void (async () => {
       try {
         const empresaId = await getSaasEmpresaId();
+        const encrypted = await encryptToken(tokens[module]);
         await (supabase as any)
           .schema('saas')
           .from('tokens_ia_modulo')
@@ -247,7 +250,7 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
             empresa_id: empresaId,
             modulo_codigo: module,
             provedor: 'openai',
-            token_criptografado: tokens[module],
+            token_criptografado: encrypted,
             modelo: model,
             ativo: true,
           }, { onConflict: 'empresa_id,modulo_codigo,provedor' });

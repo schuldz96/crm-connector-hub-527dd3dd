@@ -17,6 +17,7 @@
  */
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { decryptToken } from '../_shared/tokenCrypto.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -106,7 +107,7 @@ serve(async (req) => {
       });
     }
 
-    const apiToken = tokenRow.token_criptografado;
+    const apiToken = await decryptToken(tokenRow.token_criptografado);
     const defaultModel = tokenRow.modelo || 'gpt-4o-mini';
 
     // 4. Load agent tree

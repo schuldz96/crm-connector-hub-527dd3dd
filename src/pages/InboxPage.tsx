@@ -24,6 +24,7 @@ import {
   uploadMediaToMeta, isWithin24hWindow, normalizePhone,
   type InboxConversation, type InboxMessage,
 } from '@/lib/metaInboxService';
+import { decryptAccountTokens } from '@/lib/tokenCrypto';
 
 /* ── Types ─────────────────────────────────────────────── */
 export interface MetaInboxAccount {
@@ -545,6 +546,11 @@ export default function InboxPage() {
           filtered = [];
         }
       }
+
+      // Decrypt access_tokens loaded from DB
+      filtered = await Promise.all(
+        filtered.map((a: MetaInboxAccount) => decryptAccountTokens(a)),
+      );
 
       setAccounts(filtered);
       if (filtered.length > 0 && !selectedAccount) {
