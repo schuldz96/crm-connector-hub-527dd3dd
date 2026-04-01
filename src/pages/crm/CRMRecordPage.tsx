@@ -389,7 +389,7 @@ export default function CRMRecordPage() {
     if (!email || !email.includes('@')) { setEmailExists(false); return; }
     setCheckingEmail(true);
     try {
-      const results = await (await import('@/lib/crmService')).default || {};
+      const results = await import('@/lib/crmService');
       // Use search contacts to check
       const existing = searchContacts?.data?.find(c => c.email?.toLowerCase() === email.toLowerCase());
       setEmailExists(!!existing);

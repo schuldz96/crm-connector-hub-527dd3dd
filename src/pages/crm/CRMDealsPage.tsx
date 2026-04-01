@@ -699,7 +699,7 @@ export default function CRMDealsPage() {
                             ng[gi][fi] = { ...filter, property: e.target.value };
                             setAdvFilterGroups(ng);
                           }}>
-                          {DEAL_FILTER_CHIPS.map(p => <option key={p} value={p}>{p}</option>)}
+                          {DEAL_FILTERS.map(p => <option key={p.key} value={p.label}>{p.label}</option>)}
                         </select>
                         <button onClick={() => {
                           const ng = [...advFilterGroups];
@@ -734,7 +734,7 @@ export default function CRMDealsPage() {
                   ))}
                   <Button variant="outline" size="sm" className="text-xs mt-1" onClick={() => {
                     const ng = [...advFilterGroups];
-                    ng[gi] = [...ng[gi], { property: DEAL_FILTER_CHIPS[0], operator: 'any', value: '' }];
+                    ng[gi] = [...ng[gi], { property: DEAL_FILTERS[0]?.label ?? '', operator: 'any', value: '' }];
                     setAdvFilterGroups(ng);
                   }}>
                     <Plus className="w-3 h-3 mr-1" /> Adicionar filtro
@@ -755,15 +755,15 @@ export default function CRMDealsPage() {
                       value={advFilterSearch} onChange={e => setAdvFilterSearch(e.target.value)} autoFocus />
                   </div>
                   <div className="max-h-48 overflow-y-auto space-y-0.5">
-                    {DEAL_FILTER_CHIPS
-                      .filter(p => !advFilterSearch || p.toLowerCase().includes(advFilterSearch.toLowerCase()))
+                    {DEAL_FILTERS
+                      .filter(p => !advFilterSearch || p.label.toLowerCase().includes(advFilterSearch.toLowerCase()))
                       .map(p => (
-                        <button key={p} onClick={() => {
-                          setAdvFilterGroups(g => [...g, [{ property: p, operator: 'any', value: '' }]]);
+                        <button key={p.key} onClick={() => {
+                          setAdvFilterGroups(g => [...g, [{ property: p.label, operator: 'any', value: '' }]]);
                           setAdvFilterAdding(false);
                           setAdvFilterSearch('');
                         }} className="w-full text-left text-xs px-2 py-1.5 rounded hover:bg-muted transition-colors text-foreground">
-                          {p}
+                          {p.label}
                         </button>
                       ))}
                   </div>

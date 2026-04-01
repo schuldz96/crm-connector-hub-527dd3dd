@@ -623,7 +623,7 @@ export default function CRMTicketsPage() {
                       <div className="flex items-center gap-2">
                         <select className="flex-1 text-xs border border-border rounded px-2 py-1.5 bg-background" value={filter.property}
                           onChange={e => { const ng = [...advFilterGroups]; ng[gi] = [...ng[gi]]; ng[gi][fi] = { ...filter, property: e.target.value }; setAdvFilterGroups(ng); }}>
-                          {TICKET_FILTER_CHIPS.map(p => <option key={p} value={p}>{p}</option>)}
+                          {TICKET_FILTERS.map(p => <option key={p.key} value={p.label}>{p.label}</option>)}
                         </select>
                         <button onClick={() => { const ng = [...advFilterGroups]; ng[gi] = ng[gi].filter((_, i) => i !== fi); if (ng[gi].length === 0) ng.splice(gi, 1); setAdvFilterGroups(ng); }}><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
                       </div>
@@ -641,7 +641,7 @@ export default function CRMTicketsPage() {
                       {fi < group.length - 1 && <p className="text-[10px] text-muted-foreground font-medium">e</p>}
                     </div>
                   ))}
-                  <Button variant="outline" size="sm" className="text-xs mt-1" onClick={() => { const ng = [...advFilterGroups]; ng[gi] = [...ng[gi], { property: TICKET_FILTER_CHIPS[0], operator: 'any', value: '' }]; setAdvFilterGroups(ng); }}>
+                  <Button variant="outline" size="sm" className="text-xs mt-1" onClick={() => { const ng = [...advFilterGroups]; ng[gi] = [...ng[gi], { property: TICKET_FILTERS[0]?.label ?? '', operator: 'any', value: '' }]; setAdvFilterGroups(ng); }}>
                     <Plus className="w-3 h-3 mr-1" /> Adicionar filtro
                   </Button>
                 </div>
@@ -657,7 +657,7 @@ export default function CRMTicketsPage() {
                     <Input className="pl-8 text-xs h-8" placeholder="Pesquisar em Ticket propriedades" value={advFilterSearch} onChange={e => setAdvFilterSearch(e.target.value)} autoFocus />
                   </div>
                   <div className="max-h-48 overflow-y-auto space-y-0.5">
-                    {TICKET_FILTER_CHIPS.filter(p => !advFilterSearch || p.toLowerCase().includes(advFilterSearch.toLowerCase())).map(p => (
+                    {TICKET_FILTERS.map(p => p.label).filter(p => !advFilterSearch || p.toLowerCase().includes(advFilterSearch.toLowerCase())).map(p => (
                       <button key={p} onClick={() => { setAdvFilterGroups(g => [...g, [{ property: p, operator: 'any', value: '' }]]); setAdvFilterAdding(false); setAdvFilterSearch(''); }}
                         className="w-full text-left text-xs px-2 py-1.5 rounded hover:bg-muted transition-colors text-foreground">{p}</button>
                     ))}
