@@ -164,7 +164,7 @@ export default function LoginPage() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="seu@hubmax.com.br"
+                  placeholder="seu@appmax.com.br"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="pl-10 h-11 bg-input border-border"
