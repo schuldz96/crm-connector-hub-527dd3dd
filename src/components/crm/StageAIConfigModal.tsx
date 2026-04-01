@@ -153,7 +153,7 @@ export default function StageAIConfigModal({
   };
 
   const addQuestion = () => {
-    update('questions', [...config.questions, { id: crypto.randomUUID(), question: '', description: '' }]);
+    update('questions', [...config.questions, { id: crypto.randomUUID(), question: '', description: '', required: false }]);
   };
 
   const removeQuestion = (id: string) => {
@@ -254,7 +254,7 @@ export default function StageAIConfigModal({
                   <Input
                     value={config.aiName}
                     onChange={e => update('aiName', e.target.value)}
-                    placeholder="Ex: Appmax Assistente"
+                    placeholder="Ex: Hubmax Assistente"
                     className="h-10"
                   />
                 </div>
@@ -708,7 +708,7 @@ export default function StageAIConfigModal({
                     <Select value={config.ragSource} onValueChange={v => update('ragSource', v)}>
                       <SelectTrigger className="h-10"><SelectValue placeholder="Selecione uma base..." /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="historico-appmax">Histórico Appmax (31577 chunks)</SelectItem>
+                        <SelectItem value="historico-appmax">Histórico Hubmax (31577 chunks)</SelectItem>
                         <SelectItem value="docs-produto">Docs Produto (8420 chunks)</SelectItem>
                         <SelectItem value="faq-suporte">FAQ Suporte (2150 chunks)</SelectItem>
                       </SelectContent>

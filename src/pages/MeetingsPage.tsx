@@ -261,7 +261,7 @@ function ManualMeetingModal({
           <div>
             <label className="text-xs font-medium block mb-1">E-mails dos participantes *</label>
             <Textarea value={emails} onChange={e => setEmails(e.target.value)}
-              placeholder="vendedor@appmax.com.br, cliente@empresa.com (separados por vírgula)"
+              placeholder="vendedor@hubmax.com.br, cliente@empresa.com (separados por vírgula)"
               className="text-xs bg-secondary border-border min-h-[60px] resize-none" />
             <p className="text-[10px] text-muted-foreground mt-0.5">O primeiro e-mail será o vendedor responsável</p>
           </div>
