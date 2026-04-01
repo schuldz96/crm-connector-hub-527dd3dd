@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -223,8 +223,35 @@ export default function AgentOrgChart() {
   const [estimates, setEstimates] = useState<Estimates>(loadEstimates);
   const [generating, setGenerating] = useState(false);
   const [zoom, setZoom] = useState(0.85);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
   const { tokens } = useAppConfig();
   const { toast } = useToast();
+
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    setZoom(z => Math.min(1.5, Math.max(0.3, z - e.deltaY * 0.001)));
+  }, []);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    setDragging(true);
+    dragStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
+  }, [pan]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!dragging) return;
+    setPan({
+      x: dragStart.current.panX + (e.clientX - dragStart.current.x),
+      y: dragStart.current.panY + (e.clientY - dragStart.current.y),
+    });
+  }, [dragging]);
+
+  const handleMouseUp = useCallback(() => setDragging(false), []);
+
+  const resetView = useCallback(() => { setZoom(0.85); setPan({ x: 0, y: 0 }); }, []);
 
   const generateEstimates = async () => {
     const token = tokens.meetings || tokens.whatsapp || tokens.training;
@@ -271,10 +298,10 @@ Valores em BRL. Devs sênior R$25–35k/mês, UX R$15–20k/mês, Supabase Pro ~
             <p className="text-xs text-muted-foreground">32 agentes de IA em uma única hierarquia — AIOX Core + Vendas + Segurança</p>
           </div>
           <div className="flex items-center gap-1">
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setZoom(z => Math.max(0.4, z - 0.1))}><ZoomOut className="w-3.5 h-3.5" /></Button>
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setZoom(z => Math.max(0.3, z - 0.1))}><ZoomOut className="w-3.5 h-3.5" /></Button>
             <span className="text-[10px] text-muted-foreground w-8 text-center">{Math.round(zoom * 100)}%</span>
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setZoom(z => Math.min(1.2, z + 0.1))}><ZoomIn className="w-3.5 h-3.5" /></Button>
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setZoom(0.85)}><Maximize2 className="w-3.5 h-3.5" /></Button>
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setZoom(z => Math.min(1.5, z + 0.1))}><ZoomIn className="w-3.5 h-3.5" /></Button>
+            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={resetView}><Maximize2 className="w-3.5 h-3.5" /></Button>
           </div>
         </div>
         <div className="flex flex-wrap gap-2 mt-3">
@@ -292,9 +319,31 @@ Valores em BRL. Devs sênior R$25–35k/mês, UX R$15–20k/mês, Supabase Pro ~
       </div>
 
       {/* Unified Org Chart */}
-      <div className="rounded-2xl border border-border/40 bg-gradient-to-b from-card/50 to-background/50 p-4 overflow-x-auto">
-        <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top center', transition: 'transform 0.2s' }} className="min-w-fit flex justify-center pb-4">
+      <div
+        ref={containerRef}
+        className={cn(
+          'rounded-2xl border border-border/40 bg-gradient-to-b from-card/50 to-background/50 overflow-hidden relative',
+          dragging ? 'cursor-grabbing' : 'cursor-grab',
+        )}
+        style={{ height: 520 }}
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+      >
+        <div
+          style={{
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            transformOrigin: 'top center',
+            transition: dragging ? 'none' : 'transform 0.15s ease-out',
+          }}
+          className="min-w-fit flex justify-center pt-6 pb-8"
+        >
           <TreeNode node={FULL_ORG} />
+        </div>
+        <div className="absolute bottom-2 right-3 text-[9px] text-muted-foreground/50 pointer-events-none select-none">
+          Scroll para zoom  |  Arraste para mover
         </div>
       </div>
 
