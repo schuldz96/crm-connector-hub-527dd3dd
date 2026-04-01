@@ -1554,7 +1554,7 @@ export default function AdminPage() {
                         Nome do remetente
                       </label>
                       <Input
-                        placeholder="Appmax Revenue OS"
+                        placeholder="Hubmax Revenue OS"
                         value={emailConfig.senderName}
                         onChange={(e) => setEmailConfig(prev => ({ ...prev, senderName: e.target.value }))}
                       />
