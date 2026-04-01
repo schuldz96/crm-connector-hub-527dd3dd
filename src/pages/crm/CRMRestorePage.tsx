@@ -106,7 +106,7 @@ export default function CRMRestorePage() {
       toast({ title: `${ids.length} ${ids.length === 1 ? 'registro restaurado' : 'registros restaurados'}` });
       setSelectedIds(new Set());
       refetch();
-      qc.invalidateQueries({ queryKey: ['crm'] });
+      qc.invalidateQueries({ predicate: (q) => q.queryKey.some(k => typeof k === 'string' && k.startsWith('crm')) });
     } catch (err) {
       toast({ title: 'Erro ao restaurar', description: String(err), variant: 'destructive' });
     } finally {
