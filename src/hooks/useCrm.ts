@@ -141,6 +141,7 @@ export function useUpdateDeal() {
     mutationFn: ({ id, ...data }: { id: string } & Record<string, unknown>) => crm.updateDeal(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['crm.deals'] });
+      qc.invalidateQueries({ queryKey: ['crm.deals.pipeline'] });
       qc.invalidateQueries({ queryKey: ['crm.deal'] });
     },
   });
@@ -196,6 +197,7 @@ export function useUpdateTicket() {
     mutationFn: ({ id, ...data }: { id: string } & Record<string, unknown>) => crm.updateTicket(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['crm.tickets'] });
+      qc.invalidateQueries({ queryKey: ['crm.tickets.pipeline'] });
       qc.invalidateQueries({ queryKey: ['crm.ticket'] });
     },
   });

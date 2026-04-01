@@ -18,6 +18,8 @@ import { cn } from '@/lib/utils';
 import StageAIConfigModal, { type StageAIConfig } from '@/components/crm/StageAIConfigModal';
 import { useCrmPipelines, useCrmTicketsByPipeline, useCreateTicket, useUpdateTicket, useSaasUsers } from '@/hooks/useCrm';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { getSaasEmpresaId } from '@/lib/saas';
 import { useToast } from '@/hooks/use-toast';
 import type { CrmTicket, CrmPipelineStage, TicketPriority } from '@/types/crm';
 
@@ -207,6 +209,33 @@ export default function CRMTicketsPage() {
 
   const isLoading = loadingPipelines || loadingTickets;
   const stages: CrmPipelineStage[] = pipeline?.estagios || [];
+
+  // Load stage AI configs from DB when pipeline changes
+  useEffect(() => {
+    if (!stages.length) return;
+    const ids = stages.map(s => s.id);
+    (supabase as any).schema('saas').from('crm_estagio_ia_config')
+      .select('*').in('estagio_id', ids)
+      .then(({ data }: { data: any[] | null }) => {
+        if (!data?.length) return;
+        const map: Record<string, StageAIConfig> = {};
+        for (const row of data) {
+          const bv = row.mensagem_boas_vindas || {};
+          map[row.estagio_id] = {
+            aiName: '', provider: row.provider || '', instance: row.instancia_id || '',
+            active: row.ativo ?? false, systemPrompt: row.prompt_sistema || '',
+            autoComplement: row.auto_complemento || '', welcomeEnabled: bv.enabled ?? false,
+            welcomeType: bv.type || 'text', welcomeText: bv.text || '',
+            startMode: row.modo_inicio || 'immediate', typingDelay: row.delay_digitacao ?? 1,
+            responseDelay: row.delay_resposta ?? 0, autoEvaluation: false,
+            questions: row.perguntas || [], followUps: row.followups || [],
+            ragEnabled: row.rag_ativo ?? false, ragSource: row.rag_fonte || '',
+            ragMaxTurns: row.rag_max_turnos ?? 5, transitions: row.transicoes || [],
+          };
+        }
+        setStageAIConfigs(map);
+      });
+  }, [pipelineId]);
 
   const handleCreateTicket = async () => {
     if (!newTitle.trim()) return;
@@ -737,7 +766,23 @@ export default function CRMTicketsPage() {
           stageId={aiConfigStage.id}
           allStages={stages.map(s => ({ id: s.id, name: s.nome }))}
           initialConfig={stageAIConfigs[aiConfigStage.id]}
-          onSave={(id, cfg) => setStageAIConfigs(prev => ({ ...prev, [id]: cfg }))}
+          onSave={async (id, cfg) => {
+            setStageAIConfigs(prev => ({ ...prev, [id]: cfg }));
+            try {
+              const empresaId = await getSaasEmpresaId();
+              await (supabase as any).schema('saas').from('crm_estagio_ia_config').upsert({
+                empresa_id: empresaId, estagio_id: id, ativo: cfg.active,
+                provider: cfg.provider, instancia_id: cfg.instance,
+                prompt_sistema: cfg.systemPrompt, auto_complemento: cfg.autoComplement,
+                mensagem_boas_vindas: { enabled: cfg.welcomeEnabled, type: cfg.welcomeType, text: cfg.welcomeText },
+                modo_inicio: cfg.startMode, delay_digitacao: cfg.typingDelay, delay_resposta: cfg.responseDelay,
+                perguntas: cfg.questions, followups: cfg.followUps,
+                rag_ativo: cfg.ragEnabled, rag_fonte: cfg.ragSource, rag_max_turnos: cfg.ragMaxTurns,
+                transicoes: cfg.transitions, atualizado_em: new Date().toISOString(),
+              }, { onConflict: 'estagio_id' });
+              toast({ title: 'Configuração de IA salva' });
+            } catch (e) { console.error('[StageAI] Save error:', e); }
+          }}
         />
       )}
     </div>
