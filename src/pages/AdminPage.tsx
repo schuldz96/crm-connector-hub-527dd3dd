@@ -1528,7 +1528,7 @@ export default function AdminPage() {
                       </label>
                       <Input
                         type="email"
-                        placeholder="equipe@appmax.com.br"
+                        placeholder="equipe@hubmax.com.br"
                         value={emailConfig.gmailAccount}
                         onChange={(e) => setEmailConfig(prev => ({ ...prev, gmailAccount: e.target.value, senderEmail: e.target.value }))}
                       />
