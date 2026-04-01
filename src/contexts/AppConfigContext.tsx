@@ -204,7 +204,7 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
 
         if (!empresaRes.error && empresaRes.data?.subtitulo) {
           setCompanySubtitleState(empresaRes.data.subtitulo);
-          document.title = `Appmax ${empresaRes.data.subtitulo}`;
+          document.title = `Hubmax ${empresaRes.data.subtitulo}`;
         }
       } catch {
         // keep defaults
