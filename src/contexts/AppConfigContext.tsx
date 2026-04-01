@@ -324,7 +324,7 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
 
   const setCompanySubtitle = (value: string) => {
     setCompanySubtitleState(value);
-    document.title = `Appmax ${value}`;
+    document.title = `Hubmax ${value}`;
     void (async () => {
       try {
         const empresaId = await getSaasEmpresaId();

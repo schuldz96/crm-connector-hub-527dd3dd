@@ -153,7 +153,7 @@ export default function StageAIConfigModal({
   };
 
   const addQuestion = () => {
-    update('questions', [...config.questions, { id: crypto.randomUUID(), question: '', description: '' }]);
+    update('questions', [...config.questions, { id: crypto.randomUUID(), question: '', description: '', required: false }]);
   };
 
   const removeQuestion = (id: string) => {

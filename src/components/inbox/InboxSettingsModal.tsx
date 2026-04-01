@@ -28,7 +28,8 @@ export interface TemplateComponent {
   type: 'HEADER' | 'BODY' | 'FOOTER' | 'BUTTONS';
   format?: 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT';
   text?: string;
-  buttons?: { type: string; text: string; url?: string; phone_number?: string }[];
+  example?: any;
+  buttons?: { type: string; text: string; url?: string; phone_number?: string; example?: any }[];
 }
 
 export type TemplateQuality = 'GREEN' | 'YELLOW' | 'RED' | 'UNKNOWN';

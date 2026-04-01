@@ -33,7 +33,7 @@ export default function AppTopBar() {
   const navigate = useNavigate();
   const location = useLocation();
   const [search, setSearch] = useState('');
-  const page = PAGE_TITLES[location.pathname] || { title: 'Appmax', subtitle: '' };
+  const page = PAGE_TITLES[location.pathname] || { title: 'Hubmax', subtitle: '' };
   const routes = useMemo(
     () =>
       Object.entries(PAGE_TITLES).map(([path, meta]) => ({

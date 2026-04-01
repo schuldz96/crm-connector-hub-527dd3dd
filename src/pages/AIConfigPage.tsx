@@ -39,7 +39,7 @@ export interface EvalCriteria {
   weight: number;
   examples: string[];
   positiveSignals: string[];
-  neutralSignals: string[];
+  neutralSignals?: string[];
   negativeSignals: string[];
 }
 
