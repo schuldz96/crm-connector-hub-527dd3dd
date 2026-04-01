@@ -99,7 +99,7 @@ export default function LoginPage() {
           <div className="mb-10">
             <h1 className="text-4xl font-display font-bold mb-4 leading-tight">
               Performance comercial<br />
-              <span className="gradient-text">com padrão Hubmax.</span>
+              <span className="gradient-text">com padrão Appmax.</span>
             </h1>
             <p className="text-muted-foreground text-lg">
               Operação, IA e gestão em uma plataforma com identidade da sua marca.
@@ -116,7 +116,7 @@ export default function LoginPage() {
           </div>
         </div>
         <div className="relative z-10 flex items-center gap-6 text-xs text-muted-foreground">
-          <span>© 2026 Hubmax</span>
+          <span>© 2026 Appmax</span>
           <span>·</span>
           <span>Privacidade</span>
           <span>·</span>
@@ -164,7 +164,7 @@ export default function LoginPage() {
                 <Input
                   id="email"
                   type="email"
-                  placeholder="seu@hubmax.com.br"
+                  placeholder="seu@appmax.com.br"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="pl-10 h-11 bg-input border-border"
@@ -215,7 +215,7 @@ export default function LoginPage() {
               <ShieldCheck className="w-3.5 h-3.5 text-primary" /> Acesso restrito
             </p>
             <p className="text-[11px] text-muted-foreground leading-relaxed">
-              Esta plataforma é exclusiva para colaboradores com e-mail <strong>@hubmax.com.br</strong>. Contas de outros domínios serão bloqueadas automaticamente.
+              Esta plataforma é exclusiva para colaboradores com e-mail <strong>@appmax.com.br</strong>. Contas de outros domínios serão bloqueadas automaticamente.
             </p>
           </div>
         </div>

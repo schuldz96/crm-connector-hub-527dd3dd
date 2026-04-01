@@ -141,7 +141,7 @@ export default function AdminPage() {
     smtpPort: '587',
     smtpUser: '',
     smtpPassword: '',
-    senderName: 'Hubmax Revenue OS',
+    senderName: 'Appmax Revenue OS',
     senderEmail: '',
   });
   const [showEmailPassword, setShowEmailPassword] = useState(false);
@@ -388,10 +388,10 @@ export default function AdminPage() {
               <h2 className="font-display font-semibold text-lg">Configurações da Empresa</h2>
               <div className="grid grid-cols-2 gap-4">
                 {[
-                  { label: 'Nome da Empresa', value: 'Hubmax', placeholder: 'Sua empresa' },
-                  { label: 'Domínio', value: 'hubmax.com.br', placeholder: 'dominio.com.br' },
+                  { label: 'Nome da Empresa', value: 'Appmax', placeholder: 'Sua empresa' },
+                  { label: 'Domínio', value: 'appmax.com.br', placeholder: 'dominio.com.br' },
                   { label: 'CNPJ', value: '', placeholder: '00.000.000/0001-00' },
-                  { label: 'Email de Contato', value: 'admin@hubmax.com.br', placeholder: 'admin@empresa.com' },
+                  { label: 'Email de Contato', value: 'admin@appmax.com.br', placeholder: 'admin@empresa.com' },
                 ].map(f => (
                   <div key={f.label}>
                     <label className="text-xs font-medium block mb-1.5">{f.label}</label>
@@ -1528,7 +1528,7 @@ export default function AdminPage() {
                       </label>
                       <Input
                         type="email"
-                        placeholder="equipe@hubmax.com.br"
+                        placeholder="equipe@appmax.com.br"
                         value={emailConfig.gmailAccount}
                         onChange={(e) => setEmailConfig(prev => ({ ...prev, gmailAccount: e.target.value, senderEmail: e.target.value }))}
                       />
@@ -1554,7 +1554,7 @@ export default function AdminPage() {
                         Nome do remetente
                       </label>
                       <Input
-                        placeholder="Hubmax Revenue OS"
+                        placeholder="Appmax Revenue OS"
                         value={emailConfig.senderName}
                         onChange={(e) => setEmailConfig(prev => ({ ...prev, senderName: e.target.value }))}
                       />
@@ -1622,7 +1622,7 @@ export default function AdminPage() {
                       </label>
                       <Input
                         type="email"
-                        placeholder="noreply@hubmax.com.br"
+                        placeholder="noreply@appmax.com.br"
                         value={emailConfig.senderEmail}
                         onChange={(e) => setEmailConfig(prev => ({ ...prev, senderEmail: e.target.value }))}
                       />
