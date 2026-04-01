@@ -374,42 +374,47 @@ export default function CRMPropertiesPage() {
                       <p className="text-xs text-muted-foreground">Opções de visibilidade e validação.</p>
                     </div>
                     <hr className="border-border/50" />
-                    <div className={cn('space-y-3', isSystem && 'opacity-50 pointer-events-none')}>
+                    <div className="space-y-3">
                       <p className="text-xs font-medium">Opções de visibilidade</p>
                       <label className="flex items-start gap-3 cursor-pointer">
-                        <input type="checkbox" defaultChecked className="mt-0.5 rounded" disabled={isSystem} />
-                        <span className="text-sm">Mostrar propriedade nos formulários e fluxos</span>
-                      </label>
-                      <label className="flex items-start gap-3 cursor-pointer">
-                        <input type="checkbox" className="mt-0.5 rounded" disabled={isSystem} />
-                        <span className="text-sm">Mostrar nos resultados da pesquisa global</span>
+                        <input type="checkbox" defaultChecked className="mt-0.5 rounded" />
+                        <div>
+                          <span className="text-sm block">Mostrar propriedade nos formulários e fluxos</span>
+                          <span className="text-[11px] text-muted-foreground">Exibir este campo ao criar ou editar registros</span>
+                        </div>
                       </label>
                     </div>
                     <hr className="border-border/50" />
-                    <div className={cn('space-y-3', isSystem && 'opacity-50 pointer-events-none')}>
+                    <div className="space-y-3">
                       <p className="text-xs font-medium">Opções de validação</p>
                       <label className="flex items-start gap-3 cursor-pointer">
-                        <input type="checkbox" className="mt-0.5 rounded" disabled={isSystem} />
-                        <span className="text-sm">Exigir valores únicos para esta propriedade</span>
+                        <input type="checkbox" className="mt-0.5 rounded" />
+                        <div>
+                          <span className="text-sm block">Exigir valores únicos para esta propriedade</span>
+                          <span className="text-[11px] text-muted-foreground">Não permitir valores duplicados entre registros</span>
+                        </div>
                       </label>
-                      {(selectedProp.fieldType === 'number' || selectedProp.fieldType === 'currency') && (
-                        <>
-                          <label className="flex items-start gap-3 cursor-pointer">
-                            <input type="checkbox" className="mt-0.5 rounded" disabled={isSystem} />
-                            <div>
-                              <span className="text-sm block">Definir limite de valor mínimo</span>
-                              <span className="text-[11px] text-muted-foreground">Evitar valores abaixo de um número especificado</span>
-                            </div>
-                          </label>
-                          <label className="flex items-start gap-3 cursor-pointer">
-                            <input type="checkbox" className="mt-0.5 rounded" disabled={isSystem} />
-                            <div>
-                              <span className="text-sm block">Definir limite de valor máximo</span>
-                              <span className="text-[11px] text-muted-foreground">Evitar valores acima de um número especificado</span>
-                            </div>
-                          </label>
-                        </>
-                      )}
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input type="checkbox" className="mt-0.5 rounded" />
+                        <div>
+                          <span className="text-sm block">Aceitar apenas números</span>
+                          <span className="text-[11px] text-muted-foreground">Bloquear letras e caracteres especiais</span>
+                        </div>
+                      </label>
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input type="checkbox" className="mt-0.5 rounded" />
+                        <div>
+                          <span className="text-sm block">Definir limite mínimo de caracteres</span>
+                          <span className="text-[11px] text-muted-foreground">Exigir quantidade mínima de caracteres no preenchimento</span>
+                        </div>
+                      </label>
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input type="checkbox" className="mt-0.5 rounded" />
+                        <div>
+                          <span className="text-sm block">Definir limite máximo de caracteres</span>
+                          <span className="text-[11px] text-muted-foreground">Limitar a quantidade máxima de caracteres permitidos</span>
+                        </div>
+                      </label>
                     </div>
                   </div>
                 )}
