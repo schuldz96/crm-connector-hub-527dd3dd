@@ -424,7 +424,7 @@ export default function AdminPage() {
                       <Save className="w-3 h-3 mr-1" /> Salvar
                     </Button>
                   </div>
-                  <p className="text-[10px] text-muted-foreground mt-1">Aparece como "APPMAX · {subtitleDraft}" na sidebar e "Appmax {subtitleDraft}" na aba.</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">Aparece como "HUBMAX · {subtitleDraft}" na sidebar e "Hubmax {subtitleDraft}" na aba.</p>
                 </div>
               </div>
             </div>
