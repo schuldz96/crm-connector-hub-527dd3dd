@@ -12,7 +12,7 @@ import {
   Lock, ToggleLeft, ToggleRight, SlidersHorizontal,
   Layers, Plus, Trash2, ChevronDown, ChevronUp, GitBranch,
   ScrollText, LogIn, LogOut, MonitorSmartphone, Search, RefreshCw, Trash,
-  Filter, Plug, Copy, ExternalLink, Check, ShieldCheck,
+  Filter, Plug, Copy, ExternalLink, Check, ShieldCheck, Network,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppConfig, DEFAULT_MODULES, type ModuleId, AI_MODELS, type ModuleAIKey } from '@/contexts/AppConfigContext';
@@ -36,6 +36,7 @@ import {
   type AllowedUser,
   type AccessRequest,
 } from '@/lib/accessControl';
+import AgentOrgChart from '@/components/admin/AgentOrgChart';
 import {
   loadAreas,
   createArea,
@@ -56,6 +57,7 @@ const ADMIN_SECTIONS = [
   { id: 'modules',      label: 'Módulos Visíveis',     icon: ToggleRight },
   { id: 'security',     label: 'Segurança & RLS',      icon: Lock },
   { id: 'logs',         label: 'Logs de Acesso',       icon: ScrollText },
+  { id: 'agents',       label: 'Agentes & Projeto',    icon: Network },
 ];
 
 // ── Helpers para salvar Client ID criptografado (ofuscado) no localStorage ──
@@ -1693,6 +1695,9 @@ export default function AdminPage() {
               </div>
             </div>
           )}
+
+          {/* ── Agentes & Projeto ── */}
+          {section === 'agents' && <AgentOrgChart />}
 
         </div>
       </div>
