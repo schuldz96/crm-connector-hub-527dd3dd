@@ -176,8 +176,8 @@ export function parseTranscriptParticipation(
     if (ignoredSpeakers.has(n)) return false;
     if (/^\d/.test(n)) return false;
     if (ignoredPatterns.some(p => p.test(value))) return false;
-    // Reject if name has more than 6 words (likely a sentence, not a name)
-    if (n.split(' ').length > 6) return false;
+    // Reject if name has more than 10 words (likely a sentence, not a name)
+    if (n.split(' ').length > 10) return false;
     return true;
   };
 

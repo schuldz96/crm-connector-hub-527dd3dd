@@ -1445,32 +1445,31 @@ export default function MeetingsPage() {
                         </p>
                       )}
 
-                      {/* Section 2: All emails */}
+                      {/* Section 2: All emails as cards, internal first */}
                       {allEmails.length > 0 && (
-                        <>
-                          <div className="border-t border-border pt-3 mt-3">
-                            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">E-mails da reunião ({allEmails.length})</p>
-                            <div className="relative mb-2">
-                              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
-                              <input value={emailSearch} onChange={e => setEmailSearch(e.target.value)}
-                                placeholder="Pesquisar e-mail..." className="w-full pl-7 h-7 text-[10px] border border-border rounded-md bg-background px-2" />
-                            </div>
-                            <div className="space-y-1 max-h-[150px] overflow-y-auto">
-                              {allEmails
-                                .filter(e => !emailSearch || e.toLowerCase().includes(emailSearch.toLowerCase()))
-                                .sort((a, b) => a.localeCompare(b))
-                                .map(email => {
-                                  const isExternal = !email.endsWith('@appmax.com.br');
-                                  return (
-                                    <div key={email} className="flex items-center justify-between py-1 px-2 rounded hover:bg-muted/30 text-[10px]">
-                                      <span className="text-muted-foreground truncate">{email}</span>
-                                      {isExternal && <span className="text-accent text-[9px] flex-shrink-0 ml-1">Externo</span>}
+                        <div className="border-t border-border pt-3 mt-3">
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">E-mails da reunião ({allEmails.length})</p>
+                          <div className="space-y-1.5">
+                            {allEmails
+                              .sort((a, b) => {
+                                const aExt = !a.endsWith('@appmax.com.br') ? 1 : 0;
+                                const bExt = !b.endsWith('@appmax.com.br') ? 1 : 0;
+                                return aExt - bExt || a.localeCompare(b);
+                              })
+                              .map(email => {
+                                const isExternal = !email.endsWith('@appmax.com.br');
+                                return (
+                                  <div key={email} className={cn('flex items-center gap-2.5 p-2 rounded-lg border', isExternal ? 'bg-accent/5 border-accent/15' : 'bg-secondary border-border')}>
+                                    <div className="w-6 h-6 rounded-full bg-muted border border-border flex items-center justify-center text-[9px] font-bold flex-shrink-0">
+                                      {email[0].toUpperCase()}
                                     </div>
-                                  );
-                                })}
-                            </div>
+                                    <p className="text-[10px] text-muted-foreground truncate flex-1">{email}</p>
+                                    {isExternal && <span className="text-[9px] font-medium text-accent bg-accent/10 px-1.5 py-0.5 rounded flex-shrink-0">Externo</span>}
+                                  </div>
+                                );
+                              })}
                           </div>
-                        </>
+                        </div>
                       )}
                     </div>
                   );
