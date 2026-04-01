@@ -11,6 +11,9 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { useCrmCompanies, useCreateCompany, useSaasUsers } from '@/hooks/useCrm';
 import { useAuth } from '@/contexts/AuthContext';
