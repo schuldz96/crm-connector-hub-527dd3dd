@@ -183,44 +183,90 @@ function TreeNode({ node }: { node: OrgNode }) {
   );
 }
 
-/* ── Estimation (AI-powered) ────────────────────────────── */
-interface Estimates {
-  cost: { label: string; min: number; max: number }[];
-  timeline: { label: string; months: string; people: string; highlight?: boolean }[];
-  saas: { label: string; min: number; max: number }[];
-  updatedAt: string;
-  aiGenerated: boolean;
-}
+/* ── Estimation — Formula-based + Incremental AI ────────── */
 
-const DEFAULT_ESTIMATES: Estimates = {
-  cost: [
-    { label: 'Desenvolvimento', min: 380_000, max: 520_000 },
-    { label: 'UI/UX Design', min: 45_000, max: 80_000 },
-    { label: 'Infraestrutura (12 meses)', min: 12_000, max: 24_000 },
-    { label: 'IA / OpenAI (12 meses)', min: 18_000, max: 36_000 },
-    { label: 'Total Estimado', min: 455_000, max: 660_000 },
-  ],
-  timeline: [
-    { label: 'Time tradicional', months: '8–14', people: '5–8' },
-    { label: 'Com AIOX + Claude (real)', months: '~0.8', people: '2', highlight: true },
-  ],
-  saas: [
-    { label: 'MRR (50–150 clientes)', min: 15_000, max: 45_000 },
-    { label: 'ARR projetado', min: 180_000, max: 540_000 },
-    { label: 'Valuation (10x ARR)', min: 1_800_000, max: 5_400_000 },
-  ],
-  updatedAt: new Date().toLocaleDateString('pt-BR'),
-  aiGenerated: false,
+// Cost per unit (BRL) — benchmarks mercado brasileiro SaaS B2B
+const UNIT_COSTS = {
+  loc: 12,            // R$ por linha de código (dev sênior ~R$30k/mês, ~160h, ~20 LOC/h útil)
+  page: 8_000,        // R$ por página funcional (layout + lógica + integração)
+  edgeFunction: 5_000,// R$ por edge function (backend serverless)
+  migration: 2_000,   // R$ por migration SQL (schema, RLS, indexes)
+  agent: 3_500,       // R$ por agente IA (prompt, config, integração)
+  integration: 15_000,// R$ por integração externa (WhatsApp, Meet, OpenAI)
+  uxDesign: 3_500,    // R$ por tela desenhada
+  infraMonth: 1_800,  // R$ infra/mês (Supabase Pro + domínio + OpenAI)
 };
 
-const STORAGE_KEY = 'sdcoach_project_estimates';
-function loadEstimates(): Estimates { try { const r = localStorage.getItem(STORAGE_KEY); if (r) return JSON.parse(r); } catch {} return DEFAULT_ESTIMATES; }
-function saveEstimates(e: Estimates) { localStorage.setItem(STORAGE_KEY, JSON.stringify(e)); }
+// Real project metrics from git
+const METRICS = {
+  startDate: '2026-03-08',
+  daysElapsed: Math.ceil((Date.now() - new Date('2026-03-08').getTime()) / 86400000),
+  commits: 708,
+  loc: 37_918,
+  pages: 26,
+  edgeFunctions: 8,
+  migrations: 39,
+  agents: 32,
+  integrations: 4, // WhatsApp Evolution, Meta WABA, Google Meet, OpenAI
+  teamSize: 2,
+};
+
+function calcBaseCost() {
+  const m = METRICS;
+  const dev = m.loc * UNIT_COSTS.loc;
+  const pages = m.pages * UNIT_COSTS.page;
+  const edge = m.edgeFunctions * UNIT_COSTS.edgeFunction;
+  const migrations = m.migrations * UNIT_COSTS.migration;
+  const agents = m.agents * UNIT_COSTS.agent;
+  const integrations = m.integrations * UNIT_COSTS.integration;
+  const ux = m.pages * UNIT_COSTS.uxDesign;
+  const infra12 = 12 * UNIT_COSTS.infraMonth;
+
+  const devTotal = dev + pages + edge + migrations + agents + integrations;
+  const total = devTotal + ux + infra12;
+
+  return {
+    dev, pages, edge, migrations, agents, integrations, ux, infra12,
+    devTotal, total,
+  };
+}
+
+// Incremental log
+interface IncrementEntry {
+  date: string;
+  description: string;
+  value: number;
+}
+
+interface ProjectEstimates {
+  baseCost: ReturnType<typeof calcBaseCost>;
+  increments: IncrementEntry[];
+  lastMetrics: typeof METRICS;
+  updatedAt: string;
+}
+
+const STORAGE_KEY = 'sdcoach_project_estimates_v2';
+
+function loadProjectEstimates(): ProjectEstimates {
+  try {
+    const r = localStorage.getItem(STORAGE_KEY);
+    if (r) {
+      const parsed = JSON.parse(r);
+      // Recalculate base from current metrics
+      parsed.baseCost = calcBaseCost();
+      return parsed;
+    }
+  } catch {}
+  return { baseCost: calcBaseCost(), increments: [], lastMetrics: METRICS, updatedAt: new Date().toLocaleDateString('pt-BR') };
+}
+
+function saveProjectEstimates(e: ProjectEstimates) { localStorage.setItem(STORAGE_KEY, JSON.stringify(e)); }
+
 function formatBRL(v: number) { return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }); }
 
 /* ── Main ───────────────────────────────────────────────── */
 export default function AgentOrgChart() {
-  const [estimates, setEstimates] = useState<Estimates>(loadEstimates);
+  const [est, setEst] = useState<ProjectEstimates>(loadProjectEstimates);
   const [generating, setGenerating] = useState(false);
   const [zoom, setZoom] = useState(0.85);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -229,6 +275,9 @@ export default function AgentOrgChart() {
   const containerRef = useRef<HTMLDivElement>(null);
   const { tokens } = useAppConfig();
   const { toast } = useToast();
+
+  const incrementTotal = est.increments.reduce((s, i) => s + i.value, 0);
+  const totalProject = est.baseCost.total + incrementTotal;
 
   // Native wheel listener to allow preventDefault (passive: false)
   useEffect(() => {
@@ -261,66 +310,65 @@ export default function AgentOrgChart() {
 
   const resetView = useCallback(() => { setZoom(0.85); setPan({ x: 0, y: 0 }); }, []);
 
-  // Real project metrics from git history
-  const PROJECT_METRICS = {
-    startDate: '2026-03-08',
-    currentDate: new Date().toISOString().slice(0, 10),
-    daysElapsed: Math.ceil((Date.now() - new Date('2026-03-08').getTime()) / 86400000),
-    commits: 708,
-    linesOfCode: 37918,
-    pages: 26,
-    edgeFunctions: 8,
-    migrations: 39,
-    agents: 32,
-    team: '2 pessoas (Marcos + Yuri) + IA (Claude Code + Lovable)',
-    authors: 'gpt-engineer-app[bot]: 377 commits, Processos-appmax: 237, Maxter: 82, Yuri: 11',
-  };
+  // Traditional team estimate (formula-based)
+  // COCOMO-like: Effort = LOC/productivityPerMonth, then months = Effort/people
+  const tradProdPerPersonMonth = 800; // LOC/person/month for complex SaaS (industry avg)
+  const tradEffortMonths = METRICS.loc / tradProdPerPersonMonth; // person-months
+  const tradPeople = 5; // typical team: 2 devs + 1 UX + 1 PM + 1 QA
+  const tradMonths = Math.ceil(tradEffortMonths / tradPeople);
+  const tradMonthsRange = `${tradMonths}–${tradMonths + 4}`;
 
-  const generateEstimates = async () => {
+  const addIncrement = async () => {
     const token = tokens.meetings || tokens.whatsapp || tokens.training;
     if (!token) { toast({ variant: 'destructive', title: 'Token OpenAI não configurado', description: 'Configure em Config. IA.' }); return; }
     setGenerating(true);
     try {
-      const m = PROJECT_METRICS;
+      const lastDate = est.increments.length > 0 ? est.increments[est.increments.length - 1].date : METRICS.startDate;
       const result = await callOpenAI(token, {
         model: 'gpt-4o-mini',
-        messages: [{ role: 'user', content: `Analise este projeto SaaS REAL e gere estimativas precisas em JSON.
+        messages: [{ role: 'user', content: `Você é um avaliador de valor de software. Analise os commits recentes deste projeto e estime o VALOR AGREGADO em BRL.
 
-## DADOS REAIS DO PROJETO (git log)
-- Primeiro commit: ${m.startDate}
-- Hoje: ${m.currentDate}
-- Tempo de desenvolvimento: ${m.daysElapsed} dias (~${(m.daysElapsed / 30).toFixed(1)} meses)
-- Total de commits: ${m.commits}
-- Autores: ${m.authors}
-- Equipe REAL: ${m.team}
-- Linhas de código (src/): ${m.linesOfCode.toLocaleString()}
-- Páginas: ${m.pages}
-- Edge Functions: ${m.edgeFunctions}
-- Migrations SQL: ${m.migrations}
-- Agentes de IA: ${m.agents}
+## Projeto: Smart Deal Coach (SaaS B2B de coaching de vendas com IA)
+## Custo base atual: ${formatBRL(est.baseCost.total)}
+## Incrementos anteriores: ${formatBRL(incrementTotal)} (${est.increments.length} entregas)
+## Última avaliação: ${lastDate}
 
-## SOBRE O PROJETO
-Smart Deal Coach — SaaS B2B de coaching de vendas com IA para Appmax.
-Stack: React 18 + TypeScript + Vite + Tailwind + shadcn/ui + Supabase (PostgreSQL + Edge Functions + Storage + RLS)
-Integrações: WhatsApp (Evolution API + Meta WABA), Google Meet (transcrição), OpenAI (gpt-4o-mini)
-Features: CRM completo (contatos, empresas, negócios, tickets, pipeline kanban), avaliação multi-agente de vendas (12 metodologias), inbox WhatsApp com templates Meta, multi-tenant com RBAC hierárquico, criptografia AES-256-GCM nos tokens, squad de segurança (7 agentes), squad de vendas (13 agentes).
+## O que foi entregue recentemente (desde ${lastDate}):
+- Criptografia AES-256-GCM para tokens Meta e OpenAI
+- Squad de segurança (7 agentes especializados)
+- Botões em templates Meta WABA
+- Organograma unificado com 32 agentes
+- Estimativas de projeto baseadas em métricas reais
+- Zoom e pan interativo no organograma
+- Menu admin responsivo
 
-## INSTRUÇÕES
-Estime quanto custaria se uma empresa contratasse um time tradicional para construir isso DO ZERO.
-O campo "Com AIOX + Claude" deve refletir o que REALMENTE aconteceu: ${m.daysElapsed} dias, 2 pessoas.
+## Custo por hora de dev sênior: R$ 180–220/h
 
-Retorne APENAS JSON válido (sem markdown):
-{"cost":[{"label":"Desenvolvimento","min":N,"max":N},{"label":"UI/UX Design","min":N,"max":N},{"label":"Infraestrutura (12 meses)","min":N,"max":N},{"label":"IA / OpenAI (12 meses)","min":N,"max":N},{"label":"Total Estimado","min":N,"max":N}],"timeline":[{"label":"Time tradicional","months":"X–Y","people":"X–Y"},{"label":"Com AIOX + Claude (real)","months":"~${(m.daysElapsed / 30).toFixed(1)}","people":"2","highlight":true}],"saas":[{"label":"MRR (50–150 clientes)","min":N,"max":N},{"label":"ARR projetado","min":N,"max":N},{"label":"Valuation (10x ARR)","min":N,"max":N}]}
+Responda APENAS com JSON:
+{"description":"Resumo curto do que agrega valor","value":NUMBER_EM_BRL}
 
-Valores em BRL. Benchmark: devs sênior full-stack R$25–35k/mês, UX sênior R$15–20k/mês, PM R$18–25k/mês, Supabase Pro ~R$150/mês, OpenAI ~R$1.500–3.000/mês. Valuation: 10x ARR (SaaS early-stage).` }],
-        temperature: 0.3, max_tokens: 1000,
+O valor deve refletir horas estimadas x custo/hora para implementar essas features num time tradicional.` }],
+        temperature: 0.2, max_tokens: 200,
       });
       const content = result?.choices?.[0]?.message?.content || result?.content || '';
       const jsonStr = typeof content === 'string' ? content.replace(/```json?\n?/g, '').replace(/```/g, '').trim() : JSON.stringify(content);
       const parsed = JSON.parse(jsonStr);
-      const ne: Estimates = { ...parsed, updatedAt: new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }), aiGenerated: true };
-      setEstimates(ne); saveEstimates(ne);
-      toast({ title: 'Estimativas atualizadas com IA!' });
+
+      const newIncrement: IncrementEntry = {
+        date: new Date().toLocaleDateString('pt-BR'),
+        description: parsed.description || 'Novas features e melhorias',
+        value: typeof parsed.value === 'number' ? parsed.value : 0,
+      };
+
+      const updated: ProjectEstimates = {
+        ...est,
+        baseCost: calcBaseCost(),
+        increments: [...est.increments, newIncrement],
+        lastMetrics: METRICS,
+        updatedAt: new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      };
+      setEst(updated); saveProjectEstimates(updated);
+      toast({ title: `+${formatBRL(newIncrement.value)} adicionado`, description: newIncrement.description });
     } catch (e: any) { toast({ variant: 'destructive', title: 'Erro', description: e.message }); }
     finally { setGenerating(false); }
   };
@@ -388,54 +436,131 @@ Valores em BRL. Benchmark: devs sênior full-stack R$25–35k/mês, UX sênior R
         </div>
       </div>
 
-      {/* Estimativas */}
+      {/* Estimativas — Formula-based */}
       <div className="glass-card p-5">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <Gem className="w-4 h-4 text-primary" />
             <h2 className="font-display font-semibold text-lg">Estimativa do Projeto</h2>
-            {estimates.aiGenerated && <Badge className="text-[9px] h-4 bg-primary/20 text-primary border-primary/30 gap-1"><Sparkles className="w-2.5 h-2.5" /> IA</Badge>}
+            <Badge variant="outline" className="text-[9px] h-4">Baseado em métricas reais</Badge>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-muted-foreground">{estimates.updatedAt}</span>
-            <Button size="sm" variant="outline" className="text-xs h-7 gap-1.5" onClick={generateEstimates} disabled={generating}>
-              {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-              {generating ? 'Gerando...' : 'Atualizar com IA'}
+            {est.updatedAt && <span className="text-[10px] text-muted-foreground">{est.updatedAt}</span>}
+            <Button size="sm" variant="outline" className="text-xs h-7 gap-1.5" onClick={addIncrement} disabled={generating}>
+              {generating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+              {generating ? 'Avaliando...' : '+ Registrar entrega'}
             </Button>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {/* Cost breakdown */}
           <div className="glass-card p-4 space-y-2">
-            <div className="flex items-center gap-2 mb-1"><DollarSign className="w-4 h-4 text-green-500" /><h3 className="font-semibold text-sm">Custo</h3></div>
-            {estimates.cost.map((item, i) => {
-              const t = item.label.includes('Total');
-              return (<div key={i} className={cn('flex justify-between', t && 'pt-2 border-t border-border/40')}><span className={cn('text-xs', t ? 'font-semibold' : 'text-muted-foreground')}>{item.label}</span><span className={cn('text-xs font-mono', t ? 'font-bold text-primary' : '')}>{formatBRL(item.min)} – {formatBRL(item.max)}</span></div>);
-            })}
-          </div>
-          <div className="glass-card p-4 space-y-3">
-            <div className="flex items-center gap-2 mb-1"><Clock className="w-4 h-4 text-blue-500" /><h3 className="font-semibold text-sm">Prazo & Equipe</h3></div>
-            {estimates.timeline.map((t, i) => (
-              <div key={i} className={cn('p-3 rounded-lg border', t.highlight ? 'bg-primary/5 border-primary/30' : 'bg-muted/30 border-border/40')}>
-                <div className="flex items-center justify-between mb-1"><span className="text-xs font-medium">{t.label}</span>{t.highlight && <Badge className="text-[9px] h-4 bg-primary/20 text-primary border-primary/30">Atual</Badge>}</div>
-                <div className="flex gap-4"><span className="text-sm font-bold">{t.months} meses</span><span className="text-sm font-bold">{t.people} pessoas</span></div>
+            <div className="flex items-center gap-2 mb-1"><DollarSign className="w-4 h-4 text-green-500" /><h3 className="font-semibold text-sm">Custo Calculado</h3></div>
+            {[
+              { label: `Código (${METRICS.loc.toLocaleString()} LOC × R$${UNIT_COSTS.loc})`, value: est.baseCost.dev },
+              { label: `${METRICS.pages} Páginas`, value: est.baseCost.pages },
+              { label: `${METRICS.edgeFunctions} Edge Functions`, value: est.baseCost.edge },
+              { label: `${METRICS.migrations} Migrations SQL`, value: est.baseCost.migrations },
+              { label: `${METRICS.agents} Agentes IA`, value: est.baseCost.agents },
+              { label: `${METRICS.integrations} Integrações externas`, value: est.baseCost.integrations },
+              { label: 'UX/UI Design', value: est.baseCost.ux },
+              { label: 'Infraestrutura (12 meses)', value: est.baseCost.infra12 },
+            ].map((item, i) => (
+              <div key={i} className="flex justify-between">
+                <span className="text-[11px] text-muted-foreground">{item.label}</span>
+                <span className="text-[11px] font-mono">{formatBRL(item.value)}</span>
               </div>
             ))}
+            {incrementTotal > 0 && (
+              <div className="flex justify-between pt-1 border-t border-border/30">
+                <span className="text-[11px] text-muted-foreground">Entregas incrementais ({est.increments.length}x)</span>
+                <span className="text-[11px] font-mono text-green-400">+{formatBRL(incrementTotal)}</span>
+              </div>
+            )}
+            <div className="flex justify-between pt-2 border-t border-border/40">
+              <span className="text-xs font-semibold">Total do Projeto</span>
+              <span className="text-sm font-bold text-primary font-mono">{formatBRL(totalProject)}</span>
+            </div>
           </div>
+
+          {/* Timeline — formula-based */}
+          <div className="glass-card p-4 space-y-3">
+            <div className="flex items-center gap-2 mb-1"><Clock className="w-4 h-4 text-blue-500" /><h3 className="font-semibold text-sm">Prazo & Equipe</h3></div>
+            <div className="p-3 rounded-lg border bg-muted/30 border-border/40">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-medium">Time tradicional</span>
+                <Badge variant="outline" className="text-[8px] h-3.5">{Math.round(tradEffortMonths)} pessoa-meses</Badge>
+              </div>
+              <div className="flex gap-4">
+                <span className="text-sm font-bold">{tradMonthsRange} meses</span>
+                <span className="text-sm font-bold">{tradPeople} pessoas</span>
+              </div>
+              <p className="text-[9px] text-muted-foreground mt-1">{METRICS.loc.toLocaleString()} LOC ÷ {tradProdPerPersonMonth} LOC/pessoa/mês = {Math.round(tradEffortMonths)} pessoa-meses</p>
+            </div>
+            <div className="p-3 rounded-lg border bg-primary/5 border-primary/30">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-medium">Com AIOX + Claude (real)</span>
+                <Badge className="text-[9px] h-4 bg-primary/20 text-primary border-primary/30">Atual</Badge>
+              </div>
+              <div className="flex gap-4">
+                <span className="text-sm font-bold">~{(METRICS.daysElapsed / 30).toFixed(1)} meses</span>
+                <span className="text-sm font-bold">{METRICS.teamSize} pessoas</span>
+              </div>
+              <p className="text-[9px] text-muted-foreground mt-1">{METRICS.daysElapsed} dias, {METRICS.commits} commits, {Math.round(METRICS.commits / METRICS.daysElapsed)} commits/dia</p>
+            </div>
+            <div className="p-2 rounded bg-green-500/5 border border-green-500/20 text-center">
+              <span className="text-[10px] text-green-400 font-medium">
+                {Math.round(tradEffortMonths / (METRICS.daysElapsed / 30 * METRICS.teamSize))}x mais rápido que time tradicional
+              </span>
+            </div>
+          </div>
+
+          {/* SaaS Value */}
           <div className="glass-card p-4 space-y-2">
-            <div className="flex items-center gap-2 mb-1"><Gem className="w-4 h-4 text-purple-500" /><h3 className="font-semibold text-sm">Valor SaaS</h3></div>
-            {estimates.saas.map((item, i) => {
-              const h = item.label.includes('Valuation');
-              return (<div key={i} className={cn('flex justify-between', h && 'pt-2 border-t border-border/40')}><span className={cn('text-xs', h ? 'font-semibold' : 'text-muted-foreground')}>{item.label}</span><span className={cn('text-xs font-mono', h ? 'font-bold text-primary' : '')}>{formatBRL(item.min)} – {formatBRL(item.max)}</span></div>);
-            })}
+            <div className="flex items-center gap-2 mb-1"><Gem className="w-4 h-4 text-purple-500" /><h3 className="font-semibold text-sm">Valor como SaaS</h3></div>
+            {(() => {
+              const ticketMin = 299, ticketMax = 599;
+              const clientsMin = 50, clientsMax = 150;
+              const mrrMin = ticketMin * clientsMin, mrrMax = ticketMax * clientsMax;
+              const arrMin = mrrMin * 12, arrMax = mrrMax * 12;
+              return [
+                { label: `Ticket (${clientsMin}–${clientsMax} clientes)`, value: `${formatBRL(ticketMin)} – ${formatBRL(ticketMax)}/mês` },
+                { label: 'MRR', value: `${formatBRL(mrrMin)} – ${formatBRL(mrrMax)}` },
+                { label: 'ARR', value: `${formatBRL(arrMin)} – ${formatBRL(arrMax)}` },
+                { label: 'Valuation (10x ARR)', value: `${formatBRL(arrMin * 10)} – ${formatBRL(arrMax * 10)}`, highlight: true },
+              ].map((item, i) => (
+                <div key={i} className={cn('flex justify-between', item.highlight && 'pt-2 border-t border-border/40')}>
+                  <span className={cn('text-[11px]', item.highlight ? 'font-semibold' : 'text-muted-foreground')}>{item.label}</span>
+                  <span className={cn('text-[11px] font-mono', item.highlight ? 'font-bold text-primary' : '')}>{item.value}</span>
+                </div>
+              ));
+            })()}
           </div>
         </div>
 
+        {/* Increment history */}
+        {est.increments.length > 0 && (
+          <div className="mt-4 glass-card p-3 space-y-1">
+            <h4 className="text-xs font-semibold mb-2">Histórico de Entregas</h4>
+            {est.increments.map((inc, i) => (
+              <div key={i} className="flex items-center justify-between text-[11px]">
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground w-16">{inc.date}</span>
+                  <span>{inc.description}</span>
+                </div>
+                <span className="font-mono text-green-400">+{formatBRL(inc.value)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="mt-4 p-3 rounded-lg bg-muted/30 border border-border/40">
           <p className="text-[10px] text-muted-foreground leading-relaxed">
-            <strong>Dados reais do git:</strong> Início em 08/03/2026, 708 commits, 37.918 linhas de código, 26 páginas, 8 edge functions, 39 migrations, 32 agentes IA.
-            Equipe: 2 pessoas + IA (Claude Code + Lovable). Benchmarks: devs sênior R$ 25–35k/mês, UX R$ 15–20k/mês. Valuation 10x ARR.
-            {estimates.aiGenerated && ' Estimativas geradas por IA com base nos dados reais do projeto.'}
+            <strong>Metodologia:</strong> Custo base calculado por fórmula (LOC × R${UNIT_COSTS.loc}/linha + peso por página, edge function, migration, agente IA e integração).
+            Timeline tradicional baseada em produtividade de {tradProdPerPersonMonth} LOC/pessoa/mês (benchmark COCOMO para SaaS complexo).
+            Dados reais: início 08/03/2026, {METRICS.commits} commits, {METRICS.loc.toLocaleString()} LOC, {METRICS.pages} páginas, equipe de {METRICS.teamSize} pessoas.
+            O botão "Registrar entrega" usa IA para avaliar o valor das features recentes e acumula no total.
           </p>
         </div>
       </div>
