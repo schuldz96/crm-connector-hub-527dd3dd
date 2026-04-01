@@ -204,7 +204,7 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
 
         if (!empresaRes.error && empresaRes.data?.subtitulo) {
           setCompanySubtitleState(empresaRes.data.subtitulo);
-          document.title = `Hubmax ${empresaRes.data.subtitulo}`;
+          document.title = 'Hubmax';
         }
       } catch {
         // keep defaults
@@ -324,7 +324,7 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
 
   const setCompanySubtitle = (value: string) => {
     setCompanySubtitleState(value);
-    document.title = `Hubmax ${value}`;
+    document.title = 'Hubmax';
     void (async () => {
       try {
         const empresaId = await getSaasEmpresaId();
