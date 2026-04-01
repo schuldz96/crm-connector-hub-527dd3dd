@@ -158,7 +158,9 @@ export function parseTranscriptParticipation(
 
   const ignoredPatterns = [
     /^a reuni[aã]o terminou/i,
+    /^reuni[aã]o iniciada/i,
     /^meeting ended/i,
+    /^meeting started/i,
     /^recording/i,
     /^this meeting is being recorded/i,
     /^[0-9]/,
