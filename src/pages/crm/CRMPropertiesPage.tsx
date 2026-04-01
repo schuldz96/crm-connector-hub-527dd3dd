@@ -319,7 +319,7 @@ export default function CRMPropertiesPage() {
                 </button>
               </th>
               <th className="text-left px-4 py-2 font-medium">Descrição</th>
-              <th className="text-right pr-6 pl-4 py-2 font-medium w-[90px]">Editável</th>
+              <th className="text-center px-4 py-2 font-medium w-[110px]">Editável</th>
             </tr>
           </thead>
           <tbody>
@@ -348,11 +348,11 @@ export default function CRMPropertiesPage() {
                   <td className="px-4 py-2.5">
                     <span className="text-[11px] text-muted-foreground leading-tight">{prop.description}</span>
                   </td>
-                  <td className="pr-6 pl-4 py-2.5 text-right">
+                  <td className="px-4 py-2.5 text-center">
                     {prop.readOnly ? (
-                      <Badge variant="secondary" className="text-[9px] h-5">Somente leitura</Badge>
+                      <Badge variant="secondary" className="text-[9px] h-5 whitespace-nowrap">Somente leitura</Badge>
                     ) : (
-                      <Badge className="text-[9px] h-5 bg-success/15 text-success border-success/30">Editável</Badge>
+                      <Badge className="text-[9px] h-5 whitespace-nowrap bg-success/15 text-success border-success/30">Editável</Badge>
                     )}
                   </td>
                 </tr>
