@@ -254,7 +254,7 @@ export default function StageAIConfigModal({
                   <Input
                     value={config.aiName}
                     onChange={e => update('aiName', e.target.value)}
-                    placeholder="Ex: Hubmax Assistente"
+                    placeholder="Ex: Appmax Assistente"
                     className="h-10"
                   />
                 </div>
