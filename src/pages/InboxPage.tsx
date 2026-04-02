@@ -10,7 +10,7 @@ import {
   Loader2, RefreshCw, ChevronRight, Phone, Clock, Check,
   Paperclip, Image as ImageIcon, FileText, Mic, MicOff, LayoutTemplate,
   AlertTriangle, X, UserPlus, Trash2, RotateCcw, Archive, ArchiveRestore, Download,
-  Ticket, PanelRightOpen, PanelRightClose,
+  Ticket, PanelRightOpen, PanelRightClose, User, Tag, Edit2,
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
@@ -516,6 +516,9 @@ export default function InboxPage() {
   const [convTicket, setConvTicket] = useState<any>(null);
   const [creatingTicket, setCreatingTicket] = useState(false);
   const [ticketPipelines, setTicketPipelines] = useState<{ id: string; nome: string; estagios: { id: string; nome: string }[] }[]>([]);
+  const [accountUsers, setAccountUsers] = useState<{ id: string; nome: string; email: string }[]>([]);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -563,7 +566,7 @@ export default function InboxPage() {
     (async () => {
       try {
         const { data } = await (supabase as any).schema('saas').from('crm_tickets')
-          .select('id, numero_registro, titulo, status, prioridade, pipeline_id, estagio_id, proprietario_id, criado_em, resolvido_em, dados_custom')
+          .select('id, numero_registro, titulo, descricao, status, prioridade, categoria, plataforma, tags, pipeline_id, estagio_id, proprietario_id, sla_minutos, primeira_resposta_em, criado_em, resolvido_em, ultima_atividade_em, dados_custom')
           .eq('dados_custom->>conversation_id', selectedConv.id)
           .is('deletado_em', null)
           .order('criado_em', { ascending: false })
@@ -573,6 +576,32 @@ export default function InboxPage() {
       } catch { /* silent */ }
     })();
   }, [selectedConv?.id]);
+
+  // ── Load users with access to current account (for ticket owner) ──
+  useEffect(() => {
+    if (!selectedAccount) { setAccountUsers([]); return; }
+    (async () => {
+      try {
+        const { data: accessRows } = await (supabase as any)
+          .from('meta_inbox_user_access')
+          .select('usuario_id')
+          .eq('account_id', selectedAccount.id);
+        const userIds = (accessRows || []).map((r: any) => r.usuario_id).filter(Boolean);
+        if (userIds.length === 0) {
+          // No access restrictions — load all active users
+          const empresaId = await getSaasEmpresaId();
+          const { data } = await (supabase as any).schema('saas').from('usuarios')
+            .select('id, nome, email').eq('empresa_id', empresaId).eq('status', 'ativo').order('nome');
+          setAccountUsers(data || []);
+        } else {
+          const empresaId = await getSaasEmpresaId();
+          const { data } = await (supabase as any).schema('saas').from('usuarios')
+            .select('id, nome, email').eq('empresa_id', empresaId).in('id', userIds).order('nome');
+          setAccountUsers(data || []);
+        }
+      } catch { setAccountUsers([]); }
+    })();
+  }, [selectedAccount?.id]);
 
   // ── Load accounts (filtered by user access for restricted roles) ──
   const needsAccessFilter = user?.role === 'support' || user?.role === 'member';
@@ -1532,106 +1561,165 @@ export default function InboxPage() {
       </div>
 
       {/* Col 4 — Ticket side panel */}
-      {ticketPanelOpen && convTicket && selectedAccount && (
-        <div className="w-[320px] flex-shrink-0 border-l border-border bg-card overflow-y-auto">
-          <div className="p-4 border-b border-border flex items-center justify-between">
+      {ticketPanelOpen && convTicket && selectedAccount && (() => {
+        const statusColors: Record<string, string> = {
+          aberto: 'bg-green-500', em_andamento: 'bg-blue-500', aguardando: 'bg-yellow-500', resolvido: 'bg-emerald-500', fechado: 'bg-gray-500',
+        };
+        const statusLabels: Record<string, string> = {
+          aberto: 'Aberto', em_andamento: 'Em andamento', aguardando: 'Aguardando', resolvido: 'Resolvido', fechado: 'Fechado',
+        };
+        const prioLabels: Record<string, string> = { low: 'Baixa', medium: 'Média', high: 'Alta', urgent: 'Urgente' };
+        const prioColors: Record<string, string> = { low: '🟢', medium: '🟡', high: '🟠', urgent: '🔴' };
+        const fmtDate = (d: string | null) => d ? new Date(d).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+        const ownerUser = accountUsers.find(u => u.id === convTicket.proprietario_id);
+
+        return (
+        <div className="w-[340px] flex-shrink-0 border-l border-border bg-card flex flex-col overflow-hidden">
+          {/* Header */}
+          <div className="p-3 border-b border-border flex items-center justify-between flex-shrink-0">
             <div className="flex items-center gap-2">
               <Ticket className="w-4 h-4 text-orange-500" />
-              <span className="text-sm font-semibold">Ticket #{convTicket.numero_registro}</span>
+              <span className="text-sm font-semibold">#{convTicket.numero_registro}</span>
+              <span className={cn('w-2 h-2 rounded-full', statusColors[convTicket.status] || 'bg-gray-500')} title={statusLabels[convTicket.status]} />
             </div>
             <Button variant="ghost" size="icon" className="w-7 h-7" onClick={() => setTicketPanelOpen(false)}>
               <X className="w-3.5 h-3.5" />
             </Button>
           </div>
 
-          <div className="p-4 space-y-4">
-            {/* Title */}
-            <div>
-              <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1">Título</label>
-              <p className="text-xs font-medium">{convTicket.titulo}</p>
+          <div className="flex-1 overflow-y-auto">
+            {/* Title — editable */}
+            <div className="px-4 pt-3 pb-2">
+              {editingTitle ? (
+                <div className="flex gap-1">
+                  <Input value={titleDraft} onChange={e => setTitleDraft(e.target.value)}
+                    className="h-8 text-xs flex-1" autoFocus
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') { handleUpdateTicket('titulo', titleDraft); setEditingTitle(false); }
+                      if (e.key === 'Escape') setEditingTitle(false);
+                    }} />
+                  <Button size="icon" className="w-8 h-8" onClick={() => { handleUpdateTicket('titulo', titleDraft); setEditingTitle(false); }}>
+                    <Check className="w-3 h-3" />
+                  </Button>
+                </div>
+              ) : (
+                <button className="text-sm font-semibold text-left w-full hover:text-primary transition-colors group flex items-center gap-1"
+                  onClick={() => { setTitleDraft(convTicket.titulo); setEditingTitle(true); }}>
+                  {convTicket.titulo}
+                  <Edit2 className="w-3 h-3 opacity-0 group-hover:opacity-50 flex-shrink-0" />
+                </button>
+              )}
             </div>
 
-            {/* Status */}
-            <div>
-              <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1">Status</label>
-              <Select value={convTicket.status} onValueChange={v => handleUpdateTicket('status', v)}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="aberto" className="text-xs">
-                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500" /> Aberto</span>
-                  </SelectItem>
-                  <SelectItem value="em_andamento" className="text-xs">
-                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500" /> Em andamento</span>
-                  </SelectItem>
-                  <SelectItem value="aguardando" className="text-xs">
-                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-500" /> Aguardando</span>
-                  </SelectItem>
-                  <SelectItem value="resolvido" className="text-xs">
-                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Resolvido</span>
-                  </SelectItem>
-                  <SelectItem value="fechado" className="text-xs">
-                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-gray-500" /> Fechado</span>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Pipeline / Stage */}
-            <div>
-              <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1">Pipeline</label>
-              <Select value={convTicket.pipeline_id || ''} onValueChange={v => {
-                handleUpdateTicket('pipeline_id', v);
-                // Reset stage when pipeline changes
-                const pipe = ticketPipelines.find(p => p.id === v);
-                if (pipe?.estagios[0]) handleUpdateTicket('estagio_id', pipe.estagios[0].id);
-              }}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ticketPipelines.map(p => (
-                    <SelectItem key={p.id} value={p.id} className="text-xs">{p.nome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {convTicket.pipeline_id && (
+            <div className="px-4 space-y-3 pb-4">
+              {/* Proprietário */}
               <div>
-                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1">Etapa</label>
-                <Select value={convTicket.estagio_id || ''} onValueChange={v => handleUpdateTicket('estagio_id', v)}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(ticketPipelines.find(p => p.id === convTicket.pipeline_id)?.estagios || []).map(e => (
-                      <SelectItem key={e.id} value={e.id} className="text-xs">{e.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1">Proprietário</label>
+                <select
+                  value={convTicket.proprietario_id || ''}
+                  onChange={e => handleUpdateTicket('proprietario_id', e.target.value || null as any)}
+                  className="w-full h-8 text-xs bg-background border border-border rounded-md px-2"
+                >
+                  <option value="">— Sem proprietário —</option>
+                  {accountUsers.map(u => (
+                    <option key={u.id} value={u.id}>{u.nome} ({u.email})</option>
+                  ))}
+                </select>
               </div>
-            )}
 
-            {/* Priority */}
-            <div>
-              <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1">Prioridade</label>
-              <Select value={convTicket.prioridade} onValueChange={v => handleUpdateTicket('prioridade', v)}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low" className="text-xs">🟢 Baixa</SelectItem>
-                  <SelectItem value="medium" className="text-xs">🟡 Média</SelectItem>
-                  <SelectItem value="high" className="text-xs">🟠 Alta</SelectItem>
-                  <SelectItem value="urgent" className="text-xs">🔴 Urgente</SelectItem>
-                </SelectContent>
-              </Select>
+              {/* Status */}
+              <div>
+                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1">Status</label>
+                <select
+                  value={convTicket.status}
+                  onChange={e => handleUpdateTicket('status', e.target.value)}
+                  className="w-full h-8 text-xs bg-background border border-border rounded-md px-2"
+                >
+                  <option value="aberto">● Aberto</option>
+                  <option value="em_andamento">● Em andamento</option>
+                  <option value="aguardando">● Aguardando</option>
+                  <option value="resolvido">● Resolvido</option>
+                  <option value="fechado">● Fechado</option>
+                </select>
+              </div>
+
+              {/* Pipeline */}
+              <div>
+                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1">Pipeline</label>
+                <select
+                  value={convTicket.pipeline_id || ''}
+                  onChange={e => {
+                    handleUpdateTicket('pipeline_id', e.target.value);
+                    const pipe = ticketPipelines.find(p => p.id === e.target.value);
+                    if (pipe?.estagios[0]) handleUpdateTicket('estagio_id', pipe.estagios[0].id);
+                  }}
+                  className="w-full h-8 text-xs bg-background border border-border rounded-md px-2"
+                >
+                  <option value="">Selecione</option>
+                  {ticketPipelines.map(p => (
+                    <option key={p.id} value={p.id}>{p.nome}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Etapa */}
+              {convTicket.pipeline_id && (
+                <div>
+                  <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1">Etapa</label>
+                  <select
+                    value={convTicket.estagio_id || ''}
+                    onChange={e => handleUpdateTicket('estagio_id', e.target.value)}
+                    className="w-full h-8 text-xs bg-background border border-border rounded-md px-2"
+                  >
+                    <option value="">Selecione</option>
+                    {(ticketPipelines.find(p => p.id === convTicket.pipeline_id)?.estagios || []).map(e => (
+                      <option key={e.id} value={e.id}>{e.nome}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Prioridade */}
+              <div>
+                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1">Prioridade</label>
+                <select
+                  value={convTicket.prioridade}
+                  onChange={e => handleUpdateTicket('prioridade', e.target.value)}
+                  className="w-full h-8 text-xs bg-background border border-border rounded-md px-2"
+                >
+                  <option value="low">🟢 Baixa</option>
+                  <option value="medium">🟡 Média</option>
+                  <option value="high">🟠 Alta</option>
+                  <option value="urgent">🔴 Urgente</option>
+                </select>
+              </div>
+
+              {/* Categoria */}
+              <div>
+                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1">Categoria</label>
+                <Input
+                  value={convTicket.categoria || ''}
+                  onChange={e => handleUpdateTicket('categoria', e.target.value)}
+                  placeholder="Ex: Suporte, Financeiro, Técnico"
+                  className="h-8 text-xs"
+                />
+              </div>
+
+              {/* Descrição — editable */}
+              <div>
+                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1">Descrição</label>
+                <textarea
+                  value={convTicket.descricao || ''}
+                  onChange={e => setConvTicket((prev: any) => prev ? { ...prev, descricao: e.target.value } : prev)}
+                  onBlur={e => handleUpdateTicket('descricao', e.target.value)}
+                  placeholder="Descreva o ticket..."
+                  className="w-full text-xs bg-background border border-border rounded-md px-2 py-1.5 min-h-[60px] resize-y"
+                />
+              </div>
             </div>
 
-            {/* Contact info */}
-            <div className="border-t border-border/50 pt-3">
+            {/* Contato */}
+            <div className="px-4 py-3 border-t border-border/50">
               <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-2">Contato</label>
               <div className="space-y-1.5 text-xs">
                 <div className="flex justify-between">
@@ -1640,42 +1728,47 @@ export default function InboxPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Telefone</span>
-                  <span className="font-mono">{convTicket.dados_custom?.contact_phone || '—'}</span>
+                  <span className="font-mono text-[11px]">{convTicket.dados_custom?.contact_phone || '—'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Plataforma</span>
-                  <span>WhatsApp</span>
+                  <span>{convTicket.plataforma || 'WhatsApp'}</span>
                 </div>
               </div>
             </div>
 
-            {/* Dates */}
-            <div className="border-t border-border/50 pt-3">
+            {/* Datas */}
+            <div className="px-4 py-3 border-t border-border/50">
               <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-2">Datas</label>
               <div className="space-y-1.5 text-xs">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Criado em</span>
-                  <span>{convTicket.criado_em ? new Date(convTicket.criado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}</span>
+                  <span>{fmtDate(convTicket.criado_em)}</span>
                 </div>
+                {convTicket.primeira_resposta_em && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">1ª resposta</span>
+                    <span>{fmtDate(convTicket.primeira_resposta_em)}</span>
+                  </div>
+                )}
+                {convTicket.ultima_atividade_em && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Última atividade</span>
+                    <span>{fmtDate(convTicket.ultima_atividade_em)}</span>
+                  </div>
+                )}
                 {convTicket.resolvido_em && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Resolvido em</span>
-                    <span>{new Date(convTicket.resolvido_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                    <span>{fmtDate(convTicket.resolvido_em)}</span>
                   </div>
                 )}
               </div>
             </div>
-
-            {/* Ticket description */}
-            {convTicket.descricao && (
-              <div className="border-t border-border/50 pt-3">
-                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1">Descrição</label>
-                <p className="text-xs text-muted-foreground whitespace-pre-wrap">{convTicket.descricao}</p>
-              </div>
-            )}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Template picker modal */}
       {showTemplatePicker && (
