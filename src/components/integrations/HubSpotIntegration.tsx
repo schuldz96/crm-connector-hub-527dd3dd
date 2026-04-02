@@ -13,8 +13,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { getSaasEmpresaId } from '@/lib/saas';
 import { encryptToken } from '@/lib/tokenCrypto';
 import {
-  verifyConnection, getObject, getObjectsBatch,
-  type HsObjectType, type HsObject,
+  verifyConnection, getObject, getObjectsBatch, getPipelines, getOwners,
+  type HsObjectType, type HsObject, type HsPipeline, type HsOwner,
 } from '@/lib/hubspotService';
 
 const OBJECT_TYPES: { value: HsObjectType; label: string; icon: typeof Users }[] = [
@@ -43,6 +43,10 @@ interface ListItem {
   type: string;
   typeLabel: string;
   extra?: string;
+  createdate?: string;
+  pipelineLabel?: string;
+  stageLabel?: string;
+  ownerName?: string;
 }
 
 export default function HubSpotIntegration() {
@@ -59,6 +63,10 @@ export default function HubSpotIntegration() {
   const [results, setResults] = useState<ListItem[]>([]);
   const [mainObject, setMainObject] = useState<ListItem | null>(null);
 
+  const [owners, setOwners] = useState<HsOwner[]>([]);
+  const [dealPipelines, setDealPipelines] = useState<HsPipeline[]>([]);
+  const [ticketPipelines, setTicketPipelines] = useState<HsPipeline[]>([]);
+
   const { toast } = useToast();
 
   // ─── Connect ────────────────────────────────────────
@@ -71,6 +79,16 @@ export default function HubSpotIntegration() {
       if (!result.ok) throw new Error(result.error || 'Token inválido');
       setPortalId(result.portalId || null);
       setConnected(true);
+
+      // Load owners + pipelines in parallel
+      const [ownersData, dealPipes, ticketPipes] = await Promise.all([
+        getOwners(token.trim()).catch(() => []),
+        getPipelines(token.trim(), 'deals').catch(() => []),
+        getPipelines(token.trim(), 'tickets').catch(() => []),
+      ]);
+      setOwners(ownersData);
+      setDealPipelines(dealPipes);
+      setTicketPipelines(ticketPipes);
 
       const empresaId = await getSaasEmpresaId();
       const encrypted = await encryptToken(token.trim());
@@ -100,6 +118,41 @@ export default function HubSpotIntegration() {
     toast({ title: 'HubSpot desconectado' });
   };
 
+  // ─── Helpers ─────────────────────────────────────────
+  const resolveOwner = (ownerId: string | null | undefined): string | undefined => {
+    if (!ownerId) return undefined;
+    const owner = owners.find(o => o.id === ownerId);
+    return owner ? [owner.firstName, owner.lastName].filter(Boolean).join(' ') || owner.email : undefined;
+  };
+
+  const resolvePipeline = (type: string, pipelineId: string | null | undefined, stageId: string | null | undefined) => {
+    if (type !== 'deals' && type !== 'tickets') return {};
+    const pipes = type === 'deals' ? dealPipelines : ticketPipelines;
+    const pipe = pipes.find(p => p.id === pipelineId);
+    const stage = pipe?.stages.find(s => s.id === stageId);
+    return { pipelineLabel: pipe?.label, stageLabel: stage?.label };
+  };
+
+  const buildListItem = (obj: HsObject, type: string): ListItem => {
+    const p = obj.properties;
+    const { pipelineLabel, stageLabel } = resolvePipeline(
+      type,
+      type === 'deals' ? p.pipeline : p.hs_pipeline,
+      type === 'deals' ? p.dealstage : p.hs_pipeline_stage,
+    );
+    return {
+      id: obj.id,
+      name: objectName(obj, type),
+      type,
+      typeLabel: objectTypeLabel(type),
+      extra: p.email || p.domain || (p.amount ? `R$ ${p.amount}` : undefined) || undefined,
+      createdate: p.createdate || undefined,
+      pipelineLabel,
+      stageLabel,
+      ownerName: resolveOwner(p.hubspot_owner_id),
+    };
+  };
+
   // ─── Search ─────────────────────────────────────────
   const handleSearch = async () => {
     if (!searchId.trim()) return;
@@ -108,16 +161,7 @@ export default function HubSpotIntegration() {
     setMainObject(null);
     try {
       const obj = await getObject(token.trim(), searchType, searchId.trim());
-
-      // Main object
-      const main: ListItem = {
-        id: obj.id,
-        name: objectName(obj, searchType),
-        type: searchType,
-        typeLabel: objectTypeLabel(searchType),
-        extra: obj.properties.email || obj.properties.domain || obj.properties.amount ? `R$ ${obj.properties.amount}` : undefined,
-      };
-      setMainObject(main);
+      setMainObject(buildListItem(obj, searchType));
 
       // Associated objects
       const items: ListItem[] = [];
@@ -127,13 +171,7 @@ export default function HubSpotIntegration() {
           if (ids.length > 0) {
             const objects = await getObjectsBatch(token.trim(), assocType as HsObjectType, ids);
             for (const o of objects) {
-              items.push({
-                id: o.id,
-                name: objectName(o, assocType),
-                type: assocType,
-                typeLabel: objectTypeLabel(assocType),
-                extra: o.properties.email || o.properties.domain || (o.properties.amount ? `R$ ${o.properties.amount}` : undefined) || undefined,
-              });
+              items.push(buildListItem(o, assocType));
             }
           }
         }
@@ -270,6 +308,17 @@ export default function HubSpotIntegration() {
                 <div className="flex-1 min-w-0">
                   <span className="text-sm font-semibold">{mainObject.name}</span>
                   {mainObject.extra && <span className="text-xs text-muted-foreground ml-2">{mainObject.extra}</span>}
+                  <div className="flex items-center gap-3 mt-1 flex-wrap">
+                    {mainObject.createdate && (
+                      <span className="text-[10px] text-muted-foreground">Criado: {new Date(mainObject.createdate).toLocaleDateString('pt-BR')}</span>
+                    )}
+                    {mainObject.pipelineLabel && (
+                      <span className="text-[10px] text-muted-foreground">Pipeline: {mainObject.pipelineLabel}{mainObject.stageLabel ? ` → ${mainObject.stageLabel}` : ''}</span>
+                    )}
+                    {mainObject.ownerName && (
+                      <span className="text-[10px] text-muted-foreground">Proprietário: {mainObject.ownerName}</span>
+                    )}
+                  </div>
                 </div>
                 <Badge variant="outline" className={cn('text-[9px] h-5', typeBadgeColor(mainObject.type))}>{mainObject.typeLabel}</Badge>
                 <span className="text-[10px] text-muted-foreground font-mono">#{mainObject.id}</span>
@@ -288,7 +337,10 @@ export default function HubSpotIntegration() {
                   <tr className="border-b border-border/30 text-muted-foreground">
                     <th className="text-left px-4 py-2 font-medium w-20">ID</th>
                     <th className="text-left px-4 py-2 font-medium">Nome</th>
-                    <th className="text-left px-4 py-2 font-medium w-32">Objeto</th>
+                    <th className="text-left px-4 py-2 font-medium w-28">Objeto</th>
+                    <th className="text-left px-4 py-2 font-medium w-24">Criado em</th>
+                    <th className="text-left px-4 py-2 font-medium">Pipeline / Etapa</th>
+                    <th className="text-left px-4 py-2 font-medium w-28">Proprietário</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -305,6 +357,17 @@ export default function HubSpotIntegration() {
                         <Badge variant="outline" className={cn('text-[9px] h-5 gap-1', typeBadgeColor(item.type))}>
                           {typeIcon(item.type)} {item.typeLabel}
                         </Badge>
+                      </td>
+                      <td className="px-4 py-2 text-muted-foreground">
+                        {item.createdate ? new Date(item.createdate).toLocaleDateString('pt-BR') : '—'}
+                      </td>
+                      <td className="px-4 py-2 text-muted-foreground">
+                        {item.pipelineLabel ? (
+                          <span>{item.pipelineLabel}{item.stageLabel ? <span className="text-foreground font-medium"> → {item.stageLabel}</span> : ''}</span>
+                        ) : '—'}
+                      </td>
+                      <td className="px-4 py-2 text-muted-foreground">
+                        {item.ownerName || '—'}
                       </td>
                     </tr>
                   ))}

@@ -64,10 +64,10 @@ export interface HsObject {
 }
 
 const DEFAULT_PROPS: Record<HsObjectType, string> = {
-  contacts: 'firstname,lastname,email,phone,jobtitle,lifecyclestage,company,hs_lead_status,createdate',
-  companies: 'name,domain,phone,website,industry,numberofemployees,city,state,country,createdate',
-  deals: 'dealname,amount,dealstage,pipeline,closedate,hs_deal_stage_probability,createdate',
-  tickets: 'subject,content,hs_ticket_priority,hs_pipeline,hs_pipeline_stage,createdate',
+  contacts: 'firstname,lastname,email,phone,jobtitle,lifecyclestage,company,hs_lead_status,hubspot_owner_id,createdate',
+  companies: 'name,domain,phone,website,industry,numberofemployees,city,state,country,hubspot_owner_id,createdate',
+  deals: 'dealname,amount,dealstage,pipeline,closedate,hs_deal_stage_probability,hubspot_owner_id,createdate',
+  tickets: 'subject,content,hs_ticket_priority,hs_pipeline,hs_pipeline_stage,hubspot_owner_id,createdate',
 };
 
 export async function getObject(token: string, objectType: HsObjectType, objectId: string): Promise<HsObject> {
@@ -94,6 +94,24 @@ export async function getObjectsBatch(token: string, objectType: HsObjectType, i
     } catch { /* skip failed objects */ }
   }
   return results;
+}
+
+// ─── Owners ────────────────────────────────────────────────────────────────
+export interface HsOwner {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+}
+
+export async function getOwners(token: string): Promise<HsOwner[]> {
+  const data = await hsCall(token, '/crm/v3/owners?limit=500');
+  return (data.results || []).map((o: any) => ({
+    id: String(o.id),
+    firstName: o.firstName || '',
+    lastName: o.lastName || '',
+    email: o.email || '',
+  }));
 }
 
 // ─── Map HubSpot → Our CRM ─────────────────────────────────────────────────
