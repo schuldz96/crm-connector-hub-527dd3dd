@@ -242,6 +242,7 @@ export type Database = {
           timestamp: string
           to_phone: string | null
           wamid: string | null
+          sent_by_user_id: string | null
         }
         Insert: {
           account_id: string
@@ -264,6 +265,7 @@ export type Database = {
           msg_type?: string
           read_at?: string | null
           sent_at?: string | null
+          sent_by_user_id?: string | null
           status?: string | null
           template_components?: Json | null
           template_language?: string | null
@@ -293,6 +295,7 @@ export type Database = {
           msg_type?: string
           read_at?: string | null
           sent_at?: string | null
+          sent_by_user_id?: string | null
           status?: string | null
           template_components?: Json | null
           template_language?: string | null
