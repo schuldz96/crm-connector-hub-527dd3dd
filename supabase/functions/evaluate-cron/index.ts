@@ -22,7 +22,7 @@ async function loadEvolutionConfig(empresaId: string): Promise<void> {
     const { data } = await sb.from('integracoes')
       .select('configuracao')
       .eq('empresa_id', empresaId)
-      .eq('tipo', 'evolution')
+      .eq('tipo', 'evolution_api')
       .eq('status', 'conectada')
       .limit(1)
       .maybeSingle();
