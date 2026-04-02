@@ -330,6 +330,13 @@ export default function HubSpotIntegration() {
         return db - da;
       });
 
+      // Sort CRM objects by date (newest first)
+      crmItems.sort((a, b) => {
+        const da = a.createdate ? new Date(a.createdate).getTime() : 0;
+        const db = b.createdate ? new Date(b.createdate).getTime() : 0;
+        return db - da;
+      });
+
       setResults(crmItems);
       setEngagements(activityItems);
 
