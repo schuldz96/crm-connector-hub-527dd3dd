@@ -1828,48 +1828,93 @@ export default function InboxPage() {
             </div>
 
             {/* Histórico de proprietários */}
-            {ownerHistory.length > 0 && (
+            {(ownerHistory.length > 0 || convTicket.criado_em) && (() => {
+              const fmtDuration = (ms: number) => {
+                const secs = Math.floor(ms / 1000);
+                const mins = Math.floor(secs / 60);
+                const hours = Math.floor(mins / 60);
+                const days = Math.floor(hours / 24);
+                if (days > 0) return `${days}d ${hours % 24}h`;
+                if (hours > 0) return `${hours}h ${mins % 60}min`;
+                if (mins > 0) return `${mins}min ${secs % 60}s`;
+                return `${secs}s`;
+              };
+              const fmtTs = (d: Date) => d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+              // Build timeline entries including "sem proprietário" gaps
+              type TimelineEntry = { key: string; nome: string; isCurrent: boolean; isGap: boolean; startMs: number; endMs: number };
+              const entries: TimelineEntry[] = [];
+              const ticketStart = new Date(convTicket.criado_em).getTime();
+              const now = Date.now();
+
+              if (ownerHistory.length === 0) {
+                // No owner ever assigned
+                entries.push({ key: 'gap-only', nome: 'Sem proprietário', isCurrent: true, isGap: true, startMs: ticketStart, endMs: now });
+              } else {
+                // Gap before first owner
+                const firstStart = new Date(ownerHistory[0].inicio_em).getTime();
+                if (firstStart - ticketStart > 1000) {
+                  entries.push({ key: 'gap-0', nome: 'Sem proprietário', isCurrent: false, isGap: true, startMs: ticketStart, endMs: firstStart });
+                }
+
+                for (let i = 0; i < ownerHistory.length; i++) {
+                  const h = ownerHistory[i];
+                  const start = new Date(h.inicio_em).getTime();
+                  const end = h.fim_em ? new Date(h.fim_em).getTime() : now;
+                  const isCurrent = !h.fim_em;
+                  entries.push({ key: h.id, nome: h.usuario_nome || 'Sem nome', isCurrent, isGap: false, startMs: start, endMs: end });
+
+                  // Gap between this owner and next
+                  if (h.fim_em && i < ownerHistory.length - 1) {
+                    const nextStart = new Date(ownerHistory[i + 1].inicio_em).getTime();
+                    if (nextStart - end > 1000) {
+                      entries.push({ key: `gap-${i + 1}`, nome: 'Sem proprietário', isCurrent: false, isGap: true, startMs: end, endMs: nextStart });
+                    }
+                  }
+
+                  // Gap after last owner if they were removed (fim_em set, no next)
+                  if (h.fim_em && i === ownerHistory.length - 1) {
+                    entries.push({ key: 'gap-end', nome: 'Sem proprietário', isCurrent: true, isGap: true, startMs: end, endMs: now });
+                  }
+                }
+              }
+
+              return (
               <div className="px-4 py-3 border-t border-border/50">
                 <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-2">Histórico de atendimento</label>
                 <div className="space-y-0">
-                  {ownerHistory.map((h, i) => {
-                    const start = new Date(h.inicio_em);
-                    const end = h.fim_em ? new Date(h.fim_em) : new Date();
-                    const diffMs = end.getTime() - start.getTime();
-                    const mins = Math.floor(diffMs / 60000);
-                    const hours = Math.floor(mins / 60);
-                    const days = Math.floor(hours / 24);
-                    const duration = days > 0 ? `${days}d ${hours % 24}h` : hours > 0 ? `${hours}h ${mins % 60}min` : `${mins}min`;
-                    const isCurrent = !h.fim_em;
-
-                    return (
-                      <div key={h.id} className="flex items-start gap-2 relative">
-                        {/* Timeline line */}
-                        <div className="flex flex-col items-center flex-shrink-0 w-4">
-                          <div className={cn('w-2 h-2 rounded-full mt-1.5 flex-shrink-0', isCurrent ? 'bg-orange-500' : 'bg-muted-foreground/40')} />
-                          {i < ownerHistory.length - 1 && <div className="w-px flex-1 bg-border min-h-[24px]" />}
-                        </div>
-                        <div className="flex-1 pb-3">
-                          <div className="flex items-center justify-between">
-                            <span className={cn('text-xs font-medium', isCurrent && 'text-orange-500')}>
-                              {h.usuario_nome || 'Sem nome'}
-                              {isCurrent && <span className="text-[9px] ml-1 opacity-70">(atual)</span>}
-                            </span>
-                            <span className={cn('text-[10px] font-mono tabular-nums', isCurrent ? 'text-orange-500' : 'text-muted-foreground')}>
-                              {duration}
-                            </span>
-                          </div>
-                          <span className="text-[10px] text-muted-foreground">
-                            {start.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                            {h.fim_em && ` → ${end.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`}
+                  {entries.map((e, i) => (
+                    <div key={e.key} className="flex items-start gap-2 relative">
+                      <div className="flex flex-col items-center flex-shrink-0 w-4">
+                        <div className={cn('w-2 h-2 rounded-full mt-1.5 flex-shrink-0',
+                          e.isCurrent ? (e.isGap ? 'bg-muted-foreground/60 ring-2 ring-muted-foreground/20' : 'bg-orange-500') : (e.isGap ? 'bg-muted-foreground/20' : 'bg-muted-foreground/40')
+                        )} />
+                        {i < entries.length - 1 && <div className="w-px flex-1 bg-border min-h-[24px]" />}
+                      </div>
+                      <div className="flex-1 pb-3">
+                        <div className="flex items-center justify-between">
+                          <span className={cn('text-xs', e.isGap ? 'text-muted-foreground italic' : 'font-medium', e.isCurrent && !e.isGap && 'text-orange-500')}>
+                            {e.nome}
+                            {e.isCurrent && <span className="text-[9px] ml-1 opacity-70">(atual)</span>}
+                          </span>
+                          <span className={cn('text-[10px] font-mono tabular-nums',
+                            e.isCurrent && !e.isGap ? 'text-orange-500' : e.isGap ? 'text-muted-foreground/70' : 'text-muted-foreground'
+                          )}>
+                            {fmtDuration(e.endMs - e.startMs)}
                           </span>
                         </div>
+                        <span className="text-[10px] text-muted-foreground">
+                          {fmtTs(new Date(e.startMs))}
+                          {!e.isCurrent || (e.isCurrent && !e.isGap) ? '' : ''}
+                          {e.endMs !== now && ` → ${fmtTs(new Date(e.endMs))}`}
+                        </span>
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               </div>
-            )}
+              );
+            })()}
           </div>
         </div>
         );
