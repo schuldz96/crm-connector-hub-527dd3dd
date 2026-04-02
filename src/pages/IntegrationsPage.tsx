@@ -17,8 +17,7 @@ import { loadAllowedUsers } from '@/lib/accessControl';
 import { supabase, supabaseSaas } from '@/integrations/supabase/client';
 import { getSaasEmpresaId } from '@/lib/saas';
 
-import { getEvolutionConfig, saveEvolutionConfig, type EvolutionApiConfig } from '@/lib/evolutionConfig';
-import { encryptToken } from '@/lib/tokenCrypto';
+import { getEvolutionConfig, saveEvolutionConfig, clearEvolutionConfigCache, type EvolutionApiConfig } from '@/lib/evolutionConfig';
 
 // ─── Evolution API helpers ────────────────────────────────────────────────────
 interface EvolutionInstance {
@@ -129,10 +128,13 @@ function EvolutionPanel() {
     if (!editUrl.trim() || !editToken.trim()) return;
     setSaving(true);
     try {
+      clearEvolutionConfigCache();
       await saveEvolutionConfig(editUrl.trim(), editToken.trim());
       const newConfig = { url: editUrl.trim(), token: editToken.trim() };
       setEvoConfig(newConfig);
       toast({ title: 'Configuração salva!', description: 'URL e token da Evolution API salvos no banco.' });
+      // Reload instances with new config
+      fetchInstances();
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Erro ao salvar', description: e.message });
     } finally {
@@ -207,8 +209,9 @@ function EvolutionPanel() {
         }
       } catch { /* DB read failed, will try API */ }
 
-      // Then fetch live from Evolution API
-      const data = await evolutionFetch(evoConfig, '/instance/fetchInstances');
+      // Then fetch live from Evolution API (always get fresh config)
+      const freshConfig = await getEvolutionConfig();
+      const data = await evolutionFetch(freshConfig, '/instance/fetchInstances');
       const apiInstances: EvolutionInstance[] = Array.isArray(data) ? data : [];
       // Merge DB user assignments into live API data
       const prevMap = new Map(instances.map(i => [i.name, i.assignedUserEmail]));
@@ -228,14 +231,20 @@ function EvolutionPanel() {
     }
   }, []);
 
-  useEffect(() => { fetchInstances(); }, [fetchInstances]);
+  // Only fetch instances after config is loaded and has url+token
+  useEffect(() => {
+    if (!configLoading && evoConfig.url && evoConfig.token) {
+      fetchInstances();
+    }
+  }, [configLoading, evoConfig.url, evoConfig.token]);
 
   const handleGetQr = async (instanceName: string) => {
     setQrInstanceName(instanceName);
     setLoadingQr(true);
     setQrCode(null);
     try {
-      const data = await evolutionFetch(evoConfig, `/instance/connect/${instanceName}`);
+      const freshConfig = await getEvolutionConfig();
+      const data = await evolutionFetch(freshConfig, `/instance/connect/${instanceName}`);
       const base64 = data?.base64 || data?.qrcode?.base64 || null;
       setQrCode(base64);
       if (!base64) toast({ title: 'Instância já conectada' });
