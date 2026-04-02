@@ -876,25 +876,29 @@ export default function InboxPage() {
         .eq('id', convTicket.id);
 
       // Track owner changes in history
-      if (field === 'proprietario_id' && value !== convTicket.proprietario_id) {
+      const oldOwner = convTicket.proprietario_id || null;
+      const newOwner = (value && field === 'proprietario_id') ? value : null;
+      if (field === 'proprietario_id' && newOwner !== oldOwner) {
         const now = new Date().toISOString();
 
         // Close current owner period
-        await (supabase as any).schema('saas').from('crm_ticket_owner_history')
+        const { error: closeErr } = await (supabase as any).schema('saas').from('crm_ticket_owner_history')
           .update({ fim_em: now })
           .eq('ticket_id', convTicket.id)
           .is('fim_em', null);
+        if (closeErr) console.warn('[ticket-history] close error:', closeErr);
 
         // Open new owner period (if assigning someone, not unassigning)
-        if (value) {
-          const ownerName = accountUsers.find(u => u.id === value)?.nome || '';
-          await (supabase as any).schema('saas').from('crm_ticket_owner_history').insert({
+        if (newOwner) {
+          const ownerName = accountUsers.find(u => u.id === newOwner)?.nome || '';
+          const { error: insertErr } = await (supabase as any).schema('saas').from('crm_ticket_owner_history').insert({
             ticket_id: convTicket.id,
-            usuario_id: value,
+            usuario_id: newOwner,
             usuario_nome: ownerName,
             atribuido_por: currentUserId,
             inicio_em: now,
           });
+          if (insertErr) console.error('[ticket-history] insert error:', insertErr);
         }
 
         // Reload history
@@ -1760,7 +1764,8 @@ export default function InboxPage() {
                 <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1">Categoria</label>
                 <Input
                   value={convTicket.categoria || ''}
-                  onChange={e => handleUpdateTicket('categoria', e.target.value)}
+                  onChange={e => setConvTicket((prev: any) => prev ? { ...prev, categoria: e.target.value } : prev)}
+                  onBlur={e => handleUpdateTicket('categoria', e.target.value)}
                   placeholder="Ex: Suporte, Financeiro, Técnico"
                   className="h-8 text-xs"
                 />
