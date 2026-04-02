@@ -823,7 +823,7 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
 
                   {/* ── Ticket Configuration ─────────────── */}
                   <div className="border-t border-border/50 pt-3 mt-1">
-                    <div className="flex items-center justify-between mb-3">
+                    <label className="flex items-center justify-between cursor-pointer mb-3" onClick={() => setAccountForm(f => ({ ...f, ticket_enabled: !f.ticket_enabled }))}>
                       <div className="flex items-center gap-2">
                         <Ticket className="w-4 h-4 text-orange-500" />
                         <div>
@@ -831,66 +831,64 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
                           <p className="text-[10px] text-muted-foreground">Conversas desta conta podem abrir tickets no CRM</p>
                         </div>
                       </div>
-                      <Switch
-                        checked={accountForm.ticket_enabled}
-                        onCheckedChange={v => setAccountForm(f => ({ ...f, ticket_enabled: v }))}
-                      />
-                    </div>
+                      <div className={cn(
+                        'w-10 h-5 rounded-full relative transition-colors flex-shrink-0',
+                        accountForm.ticket_enabled ? 'bg-orange-500' : 'bg-muted'
+                      )}>
+                        <div className={cn(
+                          'absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform',
+                          accountForm.ticket_enabled ? 'translate-x-5' : 'translate-x-0.5'
+                        )} />
+                      </div>
+                    </label>
 
                     {accountForm.ticket_enabled && (
-                      <div className="space-y-3 pl-6 border-l-2 border-orange-500/20">
+                      <div className="space-y-3 pl-6 border-l-2 border-orange-500/20 animate-fade-in">
                         <div>
                           <label className="text-xs font-medium block mb-1">Pipeline de tickets *</label>
-                          <Select
+                          <select
                             value={accountForm.ticket_pipeline_id}
-                            onValueChange={v => setAccountForm(f => ({ ...f, ticket_pipeline_id: v, ticket_estagio_id: '' }))}
+                            onChange={e => setAccountForm(f => ({ ...f, ticket_pipeline_id: e.target.value, ticket_estagio_id: '' }))}
+                            className="w-full h-8 text-xs bg-background border border-border rounded-md px-2"
                           >
-                            <SelectTrigger className="h-8 text-xs bg-background border-border">
-                              <SelectValue placeholder="Selecione o pipeline" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {ticketPipelines.map(p => (
-                                <SelectItem key={p.id} value={p.id} className="text-xs">{p.nome}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            <option value="">Selecione o pipeline</option>
+                            {ticketPipelines.map(p => (
+                              <option key={p.id} value={p.id}>{p.nome}</option>
+                            ))}
+                          </select>
+                          {ticketPipelines.length === 0 && (
+                            <p className="text-[10px] text-warning mt-0.5">Nenhum pipeline de ticket encontrado. Crie um em CRM → Tickets.</p>
+                          )}
                         </div>
 
                         {accountForm.ticket_pipeline_id && (
                           <div>
                             <label className="text-xs font-medium block mb-1">Estágio inicial *</label>
-                            <Select
+                            <select
                               value={accountForm.ticket_estagio_id}
-                              onValueChange={v => setAccountForm(f => ({ ...f, ticket_estagio_id: v }))}
+                              onChange={e => setAccountForm(f => ({ ...f, ticket_estagio_id: e.target.value }))}
+                              className="w-full h-8 text-xs bg-background border border-border rounded-md px-2"
                             >
-                              <SelectTrigger className="h-8 text-xs bg-background border-border">
-                                <SelectValue placeholder="Selecione o estágio" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {(ticketPipelines.find(p => p.id === accountForm.ticket_pipeline_id)?.estagios || []).map(e => (
-                                  <SelectItem key={e.id} value={e.id} className="text-xs">{e.nome}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                              <option value="">Selecione o estágio</option>
+                              {(ticketPipelines.find(p => p.id === accountForm.ticket_pipeline_id)?.estagios || []).map(e => (
+                                <option key={e.id} value={e.id}>{e.nome}</option>
+                              ))}
+                            </select>
                           </div>
                         )}
 
                         <div>
                           <label className="text-xs font-medium block mb-1">Prioridade padrão</label>
-                          <Select
+                          <select
                             value={accountForm.ticket_prioridade}
-                            onValueChange={v => setAccountForm(f => ({ ...f, ticket_prioridade: v }))}
+                            onChange={e => setAccountForm(f => ({ ...f, ticket_prioridade: e.target.value }))}
+                            className="w-full h-8 text-xs bg-background border border-border rounded-md px-2"
                           >
-                            <SelectTrigger className="h-8 text-xs bg-background border-border">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="low" className="text-xs">Baixa</SelectItem>
-                              <SelectItem value="medium" className="text-xs">Média</SelectItem>
-                              <SelectItem value="high" className="text-xs">Alta</SelectItem>
-                              <SelectItem value="urgent" className="text-xs">Urgente</SelectItem>
-                            </SelectContent>
-                          </Select>
+                            <option value="low">Baixa</option>
+                            <option value="medium">Média</option>
+                            <option value="high">Alta</option>
+                            <option value="urgent">Urgente</option>
+                          </select>
                         </div>
 
                         <div>
@@ -899,7 +897,7 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
                             <span className="text-[10px] px-2 py-1 rounded-full bg-green-500/10 text-green-500 border border-green-500/20">Aberto</span>
                             <span className="text-[10px] px-2 py-1 rounded-full bg-muted text-muted-foreground border border-border">Fechado</span>
                           </div>
-                          <p className="text-[10px] text-muted-foreground mt-1">Tickets são criados com status "Aberto". Operador fecha manualmente.</p>
+                          <p className="text-[10px] text-muted-foreground mt-1">Tickets criados como "Aberto". Operador fecha manualmente.</p>
                         </div>
                       </div>
                     )}
