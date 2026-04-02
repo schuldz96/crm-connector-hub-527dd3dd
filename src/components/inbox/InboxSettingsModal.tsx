@@ -9,9 +9,11 @@ import {
   Settings, Plus, Trash2, Edit2, Save, X, Loader2,
   Check, AlertCircle, MessageSquare, Key, ExternalLink,
   Copy, CheckCheck, LayoutTemplate, ChevronDown, ChevronUp,
-  RefreshCw, Globe, Shield, RotateCcw, Users,
+  RefreshCw, Globe, Shield, RotateCcw, Users, Ticket,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import SearchableSelect from '@/components/ui/searchable-select';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -54,6 +56,10 @@ interface AccountFormData {
   access_token: string;
   token_type: 'permanent' | 'oauth';
   phone_display: string;
+  ticket_enabled: boolean;
+  ticket_pipeline_id: string;
+  ticket_estagio_id: string;
+  ticket_prioridade: string;
 }
 
 const EMPTY_FORM: AccountFormData = {
@@ -63,7 +69,17 @@ const EMPTY_FORM: AccountFormData = {
   access_token: '',
   token_type: 'permanent',
   phone_display: '',
+  ticket_enabled: false,
+  ticket_pipeline_id: '',
+  ticket_estagio_id: '',
+  ticket_prioridade: 'medium',
 };
+
+interface TicketPipeline {
+  id: string;
+  nome: string;
+  estagios: { id: string; nome: string; ordem: number }[];
+}
 
 /* ── Status badge ───────────────────────────────────── */
 const StatusBadge = ({ status }: { status: TemplateStatus }) => {
@@ -164,6 +180,9 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
   const [savingAccount, setSavingAccount] = useState(false);
   const [deletingAccountId, setDeletingAccountId] = useState<string | null>(null);
 
+  // Ticket pipelines
+  const [ticketPipelines, setTicketPipelines] = useState<TicketPipeline[]>([]);
+
   // Templates
   const [templates, setTemplates] = useState<MetaTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
@@ -187,6 +206,37 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
       fetchTemplates(selectedAccount);
     }
   }, [selectedAccount, tab]);
+
+  // Load ticket pipelines for account config
+  useEffect(() => {
+    (async () => {
+      try {
+        const empresaId = await getSaasEmpresaId();
+        const { data: pipes } = await (supabase as any)
+          .schema('saas')
+          .from('crm_pipelines')
+          .select('id, nome')
+          .eq('empresa_id', empresaId)
+          .eq('tipo', 'ticket')
+          .eq('ativo', true)
+          .order('ordem');
+
+        if (pipes) {
+          const pipelinesWithStages: TicketPipeline[] = [];
+          for (const p of pipes) {
+            const { data: stages } = await (supabase as any)
+              .schema('saas')
+              .from('crm_pipeline_estagios')
+              .select('id, nome, ordem')
+              .eq('pipeline_id', p.id)
+              .order('ordem');
+            pipelinesWithStages.push({ id: p.id, nome: p.nome, estagios: stages || [] });
+          }
+          setTicketPipelines(pipelinesWithStages);
+        }
+      } catch { /* silent */ }
+    })();
+  }, []);
 
   // Load access data when tab changes to 'access'
   useEffect(() => {
@@ -310,7 +360,7 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
     try {
       const empresaId = await getSaasEmpresaId();
       const encryptedToken = await encryptToken(accountForm.access_token.trim());
-      const payload = {
+      const payload: Record<string, unknown> = {
         empresa_id: empresaId,
         nome: accountForm.nome.trim(),
         phone_number_id: accountForm.phone_number_id.trim(),
@@ -319,6 +369,10 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
         token_type: accountForm.token_type,
         phone_display: accountForm.phone_display.trim() || null,
         status: 'active',
+        ticket_enabled: accountForm.ticket_enabled,
+        ticket_pipeline_id: accountForm.ticket_pipeline_id || null,
+        ticket_estagio_id: accountForm.ticket_estagio_id || null,
+        ticket_prioridade: accountForm.ticket_prioridade || 'medium',
       };
 
       let result;
@@ -656,6 +710,11 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
+                      {(acc as any).ticket_enabled && (
+                        <Badge variant="outline" className="text-[10px] h-5 bg-orange-500/10 text-orange-500 border-orange-500/20 gap-0.5">
+                          <Ticket className="w-2.5 h-2.5" /> Tickets
+                        </Badge>
+                      )}
                       <Badge variant="outline" className={cn(
                         'text-[10px] h-5',
                         acc.status === 'active' ? 'bg-green-500/10 text-green-600 border-green-500/20' : 'text-muted-foreground'
@@ -671,6 +730,10 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
                             waba_id: acc.waba_id || '', access_token: acc.access_token,
                             token_type: acc.token_type as 'permanent' | 'oauth',
                             phone_display: acc.phone_display || '',
+                            ticket_enabled: (acc as any).ticket_enabled || false,
+                            ticket_pipeline_id: (acc as any).ticket_pipeline_id || '',
+                            ticket_estagio_id: (acc as any).ticket_estagio_id || '',
+                            ticket_prioridade: (acc as any).ticket_prioridade || 'medium',
                           });
                           setShowAccountForm(true);
                         }}
@@ -756,6 +819,90 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
                         Meta for Developers → Suas apps → Token de acesso
                       </a>
                     </p>
+                  </div>
+
+                  {/* ── Ticket Configuration ─────────────── */}
+                  <div className="border-t border-border/50 pt-3 mt-1">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Ticket className="w-4 h-4 text-orange-500" />
+                        <div>
+                          <p className="text-xs font-semibold">Gerar Tickets</p>
+                          <p className="text-[10px] text-muted-foreground">Conversas desta conta podem abrir tickets no CRM</p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={accountForm.ticket_enabled}
+                        onCheckedChange={v => setAccountForm(f => ({ ...f, ticket_enabled: v }))}
+                      />
+                    </div>
+
+                    {accountForm.ticket_enabled && (
+                      <div className="space-y-3 pl-6 border-l-2 border-orange-500/20">
+                        <div>
+                          <label className="text-xs font-medium block mb-1">Pipeline de tickets *</label>
+                          <Select
+                            value={accountForm.ticket_pipeline_id}
+                            onValueChange={v => setAccountForm(f => ({ ...f, ticket_pipeline_id: v, ticket_estagio_id: '' }))}
+                          >
+                            <SelectTrigger className="h-8 text-xs bg-background border-border">
+                              <SelectValue placeholder="Selecione o pipeline" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {ticketPipelines.map(p => (
+                                <SelectItem key={p.id} value={p.id} className="text-xs">{p.nome}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {accountForm.ticket_pipeline_id && (
+                          <div>
+                            <label className="text-xs font-medium block mb-1">Estágio inicial *</label>
+                            <Select
+                              value={accountForm.ticket_estagio_id}
+                              onValueChange={v => setAccountForm(f => ({ ...f, ticket_estagio_id: v }))}
+                            >
+                              <SelectTrigger className="h-8 text-xs bg-background border-border">
+                                <SelectValue placeholder="Selecione o estágio" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(ticketPipelines.find(p => p.id === accountForm.ticket_pipeline_id)?.estagios || []).map(e => (
+                                  <SelectItem key={e.id} value={e.id} className="text-xs">{e.nome}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+
+                        <div>
+                          <label className="text-xs font-medium block mb-1">Prioridade padrão</label>
+                          <Select
+                            value={accountForm.ticket_prioridade}
+                            onValueChange={v => setAccountForm(f => ({ ...f, ticket_prioridade: v }))}
+                          >
+                            <SelectTrigger className="h-8 text-xs bg-background border-border">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="low" className="text-xs">Baixa</SelectItem>
+                              <SelectItem value="medium" className="text-xs">Média</SelectItem>
+                              <SelectItem value="high" className="text-xs">Alta</SelectItem>
+                              <SelectItem value="urgent" className="text-xs">Urgente</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-medium block mb-1">Status do ticket</label>
+                          <div className="flex gap-2">
+                            <span className="text-[10px] px-2 py-1 rounded-full bg-green-500/10 text-green-500 border border-green-500/20">Aberto</span>
+                            <span className="text-[10px] px-2 py-1 rounded-full bg-muted text-muted-foreground border border-border">Fechado</span>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground mt-1">Tickets são criados com status "Aberto". Operador fecha manualmente.</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex gap-2 pt-1">
