@@ -1,10 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, supabaseSaas } from '@/integrations/supabase/client';
 import { getSaasEmpresaId } from '@/lib/saas';
-import { CONFIG } from '@/lib/config';
-
-const EVOLUTION_API_URL = CONFIG.EVOLUTION_API_URL;
-const EVOLUTION_API_TOKEN = CONFIG.EVOLUTION_API_TOKEN;
+import { getEvolutionConfig } from '@/lib/evolutionConfig';
 
 export interface EvolutionInstance {
   id: string;
@@ -129,10 +126,11 @@ export function useEvolutionInstances() {
     }
 
     try {
-      // Fetch live data from Evolution API
-      if (EVOLUTION_API_URL && EVOLUTION_API_TOKEN) {
-        const res = await window.fetch(`${EVOLUTION_API_URL}/instance/fetchInstances`, {
-          headers: { apikey: EVOLUTION_API_TOKEN, 'Content-Type': 'application/json' },
+      // Fetch live data from Evolution API (config from DB)
+      const evoConfig = await getEvolutionConfig();
+      if (evoConfig.url && evoConfig.token) {
+        const res = await window.fetch(`${evoConfig.url}/instance/fetchInstances`, {
+          headers: { apikey: evoConfig.token, 'Content-Type': 'application/json' },
         });
         if (res.ok) {
           const apiData = await res.json();
@@ -150,7 +148,7 @@ export function useEvolutionInstances() {
           throw new Error(`Evolution API HTTP ${res.status}`);
         }
       } else {
-        throw new Error('Evolution API não configurada (VITE_EVOLUTION_API_URL ou VITE_EVOLUTION_API_TOKEN vazios).');
+        throw new Error('Evolution API não configurada. Acesse Integrações → WhatsApp para configurar.');
       }
     } catch (e: any) {
       setError(e.message);

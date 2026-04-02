@@ -4,8 +4,9 @@ import {
   RefreshCw, Loader2, Smartphone, QrCode, MessageSquare,
   Phone, Wifi, WifiOff, X, CheckCircle2, XCircle,
   AlertTriangle, Activity, ArrowDown, ArrowUp, CheckCheck,
-  ExternalLink, Database, Link2,
+  ExternalLink, Database, Link2, Eye, EyeOff,
 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import HubSpotIntegration from '@/components/integrations/HubSpotIntegration';
 import { cn } from '@/lib/utils';
 import SearchableSelect from '@/components/ui/searchable-select';
@@ -16,11 +17,8 @@ import { loadAllowedUsers } from '@/lib/accessControl';
 import { supabase, supabaseSaas } from '@/integrations/supabase/client';
 import { getSaasEmpresaId } from '@/lib/saas';
 
-import { CONFIG } from '@/lib/config';
-
-// ─── Evolution API config ─────────────────────────────────────────────────────
-const EVOLUTION_API_URL = CONFIG.EVOLUTION_API_URL;
-const EVOLUTION_API_TOKEN = CONFIG.EVOLUTION_API_TOKEN;
+import { getEvolutionConfig, saveEvolutionConfig, type EvolutionApiConfig } from '@/lib/evolutionConfig';
+import { encryptToken } from '@/lib/tokenCrypto';
 
 // ─── Evolution API helpers ────────────────────────────────────────────────────
 interface EvolutionInstance {
@@ -34,14 +32,14 @@ interface EvolutionInstance {
   _count?: { Message: number; Contact: number; Chat: number };
 }
 
-async function evolutionFetch(path: string, options: RequestInit = {}) {
-  if (!EVOLUTION_API_URL || !EVOLUTION_API_TOKEN) {
-    throw new Error('Evolution API não configurada no .env');
+async function evolutionFetch(config: EvolutionApiConfig, path: string, options: RequestInit = {}) {
+  if (!config.url || !config.token) {
+    throw new Error('Evolution API não configurada. Configure URL e Token abaixo.');
   }
-  const res = await fetch(`${EVOLUTION_API_URL}${path}`, {
+  const res = await fetch(`${config.url}${path}`, {
     ...options,
     headers: {
-      apikey: EVOLUTION_API_TOKEN,
+      apikey: config.token,
       'Content-Type': 'application/json',
       ...(options.headers || {}),
     },
@@ -96,6 +94,13 @@ function EvolutionPanel() {
   const isAdmin = hasRole(['admin', 'director', 'supervisor']);
   const [realUsers, setRealUsers] = useState<Array<{ id: string; name: string; email: string; avatar: string; status: 'active' }>>([]);
 
+  const [evoConfig, setEvoConfig] = useState<EvolutionApiConfig>({ url: '', token: '' });
+  const [configLoading, setConfigLoading] = useState(true);
+  const [editUrl, setEditUrl] = useState('');
+  const [editToken, setEditToken] = useState('');
+  const [showToken, setShowToken] = useState(false);
+  const [saving, setSaving] = useState(false);
+
   const [instances, setInstances] = useState<EvolutionInstance[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -106,6 +111,34 @@ function EvolutionPanel() {
     const map: Record<string, string> = {};
     return map;
   });
+
+  // Load Evolution config from DB
+  useEffect(() => {
+    (async () => {
+      try {
+        const cfg = await getEvolutionConfig();
+        setEvoConfig(cfg);
+        setEditUrl(cfg.url);
+        setEditToken(cfg.token);
+      } catch { /* keep defaults */ }
+      setConfigLoading(false);
+    })();
+  }, []);
+
+  const handleSaveConfig = async () => {
+    if (!editUrl.trim() || !editToken.trim()) return;
+    setSaving(true);
+    try {
+      await saveEvolutionConfig(editUrl.trim(), editToken.trim());
+      const newConfig = { url: editUrl.trim(), token: editToken.trim() };
+      setEvoConfig(newConfig);
+      toast({ title: 'Configuração salva!', description: 'URL e token da Evolution API salvos no banco.' });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro ao salvar', description: e.message });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   useEffect(() => {
     const run = async () => {
@@ -175,7 +208,7 @@ function EvolutionPanel() {
       } catch { /* DB read failed, will try API */ }
 
       // Then fetch live from Evolution API
-      const data = await evolutionFetch('/instance/fetchInstances');
+      const data = await evolutionFetch(evoConfig, '/instance/fetchInstances');
       const apiInstances: EvolutionInstance[] = Array.isArray(data) ? data : [];
       // Merge DB user assignments into live API data
       const prevMap = new Map(instances.map(i => [i.name, i.assignedUserEmail]));
@@ -202,7 +235,7 @@ function EvolutionPanel() {
     setLoadingQr(true);
     setQrCode(null);
     try {
-      const data = await evolutionFetch(`/instance/connect/${instanceName}`);
+      const data = await evolutionFetch(evoConfig, `/instance/connect/${instanceName}`);
       const base64 = data?.base64 || data?.qrcode?.base64 || null;
       setQrCode(base64);
       if (!base64) toast({ title: 'Instância já conectada' });
@@ -232,23 +265,89 @@ function EvolutionPanel() {
     return i.assignedUserEmail?.toLowerCase() === email;
   });
 
+  const configReady = evoConfig.url && evoConfig.token;
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      {/* Config card */}
+      <div className="glass-card p-5">
+        <div className="flex items-center gap-3 mb-4">
           <div className="w-9 h-9 rounded-xl bg-accent/10 flex items-center justify-center">
             <MessageSquare className="w-5 h-5 text-accent" />
           </div>
-          <div>
+          <div className="flex-1">
             <p className="text-sm font-semibold">Evolution API — WhatsApp</p>
-            <p className="text-xs text-muted-foreground">{EVOLUTION_API_URL}</p>
+            <p className="text-[11px] text-muted-foreground">Configure a URL e o token da sua instância Evolution API.</p>
           </div>
+          {configReady && (
+            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border bg-success/10 text-success border-success/20 font-medium">
+              <CheckCircle2 className="w-3 h-3" /> Configurado
+            </span>
+          )}
         </div>
-        <Button size="sm" variant="outline" className="text-xs h-7 border-border gap-1.5" onClick={fetchInstances} disabled={loading}>
-          {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
-          Atualizar
-        </Button>
+
+        {configLoading ? (
+          <div className="flex items-center gap-2 py-3">
+            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">Carregando configuração...</span>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-medium block mb-1.5">URL da API</label>
+              <Input
+                value={editUrl}
+                onChange={e => setEditUrl(e.target.value)}
+                placeholder="https://sua-instancia.evolution-api.com"
+                className="h-9 text-xs font-mono"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium block mb-1.5">Token (API Key)</label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    type={showToken ? 'text' : 'password'}
+                    value={editToken}
+                    onChange={e => setEditToken(e.target.value)}
+                    placeholder="sua-api-key-aqui"
+                    className="h-9 text-xs font-mono pr-9"
+                  />
+                  <button onClick={() => setShowToken(!showToken)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground">
+                    {showToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+                <Button size="sm" className="h-9 gap-1.5" onClick={handleSaveConfig} disabled={saving || !editUrl.trim() || !editToken.trim()}>
+                  {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                  Salvar
+                </Button>
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1.5">
+                Token criptografado com AES-256-GCM antes de salvar no banco.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Instances header */}
+      {configReady && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-accent/10 flex items-center justify-center">
+              <Smartphone className="w-5 h-5 text-accent" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold">Instâncias</p>
+              <p className="text-xs text-muted-foreground">{evoConfig.url}</p>
+            </div>
+          </div>
+          <Button size="sm" variant="outline" className="text-xs h-7 border-border gap-1.5" onClick={fetchInstances} disabled={loading}>
+            {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+            Atualizar
+          </Button>
+        </div>
+      )}
 
       {!isAdmin && myInstance && (
         <div className={cn(

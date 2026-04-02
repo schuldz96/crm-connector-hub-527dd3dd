@@ -23,13 +23,10 @@ import { useAppConfig } from '@/contexts/AppConfigContext';
 import { AI_CONFIG_STORAGE, DEFAULT_WHATSAPP_CRITERIA } from '@/pages/AIConfigPage';
 import { loadAIConfig } from '@/lib/aiConfigService';
 
-import { CONFIG } from '@/lib/config';
 import { callOpenAI } from '@/lib/openaiProxy';
 import { supabase } from '@/integrations/supabase/client';
 import { getSaasEmpresaId } from '@/lib/saas';
-
-const EVOLUTION_API_URL = CONFIG.EVOLUTION_API_URL;
-const EVOLUTION_API_TOKEN = CONFIG.EVOLUTION_API_TOKEN;
+import { getEvolutionConfig } from '@/lib/evolutionConfig';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Chat {
@@ -70,14 +67,16 @@ interface Message {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 async function evoFetch(path: string, options: RequestInit = {}, timeoutMs = 30000) {
+  const cfg = await getEvolutionConfig();
+  if (!cfg.url || !cfg.token) throw new Error('Evolution API não configurada. Acesse Integrações → WhatsApp para configurar.');
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(`${EVOLUTION_API_URL}${path}`, {
+    const res = await fetch(`${cfg.url}${path}`, {
       ...options,
       signal: controller.signal,
       headers: {
-        apikey: EVOLUTION_API_TOKEN,
+        apikey: cfg.token,
         'Content-Type': 'application/json',
         ...(options.headers || {}),
       },

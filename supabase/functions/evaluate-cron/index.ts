@@ -11,10 +11,27 @@ import { decryptToken } from '../_shared/tokenCrypto.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const EVOLUTION_API_URL = Deno.env.get('EVOLUTION_API_URL') || 'https://evolutionapic.contato-lojavirtual.com';
-const EVOLUTION_API_TOKEN = Deno.env.get('EVOLUTION_API_TOKEN') || '';
-
 const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, { db: { schema: 'saas' } });
+
+// Evolution API config — loaded from DB, falls back to env vars
+let _evoUrl = Deno.env.get('EVOLUTION_API_URL') || '';
+let _evoToken = Deno.env.get('EVOLUTION_API_TOKEN') || '';
+
+async function loadEvolutionConfig(empresaId: string): Promise<void> {
+  try {
+    const { data } = await sb.from('integracoes')
+      .select('configuracao')
+      .eq('empresa_id', empresaId)
+      .eq('tipo', 'evolution')
+      .eq('status', 'conectada')
+      .limit(1)
+      .maybeSingle();
+    if (data?.configuracao?.url && data?.configuracao?.token_encrypted) {
+      _evoUrl = data.configuracao.url;
+      _evoToken = await decryptToken(data.configuracao.token_encrypted);
+    }
+  } catch { /* keep env fallback */ }
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -38,9 +55,9 @@ async function callOpenAI(token: string, model: string, messages: any[]) {
 // ─── Fetch messages from Evolution API ───────────────────────────────────────
 async function fetchEvolutionMessages(instanceName: string, remoteJid: string): Promise<any[]> {
   try {
-    const res = await fetch(`${EVOLUTION_API_URL}/chat/findMessages/${instanceName}`, {
+    const res = await fetch(`${_evoUrl}/chat/findMessages/${instanceName}`, {
       method: 'POST',
-      headers: { apikey: EVOLUTION_API_TOKEN, 'Content-Type': 'application/json' },
+      headers: { apikey: _evoToken, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         where: { key: { remoteJid } },
         limit: 100,
@@ -101,6 +118,10 @@ serve(async (req) => {
     if (!empresa) throw new Error('Nenhuma empresa encontrada');
     const empresaId = empresa.id;
     log(`Empresa: ${empresaId}`);
+
+    // 1b. Load Evolution API config from DB (falls back to env)
+    await loadEvolutionConfig(empresaId);
+    log(`Evolution API: ${_evoUrl ? _evoUrl : '(não configurada)'}`);
 
     // 2. Get OpenAI tokens
     const { data: tokens } = await sb.from('tokens_ia_modulo')
