@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Loader2, CheckCircle2, AlertCircle, Link2, Unlink, Eye, EyeOff,
   Search, Users, Building2, Briefcase, Ticket,
+  StickyNote, Calendar, PhoneCall, ListTodo, Mail,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -13,8 +14,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { getSaasEmpresaId } from '@/lib/saas';
 import { encryptToken, decryptToken } from '@/lib/tokenCrypto';
 import {
-  verifyConnection, getObject, getObjectsBatch, getPipelines, getOwners,
-  type HsObjectType, type HsObject, type HsPipeline, type HsOwner,
+  verifyConnection, getObject, getObjectsBatch, getPipelines, getOwners, ENGAGEMENT_TYPES,
+  type HsObjectType, type HsAnyObjectType, type HsObject, type HsPipeline, type HsOwner,
 } from '@/lib/hubspotService';
 
 const OBJECT_TYPES: { value: HsObjectType; label: string; icon: typeof Users }[] = [
@@ -24,17 +25,66 @@ const OBJECT_TYPES: { value: HsObjectType; label: string; icon: typeof Users }[]
   { value: 'tickets', label: 'Ticket', icon: Ticket },
 ];
 
+const ALL_TYPE_META: Record<string, { label: string; icon: typeof Users }> = {
+  contacts: { label: 'Contato', icon: Users },
+  companies: { label: 'Empresa', icon: Building2 },
+  deals: { label: 'Negócio', icon: Briefcase },
+  tickets: { label: 'Ticket', icon: Ticket },
+  notes: { label: 'Nota', icon: StickyNote },
+  meetings: { label: 'Reunião', icon: Calendar },
+  calls: { label: 'Ligação', icon: PhoneCall },
+  tasks: { label: 'Tarefa', icon: ListTodo },
+  emails: { label: 'E-mail', icon: Mail },
+};
+
 function objectName(obj: HsObject, type: string): string {
   const p = obj.properties;
   if (type === 'contacts') return [p.firstname, p.lastname].filter(Boolean).join(' ') || `Contato #${obj.id}`;
   if (type === 'companies') return p.name || `Empresa #${obj.id}`;
   if (type === 'deals') return p.dealname || `Negócio #${obj.id}`;
   if (type === 'tickets') return p.subject || `Ticket #${obj.id}`;
+  if (type === 'notes') return (p.hs_note_body || '').slice(0, 80) || `Nota #${obj.id}`;
+  if (type === 'meetings') return p.hs_meeting_title || `Reunião #${obj.id}`;
+  if (type === 'calls') return p.hs_call_title || `Ligação #${obj.id}`;
+  if (type === 'tasks') return p.hs_task_subject || `Tarefa #${obj.id}`;
+  if (type === 'emails') return p.hs_email_subject || `E-mail #${obj.id}`;
   return `#${obj.id}`;
 }
 
 function objectTypeLabel(type: string): string {
-  return OBJECT_TYPES.find(t => t.value === type)?.label || type;
+  return ALL_TYPE_META[type]?.label || type;
+}
+
+function engagementExtra(obj: HsObject, type: string): string | undefined {
+  const p = obj.properties;
+  if (type === 'meetings') {
+    if (p.hs_meeting_start_time) {
+      const d = new Date(p.hs_meeting_start_time);
+      return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
+    return p.hs_meeting_outcome || undefined;
+  }
+  if (type === 'calls') {
+    const parts: string[] = [];
+    if (p.hs_call_direction) parts.push(p.hs_call_direction === 'INBOUND' ? '← Recebida' : '→ Realizada');
+    if (p.hs_call_duration) {
+      const secs = parseInt(p.hs_call_duration);
+      parts.push(secs >= 60 ? `${Math.floor(secs / 60)}min` : `${secs}s`);
+    }
+    return parts.join(' · ') || undefined;
+  }
+  if (type === 'tasks') {
+    const status = p.hs_task_status;
+    if (status === 'COMPLETED') return '✓ Concluída';
+    if (status === 'NOT_STARTED') return '○ Não iniciada';
+    if (status === 'IN_PROGRESS') return '◐ Em andamento';
+    if (status === 'WAITING') return '◷ Aguardando';
+    return status || undefined;
+  }
+  if (type === 'emails') {
+    return p.hs_email_direction === 'INCOMING_EMAIL' ? '← Recebido' : '→ Enviado';
+  }
+  return undefined;
 }
 
 interface ListItem {
@@ -62,7 +112,9 @@ export default function HubSpotIntegration() {
   const [searchId, setSearchId] = useState('');
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<ListItem[]>([]);
+  const [engagements, setEngagements] = useState<ListItem[]>([]);
   const [mainObject, setMainObject] = useState<ListItem | null>(null);
+  const [activeTab, setActiveTab] = useState<'objects' | 'activities'>('objects');
 
   const [owners, setOwners] = useState<HsOwner[]>([]);
   const [dealPipelines, setDealPipelines] = useState<HsPipeline[]>([]);
@@ -195,6 +247,8 @@ export default function HubSpotIntegration() {
     return { pipelineLabel: pipe?.label, stageLabel: stage?.label };
   };
 
+  const isEngagement = (type: string) => (ENGAGEMENT_TYPES as string[]).includes(type);
+
   const buildListItem = (obj: HsObject, type: string): ListItem => {
     const p = obj.properties;
     const { pipelineLabel, stageLabel } = resolvePipeline(
@@ -207,8 +261,10 @@ export default function HubSpotIntegration() {
       name: objectName(obj, type),
       type,
       typeLabel: objectTypeLabel(type),
-      extra: p.email || p.domain || (p.amount ? `R$ ${p.amount}` : undefined) || undefined,
-      createdate: p.createdate || undefined,
+      extra: isEngagement(type)
+        ? engagementExtra(obj, type)
+        : (p.email || p.domain || (p.amount ? `R$ ${p.amount}` : undefined) || undefined),
+      createdate: p.createdate || p.hs_createdate || p.hs_timestamp || undefined,
       pipelineLabel,
       stageLabel,
       ownerName: resolveOwner(p.hubspot_owner_id),
@@ -220,30 +276,49 @@ export default function HubSpotIntegration() {
     if (!searchId.trim()) return;
     setLoading(true);
     setResults([]);
+    setEngagements([]);
     setMainObject(null);
+    setActiveTab('objects');
     try {
       const obj = await getObject(token.trim(), searchType, searchId.trim());
       setMainObject(buildListItem(obj, searchType));
 
-      // Associated objects
-      const items: ListItem[] = [];
+      // Separate CRM objects from engagement activities
+      const crmItems: ListItem[] = [];
+      const activityItems: ListItem[] = [];
+
       if (obj.associations) {
         for (const [assocType, assocData] of Object.entries(obj.associations)) {
           const ids = assocData.results?.map((r: any) => r.id) || [];
           if (ids.length > 0) {
-            const objects = await getObjectsBatch(token.trim(), assocType as HsObjectType, ids);
+            const objects = await getObjectsBatch(token.trim(), assocType as HsAnyObjectType, ids);
             for (const o of objects) {
-              items.push(buildListItem(o, assocType));
+              const item = buildListItem(o, assocType);
+              if (isEngagement(assocType)) {
+                activityItems.push(item);
+              } else {
+                crmItems.push(item);
+              }
             }
           }
         }
       }
-      setResults(items);
 
-      if (items.length === 0) {
-        toast({ title: 'Objeto encontrado', description: 'Nenhum vínculo associado.' });
+      // Sort activities by date (newest first)
+      activityItems.sort((a, b) => {
+        const da = a.createdate ? new Date(a.createdate).getTime() : 0;
+        const db = b.createdate ? new Date(b.createdate).getTime() : 0;
+        return db - da;
+      });
+
+      setResults(crmItems);
+      setEngagements(activityItems);
+
+      const total = crmItems.length + activityItems.length;
+      if (total === 0) {
+        toast({ title: 'Objeto encontrado', description: 'Nenhum vínculo ou atividade associada.' });
       } else {
-        toast({ title: `${items.length} vínculos encontrados` });
+        toast({ title: `${crmItems.length} vínculo${crmItems.length !== 1 ? 's' : ''} + ${activityItems.length} atividade${activityItems.length !== 1 ? 's' : ''}` });
       }
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Erro ao buscar', description: e.message });
@@ -253,8 +328,8 @@ export default function HubSpotIntegration() {
   };
 
   const typeIcon = (type: string) => {
-    const T = OBJECT_TYPES.find(t => t.value === type);
-    return T ? <T.icon className="w-3.5 h-3.5" /> : null;
+    const meta = ALL_TYPE_META[type];
+    return meta ? <meta.icon className="w-3.5 h-3.5" /> : null;
   };
 
   const typeBadgeColor = (type: string) => {
@@ -262,6 +337,11 @@ export default function HubSpotIntegration() {
     if (type === 'companies') return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
     if (type === 'deals') return 'bg-purple-500/15 text-purple-400 border-purple-500/30';
     if (type === 'tickets') return 'bg-amber-500/15 text-amber-400 border-amber-500/30';
+    if (type === 'notes') return 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30';
+    if (type === 'meetings') return 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30';
+    if (type === 'calls') return 'bg-green-500/15 text-green-400 border-green-500/30';
+    if (type === 'tasks') return 'bg-orange-500/15 text-orange-400 border-orange-500/30';
+    if (type === 'emails') return 'bg-pink-500/15 text-pink-400 border-pink-500/30';
     return '';
   };
 
@@ -393,8 +473,26 @@ export default function HubSpotIntegration() {
             </div>
           )}
 
-          {/* Results table */}
-          {results.length > 0 && (
+          {/* Tabs: Objects / Activities */}
+          {mainObject && (results.length > 0 || engagements.length > 0) && (
+            <div className="flex gap-1 p-1 bg-secondary rounded-lg border border-border mb-3 w-fit">
+              <button onClick={() => setActiveTab('objects')}
+                className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                  activeTab === 'objects' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+                <Building2 className="w-3 h-3" /> Vínculos
+                {results.length > 0 && <span className="text-[9px] ml-0.5 opacity-70">({results.length})</span>}
+              </button>
+              <button onClick={() => setActiveTab('activities')}
+                className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                  activeTab === 'activities' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+                <Calendar className="w-3 h-3" /> Atividades
+                {engagements.length > 0 && <span className="text-[9px] ml-0.5 opacity-70">({engagements.length})</span>}
+              </button>
+            </div>
+          )}
+
+          {/* CRM Objects table */}
+          {activeTab === 'objects' && results.length > 0 && (
             <div className="rounded-lg border border-border/50 overflow-hidden">
               <div className="px-4 py-2 bg-muted/20 border-b border-border/30">
                 <span className="text-xs font-medium">{results.length} registro{results.length !== 1 ? 's' : ''} vinculado{results.length !== 1 ? 's' : ''}</span>
@@ -443,10 +541,46 @@ export default function HubSpotIntegration() {
             </div>
           )}
 
-          {/* Empty state after search */}
-          {mainObject && results.length === 0 && !loading && (
+          {/* Activities timeline */}
+          {activeTab === 'activities' && engagements.length > 0 && (
+            <div className="space-y-2">
+              {engagements.map(item => (
+                <div key={`${item.type}-${item.id}`} className="flex items-start gap-3 p-3 rounded-lg border border-border/30 hover:bg-muted/10 transition-colors">
+                  <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0', typeBadgeColor(item.type).replace('border-', 'border border-'))}>
+                    {typeIcon(item.type)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <Badge variant="outline" className={cn('text-[9px] h-4 gap-0.5', typeBadgeColor(item.type))}>
+                        {item.typeLabel}
+                      </Badge>
+                      {item.createdate && (
+                        <span className="text-[10px] text-muted-foreground">
+                          {new Date(item.createdate).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                      {item.ownerName && (
+                        <span className="text-[10px] text-muted-foreground">· {item.ownerName}</span>
+                      )}
+                    </div>
+                    <p className="text-xs font-medium truncate">{item.name}</p>
+                    {item.extra && <p className="text-[11px] text-muted-foreground mt-0.5">{item.extra}</p>}
+                  </div>
+                  <span className="text-[9px] text-muted-foreground font-mono flex-shrink-0">#{item.id}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Empty states */}
+          {activeTab === 'objects' && mainObject && results.length === 0 && !loading && (
             <div className="text-center py-6">
-              <p className="text-xs text-muted-foreground">Nenhum registro vinculado encontrado para este objeto.</p>
+              <p className="text-xs text-muted-foreground">Nenhum registro vinculado encontrado.</p>
+            </div>
+          )}
+          {activeTab === 'activities' && mainObject && engagements.length === 0 && !loading && (
+            <div className="text-center py-6">
+              <p className="text-xs text-muted-foreground">Nenhuma atividade encontrada (notas, reuniões, ligações, tarefas, e-mails).</p>
             </div>
           )}
         </div>

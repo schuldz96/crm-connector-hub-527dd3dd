@@ -56,6 +56,8 @@ export async function getPipelines(token: string, objectType: 'deals' | 'tickets
 
 // ─── Get Single Object ──────────────────────────────────────────────────────
 export type HsObjectType = 'contacts' | 'companies' | 'deals' | 'tickets';
+export type HsEngagementType = 'notes' | 'meetings' | 'calls' | 'tasks' | 'emails';
+export type HsAnyObjectType = HsObjectType | HsEngagementType;
 
 export interface HsObject {
   id: string;
@@ -63,31 +65,42 @@ export interface HsObject {
   associations?: Record<string, { results: { id: string; type: string }[] }>;
 }
 
-const DEFAULT_PROPS: Record<HsObjectType, string> = {
+const DEFAULT_PROPS: Record<HsAnyObjectType, string> = {
   contacts: 'firstname,lastname,email,phone,jobtitle,lifecyclestage,company,hs_lead_status,hubspot_owner_id,createdate',
   companies: 'name,domain,phone,website,industry,numberofemployees,city,state,country,hubspot_owner_id,createdate',
   deals: 'dealname,amount,dealstage,pipeline,closedate,hs_deal_stage_probability,hubspot_owner_id,createdate',
   tickets: 'subject,content,hs_ticket_priority,hs_pipeline,hs_pipeline_stage,hubspot_owner_id,createdate',
+  notes: 'hs_note_body,hubspot_owner_id,hs_timestamp,hs_createdate',
+  meetings: 'hs_meeting_title,hs_meeting_start_time,hs_meeting_end_time,hs_meeting_outcome,hs_meeting_location,hubspot_owner_id,hs_timestamp,hs_createdate',
+  calls: 'hs_call_title,hs_call_body,hs_call_duration,hs_call_direction,hs_call_disposition,hs_call_status,hubspot_owner_id,hs_timestamp,hs_createdate',
+  tasks: 'hs_task_subject,hs_task_body,hs_task_status,hs_task_priority,hs_task_type,hubspot_owner_id,hs_timestamp,hs_createdate',
+  emails: 'hs_email_subject,hs_email_text,hs_email_direction,hs_email_status,hs_email_sender_email,hubspot_owner_id,hs_timestamp,hs_createdate',
+};
+
+// All engagement types we fetch as associations
+const ENGAGEMENT_TYPES: HsEngagementType[] = ['notes', 'meetings', 'calls', 'tasks', 'emails'];
+
+// Associations to request per CRM object type (includes engagements)
+const ASSOCIATIONS: Record<HsObjectType, string> = {
+  contacts: 'companies,deals,tickets,notes,meetings,calls,tasks,emails',
+  companies: 'contacts,deals,tickets,notes,meetings,calls,tasks,emails',
+  deals: 'contacts,companies,tickets,notes,meetings,calls,tasks,emails',
+  tickets: 'contacts,companies,deals,notes,meetings,calls,tasks,emails',
 };
 
 export async function getObject(token: string, objectType: HsObjectType, objectId: string): Promise<HsObject> {
   const props = DEFAULT_PROPS[objectType];
-  const associations = objectType === 'contacts' ? 'companies,deals,tickets'
-    : objectType === 'companies' ? 'contacts,deals,tickets'
-    : objectType === 'deals' ? 'contacts,companies,tickets'
-    : 'contacts,companies,deals';
-
+  const associations = ASSOCIATIONS[objectType];
   const path = `/crm/v3/objects/${objectType}/${objectId}?properties=${props}&associations=${associations}`;
   return await hsCall(token, path);
 }
 
 // ─── Get Multiple Associated Objects ────────────────────────────────────────
-export async function getObjectsBatch(token: string, objectType: HsObjectType, ids: string[]): Promise<HsObject[]> {
+export async function getObjectsBatch(token: string, objectType: HsAnyObjectType, ids: string[]): Promise<HsObject[]> {
   if (ids.length === 0) return [];
   const props = DEFAULT_PROPS[objectType];
   const results: HsObject[] = [];
-  // Fetch one by one to keep it simple (batch API needs POST which is more complex)
-  for (const id of ids.slice(0, 20)) { // Limit to 20 to avoid overloading
+  for (const id of ids.slice(0, 20)) {
     try {
       const obj = await hsCall(token, `/crm/v3/objects/${objectType}/${id}?properties=${props}`);
       results.push(obj);
@@ -95,6 +108,8 @@ export async function getObjectsBatch(token: string, objectType: HsObjectType, i
   }
   return results;
 }
+
+export { ENGAGEMENT_TYPES };
 
 // ─── Owners ────────────────────────────────────────────────────────────────
 export interface HsOwner {
