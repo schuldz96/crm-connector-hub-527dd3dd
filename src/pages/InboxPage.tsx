@@ -10,7 +10,9 @@ import {
   Loader2, RefreshCw, ChevronRight, Phone, Clock, Check,
   Paperclip, Image as ImageIcon, FileText, Mic, MicOff, LayoutTemplate,
   AlertTriangle, X, UserPlus, Trash2, RotateCcw, Archive, ArchiveRestore, Download,
+  Ticket, PanelRightOpen, PanelRightClose,
 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -40,6 +42,10 @@ export interface MetaInboxAccount {
   webhook_verify_token: string | null;
   created_at: string;
   updated_at: string;
+  ticket_enabled?: boolean;
+  ticket_pipeline_id?: string | null;
+  ticket_estagio_id?: string | null;
+  ticket_prioridade?: string;
 }
 
 /* ── Avatar ────────────────────────────────────────────── */
@@ -506,6 +512,10 @@ export default function InboxPage() {
   const [confirmDeleteConv, setConfirmDeleteConv] = useState<InboxConversation | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [userNameCache, setUserNameCache] = useState<Record<string, string>>({});
+  const [ticketPanelOpen, setTicketPanelOpen] = useState(false);
+  const [convTicket, setConvTicket] = useState<any>(null);
+  const [creatingTicket, setCreatingTicket] = useState(false);
+  const [ticketPipelines, setTicketPipelines] = useState<{ id: string; nome: string; estagios: { id: string; nome: string }[] }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -526,6 +536,43 @@ export default function InboxPage() {
       } catch { /* non-critical */ }
     })();
   }, [user?.email]);
+
+  // ── Load ticket pipelines once ──
+  useEffect(() => {
+    (async () => {
+      try {
+        const empresaId = await getSaasEmpresaId();
+        const { data: pipes } = await (supabase as any).schema('saas').from('crm_pipelines')
+          .select('id, nome').eq('empresa_id', empresaId).eq('tipo', 'ticket').eq('ativo', true).order('ordem');
+        if (!pipes) return;
+        const result: typeof ticketPipelines = [];
+        for (const p of pipes) {
+          const { data: stages } = await (supabase as any).schema('saas').from('crm_pipeline_estagios')
+            .select('id, nome').eq('pipeline_id', p.id).order('ordem');
+          result.push({ id: p.id, nome: p.nome, estagios: stages || [] });
+        }
+        setTicketPipelines(result);
+      } catch { /* silent */ }
+    })();
+  }, []);
+
+  // ── Load ticket linked to current conversation ──
+  useEffect(() => {
+    setConvTicket(null);
+    if (!selectedConv) return;
+    (async () => {
+      try {
+        const { data } = await (supabase as any).schema('saas').from('crm_tickets')
+          .select('id, numero_registro, titulo, status, prioridade, pipeline_id, estagio_id, proprietario_id, criado_em, resolvido_em, dados_custom')
+          .eq('dados_custom->>conversation_id', selectedConv.id)
+          .is('deletado_em', null)
+          .order('criado_em', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (data) setConvTicket(data);
+      } catch { /* silent */ }
+    })();
+  }, [selectedConv?.id]);
 
   // ── Load accounts (filtered by user access for restricted roles) ──
   const needsAccessFilter = user?.role === 'support' || user?.role === 'member';
@@ -709,6 +756,66 @@ export default function InboxPage() {
       } catch { /* non-critical */ }
     })();
   }, [messages]);
+
+  // ── Create ticket from conversation ────────────────────
+  const handleCreateTicket = async () => {
+    if (!selectedConv || !selectedAccount) return;
+    setCreatingTicket(true);
+    try {
+      const empresaId = await getSaasEmpresaId();
+      const pipelineId = selectedAccount.ticket_pipeline_id;
+      const estagioId = selectedAccount.ticket_estagio_id;
+      const prioridade = selectedAccount.ticket_prioridade || 'medium';
+
+      if (!pipelineId || !estagioId) {
+        toast({ variant: 'destructive', title: 'Pipeline não configurado', description: 'Configure o pipeline de tickets nas configurações desta conta.' });
+        setCreatingTicket(false);
+        return;
+      }
+
+      const titulo = `${selectedConv.contact_name || selectedConv.contact_phone} — WhatsApp`;
+      const descricao = selectedConv.last_message || '';
+
+      const { data, error } = await (supabase as any).schema('saas').from('crm_tickets').insert({
+        empresa_id: empresaId,
+        titulo,
+        descricao,
+        pipeline_id: pipelineId,
+        estagio_id: estagioId,
+        prioridade,
+        status: 'aberto',
+        plataforma: 'whatsapp',
+        proprietario_id: currentUserId || null,
+        dados_custom: {
+          conversation_id: selectedConv.id,
+          account_id: selectedAccount.id,
+          contact_phone: selectedConv.contact_phone,
+          contact_name: selectedConv.contact_name,
+        },
+      }).select().single();
+
+      if (error) throw error;
+      setConvTicket(data);
+      setTicketPanelOpen(true);
+      toast({ title: 'Ticket criado!', description: `#${data.numero_registro} — ${titulo}` });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro ao criar ticket', description: e.message });
+    } finally {
+      setCreatingTicket(false);
+    }
+  };
+
+  const handleUpdateTicket = async (field: string, value: string) => {
+    if (!convTicket) return;
+    try {
+      await (supabase as any).schema('saas').from('crm_tickets')
+        .update({ [field]: value, ...(field === 'status' && value === 'resolvido' ? { resolvido_em: new Date().toISOString() } : {}) })
+        .eq('id', convTicket.id);
+      setConvTicket((prev: any) => prev ? { ...prev, [field]: value } : prev);
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro ao atualizar ticket', description: e.message });
+    }
+  };
 
   // ── 24h window check ───────────────────────────────────
   const within24h = selectedConv ? isWithin24hWindow(selectedConv.last_inbound_ts) : false;
@@ -1210,6 +1317,25 @@ export default function InboxPage() {
               )}>
                 {within24h ? '24h ativa' : 'Fora da janela'}
               </span>
+              {/* Ticket button */}
+              {selectedAccount?.ticket_enabled && (
+                convTicket ? (
+                  <Button variant="ghost" size="sm" className={cn('h-8 text-xs gap-1', ticketPanelOpen ? 'text-orange-500' : 'text-muted-foreground')}
+                    onClick={() => setTicketPanelOpen(!ticketPanelOpen)}
+                    title="Ver ticket">
+                    <Ticket className="w-3.5 h-3.5" />
+                    <span className="font-mono">#{convTicket.numero_registro}</span>
+                    {ticketPanelOpen ? <PanelRightClose className="w-3 h-3" /> : <PanelRightOpen className="w-3 h-3" />}
+                  </Button>
+                ) : (
+                  <Button variant="ghost" size="sm" className="h-8 text-xs gap-1 text-muted-foreground hover:text-orange-500"
+                    onClick={handleCreateTicket} disabled={creatingTicket}
+                    title="Abrir ticket">
+                    {creatingTicket ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ticket className="w-3.5 h-3.5" />}
+                    Abrir Ticket
+                  </Button>
+                )
+              )}
               {/* Archive/unarchive chat */}
               <Button variant="ghost" size="icon" className="w-8 h-8 text-muted-foreground hover:text-foreground"
                 title={selectedConv.status === 'archived' ? 'Desarquivar conversa' : 'Arquivar conversa'}
@@ -1404,6 +1530,152 @@ export default function InboxPage() {
           </>
         )}
       </div>
+
+      {/* Col 4 — Ticket side panel */}
+      {ticketPanelOpen && convTicket && selectedAccount && (
+        <div className="w-[320px] flex-shrink-0 border-l border-border bg-card overflow-y-auto">
+          <div className="p-4 border-b border-border flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Ticket className="w-4 h-4 text-orange-500" />
+              <span className="text-sm font-semibold">Ticket #{convTicket.numero_registro}</span>
+            </div>
+            <Button variant="ghost" size="icon" className="w-7 h-7" onClick={() => setTicketPanelOpen(false)}>
+              <X className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+
+          <div className="p-4 space-y-4">
+            {/* Title */}
+            <div>
+              <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1">Título</label>
+              <p className="text-xs font-medium">{convTicket.titulo}</p>
+            </div>
+
+            {/* Status */}
+            <div>
+              <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1">Status</label>
+              <Select value={convTicket.status} onValueChange={v => handleUpdateTicket('status', v)}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="aberto" className="text-xs">
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500" /> Aberto</span>
+                  </SelectItem>
+                  <SelectItem value="em_andamento" className="text-xs">
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500" /> Em andamento</span>
+                  </SelectItem>
+                  <SelectItem value="aguardando" className="text-xs">
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-500" /> Aguardando</span>
+                  </SelectItem>
+                  <SelectItem value="resolvido" className="text-xs">
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Resolvido</span>
+                  </SelectItem>
+                  <SelectItem value="fechado" className="text-xs">
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-gray-500" /> Fechado</span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Pipeline / Stage */}
+            <div>
+              <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1">Pipeline</label>
+              <Select value={convTicket.pipeline_id || ''} onValueChange={v => {
+                handleUpdateTicket('pipeline_id', v);
+                // Reset stage when pipeline changes
+                const pipe = ticketPipelines.find(p => p.id === v);
+                if (pipe?.estagios[0]) handleUpdateTicket('estagio_id', pipe.estagios[0].id);
+              }}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ticketPipelines.map(p => (
+                    <SelectItem key={p.id} value={p.id} className="text-xs">{p.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {convTicket.pipeline_id && (
+              <div>
+                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1">Etapa</label>
+                <Select value={convTicket.estagio_id || ''} onValueChange={v => handleUpdateTicket('estagio_id', v)}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(ticketPipelines.find(p => p.id === convTicket.pipeline_id)?.estagios || []).map(e => (
+                      <SelectItem key={e.id} value={e.id} className="text-xs">{e.nome}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Priority */}
+            <div>
+              <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1">Prioridade</label>
+              <Select value={convTicket.prioridade} onValueChange={v => handleUpdateTicket('prioridade', v)}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low" className="text-xs">🟢 Baixa</SelectItem>
+                  <SelectItem value="medium" className="text-xs">🟡 Média</SelectItem>
+                  <SelectItem value="high" className="text-xs">🟠 Alta</SelectItem>
+                  <SelectItem value="urgent" className="text-xs">🔴 Urgente</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Contact info */}
+            <div className="border-t border-border/50 pt-3">
+              <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-2">Contato</label>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Nome</span>
+                  <span className="font-medium">{convTicket.dados_custom?.contact_name || '—'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Telefone</span>
+                  <span className="font-mono">{convTicket.dados_custom?.contact_phone || '—'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Plataforma</span>
+                  <span>WhatsApp</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Dates */}
+            <div className="border-t border-border/50 pt-3">
+              <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-2">Datas</label>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Criado em</span>
+                  <span>{convTicket.criado_em ? new Date(convTicket.criado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}</span>
+                </div>
+                {convTicket.resolvido_em && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Resolvido em</span>
+                    <span>{new Date(convTicket.resolvido_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Ticket description */}
+            {convTicket.descricao && (
+              <div className="border-t border-border/50 pt-3">
+                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1">Descrição</label>
+                <p className="text-xs text-muted-foreground whitespace-pre-wrap">{convTicket.descricao}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Template picker modal */}
       {showTemplatePicker && (
