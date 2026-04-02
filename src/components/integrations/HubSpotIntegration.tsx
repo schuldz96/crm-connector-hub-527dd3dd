@@ -7,6 +7,7 @@ import {
   Loader2, CheckCircle2, AlertCircle, Link2, Unlink, Eye, EyeOff,
   Search, Users, Building2, Briefcase, Ticket,
   StickyNote, Calendar, PhoneCall, ListTodo, Mail,
+  MessageCircle, Mailbox, ClipboardList,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -14,8 +15,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { getSaasEmpresaId } from '@/lib/saas';
 import { encryptToken, decryptToken } from '@/lib/tokenCrypto';
 import {
-  verifyConnection, getObject, getObjectsBatch, getPipelines, getOwners, ENGAGEMENT_TYPES,
-  type HsObjectType, type HsAnyObjectType, type HsObject, type HsPipeline, type HsOwner,
+  verifyConnection, getObject, getDeepEngagements, getPipelines, getOwners, ENGAGEMENT_TYPES,
+  type HsObjectType, type HsObject, type HsPipeline, type HsOwner,
 } from '@/lib/hubspotService';
 
 const OBJECT_TYPES: { value: HsObjectType; label: string; icon: typeof Users }[] = [
@@ -35,6 +36,9 @@ const ALL_TYPE_META: Record<string, { label: string; icon: typeof Users }> = {
   calls: { label: 'Ligação', icon: PhoneCall },
   tasks: { label: 'Tarefa', icon: ListTodo },
   emails: { label: 'E-mail', icon: Mail },
+  communications: { label: 'Mensagem', icon: MessageCircle },
+  postal_mail: { label: 'Correio', icon: Mailbox },
+  feedback_submissions: { label: 'Formulário', icon: ClipboardList },
 };
 
 function objectName(obj: HsObject, type: string): string {
@@ -48,6 +52,9 @@ function objectName(obj: HsObject, type: string): string {
   if (type === 'calls') return p.hs_call_title || `Ligação #${obj.id}`;
   if (type === 'tasks') return p.hs_task_subject || `Tarefa #${obj.id}`;
   if (type === 'emails') return p.hs_email_subject || `E-mail #${obj.id}`;
+  if (type === 'communications') return (p.hs_communication_body || '').slice(0, 80) || `Mensagem #${obj.id}`;
+  if (type === 'postal_mail') return (p.hs_postal_mail_body || '').slice(0, 80) || `Correio #${obj.id}`;
+  if (type === 'feedback_submissions') return p.hs_submission_name || `Formulário #${obj.id}`;
   return `#${obj.id}`;
 }
 
@@ -83,6 +90,12 @@ function engagementExtra(obj: HsObject, type: string): string | undefined {
   }
   if (type === 'emails') {
     return p.hs_email_direction === 'INCOMING_EMAIL' ? '← Recebido' : '→ Enviado';
+  }
+  if (type === 'communications') {
+    return p.hs_communication_channel_type || undefined;
+  }
+  if (type === 'feedback_submissions') {
+    return p.hs_response_group || undefined;
   }
   return undefined;
 }
@@ -283,26 +296,11 @@ export default function HubSpotIntegration() {
       const obj = await getObject(token.trim(), searchType, searchId.trim());
       setMainObject(buildListItem(obj, searchType));
 
-      // Separate CRM objects from engagement activities
-      const crmItems: ListItem[] = [];
-      const activityItems: ListItem[] = [];
+      // Deep fetch: CRM objects + ALL engagements (from main + associated objects), deduplicated
+      const { crmObjects, engagements: engObjs } = await getDeepEngagements(token.trim(), obj, searchType);
 
-      if (obj.associations) {
-        for (const [assocType, assocData] of Object.entries(obj.associations)) {
-          const ids = assocData.results?.map((r: any) => r.id) || [];
-          if (ids.length > 0) {
-            const objects = await getObjectsBatch(token.trim(), assocType as HsAnyObjectType, ids);
-            for (const o of objects) {
-              const item = buildListItem(o, assocType);
-              if (isEngagement(assocType)) {
-                activityItems.push(item);
-              } else {
-                crmItems.push(item);
-              }
-            }
-          }
-        }
-      }
+      const crmItems = crmObjects.map(({ type, obj: o }) => buildListItem(o, type));
+      const activityItems = engObjs.map(({ type, obj: o }) => buildListItem(o, type));
 
       // Sort activities by date (newest first)
       activityItems.sort((a, b) => {
@@ -342,6 +340,9 @@ export default function HubSpotIntegration() {
     if (type === 'calls') return 'bg-green-500/15 text-green-400 border-green-500/30';
     if (type === 'tasks') return 'bg-orange-500/15 text-orange-400 border-orange-500/30';
     if (type === 'emails') return 'bg-pink-500/15 text-pink-400 border-pink-500/30';
+    if (type === 'communications') return 'bg-indigo-500/15 text-indigo-400 border-indigo-500/30';
+    if (type === 'postal_mail') return 'bg-stone-500/15 text-stone-400 border-stone-500/30';
+    if (type === 'feedback_submissions') return 'bg-teal-500/15 text-teal-400 border-teal-500/30';
     return '';
   };
 

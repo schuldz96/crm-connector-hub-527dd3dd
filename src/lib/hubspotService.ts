@@ -56,7 +56,7 @@ export async function getPipelines(token: string, objectType: 'deals' | 'tickets
 
 // ─── Get Single Object ──────────────────────────────────────────────────────
 export type HsObjectType = 'contacts' | 'companies' | 'deals' | 'tickets';
-export type HsEngagementType = 'notes' | 'meetings' | 'calls' | 'tasks' | 'emails';
+export type HsEngagementType = 'notes' | 'meetings' | 'calls' | 'tasks' | 'emails' | 'communications' | 'postal_mail' | 'feedback_submissions';
 export type HsAnyObjectType = HsObjectType | HsEngagementType;
 
 export interface HsObject {
@@ -75,17 +75,21 @@ const DEFAULT_PROPS: Record<HsAnyObjectType, string> = {
   calls: 'hs_call_title,hs_call_body,hs_call_duration,hs_call_direction,hs_call_disposition,hs_call_status,hubspot_owner_id,hs_timestamp,hs_createdate',
   tasks: 'hs_task_subject,hs_task_body,hs_task_status,hs_task_priority,hs_task_type,hubspot_owner_id,hs_timestamp,hs_createdate',
   emails: 'hs_email_subject,hs_email_text,hs_email_direction,hs_email_status,hs_email_sender_email,hubspot_owner_id,hs_timestamp,hs_createdate',
+  communications: 'hs_communication_channel_type,hs_communication_body,hs_communication_logged_from,hubspot_owner_id,hs_timestamp,hs_createdate',
+  postal_mail: 'hs_postal_mail_body,hubspot_owner_id,hs_timestamp,hs_createdate',
+  feedback_submissions: 'hs_content,hs_submission_name,hs_response_group,hubspot_owner_id,hs_timestamp,hs_createdate',
 };
 
 // All engagement types we fetch as associations
-const ENGAGEMENT_TYPES: HsEngagementType[] = ['notes', 'meetings', 'calls', 'tasks', 'emails'];
+const ENGAGEMENT_TYPES: HsEngagementType[] = ['notes', 'meetings', 'calls', 'tasks', 'emails', 'communications', 'postal_mail', 'feedback_submissions'];
 
 // Associations to request per CRM object type (includes engagements)
+const ALL_ENGAGEMENTS = ENGAGEMENT_TYPES.join(',');
 const ASSOCIATIONS: Record<HsObjectType, string> = {
-  contacts: 'companies,deals,tickets,notes,meetings,calls,tasks,emails',
-  companies: 'contacts,deals,tickets,notes,meetings,calls,tasks,emails',
-  deals: 'contacts,companies,tickets,notes,meetings,calls,tasks,emails',
-  tickets: 'contacts,companies,deals,notes,meetings,calls,tasks,emails',
+  contacts: `companies,deals,tickets,${ALL_ENGAGEMENTS}`,
+  companies: `contacts,deals,tickets,${ALL_ENGAGEMENTS}`,
+  deals: `contacts,companies,tickets,${ALL_ENGAGEMENTS}`,
+  tickets: `contacts,companies,deals,${ALL_ENGAGEMENTS}`,
 };
 
 export async function getObject(token: string, objectType: HsObjectType, objectId: string): Promise<HsObject> {
@@ -107,6 +111,90 @@ export async function getObjectsBatch(token: string, objectType: HsAnyObjectType
     } catch { /* skip failed objects */ }
   }
   return results;
+}
+
+// ─── Deep fetch: get engagements from associated CRM objects ────────────────
+export async function getDeepEngagements(
+  token: string,
+  mainObj: HsObject,
+  mainType: HsObjectType,
+): Promise<{ crmObjects: { type: HsObjectType; obj: HsObject }[]; engagements: { type: HsEngagementType; obj: HsObject }[] }> {
+  const seen = new Set<string>(); // dedup key: "type-id"
+  const crmObjects: { type: HsObjectType; obj: HsObject }[] = [];
+  const engagements: { type: HsEngagementType; obj: HsObject }[] = [];
+
+  const addEngagement = (type: HsEngagementType, obj: HsObject) => {
+    const key = `${type}-${obj.id}`;
+    if (!seen.has(key)) { seen.add(key); engagements.push({ type, obj }); }
+  };
+
+  const addCrmObject = (type: HsObjectType, obj: HsObject) => {
+    const key = `${type}-${obj.id}`;
+    if (!seen.has(key)) { seen.add(key); crmObjects.push({ type, obj }); }
+  };
+
+  // Mark main object as seen
+  seen.add(`${mainType}-${mainObj.id}`);
+
+  if (!mainObj.associations) return { crmObjects, engagements };
+
+  // Phase 1: collect IDs by type from main object associations
+  const assocIdsByType: Record<string, string[]> = {};
+  for (const [assocType, assocData] of Object.entries(mainObj.associations)) {
+    const ids = assocData.results?.map((r: any) => r.id) || [];
+    if (ids.length > 0) assocIdsByType[assocType] = ids;
+  }
+
+  // Phase 2: fetch all associations in parallel (CRM objects + direct engagements)
+  const fetchPromises: Promise<void>[] = [];
+
+  for (const [assocType, ids] of Object.entries(assocIdsByType)) {
+    const isEng = (ENGAGEMENT_TYPES as string[]).includes(assocType);
+    fetchPromises.push(
+      getObjectsBatch(token, assocType as HsAnyObjectType, ids).then(objects => {
+        for (const obj of objects) {
+          if (isEng) {
+            addEngagement(assocType as HsEngagementType, obj);
+          } else {
+            addCrmObject(assocType as HsObjectType, obj);
+          }
+        }
+      })
+    );
+  }
+
+  await Promise.all(fetchPromises);
+
+  // Phase 3: fetch engagements from associated CRM objects (deep)
+  const deepPromises: Promise<void>[] = [];
+  const CRM_TYPES: HsObjectType[] = ['contacts', 'companies', 'deals', 'tickets'];
+
+  for (const { type: crmType, obj: crmObj } of [...crmObjects]) {
+    // Fetch this CRM object WITH its engagements
+    deepPromises.push(
+      getObject(token, crmType, crmObj.id).then(fullObj => {
+        if (!fullObj.associations) return;
+        const engPromises: Promise<void>[] = [];
+        for (const engType of ENGAGEMENT_TYPES) {
+          const engIds = fullObj.associations[engType]?.results?.map((r: any) => r.id) || [];
+          // Filter out already-seen IDs
+          const newIds = engIds.filter(id => !seen.has(`${engType}-${id}`));
+          if (newIds.length > 0) {
+            engPromises.push(
+              getObjectsBatch(token, engType, newIds).then(objs => {
+                for (const o of objs) addEngagement(engType, o);
+              })
+            );
+          }
+        }
+        return Promise.all(engPromises) as Promise<any>;
+      }).catch(() => {}) // skip failed deep fetches
+    );
+  }
+
+  await Promise.all(deepPromises);
+
+  return { crmObjects, engagements };
 }
 
 export { ENGAGEMENT_TYPES };
