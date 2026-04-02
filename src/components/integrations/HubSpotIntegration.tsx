@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { getSaasEmpresaId } from '@/lib/saas';
-import { encryptToken } from '@/lib/tokenCrypto';
+import { encryptToken, decryptToken } from '@/lib/tokenCrypto';
 import {
   verifyConnection, getObject, getObjectsBatch, getPipelines, getOwners,
   type HsObjectType, type HsObject, type HsPipeline, type HsOwner,
@@ -54,6 +54,7 @@ export default function HubSpotIntegration() {
   const [showToken, setShowToken] = useState(false);
   const [connected, setConnected] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [portalId, setPortalId] = useState<number | null>(null);
   const [error, setError] = useState('');
 
@@ -68,6 +69,54 @@ export default function HubSpotIntegration() {
   const [ticketPipelines, setTicketPipelines] = useState<HsPipeline[]>([]);
 
   const { toast } = useToast();
+
+  // ─── Load saved integration on mount ───────────────
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const empresaId = await getSaasEmpresaId();
+        const { data } = await (supabase as any).schema('saas').from('integracoes')
+          .select('configuracao, status')
+          .eq('empresa_id', empresaId)
+          .eq('tipo', 'hubspot')
+          .eq('status', 'conectada')
+          .limit(1)
+          .maybeSingle();
+
+        if (cancelled || !data?.configuracao?.token_encrypted) return;
+
+        const decrypted = await decryptToken(data.configuracao.token_encrypted);
+        if (cancelled || !decrypted) return;
+
+        // Verify the token is still valid
+        const result = await verifyConnection(decrypted);
+        if (cancelled) return;
+
+        if (result.ok) {
+          setToken(decrypted);
+          setPortalId(result.portalId || data.configuracao.portal_id || null);
+          setConnected(true);
+
+          const [ownersData, dealPipes, ticketPipes] = await Promise.all([
+            getOwners(decrypted).catch(() => []),
+            getPipelines(decrypted, 'deals').catch(() => []),
+            getPipelines(decrypted, 'tickets').catch(() => []),
+          ]);
+          if (!cancelled) {
+            setOwners(ownersData);
+            setDealPipelines(dealPipes);
+            setTicketPipelines(ticketPipes);
+          }
+        }
+      } catch {
+        // No saved integration or token expired — user will connect manually
+      } finally {
+        if (!cancelled) setInitialLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // ─── Connect ────────────────────────────────────────
   const handleConnect = async () => {
@@ -110,11 +159,24 @@ export default function HubSpotIntegration() {
     }
   };
 
-  const handleDisconnect = () => {
+  const handleDisconnect = async () => {
     setConnected(false);
+    setToken('');
     setPortalId(null);
     setResults([]);
     setMainObject(null);
+    setOwners([]);
+    setDealPipelines([]);
+    setTicketPipelines([]);
+
+    try {
+      const empresaId = await getSaasEmpresaId();
+      await (supabase as any).schema('saas').from('integracoes')
+        .update({ status: 'desconectada', configuracao: {} })
+        .eq('empresa_id', empresaId)
+        .eq('tipo', 'hubspot');
+    } catch { /* best-effort cleanup */ }
+
     toast({ title: 'HubSpot desconectado' });
   };
 
@@ -220,7 +282,12 @@ export default function HubSpotIntegration() {
           )}
         </div>
 
-        {!connected ? (
+        {initialLoading ? (
+          <div className="flex items-center gap-2 py-3">
+            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">Verificando conexão salva...</span>
+          </div>
+        ) : !connected ? (
           <div className="space-y-3">
             <div>
               <label className="text-xs font-medium block mb-1.5">Token de Acesso (Private App)</label>
