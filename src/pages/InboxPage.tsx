@@ -519,6 +519,7 @@ export default function InboxPage() {
   const [accountUsers, setAccountUsers] = useState<{ id: string; nome: string; email: string }[]>([]);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
+  const [ownerHistory, setOwnerHistory] = useState<any[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -539,6 +540,22 @@ export default function InboxPage() {
       } catch { /* non-critical */ }
     })();
   }, [user?.email]);
+
+  // ── Load owner history for ticket ──
+  const loadOwnerHistory = useCallback(async (ticketId: string) => {
+    try {
+      const { data } = await (supabase as any).schema('saas').from('crm_ticket_owner_history')
+        .select('id, usuario_id, usuario_nome, atribuido_por, inicio_em, fim_em')
+        .eq('ticket_id', ticketId)
+        .order('inicio_em', { ascending: true });
+      setOwnerHistory(data || []);
+    } catch { setOwnerHistory([]); }
+  }, []);
+
+  useEffect(() => {
+    if (convTicket?.id) loadOwnerHistory(convTicket.id);
+    else setOwnerHistory([]);
+  }, [convTicket?.id, loadOwnerHistory]);
 
   // ── Load ticket pipelines once ──
   useEffect(() => {
@@ -824,6 +841,19 @@ export default function InboxPage() {
       }).select().single();
 
       if (error) throw error;
+
+      // Register initial owner in history
+      if (currentUserId) {
+        const ownerName = accountUsers.find(u => u.id === currentUserId)?.nome || '';
+        await (supabase as any).schema('saas').from('crm_ticket_owner_history').insert({
+          ticket_id: data.id,
+          usuario_id: currentUserId,
+          usuario_nome: ownerName,
+          atribuido_por: currentUserId,
+          inicio_em: new Date().toISOString(),
+        });
+      }
+
       setConvTicket(data);
       setTicketPanelOpen(true);
       toast({ title: 'Ticket criado!', description: `#${data.numero_registro} — ${titulo}` });
@@ -834,13 +864,44 @@ export default function InboxPage() {
     }
   };
 
-  const handleUpdateTicket = async (field: string, value: string) => {
+  const handleUpdateTicket = async (field: string, value: string | null) => {
     if (!convTicket) return;
     try {
+      const extra: Record<string, unknown> = {};
+      if (field === 'status' && value === 'resolvido') extra.resolvido_em = new Date().toISOString();
+      if (field === 'status' && value === 'fechado') extra.resolvido_em = convTicket.resolvido_em || new Date().toISOString();
+
       await (supabase as any).schema('saas').from('crm_tickets')
-        .update({ [field]: value, ...(field === 'status' && value === 'resolvido' ? { resolvido_em: new Date().toISOString() } : {}) })
+        .update({ [field]: value || null, ...extra })
         .eq('id', convTicket.id);
-      setConvTicket((prev: any) => prev ? { ...prev, [field]: value } : prev);
+
+      // Track owner changes in history
+      if (field === 'proprietario_id' && value !== convTicket.proprietario_id) {
+        const now = new Date().toISOString();
+
+        // Close current owner period
+        await (supabase as any).schema('saas').from('crm_ticket_owner_history')
+          .update({ fim_em: now })
+          .eq('ticket_id', convTicket.id)
+          .is('fim_em', null);
+
+        // Open new owner period (if assigning someone, not unassigning)
+        if (value) {
+          const ownerName = accountUsers.find(u => u.id === value)?.nome || '';
+          await (supabase as any).schema('saas').from('crm_ticket_owner_history').insert({
+            ticket_id: convTicket.id,
+            usuario_id: value,
+            usuario_nome: ownerName,
+            atribuido_por: currentUserId,
+            inicio_em: now,
+          });
+        }
+
+        // Reload history
+        loadOwnerHistory(convTicket.id);
+      }
+
+      setConvTicket((prev: any) => prev ? { ...prev, [field]: value || null, ...extra } : prev);
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Erro ao atualizar ticket', description: e.message });
     }
@@ -1765,6 +1826,50 @@ export default function InboxPage() {
                 )}
               </div>
             </div>
+
+            {/* Histórico de proprietários */}
+            {ownerHistory.length > 0 && (
+              <div className="px-4 py-3 border-t border-border/50">
+                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-2">Histórico de atendimento</label>
+                <div className="space-y-0">
+                  {ownerHistory.map((h, i) => {
+                    const start = new Date(h.inicio_em);
+                    const end = h.fim_em ? new Date(h.fim_em) : new Date();
+                    const diffMs = end.getTime() - start.getTime();
+                    const mins = Math.floor(diffMs / 60000);
+                    const hours = Math.floor(mins / 60);
+                    const days = Math.floor(hours / 24);
+                    const duration = days > 0 ? `${days}d ${hours % 24}h` : hours > 0 ? `${hours}h ${mins % 60}min` : `${mins}min`;
+                    const isCurrent = !h.fim_em;
+
+                    return (
+                      <div key={h.id} className="flex items-start gap-2 relative">
+                        {/* Timeline line */}
+                        <div className="flex flex-col items-center flex-shrink-0 w-4">
+                          <div className={cn('w-2 h-2 rounded-full mt-1.5 flex-shrink-0', isCurrent ? 'bg-orange-500' : 'bg-muted-foreground/40')} />
+                          {i < ownerHistory.length - 1 && <div className="w-px flex-1 bg-border min-h-[24px]" />}
+                        </div>
+                        <div className="flex-1 pb-3">
+                          <div className="flex items-center justify-between">
+                            <span className={cn('text-xs font-medium', isCurrent && 'text-orange-500')}>
+                              {h.usuario_nome || 'Sem nome'}
+                              {isCurrent && <span className="text-[9px] ml-1 opacity-70">(atual)</span>}
+                            </span>
+                            <span className={cn('text-[10px] font-mono tabular-nums', isCurrent ? 'text-orange-500' : 'text-muted-foreground')}>
+                              {duration}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-muted-foreground">
+                            {start.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                            {h.fim_em && ` → ${end.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
         );
