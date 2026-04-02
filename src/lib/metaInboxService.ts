@@ -61,6 +61,7 @@ export interface InboxMessage {
   delivered_at: string | null;
   read_at: string | null;
   failed_at: string | null;
+  sent_by_user_id: string | null;
 }
 
 // ─── Load conversations for an account ──────────────────────────────────────
@@ -111,6 +112,7 @@ export async function sendTextMessage(
   conversationId: string,
   toPhone: string,
   text: string,
+  sentByUserId?: string,
 ): Promise<{ success: boolean; wamid?: string; error?: string }> {
   try {
     const res = await fetch(`${META_API}/${account.phone_number_id}/messages`, {
@@ -147,6 +149,7 @@ export async function sendTextMessage(
       status: 'sent',
       timestamp: new Date().toISOString(),
       sent_at: new Date().toISOString(),
+      sent_by_user_id: sentByUserId || null,
     });
 
     // Update conversation
@@ -172,6 +175,7 @@ export async function sendMediaMessage(
   caption?: string,
   filename?: string,
   voice?: boolean,
+  sentByUserId?: string,
 ): Promise<{ success: boolean; wamid?: string; error?: string }> {
   try {
     const mediaPayload: Record<string, unknown> = {};
@@ -226,6 +230,7 @@ export async function sendMediaMessage(
       status: 'sent',
       timestamp: new Date().toISOString(),
       sent_at: new Date().toISOString(),
+      sent_by_user_id: sentByUserId || null,
     });
 
     await supabase.from('meta_inbox_conversations').update({
@@ -275,6 +280,7 @@ export async function sendTemplateMessage(
   language: string,
   components?: any[],
   renderedBody?: string,
+  sentByUserId?: string,
 ): Promise<{ success: boolean; wamid?: string; error?: string }> {
   try {
     const templatePayload: Record<string, unknown> = {
@@ -320,6 +326,7 @@ export async function sendTemplateMessage(
       status: 'sent',
       timestamp: new Date().toISOString(),
       sent_at: new Date().toISOString(),
+      sent_by_user_id: sentByUserId || null,
     });
 
     const displayMsg = renderedBody || `[Template] ${templateName}`;

@@ -504,8 +504,28 @@ export default function InboxPage() {
   const [newConvOpen, setNewConvOpen] = useState(false);
   const [bulkSendOpen, setBulkSendOpen] = useState(false);
   const [confirmDeleteConv, setConfirmDeleteConv] = useState<InboxConversation | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [userNameCache, setUserNameCache] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // ── Resolve current user's saas.usuarios.id once ──
+  useEffect(() => {
+    if (!user?.email) return;
+    (async () => {
+      try {
+        const empresaId = await getSaasEmpresaId();
+        const { data } = await (supabase as any)
+          .schema('saas')
+          .from('usuarios')
+          .select('id')
+          .eq('empresa_id', empresaId)
+          .eq('email', user.email.toLowerCase())
+          .maybeSingle();
+        if (data?.id) setCurrentUserId(data.id);
+      } catch { /* non-critical */ }
+    })();
+  }, [user?.email]);
 
   // ── Load accounts (filtered by user access for restricted roles) ──
   const needsAccessFilter = user?.role === 'support' || user?.role === 'member';
@@ -667,6 +687,29 @@ export default function InboxPage() {
     }
   }, [messages]);
 
+  // ── Resolve sender names for sent messages ──
+  useEffect(() => {
+    const userIds = [...new Set(messages.filter(m => m.sent_by_user_id).map(m => m.sent_by_user_id!))];
+    const unknown = userIds.filter(id => !userNameCache[id]);
+    if (unknown.length === 0) return;
+    (async () => {
+      try {
+        const empresaId = await getSaasEmpresaId();
+        const { data } = await (supabase as any)
+          .schema('saas')
+          .from('usuarios')
+          .select('id, nome')
+          .eq('empresa_id', empresaId)
+          .in('id', unknown);
+        if (data) {
+          const newEntries: Record<string, string> = {};
+          for (const u of data) newEntries[u.id] = u.nome || 'Usuário';
+          setUserNameCache(prev => ({ ...prev, ...newEntries }));
+        }
+      } catch { /* non-critical */ }
+    })();
+  }, [messages]);
+
   // ── 24h window check ───────────────────────────────────
   const within24h = selectedConv ? isWithin24hWindow(selectedConv.last_inbound_ts) : false;
 
@@ -674,7 +717,7 @@ export default function InboxPage() {
   const handleSendText = async () => {
     if (!msgInput.trim() || !selectedConv || !selectedAccount) return;
     setSending(true);
-    const result = await sendTextMessage(selectedAccount, selectedConv.id, selectedConv.contact_phone, msgInput.trim());
+    const result = await sendTextMessage(selectedAccount, selectedConv.id, selectedConv.contact_phone, msgInput.trim(), currentUserId || undefined);
     if (result.success) {
       setMsgInput('');
       const data = await loadMessages(selectedConv.id, selectedAccount?.id);
@@ -710,6 +753,7 @@ export default function InboxPage() {
       const result = await sendMediaMessage(
         selectedAccount, selectedConv.id, selectedConv.contact_phone,
         type, urlData.publicUrl, '', type === 'document' ? file.name : undefined,
+        false, currentUserId || undefined,
       );
 
       if (result.success) {
@@ -772,6 +816,7 @@ export default function InboxPage() {
       const result = await sendTemplateMessage(
         selectedAccount, selectedConv.id, selectedConv.contact_phone,
         pickerSelectedTpl.name, pickerSelectedTpl.language, components, renderedBody,
+        currentUserId || undefined,
       );
       if (result.success) {
         const data = await loadMessages(selectedConv.id, selectedAccount?.id);
@@ -802,9 +847,10 @@ export default function InboxPage() {
           msg.template_name, msg.template_language || 'pt_BR',
           msg.template_components ? JSON.parse(msg.template_components as any) : undefined,
           msg.body || undefined,
+          currentUserId || undefined,
         );
       } else {
-        result = await sendTextMessage(selectedAccount, selectedConv.id, selectedConv.contact_phone, msg.body || '');
+        result = await sendTextMessage(selectedAccount, selectedConv.id, selectedConv.contact_phone, msg.body || '', currentUserId || undefined);
       }
       if (result.success) {
         // Delete the failed message
@@ -849,7 +895,7 @@ export default function InboxPage() {
           // Send as voice message (voice: true = waveform appearance)
           const result = await sendMediaMessage(
             selectedAccount!, selectedConv!.id, selectedConv!.contact_phone,
-            'audio', uploadData.id, undefined, undefined, true,
+            'audio', uploadData.id, undefined, undefined, true, currentUserId || undefined,
           );
           if (result.success) {
             const data = await loadMessages(selectedConv!.id, selectedAccount?.id);
@@ -1296,8 +1342,11 @@ export default function InboxPage() {
                         </button>
                       </div>
                     )}
-                    {/* Timestamp + status */}
+                    {/* Timestamp + sender + status */}
                     <div className={cn('flex items-center gap-1 px-3.5 pb-1.5', msg.from_me ? 'justify-end' : 'justify-start')}>
+                      {msg.from_me && msg.sent_by_user_id && userNameCache[msg.sent_by_user_id] && (
+                        <span className="text-[10px] opacity-50 mr-0.5">{userNameCache[msg.sent_by_user_id]}</span>
+                      )}
                       <span className="text-[10px] opacity-70">{formatTime(msg.timestamp)}</span>
                       {msg.from_me && <MsgStatusIcon status={msg.status} />}
                     </div>
