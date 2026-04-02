@@ -41,20 +41,36 @@ const ALL_TYPE_META: Record<string, { label: string; icon: typeof Users }> = {
   feedback_submissions: { label: 'Formulário', icon: ClipboardList },
 };
 
+/** Strip HTML tags and decode common entities */
+function stripHtml(html: string | null | undefined): string {
+  if (!html) return '';
+  return html
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function objectName(obj: HsObject, type: string): string {
   const p = obj.properties;
   if (type === 'contacts') return [p.firstname, p.lastname].filter(Boolean).join(' ') || `Contato #${obj.id}`;
   if (type === 'companies') return p.name || `Empresa #${obj.id}`;
   if (type === 'deals') return p.dealname || `Negócio #${obj.id}`;
   if (type === 'tickets') return p.subject || `Ticket #${obj.id}`;
-  if (type === 'notes') return (p.hs_note_body || '').slice(0, 80) || `Nota #${obj.id}`;
+  if (type === 'notes') return stripHtml(p.hs_note_body).slice(0, 120) || `Nota #${obj.id}`;
   if (type === 'meetings') return p.hs_meeting_title || `Reunião #${obj.id}`;
-  if (type === 'calls') return p.hs_call_title || `Ligação #${obj.id}`;
-  if (type === 'tasks') return p.hs_task_subject || `Tarefa #${obj.id}`;
+  if (type === 'calls') return p.hs_call_title || stripHtml(p.hs_call_body).slice(0, 80) || `Ligação #${obj.id}`;
+  if (type === 'tasks') return p.hs_task_subject || stripHtml(p.hs_task_body).slice(0, 80) || `Tarefa #${obj.id}`;
   if (type === 'emails') return p.hs_email_subject || `E-mail #${obj.id}`;
-  if (type === 'communications') return (p.hs_communication_body || '').slice(0, 80) || `Mensagem #${obj.id}`;
-  if (type === 'postal_mail') return (p.hs_postal_mail_body || '').slice(0, 80) || `Correio #${obj.id}`;
-  if (type === 'feedback_submissions') return p.hs_submission_name || `Formulário #${obj.id}`;
+  if (type === 'communications') return stripHtml(p.hs_communication_body).slice(0, 120) || `Mensagem #${obj.id}`;
+  if (type === 'postal_mail') return stripHtml(p.hs_postal_mail_body).slice(0, 120) || `Correio #${obj.id}`;
+  if (type === 'feedback_submissions') return p.hs_submission_name || stripHtml(p.hs_content).slice(0, 80) || `Formulário #${obj.id}`;
   return `#${obj.id}`;
 }
 
@@ -92,7 +108,12 @@ function engagementExtra(obj: HsObject, type: string): string | undefined {
     return p.hs_email_direction === 'INCOMING_EMAIL' ? '← Recebido' : '→ Enviado';
   }
   if (type === 'communications') {
-    return p.hs_communication_channel_type || undefined;
+    const channel = p.hs_communication_channel_type;
+    const channelLabels: Record<string, string> = {
+      SMS: 'SMS', WHATS_APP: 'WhatsApp', LIVE_CHAT: 'Chat ao vivo',
+      FB_MESSENGER: 'Messenger', LINKEDIN_MESSAGE: 'LinkedIn',
+    };
+    return channelLabels[channel || ''] || channel || undefined;
   }
   if (type === 'feedback_submissions') {
     return p.hs_response_group || undefined;
