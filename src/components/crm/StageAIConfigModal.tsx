@@ -640,18 +640,20 @@ export default function StageAIConfigModal({
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-sm font-semibold text-foreground">Gatilhos</span>
-                          <div className="flex gap-1">
-                            {TRIGGER_TYPES.map(tt => (
-                              <button key={tt.value}
-                                onClick={() => update('followUps', config.followUps.map(f => f.id === fu.id ? {
-                                  ...f,
-                                  triggers: [...f.triggers, { id: crypto.randomUUID(), type: tt.value as any, value: tt.value === 'time' ? 1 : 24, unit: 'minutes' as const }],
-                                } : f))}
-                                className="text-[10px] px-2 py-1 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                                + {tt.label}
-                              </button>
-                            ))}
-                          </div>
+                          {fu.triggers.length === 0 && (
+                            <div className="flex gap-1">
+                              {TRIGGER_TYPES.map(tt => (
+                                <button key={tt.value}
+                                  onClick={() => update('followUps', config.followUps.map(f => f.id === fu.id ? {
+                                    ...f,
+                                    triggers: [{ id: crypto.randomUUID(), type: tt.value as any, value: tt.value === 'time' ? 1 : 24, unit: 'minutes' as const }],
+                                  } : f))}
+                                  className="text-[10px] px-2 py-1 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                                  + {tt.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         {fu.triggers.length === 0 && (
