@@ -212,7 +212,7 @@ export default function CRMDealsPage() {
         for (const row of data) {
           const bv = row.mensagem_boas_vindas || {};
           map[row.estagio_id] = {
-            aiName: '', provider: row.provider || '', instance: row.instancia_id || '',
+            aiName: row.nome_ia || '', provider: row.provider || '', instance: row.instancia_id || '',
             active: row.ativo ?? false, systemPrompt: row.prompt_sistema || '',
             autoComplement: row.auto_complemento || '', welcomeEnabled: bv.enabled ?? false,
             welcomeType: bv.type || 'text', welcomeText: bv.text || '',
@@ -929,7 +929,7 @@ export default function CRMDealsPage() {
               const empresaId = await getSaasEmpresaId();
               await (supabase as any).schema('saas').from('crm_estagio_ia_config').upsert({
                 empresa_id: empresaId, estagio_id: id, ativo: cfg.active,
-                provider: cfg.provider, instancia_id: cfg.instance,
+                nome_ia: cfg.aiName, provider: cfg.provider, instancia_id: cfg.instance,
                 prompt_sistema: cfg.systemPrompt, auto_complemento: cfg.autoComplement,
                 mensagem_boas_vindas: { enabled: cfg.welcomeEnabled, type: cfg.welcomeType, text: cfg.welcomeText },
                 modo_inicio: cfg.startMode, delay_digitacao: cfg.typingDelay, delay_resposta: cfg.responseDelay,

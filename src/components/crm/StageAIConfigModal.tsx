@@ -57,7 +57,7 @@ export interface StageAIConfig {
   welcomeType: 'text' | 'image' | 'audio' | 'video';
   welcomeText: string;
   // Comportamento tab
-  startMode: 'immediate' | 'on_move' | 'wait_first';
+  startMode: 'immediate' | 'on_move' | 'create_or_move' | 'wait_first';
   typingDelay: number;
   responseDelay: number;
   // Perguntas tab
@@ -480,6 +480,7 @@ export default function StageAIConfigModal({
                   {([
                     { value: 'immediate', label: 'Ao criar o registro (envia boas-vindas imediatamente)' },
                     { value: 'on_move', label: 'Ao mover para esta etapa (envia boas-vindas ao entrar)' },
+                    { value: 'create_or_move', label: 'Ao criar ou mover para esta etapa' },
                     { value: 'wait_first', label: 'Aguardar 1ª mensagem do contato' },
                   ] as const).map(opt => (
                     <label key={opt.value} className="flex items-center gap-2 cursor-pointer">
