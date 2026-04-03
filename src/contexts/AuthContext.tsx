@@ -273,7 +273,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   // CRM access: restricted by email whitelist (enforced at auth level, not just sidebar)
-  const CRM_ALLOWED_EMAILS = ['marcos.schuldz@appmax.com.br', 'yuri.santos@appmax.com.br'];
+  const CRM_ALLOWED_EMAILS = ['marcos.schuldz@appmax.com.br', 'yuri.santos@appmax.com.br', 'leonardo.machado@appmax.com.br'];
 
   const canAccess = (resource: string) => {
     if (!user) return false;

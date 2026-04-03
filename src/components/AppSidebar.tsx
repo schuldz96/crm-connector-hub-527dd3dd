@@ -80,7 +80,7 @@ export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean
   const normalizedUserId = (user?.id ?? '').replace(/^google_/, 'user_');
 
   // Don't render nav items until config is loaded (prevents flash of unauthorized items)
-  const CRM_ALLOWED_EMAILS = ['marcos.schuldz@appmax.com.br', 'yuri.santos@appmax.com.br'];
+  const CRM_ALLOWED_EMAILS = ['marcos.schuldz@appmax.com.br', 'yuri.santos@appmax.com.br', 'leonardo.machado@appmax.com.br'];
   const visibleItems = configLoaded ? NAV_ITEMS.filter(item => {
     const moduleId = item.path.split('?')[0].replace('/', '') as any;
     // CRM: acesso exclusivo por email
