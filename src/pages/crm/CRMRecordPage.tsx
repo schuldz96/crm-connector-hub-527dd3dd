@@ -1075,7 +1075,7 @@ export default function CRMRecordPage() {
               items={associatedContacts.map((c: Record<string, unknown>) => ({
                 id: c.id as string,
                 name: c.nome as string,
-                subtitle: c.email as string || c.cargo as string || '',
+                subtitle: c.cargo as string || '',
                 email: c.email as string,
                 assocId: assocMeta.contact.find(a => a.id === c.id)?.assocId || '',
                 href: `/crm/record/0-1/${c.numero_registro as string}`,
