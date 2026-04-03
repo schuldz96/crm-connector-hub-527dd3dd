@@ -196,11 +196,13 @@ export default function CRMPipelineSettingsPage() {
   };
 
   const createNewPipeline = async () => {
+    const nome = window.prompt('Nome do novo pipeline:');
+    if (!nome?.trim()) return;
     try {
       const empresaId = await getSaasEmpresaId();
       const { data, error } = await saas().from('crm_pipelines').insert({
         empresa_id: empresaId,
-        nome: `Novo pipeline ${pipelines.length + 1}`,
+        nome: nome.trim(),
         tipo: objectType,
         ordem: pipelines.length,
       }).select().single();
@@ -213,7 +215,7 @@ export default function CRMPipelineSettingsPage() {
       ]);
       await refetch();
       setSelectedPipelineId(data.id);
-      toast({ title: 'Pipeline criado' });
+      toast({ title: 'Pipeline criado', description: nome.trim() });
     } catch (err) {
       toast({ title: 'Erro', description: String(err), variant: 'destructive' });
     }
