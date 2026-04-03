@@ -20,6 +20,7 @@ import { useCrmPipelines, useCrmTicketsByPipeline, useCreateTicket, useUpdateTic
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { getSaasEmpresaId } from '@/lib/saas';
+import { triggerCrmAI } from '@/lib/crmService';
 import { useToast } from '@/hooks/use-toast';
 import type { CrmTicket, CrmPipelineStage, TicketPriority } from '@/types/crm';
 
@@ -240,11 +241,12 @@ export default function CRMTicketsPage() {
   const handleCreateTicket = async () => {
     if (!newTitle.trim()) return;
     try {
-      await createTicket.mutateAsync({
+      const stageId = newStage || stages[0]?.id;
+      const created = await createTicket.mutateAsync({
         titulo: newTitle,
         prioridade: newPriority,
         pipeline_id: pipelineId,
-        estagio_id: newStage || stages[0]?.id,
+        estagio_id: stageId,
         status: 'aberto',
       } as any);
       setShowCreateModal(false);
@@ -252,6 +254,9 @@ export default function CRMTicketsPage() {
       setNewPriority('medium');
       setNewStage('');
       toast({ title: 'Ticket criado com sucesso' });
+      if (created?.id && stageId) {
+        getSaasEmpresaId().then(eid => triggerCrmAI('ticket', created.id, stageId, eid, 'create')).catch(() => {});
+      }
     } catch {
       toast({ title: 'Erro ao criar ticket', variant: 'destructive' });
     }
@@ -501,6 +506,7 @@ export default function CRMTicketsPage() {
                     if (ref && ref.fromStageId !== stage.id) {
                       updateTicket.mutate({ id: ref.ticketId, estagio_id: stage.id });
                       toast({ title: `Ticket movido para ${stage.nome}` });
+                      getSaasEmpresaId().then(eid => triggerCrmAI('ticket', ref.ticketId, stage.id, eid, 'move')).catch(() => {});
                     }
                     dragItemRef.current = null;
                   }}

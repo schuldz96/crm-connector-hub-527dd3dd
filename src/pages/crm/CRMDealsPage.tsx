@@ -20,6 +20,7 @@ import { useCrmPipelines, useCrmDealsByPipeline, useCreateDeal, useUpdateDeal, u
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { getSaasEmpresaId } from '@/lib/saas';
+import { triggerCrmAI } from '@/lib/crmService';
 import { useToast } from '@/hooks/use-toast';
 import type { CrmDeal, CrmPipelineStage } from '@/types/crm';
 
@@ -269,11 +270,12 @@ export default function CRMDealsPage() {
   const handleCreateDeal = async () => {
     if (!newDealName.trim()) return;
     try {
-      await createDeal.mutateAsync({
+      const stageId = newDealStage || stages[0]?.id;
+      const created = await createDeal.mutateAsync({
         nome: newDealName,
         valor: parseFloat(newDealValue) || 0,
         pipeline_id: pipelineId,
-        estagio_id: newDealStage || stages[0]?.id,
+        estagio_id: stageId,
         status: 'aberto',
       } as any);
       setShowCreateModal(false);
@@ -281,6 +283,10 @@ export default function CRMDealsPage() {
       setNewDealValue('');
       setNewDealStage('');
       toast({ title: 'Negócio criado com sucesso' });
+      // Trigger AI for create
+      if (created?.id && stageId) {
+        getSaasEmpresaId().then(eid => triggerCrmAI('deal', created.id, stageId, eid, 'create')).catch(() => {});
+      }
     } catch {
       toast({ title: 'Erro ao criar negócio', variant: 'destructive' });
     }
@@ -566,6 +572,8 @@ export default function CRMDealsPage() {
                     if (ref && ref.fromStageId !== stage.id) {
                       updateDeal.mutate({ id: ref.dealId, estagio_id: stage.id });
                       toast({ title: `Negócio movido para ${stage.nome}` });
+                      // Trigger AI for stage move
+                      getSaasEmpresaId().then(eid => triggerCrmAI('deal', ref.dealId, stage.id, eid, 'move')).catch(() => {});
                     }
                     dragItemRef.current = null;
                   }}

@@ -13,6 +13,17 @@ import type {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const saas = () => (supabase as any).schema('saas');
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://lwusznsduxcqjjmbbobt.supabase.co';
+
+/** Fire-and-forget: trigger CRM AI for stage events */
+export function triggerCrmAI(entidadeTipo: 'deal' | 'ticket', entidadeId: string, estagioId: string, empresaId: string, evento: 'create' | 'move') {
+  fetch(`${SUPABASE_URL}/functions/v1/crm-ai-trigger`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ entidade_tipo: entidadeTipo, entidade_id: entidadeId, estagio_id: estagioId, empresa_id: empresaId, evento }),
+  }).catch(e => console.warn('[crm-ai-trigger]', e.message));
+}
+
 // ========================
 // Helper: Build paginated query
 // ========================
