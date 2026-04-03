@@ -70,7 +70,11 @@ export interface StageAIConfig {
   ragSource: string;
   ragMaxTurns: number;
   // Transições tab
-  transitions: { stageId: string; condition: string; trigger: string }[];
+  transitions: {
+    stageId: string;
+    trigger: 'welcome_sent' | 'lead_replied' | 'lead_replied_positive' | 'lead_replied_negative' | 'ai_decision' | 'no_response' | 'keyword' | 'questions_completed';
+    config?: { timeout_hours?: number; keyword?: string; prompt?: string };
+  }[];
 }
 
 const DEFAULT_CONFIG: StageAIConfig = {
@@ -799,7 +803,25 @@ export default function StageAIConfigModal({
           )}
 
           {/* ═══ Transições Tab ═══ */}
-          {activeTab === 'transitions' && (
+          {activeTab === 'transitions' && (() => {
+            const TRIGGER_OPTIONS = [
+              { value: 'welcome_sent', label: 'Boas-vindas enviada', desc: 'Move quando a mensagem de boas-vindas for enviada com sucesso' },
+              { value: 'lead_replied', label: 'Lead respondeu', desc: 'Move quando o lead envia qualquer resposta' },
+              { value: 'lead_replied_positive', label: 'Resposta positiva', desc: 'IA avalia a resposta e move se for positiva (interesse, aceite, confirmação)' },
+              { value: 'lead_replied_negative', label: 'Resposta negativa', desc: 'IA avalia a resposta e move se for negativa (rejeição, desinteresse)' },
+              { value: 'ai_decision', label: 'Decisão da IA (prompt)', desc: 'IA decide com base num prompt customizado que você define' },
+              { value: 'no_response', label: 'Sem resposta', desc: 'Move após X horas sem resposta do lead' },
+              { value: 'keyword', label: 'Palavra-chave', desc: 'Move quando o lead responde com uma palavra-chave específica' },
+              { value: 'questions_completed', label: 'Perguntas respondidas', desc: 'Move quando todas as perguntas da aba Perguntas forem respondidas' },
+            ];
+
+            const updateTransition = (idx: number, patch: Record<string, unknown>) => {
+              const updated = [...config.transitions];
+              updated[idx] = { ...updated[idx], ...patch } as any;
+              update('transitions', updated);
+            };
+
+            return (
             <>
               <p className="text-sm text-muted-foreground">
                 Configure quando o lead deve ser movido automaticamente para outra etapa. Cada regra define um gatilho e a etapa de destino.
@@ -807,8 +829,10 @@ export default function StageAIConfigModal({
 
               {config.transitions.length > 0 && (
                 <div className="space-y-3">
-                  {config.transitions.map((t, idx) => (
-                    <div key={idx} className="border border-border rounded-lg p-3 space-y-2">
+                  {config.transitions.map((t, idx) => {
+                    const triggerInfo = TRIGGER_OPTIONS.find(o => o.value === t.trigger);
+                    return (
+                    <div key={idx} className="border border-border rounded-lg p-3 space-y-3">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-muted-foreground">Transição {idx + 1}</span>
                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => {
@@ -817,50 +841,94 @@ export default function StageAIConfigModal({
                           <Trash2 className="w-3 h-3 text-destructive" />
                         </Button>
                       </div>
+
+                      {/* Trigger type */}
                       <div>
-                        <label className="text-xs font-medium text-foreground mb-1 block">Gatilho</label>
-                        <Input
-                          value={t.trigger}
-                          onChange={e => {
-                            const updated = [...config.transitions];
-                            updated[idx] = { ...updated[idx], trigger: e.target.value };
-                            update('transitions', updated);
-                          }}
-                          placeholder="Ex: lead respondeu positivamente"
-                          className="h-8 text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-foreground mb-1 block">Etapa de destino</label>
-                        <Select
-                          value={t.stageId}
-                          onValueChange={v => {
-                            const updated = [...config.transitions];
-                            updated[idx] = { ...updated[idx], stageId: v };
-                            update('transitions', updated);
-                          }}
+                        <label className="text-xs font-medium text-foreground mb-1 block">Quando</label>
+                        <select
+                          value={t.trigger || ''}
+                          onChange={e => updateTransition(idx, { trigger: e.target.value, config: {} })}
+                          className="w-full h-8 text-xs bg-background border border-border rounded-md px-2"
                         >
-                          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                          <SelectContent>
-                            {allStages.filter(s => s.id !== stageId).map(s => (
-                              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          <option value="">Selecione o gatilho...</option>
+                          {TRIGGER_OPTIONS.map(o => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                        {triggerInfo && (
+                          <p className="text-[10px] text-muted-foreground mt-1">{triggerInfo.desc}</p>
+                        )}
+                      </div>
+
+                      {/* Trigger-specific config */}
+                      {t.trigger === 'no_response' && (
+                        <div>
+                          <label className="text-xs font-medium text-foreground mb-1 block">Após quantas horas sem resposta?</label>
+                          <Input
+                            type="number"
+                            value={t.config?.timeout_hours || 24}
+                            onChange={e => updateTransition(idx, { config: { ...t.config, timeout_hours: parseInt(e.target.value) || 24 } })}
+                            className="h-8 text-xs w-32"
+                            min={1}
+                          />
+                        </div>
+                      )}
+
+                      {t.trigger === 'keyword' && (
+                        <div>
+                          <label className="text-xs font-medium text-foreground mb-1 block">Palavra-chave (case insensitive)</label>
+                          <Input
+                            value={t.config?.keyword || ''}
+                            onChange={e => updateTransition(idx, { config: { ...t.config, keyword: e.target.value } })}
+                            placeholder="Ex: sim, quero, confirmo"
+                            className="h-8 text-xs"
+                          />
+                          <p className="text-[10px] text-muted-foreground mt-1">Separe múltiplas palavras com vírgula. Qualquer uma dispara.</p>
+                        </div>
+                      )}
+
+                      {t.trigger === 'ai_decision' && (
+                        <div>
+                          <label className="text-xs font-medium text-foreground mb-1 block">Prompt de decisão</label>
+                          <Textarea
+                            value={t.config?.prompt || ''}
+                            onChange={e => updateTransition(idx, { config: { ...t.config, prompt: e.target.value } })}
+                            placeholder="Analise a conversa e responda apenas SIM ou NÃO: o lead está pronto para avançar?"
+                            className="min-h-[80px] resize-y text-xs"
+                          />
+                          <p className="text-[10px] text-muted-foreground mt-1">A IA receberá a conversa completa + este prompt. Deve responder SIM para mover.</p>
+                        </div>
+                      )}
+
+                      {/* Destination stage */}
+                      <div>
+                        <label className="text-xs font-medium text-foreground mb-1 block">Mover para</label>
+                        <select
+                          value={t.stageId || ''}
+                          onChange={e => updateTransition(idx, { stageId: e.target.value })}
+                          className="w-full h-8 text-xs bg-background border border-border rounded-md px-2"
+                        >
+                          <option value="">Selecione a etapa...</option>
+                          {allStages.filter(s => s.id !== stageId).map(s => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 
               <button
-                onClick={() => update('transitions', [...config.transitions, { stageId: '', condition: '', trigger: '' }])}
+                onClick={() => update('transitions', [...config.transitions, { stageId: '', trigger: 'lead_replied' as any, config: {} }])}
                 className="text-sm text-primary hover:underline flex items-center gap-1"
               >
                 <Plus className="w-3.5 h-3.5" /> Adicionar transição
               </button>
             </>
-          )}
+            );
+          })()}
         </div>
 
         {/* Footer */}

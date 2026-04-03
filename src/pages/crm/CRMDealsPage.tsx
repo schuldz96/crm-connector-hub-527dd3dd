@@ -946,7 +946,10 @@ export default function CRMDealsPage() {
                 transicoes: cfg.transitions, atualizado_em: new Date().toISOString(),
               }, { onConflict: 'estagio_id' });
               toast({ title: 'Configuração de IA salva' });
-            } catch (e) { console.error('[StageAI] Save error:', e); }
+            } catch (e: any) {
+              console.error('[StageAI] Save error:', e);
+              toast({ title: 'Erro ao salvar IA', description: e?.message || String(e), variant: 'destructive' });
+            }
           }}
         />
       )}

@@ -195,15 +195,22 @@ serve(async (req) => {
       log(`Provider desconhecido: ${config.provider}`);
     }
 
-    // 6. Registrar conversa com a mensagem enviada
+    // 6. Registrar conversa com a mensagem enviada (reset se já existia)
     const conv = await ensureConversation(empresa_id, entidade_tipo, entidade_id, estagio_id, config, contato, log);
-    if (sent && conv) {
-      const msgs = conv.mensagens || [];
-      msgs.push({ role: 'assistant', content: welcomeText, timestamp: new Date().toISOString() });
+    if (conv) {
+      const welcomeMsg = { role: 'assistant', content: welcomeText, timestamp: new Date().toISOString() };
+      // Reset: start fresh conversation with just the welcome message
       await sb.from('crm_ai_conversations')
-        .update({ mensagens: msgs, total_mensagens: msgs.length, ultima_mensagem_em: new Date().toISOString() })
+        .update({
+          mensagens: sent ? [welcomeMsg] : [],
+          total_mensagens: sent ? 1 : 0,
+          ultima_mensagem_em: sent ? new Date().toISOString() : null,
+          status: 'active',
+          contato_id: contato.id,
+          contato_telefone: contato.telefone,
+        })
         .eq('id', conv.id);
-      log('Conversa atualizada com welcome message.');
+      log(sent ? 'Conversa resetada com welcome message.' : 'Conversa resetada (envio falhou).');
     }
 
     log(`=== Concluído: sent=${sent} ===`);
