@@ -764,6 +764,7 @@ export default function CRMTicketsPage() {
           onClose={() => setAiConfigStage(null)}
           stageName={aiConfigStage.name}
           stageId={aiConfigStage.id}
+          objectType="ticket"
           allStages={stages.map(s => ({ id: s.id, name: s.nome }))}
           initialConfig={stageAIConfigs[aiConfigStage.id]}
           onSave={async (id, cfg) => {

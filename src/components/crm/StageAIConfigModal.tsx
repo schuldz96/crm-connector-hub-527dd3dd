@@ -57,7 +57,7 @@ export interface StageAIConfig {
   welcomeType: 'text' | 'image' | 'audio' | 'video';
   welcomeText: string;
   // Comportamento tab
-  startMode: 'immediate' | 'wait_first';
+  startMode: 'immediate' | 'on_move' | 'wait_first';
   typingDelay: number;
   responseDelay: number;
   // Perguntas tab
@@ -120,18 +120,49 @@ const TRIGGER_TYPES = [
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+// Object-specific variables
+const OBJECT_VARIABLES: Record<string, { key: string; label: string }[]> = {
+  deal: [
+    { key: '{{deal_name}}', label: 'Nome do negócio' },
+    { key: '{{deal_value}}', label: 'Valor' },
+    { key: '{{deal_stage}}', label: 'Etapa' },
+    { key: '{{deal_pipeline}}', label: 'Pipeline' },
+    { key: '{{deal_close_date}}', label: 'Data de fechamento' },
+    { key: '{{deal_owner}}', label: 'Proprietário' },
+    { key: '{{deal_probability}}', label: 'Probabilidade' },
+  ],
+  ticket: [
+    { key: '{{ticket_title}}', label: 'Título' },
+    { key: '{{ticket_status}}', label: 'Status' },
+    { key: '{{ticket_priority}}', label: 'Prioridade' },
+    { key: '{{ticket_category}}', label: 'Categoria' },
+    { key: '{{ticket_stage}}', label: 'Etapa' },
+    { key: '{{ticket_pipeline}}', label: 'Pipeline' },
+    { key: '{{ticket_owner}}', label: 'Proprietário' },
+    { key: '{{ticket_sla}}', label: 'SLA (min)' },
+  ],
+};
+
+const COMMON_VARIABLES = [
+  { key: '{{name}}', label: 'Nome do contato' },
+  { key: '{{first_name}}', label: 'Primeiro nome' },
+  { key: '{{phone}}', label: 'Telefone' },
+  { key: '{{email}}', label: 'E-mail' },
+];
+
 interface StageAIConfigModalProps {
   open: boolean;
   onClose: () => void;
   stageName: string;
   stageId: string;
+  objectType?: 'deal' | 'ticket';
   allStages?: { id: string; name: string }[];
   initialConfig?: Partial<StageAIConfig>;
   onSave?: (stageId: string, config: StageAIConfig) => void;
 }
 
 export default function StageAIConfigModal({
-  open, onClose, stageName, stageId, allStages = [], initialConfig, onSave,
+  open, onClose, stageName, stageId, objectType = 'deal', allStages = [], initialConfig, onSave,
 }: StageAIConfigModalProps) {
   const [activeTab, setActiveTab] = useState('ia');
   const [config, setConfig] = useState<StageAIConfig>({ ...DEFAULT_CONFIG, ...initialConfig });
@@ -312,6 +343,29 @@ export default function StageAIConfigModal({
           {/* ═══ Prompt Tab ═══ */}
           {activeTab === 'prompt' && (
             <>
+              {/* Available variables */}
+              <div className="rounded-lg border border-border/50 p-3 space-y-1.5">
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Variáveis disponíveis (clique para copiar)</p>
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className="text-[10px] text-muted-foreground mr-0.5">Contato:</span>
+                  {COMMON_VARIABLES.map(v => (
+                    <Badge key={v.key} variant="outline" className="text-[10px] font-mono cursor-pointer hover:bg-muted"
+                      onClick={() => { navigator.clipboard.writeText(v.key); }} title={v.label}>
+                      {v.key}
+                    </Badge>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className="text-[10px] text-muted-foreground mr-0.5">{objectType === 'ticket' ? 'Ticket:' : 'Negócio:'}</span>
+                  {(OBJECT_VARIABLES[objectType] || []).map(v => (
+                    <Badge key={v.key} variant="outline" className="text-[10px] font-mono cursor-pointer hover:bg-primary/20 hover:text-primary"
+                      onClick={() => { navigator.clipboard.writeText(v.key); }} title={v.label}>
+                      {v.key}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
               <div>
                 <label className="text-sm font-semibold text-foreground mb-1.5 block">System Prompt</label>
                 <Textarea
@@ -363,20 +417,33 @@ export default function StageAIConfigModal({
                         <div>
                           <label className="text-xs font-medium text-foreground mb-1.5 block">Variáveis do Template (uma por linha)</label>
                           <Textarea placeholder="{{1}} = Nome do contato&#10;{{2}} = Nome da empresa" className="min-h-[60px] resize-y text-xs font-mono" />
-                          <p className="text-[10px] text-muted-foreground mt-1">Use variáveis do sistema: {'{{first_name}}'}, {'{{company}}'}, {'{{phone}}'}</p>
+                          <p className="text-[10px] text-muted-foreground mt-1">
+                            Variáveis: {COMMON_VARIABLES.map(v => v.key).join(', ')}, {(OBJECT_VARIABLES[objectType] || []).map(v => v.key).join(', ')}
+                          </p>
                         </div>
                       </div>
                     ) : (
                       /* Evolution / Owner: free-text welcome */
                       <>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <span>Use variáveis:</span>
-                          {['{{name}}', '{{first_name}}', '{{phone}}'].map(v => (
-                            <Badge key={v} variant="outline" className="text-[10px] font-mono cursor-pointer hover:bg-muted"
-                              onClick={() => update('welcomeText', config.welcomeText + ' ' + v)}>
-                              {v}
-                            </Badge>
-                          ))}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-1 flex-wrap text-xs">
+                            <span className="text-muted-foreground text-[10px] mr-1">Contato:</span>
+                            {COMMON_VARIABLES.map(v => (
+                              <Badge key={v.key} variant="outline" className="text-[10px] font-mono cursor-pointer hover:bg-muted"
+                                onClick={() => update('welcomeText', config.welcomeText + ' ' + v.key)} title={v.label}>
+                                {v.key}
+                              </Badge>
+                            ))}
+                          </div>
+                          <div className="flex items-center gap-1 flex-wrap text-xs">
+                            <span className="text-muted-foreground text-[10px] mr-1">{objectType === 'ticket' ? 'Ticket:' : 'Negócio:'}</span>
+                            {(OBJECT_VARIABLES[objectType] || []).map(v => (
+                              <Badge key={v.key} variant="outline" className="text-[10px] font-mono cursor-pointer hover:bg-primary/20 hover:text-primary"
+                                onClick={() => update('welcomeText', config.welcomeText + ' ' + v.key)} title={v.label}>
+                                {v.key}
+                              </Badge>
+                            ))}
+                          </div>
                         </div>
 
                         <div>
@@ -410,27 +477,26 @@ export default function StageAIConfigModal({
               <div>
                 <label className="text-sm font-semibold text-foreground mb-2 block">Quando iniciar conversa</label>
                 <div className="space-y-2">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="startMode"
-                      checked={config.startMode === 'immediate'}
-                      onChange={() => update('startMode', 'immediate')}
-                      className="accent-primary"
-                    />
-                    <span className="text-sm text-foreground">Ao criar o registro (envia boas-vindas imediatamente)</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="startMode"
-                      checked={config.startMode === 'wait_first'}
-                      onChange={() => update('startMode', 'wait_first')}
-                      className="accent-primary"
-                    />
-                    <span className="text-sm text-foreground">Aguardar 1ª mensagem do contato</span>
-                  </label>
+                  {([
+                    { value: 'immediate', label: 'Ao criar o registro (envia boas-vindas imediatamente)' },
+                    { value: 'on_move', label: 'Ao mover para esta etapa (envia boas-vindas ao entrar)' },
+                    { value: 'wait_first', label: 'Aguardar 1ª mensagem do contato' },
+                  ] as const).map(opt => (
+                    <label key={opt.value} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="startMode"
+                        checked={config.startMode === opt.value}
+                        onChange={() => update('startMode', opt.value as any)}
+                        className="accent-primary"
+                      />
+                      <span className="text-sm text-foreground">{opt.label}</span>
+                    </label>
+                  ))}
                 </div>
+                <p className="text-[10px] text-muted-foreground mt-2">
+                  A IA só responde para {objectType === 'ticket' ? 'tickets' : 'negócios'} que estão neste pipeline. Registros fora do pipeline não recebem interação da IA.
+                </p>
               </div>
 
               <div>
