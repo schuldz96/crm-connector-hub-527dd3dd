@@ -24,7 +24,7 @@ interface FollowUpTrigger {
   id: string;
   type: 'time' | 'keyword' | 'no_response';
   value: number;
-  unit: 'minutes' | 'hours' | 'days';
+  unit: 'seconds' | 'minutes' | 'hours' | 'days';
   keyword?: string;
 }
 
@@ -125,7 +125,7 @@ const WELCOME_TYPES = [
 ] as const;
 
 const TRIGGER_TYPES = [
-  { value: 'time', label: 'X tempo após entrar na etapa' },
+  { value: 'time', label: 'Tempo após entrar na etapa' },
   { value: 'keyword', label: 'Palavra-chave recebida' },
   { value: 'no_response', label: 'Sem resposta do lead' },
 ];
@@ -640,9 +640,18 @@ export default function StageAIConfigModal({
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-sm font-semibold text-foreground">Gatilhos</span>
-                          <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => addTrigger(fu.id)}>
-                            <Plus className="w-3 h-3" /> Adicionar Gatilho
-                          </Button>
+                          <div className="flex gap-1">
+                            {TRIGGER_TYPES.map(tt => (
+                              <button key={tt.value}
+                                onClick={() => update('followUps', config.followUps.map(f => f.id === fu.id ? {
+                                  ...f,
+                                  triggers: [...f.triggers, { id: crypto.randomUUID(), type: tt.value as any, value: tt.value === 'time' ? 1 : 24, unit: 'minutes' as const }],
+                                } : f))}
+                                className="text-[10px] px-2 py-1 rounded border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                                + {tt.label}
+                              </button>
+                            ))}
+                          </div>
                         </div>
 
                         {fu.triggers.length === 0 && (
@@ -650,53 +659,49 @@ export default function StageAIConfigModal({
                         )}
 
                         {fu.triggers.map(trigger => (
-                          <div key={trigger.id} className="border border-border rounded-lg p-3 space-y-2 mb-2">
-                            <div className="flex items-center gap-2">
-                              <Select
-                                value={trigger.type}
-                                onValueChange={v => updateTrigger(fu.id, trigger.id, { type: v as FollowUpTrigger['type'] })}
-                              >
-                                <SelectTrigger className="h-8 flex-1"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  {TRIGGER_TYPES.map(tt => (
-                                    <SelectItem key={tt.value} value={tt.value}>{tt.label}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => removeTrigger(fu.id, trigger.id)}>
-                                <X className="w-3.5 h-3.5" />
-                              </Button>
-                            </div>
-
+                          <div key={trigger.id} className="border border-border rounded-lg p-2.5 mb-2">
                             {trigger.type === 'time' && (
                               <div className="flex items-center gap-2">
                                 <Input
                                   type="number"
                                   value={trigger.value}
                                   onChange={e => updateTrigger(fu.id, trigger.id, { value: Number(e.target.value) })}
-                                  className="h-8 w-24"
+                                  className="h-8 w-16 text-center text-sm"
+                                  min={1}
                                 />
-                                <Select
-                                  value={trigger.unit}
-                                  onValueChange={v => updateTrigger(fu.id, trigger.id, { unit: v as FollowUpTrigger['unit'] })}
-                                >
-                                  <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="minutes">Minutos</SelectItem>
-                                    <SelectItem value="hours">Horas</SelectItem>
-                                    <SelectItem value="days">Dias</SelectItem>
-                                  </SelectContent>
-                                </Select>
+                                <div className="flex gap-1">
+                                  {([
+                                    { value: 'seconds', label: 'Seg' },
+                                    { value: 'minutes', label: 'Min' },
+                                    { value: 'hours', label: 'Hora' },
+                                    { value: 'days', label: 'Dia' },
+                                  ] as const).map(u => (
+                                    <button key={u.value} onClick={() => updateTrigger(fu.id, trigger.id, { unit: u.value as any })}
+                                      className={cn('px-2 py-1 rounded text-[10px] font-medium border transition-colors',
+                                        trigger.unit === u.value ? 'bg-primary/10 border-primary/30 text-primary' : 'border-border text-muted-foreground hover:text-foreground')}>
+                                      {u.label}
+                                    </button>
+                                  ))}
+                                </div>
+                                <span className="text-xs text-muted-foreground flex-1">após entrar na etapa</span>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0" onClick={() => removeTrigger(fu.id, trigger.id)}>
+                                  <X className="w-3 h-3" />
+                                </Button>
                               </div>
                             )}
 
                             {trigger.type === 'keyword' && (
-                              <Input
-                                value={trigger.keyword || ''}
-                                onChange={e => updateTrigger(fu.id, trigger.id, { keyword: e.target.value })}
-                                placeholder="Palavra-chave..."
-                                className="h-8"
-                              />
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  value={trigger.keyword || ''}
+                                  onChange={e => updateTrigger(fu.id, trigger.id, { keyword: e.target.value })}
+                                  placeholder="Palavra-chave..."
+                                  className="h-8 flex-1 text-xs"
+                                />
+                                <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0" onClick={() => removeTrigger(fu.id, trigger.id)}>
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </div>
                             )}
 
                             {trigger.type === 'no_response' && (
@@ -705,19 +710,26 @@ export default function StageAIConfigModal({
                                   type="number"
                                   value={trigger.value}
                                   onChange={e => updateTrigger(fu.id, trigger.id, { value: Number(e.target.value) })}
-                                  className="h-8 w-24"
+                                  className="h-8 w-16 text-center text-sm"
+                                  min={1}
                                 />
-                                <Select
-                                  value={trigger.unit}
-                                  onValueChange={v => updateTrigger(fu.id, trigger.id, { unit: v as FollowUpTrigger['unit'] })}
-                                >
-                                  <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="minutes">Minutos</SelectItem>
-                                    <SelectItem value="hours">Horas</SelectItem>
-                                    <SelectItem value="days">Dias</SelectItem>
-                                  </SelectContent>
-                                </Select>
+                                <div className="flex gap-1">
+                                  {([
+                                    { value: 'minutes', label: 'Min' },
+                                    { value: 'hours', label: 'Hora' },
+                                    { value: 'days', label: 'Dia' },
+                                  ] as const).map(u => (
+                                    <button key={u.value} onClick={() => updateTrigger(fu.id, trigger.id, { unit: u.value as any })}
+                                      className={cn('px-2 py-1 rounded text-[10px] font-medium border transition-colors',
+                                        trigger.unit === u.value ? 'bg-primary/10 border-primary/30 text-primary' : 'border-border text-muted-foreground hover:text-foreground')}>
+                                      {u.label}
+                                    </button>
+                                  ))}
+                                </div>
+                                <span className="text-xs text-muted-foreground flex-1">sem resposta</span>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0" onClick={() => removeTrigger(fu.id, trigger.id)}>
+                                  <X className="w-3 h-3" />
+                                </Button>
                               </div>
                             )}
                           </div>
