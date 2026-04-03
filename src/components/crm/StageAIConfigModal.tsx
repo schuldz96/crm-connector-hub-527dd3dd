@@ -28,11 +28,19 @@ interface FollowUpTrigger {
   keyword?: string;
 }
 
+interface FollowUpContent {
+  type: 'text' | 'image' | 'audio' | 'video';
+  text?: string;       // for text type or caption
+  mediaUrl?: string;   // URL of the media file
+  fileName?: string;   // original filename
+}
+
 interface FollowUpItem {
   id: string;
   triggers: FollowUpTrigger[];
   allowReinscription: boolean;
-  contents: string[];
+  content: FollowUpContent | null; // 1 follow-up = 1 content
+  contents?: string[]; // legacy — ignored
   expanded: boolean;
 }
 
@@ -204,7 +212,7 @@ export default function StageAIConfigModal({
       id: crypto.randomUUID(),
       triggers: [],
       allowReinscription: false,
-      contents: [],
+      content: null,
       expanded: true,
     }]);
   };
@@ -613,7 +621,7 @@ export default function StageAIConfigModal({
                       <GripVertical className="w-4 h-4 text-muted-foreground cursor-grab" />
                       <span className="text-sm font-medium text-foreground">Follow-up {idx + 1}</span>
                       <span className="text-xs text-muted-foreground">
-                        {fu.triggers.length} gatilho(s) · {fu.contents.length} conteúdo(s)
+                        {fu.triggers.length} gatilho(s) · {fu.content ? '1 conteúdo' : 'Sem conteúdo'}
                       </span>
                     </div>
                     <div className="flex items-center gap-1">
@@ -732,75 +740,86 @@ export default function StageAIConfigModal({
                         </label>
                       </div>
 
-                      {/* Contents */}
+                      {/* Content — 1 per follow-up */}
                       <div className="border-t border-border pt-3">
-                        <span className="text-sm font-semibold text-foreground block mb-2">Conteúdos ({fu.contents.length})</span>
-                        {fu.contents.length > 0 && (
-                          <div className="space-y-2 mb-2">
-                            {fu.contents.map((content, ci) => (
-                              <div key={ci} className="flex items-start gap-2 p-2 rounded-lg bg-muted/30 border border-border">
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs whitespace-pre-wrap">{content}</p>
-                                </div>
-                                <div className="flex items-center gap-1 flex-shrink-0">
-                                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => {
-                                    // Move up
-                                    if (ci === 0) return;
-                                    const newContents = [...fu.contents];
-                                    [newContents[ci - 1], newContents[ci]] = [newContents[ci], newContents[ci - 1]];
-                                    update('followUps', config.followUps.map(f => f.id === fu.id ? { ...f, contents: newContents } : f));
-                                  }}>
-                                    <ChevronUp className="w-3 h-3" />
-                                  </Button>
-                                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => {
-                                    // Move down
-                                    if (ci === fu.contents.length - 1) return;
-                                    const newContents = [...fu.contents];
-                                    [newContents[ci], newContents[ci + 1]] = [newContents[ci + 1], newContents[ci]];
-                                    update('followUps', config.followUps.map(f => f.id === fu.id ? { ...f, contents: newContents } : f));
-                                  }}>
-                                    <ChevronDown className="w-3 h-3" />
-                                  </Button>
-                                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => {
-                                    update('followUps', config.followUps.map(f =>
-                                      f.id === fu.id ? { ...f, contents: f.contents.filter((_, i) => i !== ci) } : f
-                                    ));
-                                  }}>
-                                    <Trash2 className="w-3 h-3 text-destructive" />
-                                  </Button>
-                                </div>
-                              </div>
-                            ))}
+                        <span className="text-sm font-semibold text-foreground block mb-2">Conteúdo</span>
+
+                        {/* Type selector — 4 buttons */}
+                        <div className="grid grid-cols-4 gap-2 mb-3">
+                          {([
+                            { type: 'text', label: 'Texto', icon: FileText },
+                            { type: 'image', label: 'Imagem', icon: Image },
+                            { type: 'audio', label: 'Áudio', icon: Music },
+                            { type: 'video', label: 'Vídeo', icon: Video },
+                          ] as const).map(opt => {
+                            const isActive = fu.content?.type === opt.type;
+                            return (
+                              <button key={opt.type} onClick={() => {
+                                update('followUps', config.followUps.map(f =>
+                                  f.id === fu.id ? { ...f, content: { type: opt.type, text: fu.content?.type === opt.type ? fu.content.text : '', mediaUrl: fu.content?.type === opt.type ? fu.content.mediaUrl : '' } } : f
+                                ));
+                              }}
+                              className={cn('flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition-colors',
+                                isActive ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted')}>
+                                <opt.icon className="w-3.5 h-3.5" /> {opt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Content fields based on type */}
+                        {fu.content?.type === 'text' && (
+                          <div>
+                            <Textarea
+                              value={fu.content.text || ''}
+                              onChange={e => update('followUps', config.followUps.map(f =>
+                                f.id === fu.id ? { ...f, content: { ...f.content!, text: e.target.value } } : f
+                              ))}
+                              placeholder="Digite a mensagem do follow-up..."
+                              className="min-h-[80px] resize-y text-sm"
+                            />
                           </div>
                         )}
-                        <div className="flex gap-2">
-                          <Input
-                            placeholder="Digite o conteúdo da mensagem..."
-                            className="h-8 text-xs flex-1"
-                            id={`fu-content-${fu.id}`}
-                            onKeyDown={e => {
-                              if (e.key === 'Enter') {
-                                const input = e.currentTarget;
-                                if (!input.value.trim()) return;
-                                update('followUps', config.followUps.map(f =>
-                                  f.id === fu.id ? { ...f, contents: [...f.contents, input.value.trim()] } : f
-                                ));
-                                input.value = '';
-                              }
-                            }}
-                          />
-                          <Button size="sm" className="h-8 text-xs gap-1" onClick={() => {
-                            const input = document.getElementById(`fu-content-${fu.id}`) as HTMLInputElement;
-                            if (!input?.value.trim()) return;
-                            update('followUps', config.followUps.map(f =>
-                              f.id === fu.id ? { ...f, contents: [...f.contents, input.value.trim()] } : f
-                            ));
-                            input.value = '';
-                          }}>
-                            <Plus className="w-3 h-3" /> Adicionar
-                          </Button>
-                        </div>
-                        <p className="text-[10px] text-muted-foreground mt-1">Cada conteúdo será enviado como uma mensagem separada. Use Enter para adicionar.</p>
+
+                        {(fu.content?.type === 'image' || fu.content?.type === 'audio' || fu.content?.type === 'video') && (
+                          <div className="space-y-2">
+                            <div>
+                              <label className="text-xs font-medium block mb-1">URL da mídia</label>
+                              <Input
+                                value={fu.content.mediaUrl || ''}
+                                onChange={e => update('followUps', config.followUps.map(f =>
+                                  f.id === fu.id ? { ...f, content: { ...f.content!, mediaUrl: e.target.value } } : f
+                                ))}
+                                placeholder={fu.content.type === 'image' ? 'https://exemplo.com/imagem.jpg' : fu.content.type === 'audio' ? 'https://exemplo.com/audio.mp3' : 'https://exemplo.com/video.mp4'}
+                                className="h-8 text-xs font-mono"
+                              />
+                              <p className="text-[10px] text-muted-foreground mt-1">
+                                {config.provider === 'meta'
+                                  ? 'Meta WABA: use URL pública acessível. Formatos: JPEG/PNG (imagem), MP4 (vídeo), MP3/OGG (áudio).'
+                                  : 'Evolution API: use URL pública. Suporta JPEG, PNG, MP4, MP3, OGG, WEBM.'}
+                              </p>
+                            </div>
+                            {fu.content.type !== 'audio' && (
+                              <div>
+                                <label className="text-xs font-medium block mb-1">Legenda (opcional)</label>
+                                <Input
+                                  value={fu.content.text || ''}
+                                  onChange={e => update('followUps', config.followUps.map(f =>
+                                    f.id === fu.id ? { ...f, content: { ...f.content!, text: e.target.value } } : f
+                                  ))}
+                                  placeholder="Texto que acompanha a mídia"
+                                  className="h-8 text-xs"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {!fu.content && (
+                          <p className="text-xs text-muted-foreground text-center py-3 border border-dashed border-border rounded-lg">
+                            Selecione o tipo de conteúdo acima
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}
