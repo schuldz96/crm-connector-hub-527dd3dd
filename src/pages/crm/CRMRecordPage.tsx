@@ -455,11 +455,10 @@ export default function CRMRecordPage() {
     if (!table) return;
     try {
       await (supabase as any).schema('saas').from(table)
-        .update({ contato_principal_id: contactId })
+        .update({ contato_principal_id: contactId || null })
         .eq('id', recordId);
-      // Update local record cache
-      (rec as any).contato_principal_id = contactId;
-      toast({ title: 'Contato principal definido' });
+      (rec as any).contato_principal_id = contactId || null;
+      toast({ title: contactId ? 'Contato principal definido' : 'Contato principal removido' });
     } catch (e: any) {
       toast({ title: 'Erro', description: e.message, variant: 'destructive' });
     }
@@ -1499,10 +1498,16 @@ function AssociationSection({
                         </button>
                       </div>
                     )}
-                    {onSetPrimary && !isPrimary && (
-                      <button className="text-[10px] text-muted-foreground hover:text-primary mt-0.5" onClick={() => onSetPrimary(item.id)}>
-                        Definir como principal
-                      </button>
+                    {onSetPrimary && (
+                      isPrimary ? (
+                        <button className="text-[10px] text-muted-foreground hover:text-destructive mt-0.5" onClick={() => onSetPrimary('')}>
+                          Remover principal
+                        </button>
+                      ) : (
+                        <button className="text-[10px] text-muted-foreground hover:text-primary mt-0.5" onClick={() => onSetPrimary(item.id)}>
+                          Definir como principal
+                        </button>
+                      )
                     )}
                   </div>
                   <Button
