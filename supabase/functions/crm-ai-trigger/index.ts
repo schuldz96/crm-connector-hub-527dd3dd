@@ -101,6 +101,46 @@ serve(async (req) => {
 
     log(`Contato principal: ${contato.nome} — ${contato.telefone}`);
 
+    // 3b. Verificar conflito: mesmo telefone com conversa IA ativa no mesmo pipeline
+    const { data: pipeline } = await sb.from(entidade_tipo === 'deal' ? 'crm_negocios' : 'crm_tickets')
+      .select('pipeline_id')
+      .eq('id', entidade_id)
+      .maybeSingle();
+
+    if (pipeline?.pipeline_id) {
+      // Buscar outras entidades no mesmo pipeline com o mesmo contato
+      const otherTable = entidade_tipo === 'deal' ? 'crm_negocios' : 'crm_tickets';
+      const statusField = entidade_tipo === 'deal' ? 'status' : 'status';
+      const lostStatuses = entidade_tipo === 'deal' ? ['perdido'] : ['fechado', 'resolvido'];
+
+      const { data: samePhoneEntities } = await sb.from(otherTable)
+        .select('id, contato_principal_id, status')
+        .eq('pipeline_id', pipeline.pipeline_id)
+        .eq('contato_principal_id', contato.id)
+        .neq('id', entidade_id)
+        .is('deletado_em', null);
+
+      // Filter to only active (not lost/closed) entities
+      const activeConflicts = (samePhoneEntities || []).filter(
+        (e: any) => !lostStatuses.includes(e.status)
+      );
+
+      if (activeConflicts.length > 0) {
+        // Check if any of them has an active AI conversation
+        const conflictIds = activeConflicts.map((e: any) => e.id);
+        const { data: activeConvs } = await sb.from('crm_ai_conversations')
+          .select('id, entidade_id')
+          .eq('entidade_tipo', entidade_tipo)
+          .in('entidade_id', conflictIds)
+          .eq('status', 'active');
+
+        if (activeConvs && activeConvs.length > 0) {
+          log(`CONFLITO: ${activeConvs.length} conversa(s) IA ativa(s) no mesmo pipeline para o mesmo contato. IDs: ${activeConvs.map((c: any) => c.entidade_id).join(', ')}. IA bloqueada para evitar cruzamento.`);
+          return jsonRes({ success: true, skipped: true, reason: 'conflict_same_pipeline', conflicting_entities: activeConvs.map((c: any) => c.entidade_id), logs });
+        }
+      }
+    }
+
     // 4. Resolver welcome message com variáveis
     const welcomeConfig = config.mensagem_boas_vindas || {};
     if (!welcomeConfig.enabled) {
