@@ -732,11 +732,75 @@ export default function StageAIConfigModal({
                         </label>
                       </div>
 
-                      {/* Content placeholder */}
-                      <div className="border border-dashed border-border rounded-lg p-4 text-center">
-                        <button className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 mx-auto">
-                          <Plus className="w-3.5 h-3.5" /> Adicionar Conteúdo
-                        </button>
+                      {/* Contents */}
+                      <div className="border-t border-border pt-3">
+                        <span className="text-sm font-semibold text-foreground block mb-2">Conteúdos ({fu.contents.length})</span>
+                        {fu.contents.length > 0 && (
+                          <div className="space-y-2 mb-2">
+                            {fu.contents.map((content, ci) => (
+                              <div key={ci} className="flex items-start gap-2 p-2 rounded-lg bg-muted/30 border border-border">
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs whitespace-pre-wrap">{content}</p>
+                                </div>
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => {
+                                    // Move up
+                                    if (ci === 0) return;
+                                    const newContents = [...fu.contents];
+                                    [newContents[ci - 1], newContents[ci]] = [newContents[ci], newContents[ci - 1]];
+                                    update('followUps', config.followUps.map(f => f.id === fu.id ? { ...f, contents: newContents } : f));
+                                  }}>
+                                    <ChevronUp className="w-3 h-3" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => {
+                                    // Move down
+                                    if (ci === fu.contents.length - 1) return;
+                                    const newContents = [...fu.contents];
+                                    [newContents[ci], newContents[ci + 1]] = [newContents[ci + 1], newContents[ci]];
+                                    update('followUps', config.followUps.map(f => f.id === fu.id ? { ...f, contents: newContents } : f));
+                                  }}>
+                                    <ChevronDown className="w-3 h-3" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => {
+                                    update('followUps', config.followUps.map(f =>
+                                      f.id === fu.id ? { ...f, contents: f.contents.filter((_, i) => i !== ci) } : f
+                                    ));
+                                  }}>
+                                    <Trash2 className="w-3 h-3 text-destructive" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="Digite o conteúdo da mensagem..."
+                            className="h-8 text-xs flex-1"
+                            id={`fu-content-${fu.id}`}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                const input = e.currentTarget;
+                                if (!input.value.trim()) return;
+                                update('followUps', config.followUps.map(f =>
+                                  f.id === fu.id ? { ...f, contents: [...f.contents, input.value.trim()] } : f
+                                ));
+                                input.value = '';
+                              }
+                            }}
+                          />
+                          <Button size="sm" className="h-8 text-xs gap-1" onClick={() => {
+                            const input = document.getElementById(`fu-content-${fu.id}`) as HTMLInputElement;
+                            if (!input?.value.trim()) return;
+                            update('followUps', config.followUps.map(f =>
+                              f.id === fu.id ? { ...f, contents: [...f.contents, input.value.trim()] } : f
+                            ));
+                            input.value = '';
+                          }}>
+                            <Plus className="w-3 h-3" /> Adicionar
+                          </Button>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground mt-1">Cada conteúdo será enviado como uma mensagem separada. Use Enter para adicionar.</p>
                       </div>
                     </div>
                   )}
