@@ -245,7 +245,10 @@ export function useCreateAssociation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: crm.createAssociation,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['crm.associations'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['crm.associations'] });
+      qc.invalidateQueries({ queryKey: ['crm.associated'] });
+    },
   });
 }
 
