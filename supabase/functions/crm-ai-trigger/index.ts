@@ -43,11 +43,14 @@ serve(async (req) => {
     log(`=== CRM AI Trigger: ${evento} ${entidade_tipo} ${entidade_id} → estágio ${estagio_id} ===`);
 
     // 1. Buscar config de IA do estágio
-    const { data: config } = await sb.from('crm_estagio_ia_config')
+    const { data: config, error: configErr } = await sb.from('crm_estagio_ia_config')
       .select('*')
       .eq('estagio_id', estagio_id)
       .eq('empresa_id', empresa_id)
       .maybeSingle();
+
+    if (configErr) log(`Erro ao buscar config: ${configErr.message} (code: ${configErr.code})`);
+    log(`Config result: ${config ? `ativo=${config.ativo}, provider=${config.provider}` : 'NULL'}`);
 
     if (!config || !config.ativo) {
       log('IA não configurada ou inativa para este estágio. Ignorando.');
@@ -220,13 +223,13 @@ async function sendViaEvolution(
   empresaId: string, instanceName: string, phone: string, text: string, log: (msg: string) => void,
 ): Promise<boolean> {
   try {
-    // Load Evolution config from DB
-    const { data: integ } = await sb.from('integracoes')
+    // Load Evolution config from DB (get the one with token)
+    const { data: integRows } = await sb.from('integracoes')
       .select('configuracao')
       .eq('empresa_id', empresaId)
       .eq('tipo', 'evolution_api')
-      .eq('status', 'conectada')
-      .maybeSingle();
+      .eq('status', 'conectada');
+    const integ = (integRows || []).find((r: any) => r.configuracao?.token_encrypted) || (integRows || [])[0];
 
     let evoUrl = Deno.env.get('EVOLUTION_API_URL') || '';
     let evoToken = Deno.env.get('EVOLUTION_API_TOKEN') || '';
@@ -237,7 +240,7 @@ async function sendViaEvolution(
     }
 
     if (!evoUrl || !evoToken) {
-      log('Evolution API não configurada.');
+      log(`Evolution API não configurada. url=${evoUrl ? 'set' : 'empty'}, token=${evoToken ? 'set' : 'empty'}`);
       return false;
     }
 
