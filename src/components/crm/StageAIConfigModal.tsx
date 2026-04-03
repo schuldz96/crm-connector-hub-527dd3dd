@@ -177,7 +177,14 @@ export default function StageAIConfigModal({
   open, onClose, stageName, stageId, objectType = 'deal', allStages = [], initialConfig, onSave,
 }: StageAIConfigModalProps) {
   const [activeTab, setActiveTab] = useState('ia');
-  const [config, setConfig] = useState<StageAIConfig>({ ...DEFAULT_CONFIG, ...initialConfig });
+  const [config, setConfig] = useState<StageAIConfig>(() => {
+    const merged = { ...DEFAULT_CONFIG, ...initialConfig };
+    // Follow-ups start collapsed
+    if (merged.followUps?.length) {
+      merged.followUps = merged.followUps.map(fu => ({ ...fu, expanded: false }));
+    }
+    return merged;
+  });
   const { instances } = useEvolutionInstances();
 
   // Filter instances by provider
