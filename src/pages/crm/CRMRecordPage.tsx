@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import {
   useCrmRecord, useCrmActivities, useCrmAssociatedRecords,
   useCreateActivity, useCreateAssociation, useDeleteAssociation,
@@ -377,6 +378,10 @@ export default function CRMRecordPage() {
     );
     Promise.all(promises)
       .then(() => {
+        // Auto-set first contact as primary for deals/tickets
+        if (associationDialog === 'contact' && (objectType === 'deal' || objectType === 'ticket') && !rec.contato_principal_id && selectedAssociationIds[0]) {
+          handleSetPrimaryContact(selectedAssociationIds[0]);
+        }
         toast({ title: 'Associação criada' });
         setAssociationDialog(null);
         setSelectedAssociationIds([]);
@@ -423,6 +428,10 @@ export default function CRMRecordPage() {
       }
       if (newId) {
         await createAssociation.mutateAsync({ origem_tipo: objectType, origem_id: recordId, destino_tipo: associationDialog, destino_id: newId });
+        // Auto-set first contact as primary for deals/tickets
+        if (associationDialog === 'contact' && (objectType === 'deal' || objectType === 'ticket') && !rec.contato_principal_id) {
+          handleSetPrimaryContact(newId);
+        }
         toast({ title: `${OBJECT_LABELS[associationDialog].singular} criado e associado` });
         setAssociationDialog(null);
         setNewContactForm({ email: '', nome: '', telefone: '', cargo: '' });
@@ -438,6 +447,22 @@ export default function CRMRecordPage() {
       onSuccess: () => toast({ title: 'Associação removida' }),
       onError: (e) => toast({ title: 'Erro', description: String(e), variant: 'destructive' }),
     });
+  };
+
+  const handleSetPrimaryContact = async (contactId: string) => {
+    if (!recordId) return;
+    const table = objectType === 'deal' ? 'crm_negocios' : objectType === 'ticket' ? 'crm_tickets' : null;
+    if (!table) return;
+    try {
+      await (supabase as any).schema('saas').from(table)
+        .update({ contato_principal_id: contactId })
+        .eq('id', recordId);
+      // Update local record cache
+      (rec as any).contato_principal_id = contactId;
+      toast({ title: 'Contato principal definido' });
+    } catch (e: any) {
+      toast({ title: 'Erro', description: e.message, variant: 'destructive' });
+    }
   };
 
   const getSearchResults = (): { id: string; label: string }[] => {
@@ -1083,6 +1108,8 @@ export default function CRMRecordPage() {
               onCopy={handleCopyText}
               onRemove={handleRemoveAssociation}
               allLabel={`Exibir todos os ${OBJECT_LABELS.contact.plural} associados`}
+              primaryContactId={(objectType === 'deal' || objectType === 'ticket') ? rec.contato_principal_id as string | null : undefined}
+              onSetPrimary={(objectType === 'deal' || objectType === 'ticket') ? handleSetPrimaryContact : undefined}
             />
           )}
 
@@ -1391,10 +1418,12 @@ interface AssociationItem {
   email: string;
   assocId: string;
   href?: string;
+  isPrimary?: boolean;
 }
 
 function AssociationSection({
   title, icon, count, loading, onAdd, items, onCopy, onRemove, allLabel,
+  primaryContactId, onSetPrimary,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -1405,6 +1434,8 @@ function AssociationSection({
   onCopy: (text: string) => void;
   onRemove: (assocId: string) => void;
   allLabel: string;
+  primaryContactId?: string | null;
+  onSetPrimary?: (contactId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(true);
   return (
@@ -1439,17 +1470,24 @@ function AssociationSection({
             <p className="text-xs text-muted-foreground text-center py-2">Nenhum registro associado</p>
           ) : (
             <>
-              {items.slice(0, 5).map(item => (
-                <div key={item.id} className="flex items-start gap-2 p-2 rounded-md bg-muted/30 hover:bg-muted/50 transition-colors">
-                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-semibold shrink-0">
+              {items.slice(0, 5).map(item => {
+                const isPrimary = primaryContactId === item.id;
+                return (
+                <div key={item.id} className={cn('flex items-start gap-2 p-2 rounded-md transition-colors', isPrimary ? 'bg-primary/10 border border-primary/20' : 'bg-muted/30 hover:bg-muted/50')}>
+                  <div className={cn('w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold shrink-0', isPrimary ? 'bg-primary/20 text-primary' : 'bg-primary/10 text-primary')}>
                     {item.name.charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    {item.href ? (
-                      <a href={item.href} className="text-sm font-medium text-primary hover:underline truncate block">{item.name}</a>
-                    ) : (
-                      <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      {item.href ? (
+                        <a href={item.href} className="text-sm font-medium text-primary hover:underline truncate">{item.name}</a>
+                      ) : (
+                        <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
+                      )}
+                      {isPrimary && (
+                        <Badge variant="outline" className="text-[9px] h-4 px-1 bg-primary/10 text-primary border-primary/30 shrink-0">Principal</Badge>
+                      )}
+                    </div>
                     {item.subtitle && (
                       <p className="text-xs text-muted-foreground truncate">{item.subtitle}</p>
                     )}
@@ -1461,9 +1499,11 @@ function AssociationSection({
                         </button>
                       </div>
                     )}
-                    <button className="text-[10px] text-primary hover:underline mt-0.5">
-                      Adicionar rótulo de associação
-                    </button>
+                    {onSetPrimary && !isPrimary && (
+                      <button className="text-[10px] text-muted-foreground hover:text-primary mt-0.5" onClick={() => onSetPrimary(item.id)}>
+                        Definir como principal
+                      </button>
+                    )}
                   </div>
                   <Button
                     variant="ghost"
@@ -1474,7 +1514,8 @@ function AssociationSection({
                     <X className="w-3 h-3" />
                   </Button>
                 </div>
-              ))}
+                );
+              })}
               {count > 0 && (
                 <button className="w-full text-xs text-primary hover:underline text-center py-1">
                   {allLabel}
