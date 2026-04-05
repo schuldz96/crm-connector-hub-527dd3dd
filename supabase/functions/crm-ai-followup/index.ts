@@ -124,10 +124,20 @@ serve(async (req) => {
           if (!phone) { log(`Conv ${conv.id}: sem telefone.`); continue; }
 
           let msgSent = false;
+          let finalText = '';
 
-          if (content.type === 'text' && content.text) {
+          if (content.type === 'ai_generate') {
+            // AI generates the message using system prompt + conversation memory
+            const aiText = await generateAIMessage(conv.empresa_id, conv.estagio_id, msgs, content.text, log);
+            if (aiText) {
+              finalText = aiText;
+              msgSent = await sendText(conv.empresa_id, config.provider, config.instancia_id, phone, aiText, log);
+            }
+          } else if (content.type === 'text' && content.text) {
+            finalText = content.text;
             msgSent = await sendText(conv.empresa_id, config.provider, config.instancia_id, phone, content.text, log);
           } else if (['image', 'audio', 'video'].includes(content.type) && content.mediaUrl) {
+            finalText = `[${content.type}] ${content.mediaUrl}`;
             msgSent = await sendMedia(conv.empresa_id, config.provider, config.instancia_id, phone, content.type, content.mediaUrl, content.text, log);
           }
 
@@ -135,10 +145,10 @@ serve(async (req) => {
             // 5. Record in memory
             msgs.push({
               role: 'assistant',
-              content: content.type === 'text' ? content.text : `[${content.type}] ${content.mediaUrl || ''}`,
+              content: finalText,
               timestamp: new Date().toISOString(),
               followup_id: fu.id,
-              type: 'followup',
+              type: content.type === 'ai_generate' ? 'ai_followup' : 'followup',
             });
 
             await sb.from('crm_ai_conversations')
@@ -236,4 +246,84 @@ async function sendMedia(
   }
   log(`Provider ${provider} não suportado para media follow-ups (ainda)`);
   return false;
+}
+
+async function generateAIMessage(
+  empresaId: string, estagioId: string, msgs: any[], followupHint: string | undefined, log: (msg: string) => void,
+): Promise<string | null> {
+  try {
+    // Get stage config for system prompt
+    const { data: config } = await sb.from('crm_estagio_ia_config')
+      .select('prompt_sistema, auto_complemento, nome_ia')
+      .eq('estagio_id', estagioId)
+      .eq('empresa_id', empresaId)
+      .maybeSingle();
+
+    if (!config?.prompt_sistema) {
+      log('Sem system prompt configurado para gerar mensagem IA.');
+      return null;
+    }
+
+    // Get OpenAI token
+    const { data: tokenRow } = await sb.from('tokens_ia_modulo')
+      .select('token_criptografado, modelo')
+      .eq('empresa_id', empresaId)
+      .eq('modulo_codigo', 'whatsapp')
+      .eq('provedor', 'openai')
+      .maybeSingle();
+
+    if (!tokenRow?.token_criptografado) {
+      log('Sem token OpenAI configurado (módulo whatsapp).');
+      return null;
+    }
+
+    const openaiToken = await decryptToken(tokenRow.token_criptografado);
+    const model = tokenRow.modelo || 'gpt-4o-mini';
+
+    // Build messages array for OpenAI
+    let systemPrompt = config.prompt_sistema;
+    if (config.auto_complemento) systemPrompt += '\n\n' + config.auto_complemento;
+    if (followupHint) systemPrompt += `\n\nINSTRUÇÃO PARA ESTA MENSAGEM DE FOLLOW-UP:\n${followupHint}`;
+
+    const openaiMsgs: { role: string; content: string }[] = [
+      { role: 'system', content: systemPrompt },
+    ];
+
+    // Add conversation history (memory)
+    for (const m of msgs) {
+      openaiMsgs.push({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: m.content || '',
+      });
+    }
+
+    // Add follow-up instruction
+    openaiMsgs.push({
+      role: 'user',
+      content: '[SISTEMA] O lead não respondeu. Envie uma mensagem de follow-up natural, mantendo o contexto da conversa. Seja breve e direto.',
+    });
+
+    log(`Gerando mensagem IA com ${openaiMsgs.length} msgs de contexto (model: ${model})`);
+
+    // Call OpenAI via RPC (same pattern as evaluate-cron)
+    const { data: aiResult, error: rpcErr } = await sb.rpc('openai_chat', {
+      p_token: openaiToken,
+      p_model: model,
+      p_messages: JSON.stringify(openaiMsgs),
+      p_temperature: 0.7,
+      p_max_tokens: 500,
+    });
+
+    if (rpcErr) { log(`OpenAI RPC error: ${rpcErr.message}`); return null; }
+    if (aiResult?.error) { log(`OpenAI error: ${aiResult.error}`); return null; }
+
+    const aiText = aiResult?.choices?.[0]?.message?.content || aiResult?.content || '';
+    if (!aiText.trim()) { log('IA retornou texto vazio.'); return null; }
+
+    log(`IA gerou: "${aiText.slice(0, 100)}..."`);
+    return aiText.trim();
+  } catch (e: any) {
+    log(`Erro ao gerar mensagem IA: ${e.message}`);
+    return null;
+  }
 }

@@ -29,8 +29,8 @@ interface FollowUpTrigger {
 }
 
 interface FollowUpContent {
-  type: 'text' | 'image' | 'audio' | 'video';
-  text?: string;       // for text type or caption
+  type: 'text' | 'image' | 'audio' | 'video' | 'ai_generate';
+  text?: string;       // for text type, caption, or AI prompt hint
   mediaUrl?: string;   // URL of the media file
   fileName?: string;   // original filename
 }
@@ -766,12 +766,13 @@ export default function StageAIConfigModal({
                         <span className="text-sm font-semibold text-foreground block mb-2">Conteúdo</span>
 
                         {/* Type selector — 4 buttons */}
-                        <div className="grid grid-cols-4 gap-2 mb-3">
+                        <div className="grid grid-cols-5 gap-1.5 mb-3">
                           {([
                             { type: 'text', label: 'Texto', icon: FileText },
                             { type: 'image', label: 'Imagem', icon: Image },
                             { type: 'audio', label: 'Áudio', icon: Music },
                             { type: 'video', label: 'Vídeo', icon: Video },
+                            { type: 'ai_generate', label: 'IA decide', icon: Bot },
                           ] as const).map(opt => {
                             const isActive = fu.content?.type === opt.type;
                             return (
@@ -833,6 +834,30 @@ export default function StageAIConfigModal({
                                 />
                               </div>
                             )}
+                          </div>
+                        )}
+
+                        {fu.content?.type === 'ai_generate' && (
+                          <div className="space-y-2">
+                            <div className="flex items-start gap-2 p-2.5 rounded-lg bg-primary/5 border border-primary/20">
+                              <Bot className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                              <div className="text-xs text-muted-foreground">
+                                <p className="font-medium text-foreground mb-1">A IA gera a mensagem automaticamente</p>
+                                <p>Usa o <strong>System Prompt</strong> da aba Prompt + toda a <strong>memória da conversa</strong> (mensagens trocadas) para decidir o que responder. Mantém contexto completo.</p>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="text-xs font-medium block mb-1">Instrução adicional para o follow-up (opcional)</label>
+                              <Textarea
+                                value={fu.content.text || ''}
+                                onChange={e => update('followUps', config.followUps.map(f =>
+                                  f.id === fu.id ? { ...f, content: { ...f.content!, text: e.target.value } } : f
+                                ))}
+                                placeholder="Ex: Relembre o lead sobre a proposta enviada. Seja breve e amigável. Pergunte se tem alguma dúvida."
+                                className="min-h-[60px] resize-y text-xs"
+                              />
+                              <p className="text-[10px] text-muted-foreground mt-1">Esta instrução é adicionada ao prompt da IA junto com o histórico da conversa.</p>
+                            </div>
                           </div>
                         )}
 
