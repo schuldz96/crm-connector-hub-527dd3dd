@@ -58,48 +58,53 @@ serve(async (req) => {
 
         for (const fu of followups) {
           // Check if already sent this follow-up
-          const fuSentKey = `followup:${fu.id}`;
-          const alreadySent = msgs.some((m: any) => m.followup_id === fu.id);
+          const sendCount = msgs.filter((m: any) => m.followup_id === fu.id).length;
+          const alreadySent = sendCount > 0;
+
+          // Not reinscription: send only once
           if (alreadySent && !fu.allowReinscription) continue;
+
+          // Reinscription limit: max 3 resends
+          const MAX_REINSCRIPTIONS = 3;
+          if (alreadySent && fu.allowReinscription && sendCount >= MAX_REINSCRIPTIONS) continue;
 
           // Check trigger
           const trigger = fu.triggers?.[0]; // 1 trigger per follow-up
           if (!trigger) continue;
 
           let shouldFire = false;
+          const value = trigger.value || 1;
+          const unit = trigger.unit || 'minutes';
+          const msMap: Record<string, number> = { seconds: 1000, minutes: 60000, hours: 3600000, days: 86400000 };
+          const delayMs = value * (msMap[unit] || 60000);
 
           if (trigger.type === 'time') {
-            const value = trigger.value || 1;
-            const unit = trigger.unit || 'minutes';
-            const msMap: Record<string, number> = { seconds: 1000, minutes: 60000, hours: 3600000, days: 86400000 };
-            const delayMs = value * (msMap[unit] || 60000);
-
-            // Time since conversation was created (entered stage)
-            const elapsed = now - convCreatedAt;
-            if (elapsed >= delayMs) {
-              // For reinscription: check time since last follow-up send
-              if (alreadySent && fu.allowReinscription) {
-                const lastSend = msgs.filter((m: any) => m.followup_id === fu.id).pop();
-                if (lastSend) {
-                  const lastSendTime = new Date(lastSend.timestamp).getTime();
-                  if (now - lastSendTime < delayMs) continue; // Not enough time since last
-                }
+            if (!alreadySent) {
+              // First send: time since conversation was created
+              const elapsed = now - convCreatedAt;
+              if (elapsed >= delayMs) shouldFire = true;
+            } else if (fu.allowReinscription) {
+              // Reinscription: time since last follow-up send
+              const lastSend = msgs.filter((m: any) => m.followup_id === fu.id).pop();
+              if (lastSend) {
+                const lastSendTime = new Date(lastSend.timestamp).getTime();
+                if (now - lastSendTime >= delayMs) shouldFire = true;
               }
-              shouldFire = true;
             }
           }
 
           if (trigger.type === 'no_response') {
-            const value = trigger.value || 24;
-            const unit = trigger.unit || 'hours';
-            const msMap: Record<string, number> = { minutes: 60000, hours: 3600000, days: 86400000 };
-            const delayMs = value * (msMap[unit] || 3600000);
-
-            // Time since last message (from us)
+            // Time since last assistant message (any, not just this follow-up)
             const lastMsg = [...msgs].reverse().find((m: any) => m.role === 'assistant');
             if (lastMsg) {
               const elapsed = now - new Date(lastMsg.timestamp).getTime();
-              if (elapsed >= delayMs) shouldFire = true;
+              if (elapsed >= delayMs) {
+                if (!alreadySent) shouldFire = true;
+                else if (fu.allowReinscription) {
+                  const lastFuSend = msgs.filter((m: any) => m.followup_id === fu.id).pop();
+                  if (lastFuSend && now - new Date(lastFuSend.timestamp).getTime() >= delayMs) shouldFire = true;
+                }
+              }
             }
           }
 
