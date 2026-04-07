@@ -1230,8 +1230,15 @@ export default function InboxPage() {
     } else if (['image', 'audio', 'document'].includes(macro.tipo) && macro.media_url) {
       setSending(true);
       try {
-        await sendMediaMessage(selectedAccount, selectedConv.id, selectedConv.contact_phone,
-          macro.tipo, macro.media_url, macro.conteudo || undefined, currentUserId || undefined);
+        await sendMediaMessage(
+          selectedAccount, selectedConv.id, selectedConv.contact_phone,
+          macro.tipo as 'image' | 'audio' | 'document',
+          macro.media_url,
+          macro.conteudo || undefined,  // caption
+          undefined,                    // filename
+          macro.tipo === 'audio',       // voice (for audio macros)
+          currentUserId || undefined,   // sentByUserId
+        );
         const data = await loadMessages(selectedConv.id, selectedAccount.id);
         setMessages(data);
         toast({ title: `Macro /${macro.nome} enviada` });

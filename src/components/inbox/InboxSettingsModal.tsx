@@ -1454,8 +1454,15 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
                     <div className="space-y-2">
                       <Input value={macroForm.media_url} onChange={e => setMacroForm(f => ({ ...f, media_url: e.target.value }))}
                         placeholder="URL da mídia (link público)" className="h-8 text-xs" />
-                      <Input value={macroForm.conteudo} onChange={e => setMacroForm(f => ({ ...f, conteudo: e.target.value }))}
-                        placeholder="Legenda (opcional)" className="h-8 text-xs" />
+                      <p className="text-[10px] text-muted-foreground">
+                        {macroForm.tipo === 'image' && 'Formatos: JPG, PNG, WEBP (máx 5MB). Aparece como imagem no WhatsApp.'}
+                        {macroForm.tipo === 'audio' && 'Formato: OGG Opus (máx 16MB). Aparece como mensagem de voz com play.'}
+                        {macroForm.tipo === 'document' && 'Formatos: PDF, DOC, XLS, etc (máx 100MB). Aparece como documento para download.'}
+                      </p>
+                      {macroForm.tipo !== 'audio' && (
+                        <Input value={macroForm.conteudo} onChange={e => setMacroForm(f => ({ ...f, conteudo: e.target.value }))}
+                          placeholder="Legenda (opcional)" className="h-8 text-xs" />
+                      )}
                     </div>
                   )}
                   <div className="flex gap-2">
