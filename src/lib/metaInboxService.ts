@@ -34,6 +34,7 @@ export interface InboxConversation {
   unread_count: number;
   last_inbound_ts: string | null;
   assigned_user_id: string | null;
+  tags: string[];
   status: string;
 }
 

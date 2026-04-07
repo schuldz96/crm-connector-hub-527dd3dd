@@ -10,6 +10,7 @@ import {
   Check, AlertCircle, MessageSquare, Key, ExternalLink,
   Copy, CheckCheck, LayoutTemplate, ChevronDown, ChevronUp,
   RefreshCw, Globe, Shield, RotateCcw, Users, Ticket,
+  Zap, Tag, FileText, Image as ImageIcon, Mic, Palette,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -201,6 +202,21 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
   const [savingAccess, setSavingAccess] = useState(false);
   const [accessAccountId, setAccessAccountId] = useState<string>(accounts[0]?.id || '');
 
+  // Macros
+  interface Macro { id: string; nome: string; tipo: string; conteudo: string | null; media_url: string | null; media_nome: string | null; }
+  const [macros, setMacros] = useState<Macro[]>([]);
+  const [macroForm, setMacroForm] = useState({ nome: '', tipo: 'text', conteudo: '', media_url: '', media_nome: '' });
+  const [editingMacro, setEditingMacro] = useState<string | null>(null);
+  const [savingMacro, setSavingMacro] = useState(false);
+
+  // Tags
+  interface TagDef { id: string; nome: string; cor: string; }
+  const [tags, setTags] = useState<TagDef[]>([]);
+  const [tagForm, setTagForm] = useState({ nome: '', cor: '#8B5CF6' });
+  const [savingTag, setSavingTag] = useState(false);
+
+  const TAG_COLORS = ['#8B5CF6', '#F59E0B', '#EF4444', '#10B981', '#3B82F6', '#EC4899', '#6366F1', '#14B8A6', '#F97316', '#64748B'];
+
   useEffect(() => {
     if (selectedAccount && tab === 'templates') {
       fetchTemplates(selectedAccount);
@@ -245,6 +261,80 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
       if (accessAccountId) loadAccessForAccount(accessAccountId);
     }
   }, [tab, accessAccountId]);
+
+  // Load macros for selected account
+  const loadMacros = useCallback(async (accId: string) => {
+    const { data } = await supabase.from('meta_inbox_macros').select('*').eq('account_id', accId).order('nome');
+    setMacros((data || []) as Macro[]);
+  }, []);
+
+  const loadTags = useCallback(async (accId: string) => {
+    const { data } = await supabase.from('meta_inbox_tags').select('*').eq('account_id', accId).order('nome');
+    setTags((data || []) as TagDef[]);
+  }, []);
+
+  useEffect(() => {
+    if (selectedAccount && (tab === 'macros' || tab === 'tags')) {
+      if (tab === 'macros') loadMacros(selectedAccount.id);
+      if (tab === 'tags') loadTags(selectedAccount.id);
+    }
+  }, [selectedAccount, tab]);
+
+  const saveMacro = async () => {
+    if (!selectedAccount || !macroForm.nome.trim()) return;
+    setSavingMacro(true);
+    try {
+      const empresaId = await getSaasEmpresaId();
+      const payload = {
+        account_id: selectedAccount.id, empresa_id: empresaId,
+        nome: macroForm.nome.trim().toLowerCase().replace(/\s+/g, '_'),
+        tipo: macroForm.tipo, conteudo: macroForm.conteudo || null,
+        media_url: macroForm.media_url || null, media_nome: macroForm.media_nome || null,
+      };
+      if (editingMacro) {
+        await supabase.from('meta_inbox_macros').update(payload).eq('id', editingMacro);
+      } else {
+        await supabase.from('meta_inbox_macros').insert(payload);
+      }
+      setMacroForm({ nome: '', tipo: 'text', conteudo: '', media_url: '', media_nome: '' });
+      setEditingMacro(null);
+      await loadMacros(selectedAccount.id);
+      toast({ title: editingMacro ? 'Macro atualizada' : 'Macro criada' });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: e.message });
+    } finally { setSavingMacro(false); }
+  };
+
+  const deleteMacro = async (id: string) => {
+    if (!selectedAccount) return;
+    await supabase.from('meta_inbox_macros').delete().eq('id', id);
+    await loadMacros(selectedAccount.id);
+    toast({ title: 'Macro removida' });
+  };
+
+  const saveTag = async () => {
+    if (!selectedAccount || !tagForm.nome.trim()) return;
+    setSavingTag(true);
+    try {
+      const empresaId = await getSaasEmpresaId();
+      await supabase.from('meta_inbox_tags').insert({
+        account_id: selectedAccount.id, empresa_id: empresaId,
+        nome: tagForm.nome.trim(), cor: tagForm.cor,
+      });
+      setTagForm({ nome: '', cor: '#8B5CF6' });
+      await loadTags(selectedAccount.id);
+      toast({ title: 'Tag criada' });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: e.message });
+    } finally { setSavingTag(false); }
+  };
+
+  const deleteTag = async (id: string) => {
+    if (!selectedAccount) return;
+    await supabase.from('meta_inbox_tags').delete().eq('id', id);
+    await loadTags(selectedAccount.id);
+    toast({ title: 'Tag removida' });
+  };
 
   const loadAllUsers = async () => {
     try {
@@ -681,6 +771,12 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
             )}
             <TabsTrigger value="templates" className="text-xs gap-1.5">
               <LayoutTemplate className="w-3.5 h-3.5" /> Templates
+            </TabsTrigger>
+            <TabsTrigger value="macros" className="text-xs gap-1.5">
+              <Zap className="w-3.5 h-3.5" /> Macros
+            </TabsTrigger>
+            <TabsTrigger value="tags" className="text-xs gap-1.5">
+              <Tag className="w-3.5 h-3.5" /> Tags
             </TabsTrigger>
             {!isRestrictedRole && (
               <>
@@ -1319,6 +1415,145 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
                 </a>
               </div>
             </div>
+          </TabsContent>
+          {/* ── Tab: Macros ──────────────────────────────── */}
+          <TabsContent value="macros" className="flex-1 overflow-y-auto px-5 pb-5 mt-0 pt-4">
+            {!selectedAccount ? (
+              <p className="text-sm text-muted-foreground">Selecione uma conta primeiro (aba Contas).</p>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  Macros são atalhos rápidos acionados por <code className="bg-muted px-1 rounded">/nome</code> no campo de mensagem.
+                  Macros só aparecem dentro da janela de 24h.
+                </p>
+
+                {/* Macro form */}
+                <div className="border border-border rounded-lg p-3 space-y-3 bg-muted/30">
+                  <p className="text-xs font-semibold">{editingMacro ? 'Editar macro' : 'Nova macro'}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] font-medium text-muted-foreground mb-1 block">Nome (atalho)</label>
+                      <Input value={macroForm.nome} onChange={e => setMacroForm(f => ({ ...f, nome: e.target.value }))}
+                        placeholder="boas_vindas" className="h-8 text-xs" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-medium text-muted-foreground mb-1 block">Tipo</label>
+                      <select value={macroForm.tipo} onChange={e => setMacroForm(f => ({ ...f, tipo: e.target.value }))}
+                        className="w-full h-8 text-xs bg-background border border-border rounded-md px-2">
+                        <option value="text">Texto</option>
+                        <option value="image">Imagem</option>
+                        <option value="audio">Áudio</option>
+                        <option value="document">Documento</option>
+                      </select>
+                    </div>
+                  </div>
+                  {macroForm.tipo === 'text' ? (
+                    <Textarea value={macroForm.conteudo} onChange={e => setMacroForm(f => ({ ...f, conteudo: e.target.value }))}
+                      placeholder="Texto da mensagem..." className="min-h-[60px] text-xs resize-y" />
+                  ) : (
+                    <div className="space-y-2">
+                      <Input value={macroForm.media_url} onChange={e => setMacroForm(f => ({ ...f, media_url: e.target.value }))}
+                        placeholder="URL da mídia (link público)" className="h-8 text-xs" />
+                      <Input value={macroForm.conteudo} onChange={e => setMacroForm(f => ({ ...f, conteudo: e.target.value }))}
+                        placeholder="Legenda (opcional)" className="h-8 text-xs" />
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <Button size="sm" className="text-xs h-7 gap-1" onClick={saveMacro} disabled={savingMacro || !macroForm.nome.trim()}>
+                      {savingMacro ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                      {editingMacro ? 'Atualizar' : 'Salvar'}
+                    </Button>
+                    {editingMacro && (
+                      <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => {
+                        setEditingMacro(null);
+                        setMacroForm({ nome: '', tipo: 'text', conteudo: '', media_url: '', media_nome: '' });
+                      }}>Cancelar</Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Macros list */}
+                {macros.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-4">Nenhuma macro cadastrada.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {macros.map(m => {
+                      const typeIcon = m.tipo === 'image' ? ImageIcon : m.tipo === 'audio' ? Mic : m.tipo === 'document' ? FileText : MessageSquare;
+                      const Icon = typeIcon;
+                      return (
+                        <div key={m.id} className="flex items-center gap-3 border border-border rounded-lg px-3 py-2 bg-background">
+                          <Icon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold">/{m.nome}</p>
+                            <p className="text-[10px] text-muted-foreground truncate">{m.conteudo || m.media_url || '(sem conteúdo)'}</p>
+                          </div>
+                          <Badge variant="outline" className="text-[9px] h-4 px-1">{m.tipo}</Badge>
+                          <button onClick={() => {
+                            setEditingMacro(m.id);
+                            setMacroForm({ nome: m.nome, tipo: m.tipo, conteudo: m.conteudo || '', media_url: m.media_url || '', media_nome: m.media_nome || '' });
+                          }} className="text-muted-foreground hover:text-foreground"><Edit2 className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => deleteMacro(m.id)} className="text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ── Tab: Tags ────────────────────────────────── */}
+          <TabsContent value="tags" className="flex-1 overflow-y-auto px-5 pb-5 mt-0 pt-4">
+            {!selectedAccount ? (
+              <p className="text-sm text-muted-foreground">Selecione uma conta primeiro (aba Contas).</p>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  Tags para categorizar conversas. Uma conversa pode ter múltiplas tags.
+                </p>
+
+                {/* Tag form */}
+                <div className="border border-border rounded-lg p-3 space-y-3 bg-muted/30">
+                  <p className="text-xs font-semibold">Nova tag</p>
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <label className="text-[10px] font-medium text-muted-foreground mb-1 block">Nome</label>
+                      <Input value={tagForm.nome} onChange={e => setTagForm(f => ({ ...f, nome: e.target.value }))}
+                        placeholder="Ex: b2c_acordo" className="h-8 text-xs" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-medium text-muted-foreground mb-1 block">Cor</label>
+                      <div className="flex gap-1">
+                        {TAG_COLORS.map(c => (
+                          <button key={c} onClick={() => setTagForm(f => ({ ...f, cor: c }))}
+                            className={cn('w-5 h-5 rounded-full border-2 transition-transform', tagForm.cor === c ? 'border-foreground scale-125' : 'border-transparent')}
+                            style={{ background: c }} />
+                        ))}
+                      </div>
+                    </div>
+                    <Button size="sm" className="text-xs h-8 gap-1" onClick={saveTag} disabled={savingTag || !tagForm.nome.trim()}>
+                      {savingTag ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                      Criar
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Tags list */}
+                {tags.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-4">Nenhuma tag cadastrada.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {tags.map(t => (
+                      <div key={t.id} className="flex items-center gap-1.5 border border-border rounded-full px-3 py-1.5 bg-background">
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: t.cor }} />
+                        <span className="text-xs font-medium">{t.nome}</span>
+                        <button onClick={() => deleteTag(t.id)} className="text-muted-foreground hover:text-destructive ml-1"><X className="w-3 h-3" /></button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </TabsContent>
         </Tabs>
 

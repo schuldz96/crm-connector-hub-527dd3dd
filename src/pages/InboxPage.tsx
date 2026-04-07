@@ -508,6 +508,14 @@ export default function InboxPage() {
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>('all');
   const [editingContactName, setEditingContactName] = useState(false);
   const [editNameValue, setEditNameValue] = useState('');
+
+  // Macros & Tags
+  interface Macro { id: string; nome: string; tipo: string; conteudo: string | null; media_url: string | null; }
+  interface TagDef { id: string; nome: string; cor: string; }
+  const [macros, setMacros] = useState<Macro[]>([]);
+  const [accountTags, setAccountTags] = useState<TagDef[]>([]);
+  const [showMacroPicker, setShowMacroPicker] = useState(false);
+  const [macroFilter, setMacroFilter] = useState('');
   const [msgInput, setMsgInput] = useState('');
   const [sending, setSending] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -700,6 +708,13 @@ export default function InboxPage() {
     loadConvs();
     // Don't clear selection if coming from URL
     if (!searchParams.get('phone')) { setSelectedConv(null); setMessages([]); }
+    // Load macros and tags for account
+    if (selectedAccount) {
+      supabase.from('meta_inbox_macros').select('*').eq('account_id', selectedAccount.id).order('nome')
+        .then(({ data }) => setMacros((data || []) as Macro[]));
+      supabase.from('meta_inbox_tags').select('*').eq('account_id', selectedAccount.id).order('nome')
+        .then(({ data }) => setAccountTags((data || []) as TagDef[]));
+    }
   }, [loadConvs]);
 
   // Auto-select conversation from URL params
@@ -1189,6 +1204,43 @@ export default function InboxPage() {
     }
   };
 
+  // ── Toggle tag on conversation ──
+  const toggleConvTag = async (conv: InboxConversation, tagName: string) => {
+    const currentTags = conv.tags || [];
+    const newTags = currentTags.includes(tagName)
+      ? currentTags.filter(t => t !== tagName)
+      : [...currentTags, tagName];
+    try {
+      await supabase.from('meta_inbox_conversations')
+        .update({ tags: newTags, updated_at: new Date().toISOString() })
+        .eq('id', conv.id);
+      setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, tags: newTags } : c));
+      if (selectedConv?.id === conv.id) setSelectedConv(prev => prev ? { ...prev, tags: newTags } : prev);
+    } catch { /* silent */ }
+  };
+
+  // ── Execute macro ──
+  const executeMacro = async (macro: Macro) => {
+    if (!selectedConv || !selectedAccount) return;
+    setShowMacroPicker(false);
+    setMsgInput('');
+    setMacroFilter('');
+    if (macro.tipo === 'text' && macro.conteudo) {
+      setMsgInput(macro.conteudo);
+    } else if (['image', 'audio', 'document'].includes(macro.tipo) && macro.media_url) {
+      setSending(true);
+      try {
+        await sendMediaMessage(selectedAccount, selectedConv.id, selectedConv.contact_phone,
+          macro.tipo, macro.media_url, macro.conteudo || undefined, currentUserId || undefined);
+        const data = await loadMessages(selectedConv.id, selectedAccount.id);
+        setMessages(data);
+        toast({ title: `Macro /${macro.nome} enviada` });
+      } catch (e: any) {
+        toast({ variant: 'destructive', title: 'Erro ao enviar macro', description: e.message });
+      } finally { setSending(false); }
+    }
+  };
+
   // ── Filter & sort conversations ────────────────────────
   const filteredConvs = (() => {
     let list = conversations.filter(c =>
@@ -1449,12 +1501,25 @@ export default function InboxPage() {
                     </Badge>
                   )}
                 </div>
-                {conv.assigned_user_id && (() => {
-                  const owner = accountUsers.find(u => u.id === conv.assigned_user_id);
-                  return owner ? (
-                    <p className="text-[9px] text-accent/70 truncate mt-0.5">{owner.nome.split(' ')[0]}</p>
-                  ) : null;
-                })()}
+                {/* Tags + owner badges */}
+                <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                  {(conv.tags || []).map(tagName => {
+                    const tagDef = accountTags.find(t => t.nome === tagName);
+                    return (
+                      <span key={tagName} className="inline-flex items-center gap-0.5 text-[9px] font-medium rounded px-1 py-0 border"
+                        style={{ borderColor: tagDef?.cor || '#64748B', color: tagDef?.cor || '#64748B', background: `${tagDef?.cor || '#64748B'}15` }}>
+                        <span className="w-1.5 h-1.5 rounded-full" style={{ background: tagDef?.cor || '#64748B' }} />
+                        {tagName}
+                      </span>
+                    );
+                  })}
+                  {conv.assigned_user_id && (() => {
+                    const owner = accountUsers.find(u => u.id === conv.assigned_user_id);
+                    return owner ? (
+                      <span className="text-[9px] text-accent/70 truncate">{owner.nome.split(' ')[0]}</span>
+                    ) : null;
+                  })()}
+                </div>
               </div>
             </div>
           ))}
@@ -1516,6 +1581,24 @@ export default function InboxPage() {
                     ))}
                   </select>
                 </div>
+                {/* Tags row */}
+                {accountTags.length > 0 && (
+                  <div className="flex items-center gap-1 mt-1 flex-wrap">
+                    {accountTags.map(t => {
+                      const isActive = (selectedConv.tags || []).includes(t.nome);
+                      return (
+                        <button key={t.id} onClick={() => toggleConvTag(selectedConv, t.nome)}
+                          className={cn('inline-flex items-center gap-0.5 text-[9px] font-medium rounded-full px-1.5 py-0.5 border transition-all',
+                            isActive ? 'opacity-100' : 'opacity-40 hover:opacity-70'
+                          )}
+                          style={{ borderColor: t.cor, color: t.cor, background: isActive ? `${t.cor}20` : 'transparent' }}>
+                          <span className="w-1.5 h-1.5 rounded-full" style={{ background: t.cor }} />
+                          {t.nome}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
               {/* 24h window indicator */}
               <span className={cn('text-[9px] px-2 py-0.5 rounded-full border font-medium',
@@ -1710,12 +1793,49 @@ export default function InboxPage() {
                 <LayoutTemplate className="w-4 h-4" />
               </Button>
 
-              {/* Text input */}
-              <Input value={msgInput} onChange={e => setMsgInput(e.target.value)}
-                placeholder={recording ? '🔴 Gravando áudio...' : within24h ? 'Escreva uma mensagem...' : 'Fora da janela 24h — use template'}
-                className={cn('flex-1 h-9 text-sm bg-muted/40 border-border', recording && 'border-destructive/50')}
-                disabled={!within24h || sending || recording}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendText(); } }} />
+              {/* Text input + macro picker */}
+              <div className="flex-1 relative">
+                <Input value={msgInput} onChange={e => {
+                    setMsgInput(e.target.value);
+                    if (e.target.value.startsWith('/') && within24h) {
+                      setShowMacroPicker(true);
+                      setMacroFilter(e.target.value.slice(1).toLowerCase());
+                    } else {
+                      setShowMacroPicker(false);
+                      setMacroFilter('');
+                    }
+                  }}
+                  placeholder={recording ? '🔴 Gravando áudio...' : within24h ? 'Escreva uma mensagem... (/ para macro)' : 'Fora da janela 24h — use template'}
+                  className={cn('h-9 text-sm bg-muted/40 border-border w-full', recording && 'border-destructive/50')}
+                  disabled={!within24h || sending || recording}
+                  onKeyDown={e => {
+                    if (e.key === 'Escape') { setShowMacroPicker(false); return; }
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (showMacroPicker) {
+                        const filtered = macros.filter(m => m.nome.toLowerCase().includes(macroFilter));
+                        if (filtered.length === 1) { executeMacro(filtered[0]); return; }
+                      }
+                      handleSendText();
+                    }
+                  }} />
+                {/* Macro autocomplete popup */}
+                {showMacroPicker && macros.length > 0 && (
+                  <div className="absolute bottom-full left-0 right-0 mb-1 bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto z-50">
+                    {macros.filter(m => m.nome.toLowerCase().includes(macroFilter)).map(m => (
+                      <button key={m.id} onClick={() => executeMacro(m)}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-muted/50 transition-colors">
+                        <span className="text-xs font-semibold text-primary">/{m.nome}</span>
+                        <span className="text-[10px] text-muted-foreground truncate flex-1">{m.conteudo || m.media_url || ''}</span>
+                        <Badge variant="outline" className="text-[9px] h-4 px-1 flex-shrink-0">{m.tipo}</Badge>
+                      </button>
+                    ))}
+                    {macros.filter(m => m.nome.toLowerCase().includes(macroFilter)).length === 0 && (
+                      <p className="text-xs text-muted-foreground px-3 py-2">Nenhuma macro encontrada</p>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Mic / Send button */}
               {msgInput.trim() ? (
