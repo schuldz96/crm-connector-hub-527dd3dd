@@ -548,6 +548,9 @@ export default function InboxPage() {
   const [ownerHistory, setOwnerHistory] = useState<any[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingFilePreview, setPendingFilePreview] = useState<string | null>(null);
+  const [pendingCaption, setPendingCaption] = useState('');
 
   // ── Resolve current user's saas.usuarios.id once ──
   useEffect(() => {
@@ -989,30 +992,61 @@ export default function InboxPage() {
   };
 
   // ── Send file (image/audio/video/document) ─────────────
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ── File select → show preview instead of sending directly ──
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !selectedConv || !selectedAccount) return;
+    if (!file) return;
     e.target.value = '';
+    setPendingFile(file);
+    setPendingCaption('');
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = () => setPendingFilePreview(reader.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setPendingFilePreview(null);
+    }
+  };
 
+  // ── Paste image from clipboard → show preview ──
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (!file) return;
+        setPendingFile(file);
+        setPendingCaption('');
+        const reader = new FileReader();
+        reader.onload = () => setPendingFilePreview(reader.result as string);
+        reader.readAsDataURL(file);
+        return;
+      }
+    }
+  }, []);
+
+  // ── Confirm send file (after preview) ──
+  const confirmSendFile = async () => {
+    if (!pendingFile || !selectedConv || !selectedAccount) return;
     setSending(true);
     try {
-      // Determine type
-      const type = file.type.startsWith('image/') ? 'image'
-        : file.type.startsWith('audio/') ? 'audio'
-        : file.type.startsWith('video/') ? 'video'
-        : 'document';
+      const type = pendingFile.type.startsWith('image/') ? 'image'
+        : pendingFile.type.startsWith('audio/') ? 'audio'
+        : pendingFile.type.startsWith('video/') ? 'video'
+        : 'document' as const;
 
-      // Upload to Supabase Storage, send public URL to Meta (avoids CORS + format issues)
-      const ext = file.name.split('.').pop() || 'bin';
+      const ext = pendingFile.name.split('.').pop() || 'bin';
       const storagePath = `${type}/${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from('inbox-media').upload(storagePath, file, { contentType: file.type, upsert: true });
+      const { error: upErr } = await supabase.storage.from('inbox-media').upload(storagePath, pendingFile, { contentType: pendingFile.type, upsert: true });
       if (upErr) throw new Error(upErr.message);
       const { data: urlData } = supabase.storage.from('inbox-media').getPublicUrl(storagePath);
       if (!urlData?.publicUrl) throw new Error('URL pública não disponível');
 
       const result = await sendMediaMessage(
         selectedAccount, selectedConv.id, selectedConv.contact_phone,
-        type, urlData.publicUrl, '', type === 'document' ? file.name : undefined,
+        type, urlData.publicUrl, pendingCaption || undefined, type === 'document' ? pendingFile.name : undefined,
         false, currentUserId || undefined,
       );
 
@@ -1025,45 +1059,13 @@ export default function InboxPage() {
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Erro no upload', description: err.message });
     }
+    setPendingFile(null);
+    setPendingFilePreview(null);
+    setPendingCaption('');
     setSending(false);
   };
 
-  // ── Paste image from clipboard ──
-  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
-    const items = e.clipboardData?.items;
-    if (!items || !selectedConv || !selectedAccount) return;
-    for (const item of Array.from(items)) {
-      if (item.type.startsWith('image/')) {
-        e.preventDefault();
-        const file = item.getAsFile();
-        if (!file) return;
-        setSending(true);
-        try {
-          const ext = file.type.split('/')[1] || 'png';
-          const storagePath = `image/${Date.now()}.${ext}`;
-          const { error: upErr } = await supabase.storage.from('inbox-media').upload(storagePath, file, { contentType: file.type, upsert: true });
-          if (upErr) throw new Error(upErr.message);
-          const { data: urlData } = supabase.storage.from('inbox-media').getPublicUrl(storagePath);
-          if (!urlData?.publicUrl) throw new Error('URL pública não disponível');
-          const result = await sendMediaMessage(
-            selectedAccount, selectedConv.id, selectedConv.contact_phone,
-            'image', urlData.publicUrl, '', undefined, false, currentUserId || undefined,
-          );
-          if (result.success) {
-            const data = await loadMessages(selectedConv.id, selectedAccount?.id);
-            setMessages(data);
-            toast({ title: 'Imagem enviada' });
-          } else {
-            toast({ variant: 'destructive', title: 'Erro ao enviar imagem', description: result.error });
-          }
-        } catch (err: any) {
-          toast({ variant: 'destructive', title: 'Erro no upload', description: err.message });
-        }
-        setSending(false);
-        return;
-      }
-    }
-  }, [selectedConv, selectedAccount, currentUserId]);
+  const cancelSendFile = () => { setPendingFile(null); setPendingFilePreview(null); setPendingCaption(''); };
 
   // ── Send template ──────────────────────────────────────
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
@@ -1942,6 +1944,39 @@ export default function InboxPage() {
               })}
               <div ref={messagesEndRef} />
             </div>
+
+            {/* File preview bar */}
+            {pendingFile && (
+              <div className="border-t border-border px-4 py-3 bg-card flex items-center gap-3 flex-shrink-0">
+                {pendingFilePreview ? (
+                  <img src={pendingFilePreview} alt="preview" className="w-16 h-16 rounded-lg object-cover border border-border" />
+                ) : (
+                  <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center border border-border">
+                    <FileText className="w-6 h-6 text-muted-foreground" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium truncate">{pendingFile.name}</p>
+                  <p className="text-[10px] text-muted-foreground">{(pendingFile.size / 1024).toFixed(0)} KB · {pendingFile.type || 'arquivo'}</p>
+                  <Input
+                    value={pendingCaption}
+                    onChange={e => setPendingCaption(e.target.value)}
+                    placeholder="Legenda (opcional)"
+                    className="h-7 text-xs mt-1.5 bg-muted/40 border-border"
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); confirmSendFile(); } }}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5 flex-shrink-0">
+                  <Button size="sm" className="h-8 text-xs gap-1" onClick={confirmSendFile} disabled={sending}>
+                    {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                    Enviar
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={cancelSendFile}>
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {/* Input bar */}
             <div className="border-t border-border p-3 flex items-center gap-1.5 bg-card flex-shrink-0">
