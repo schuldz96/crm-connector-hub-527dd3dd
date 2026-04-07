@@ -213,6 +213,37 @@ serve(async (req) => {
       log(sent ? 'Conversa resetada com welcome message.' : 'Conversa resetada (envio falhou).');
     }
 
+    // 7. Executar transições automáticas
+    if (sent) {
+      const transicoes = (config.transicoes || []) as any[];
+      for (const t of transicoes) {
+        if (t.trigger === 'welcome_sent' && t.stageId) {
+          log(`Transição welcome_sent → movendo ${entidade_tipo} ${entidade_id} para estágio ${t.stageId}`);
+          const moveTable = entidade_tipo === 'deal' ? 'crm_negocios' : 'crm_tickets';
+          const { error: moveErr } = await sb.from(moveTable)
+            .update({ estagio_id: t.stageId })
+            .eq('id', entidade_id);
+
+          if (moveErr) {
+            log(`Erro ao mover: ${moveErr.message}`);
+          } else {
+            log(`✓ ${entidade_tipo} movido para estágio ${t.stageId}`);
+
+            // Atualizar a conversa IA para apontar para o novo estágio
+            if (conv) {
+              await sb.from('crm_ai_conversations')
+                .update({ estagio_id: t.stageId })
+                .eq('id', conv.id);
+            }
+
+            // Trigger IA do novo estágio (se configurado)
+            // Não re-trigger para evitar loop — o novo estágio decidirá ao receber evento 'move'
+          }
+          break; // Só executa a primeira transição welcome_sent
+        }
+      }
+    }
+
     log(`=== Concluído: sent=${sent} ===`);
     return jsonRes({ success: true, sent, logs });
 
