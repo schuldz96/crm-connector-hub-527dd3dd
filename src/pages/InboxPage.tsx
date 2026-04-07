@@ -1661,7 +1661,10 @@ export default function InboxPage() {
                   {conv.assigned_user_id && (() => {
                     const owner = accountUsers.find(u => u.id === conv.assigned_user_id);
                     return owner ? (
-                      <span className="text-[9px] text-accent/70 truncate">{owner.nome.split(' ')[0]}</span>
+                      <span className="inline-flex items-center gap-0.5 text-[9px] font-medium bg-sky-500/15 text-sky-400 rounded px-1.5 py-0">
+                        <User className="w-2.5 h-2.5" />
+                        {owner.nome.split(' ')[0]}
+                      </span>
                     ) : null;
                   })()}
                 </div>
