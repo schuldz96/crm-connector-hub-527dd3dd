@@ -40,6 +40,9 @@ serve(async (req) => {
 
     log(`${conversations.length} conversa(s) ativa(s) encontrada(s)`);
 
+    // Pre-load Evolution API configs per empresa (avoid redundant lookups)
+    const evoConfigCache = new Map<string, { url: string; token: string } | null>();
+
     for (const conv of conversations) {
       try {
         // 2. Get stage AI config (followups + transições)
@@ -50,6 +53,17 @@ serve(async (req) => {
           .maybeSingle();
 
         if (!config) continue;
+
+        // 2a. Sync inbound messages from Evolution API (poll)
+        if (config.provider === 'evolution' && conv.contato_telefone && config.instancia_id) {
+          const synced = await syncEvolutionMessages(conv, config.instancia_id, evoConfigCache, log);
+          if (synced) {
+            // Re-read conversation to get updated mensagens
+            const { data: updatedConv } = await sb.from('crm_ai_conversations')
+              .select('*').eq('id', conv.id).maybeSingle();
+            if (updatedConv) Object.assign(conv, updatedConv);
+          }
+        }
 
         // 2b. Avaliar transições automáticas
         const transicoes = (config.transicoes || []) as any[];
@@ -258,6 +272,104 @@ async function sendMedia(
   }
   log(`Provider ${provider} não suportado para media follow-ups (ainda)`);
   return false;
+}
+
+// ── Evolution API Message Sync ─────────────────────────────────────────────
+
+async function syncEvolutionMessages(
+  conv: any, instanceName: string,
+  cache: Map<string, { url: string; token: string } | null>,
+  log: (msg: string) => void,
+): Promise<boolean> {
+  try {
+    // Get Evolution config (cached per empresa)
+    if (!cache.has(conv.empresa_id)) {
+      cache.set(conv.empresa_id, await getEvolutionConfig(conv.empresa_id));
+    }
+    const evo = cache.get(conv.empresa_id);
+    if (!evo) return false;
+
+    // Build JID from phone number
+    let phone = conv.contato_telefone.replace(/\D/g, '');
+    if (!phone.startsWith('55') && phone.length <= 11) phone = '55' + phone;
+    const jid = `${phone}@s.whatsapp.net`;
+
+    // Fetch last 20 messages from Evolution API
+    const res = await fetch(`${evo.url}/chat/findMessages/${instanceName}`, {
+      method: 'POST',
+      headers: { apikey: evo.token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ where: { key: { remoteJid: jid } }, limit: 20 }),
+    });
+
+    if (!res.ok) return false;
+    const data = await res.json();
+    const rawMsgs: any[] = Array.isArray(data?.messages?.records)
+      ? data.messages.records
+      : Array.isArray(data) ? data : [];
+
+    if (!rawMsgs.length) return false;
+
+    // Extract inbound text messages (fromMe=false)
+    const inboundMsgs: { text: string; timestamp: number }[] = [];
+    for (const m of rawMsgs) {
+      const key = m.key || {};
+      if (key.fromMe) continue;
+      if (m.messageType === 'protocolMessage' || m.messageType === 'reactionMessage') continue;
+
+      const mc = m.message || {};
+      let text = '';
+      if (mc.conversation) text = mc.conversation;
+      else if (mc.extendedTextMessage?.text) text = mc.extendedTextMessage.text;
+      else if (mc.imageMessage) text = mc.imageMessage.caption || '[Imagem]';
+      else if (mc.videoMessage) text = mc.videoMessage.caption || '[Vídeo]';
+      else if (mc.audioMessage) text = '[Áudio]';
+      else if (mc.documentMessage) text = `[Documento] ${mc.documentMessage.fileName || ''}`;
+      else if (mc.buttonsResponseMessage) text = mc.buttonsResponseMessage.selectedDisplayText || '[Botão]';
+      else if (mc.listResponseMessage) text = mc.listResponseMessage.title || '[Lista]';
+      else continue; // skip unknown types
+
+      const ts = m.messageTimestamp || m.messageTimestamp?.low || Math.floor(Date.now() / 1000);
+      inboundMsgs.push({ text, timestamp: typeof ts === 'number' ? ts : parseInt(ts) });
+    }
+
+    if (!inboundMsgs.length) return false;
+
+    // Compare with existing messages to find new ones
+    const existingMsgs = (conv.mensagens || []) as any[];
+    const existingUserTexts = new Set(
+      existingMsgs.filter((m: any) => m.role === 'user').map((m: any) => m.content)
+    );
+
+    // Get the timestamp of the last known user message
+    const lastUserMsg = [...existingMsgs].reverse().find((m: any) => m.role === 'user');
+    const lastUserTs = lastUserMsg ? new Date(lastUserMsg.timestamp).getTime() / 1000 : 0;
+
+    const newMsgs = inboundMsgs.filter(m =>
+      m.timestamp > lastUserTs && !existingUserTexts.has(m.text)
+    );
+
+    if (!newMsgs.length) return false;
+
+    // Append new messages
+    const updated = [...existingMsgs];
+    for (const m of newMsgs.sort((a, b) => a.timestamp - b.timestamp)) {
+      updated.push({
+        role: 'user',
+        content: m.text,
+        timestamp: new Date(m.timestamp * 1000).toISOString(),
+      });
+    }
+
+    await sb.from('crm_ai_conversations')
+      .update({ mensagens: updated, total_mensagens: updated.length, ultima_mensagem_em: new Date().toISOString() })
+      .eq('id', conv.id);
+
+    log(`Sync Evolution: ${newMsgs.length} msg(s) nova(s) do lead na conv ${conv.id}`);
+    return true;
+  } catch (e: any) {
+    log(`Sync Evolution error (conv ${conv.id}): ${e.message}`);
+    return false;
+  }
 }
 
 // ── Transition Evaluation ──────────────────────────────────────────────────
