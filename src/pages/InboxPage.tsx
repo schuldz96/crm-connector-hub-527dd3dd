@@ -1990,7 +1990,7 @@ export default function InboxPage() {
 
               {/* Attach button */}
               <Button variant="ghost" size="icon" className="w-9 h-9 flex-shrink-0 text-muted-foreground"
-                onClick={() => fileInputRef.current?.click()} disabled={sending} title="Enviar arquivo">
+                onClick={() => fileInputRef.current?.click()} disabled={!within24h || sending} title="Enviar arquivo">
                 <Paperclip className="w-4 h-4" />
               </Button>
 
