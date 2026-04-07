@@ -20,6 +20,7 @@ const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const FORWARD_WEBHOOK_URL = Deno.env.get('FORWARD_WEBHOOK_URL') || '';
 
 const sb = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+const sbSaas = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, { db: { schema: 'saas' } });
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -231,6 +232,9 @@ async function handleMessages(value: any) {
       }).eq('id', convId);
       // Metrics are tracked automatically by DB triggers (trg_inbox_message_metrics)
       log(`Inbound: ${contactPhone} → ${lastMsg.slice(0, 50)}`);
+
+      // Bridge to CRM AI conversations (for transition triggers)
+      await bridgeToCrmAI(account.empresa_id, contactPhone, lastMsg);
     }
   }
 
@@ -329,6 +333,50 @@ async function forwardWebhook(body: string) {
     });
   } catch (e: any) {
     log(`Forward failed: ${e.message}`);
+  }
+}
+
+// ─── Bridge: sync inbound message to CRM AI conversations ─────────────────
+async function bridgeToCrmAI(empresaId: string, contactPhone: string, messageText: string) {
+  try {
+    // Find active CRM AI conversation for this phone number
+    const { data: conv } = await sbSaas.from('crm_ai_conversations')
+      .select('id, mensagens')
+      .eq('empresa_id', empresaId)
+      .eq('contato_telefone', contactPhone)
+      .eq('status', 'active')
+      .maybeSingle();
+
+    if (!conv) {
+      // Try without country code prefix (normalize)
+      let altPhone = contactPhone;
+      if (altPhone.startsWith('55') && altPhone.length >= 12) {
+        altPhone = altPhone.slice(2); // try without 55
+      }
+      const { data: conv2 } = await sbSaas.from('crm_ai_conversations')
+        .select('id, mensagens')
+        .eq('empresa_id', empresaId)
+        .eq('status', 'active')
+        .or(`contato_telefone.eq.${contactPhone},contato_telefone.eq.${altPhone},contato_telefone.eq.55${altPhone}`)
+        .maybeSingle();
+
+      if (!conv2) return;
+      // Found with alt phone
+      const msgs = [...(conv2.mensagens || []), { role: 'user', content: messageText, timestamp: new Date().toISOString() }];
+      await sbSaas.from('crm_ai_conversations')
+        .update({ mensagens: msgs, total_mensagens: msgs.length, ultima_mensagem_em: new Date().toISOString() })
+        .eq('id', conv2.id);
+      log(`Bridge CRM AI: msg do lead adicionada à conv ${conv2.id} (alt phone)`);
+      return;
+    }
+
+    const msgs = [...(conv.mensagens || []), { role: 'user', content: messageText, timestamp: new Date().toISOString() }];
+    await sbSaas.from('crm_ai_conversations')
+      .update({ mensagens: msgs, total_mensagens: msgs.length, ultima_mensagem_em: new Date().toISOString() })
+      .eq('id', conv.id);
+    log(`Bridge CRM AI: msg do lead adicionada à conv ${conv.id}`);
+  } catch (e: any) {
+    log(`Bridge CRM AI error: ${e.message}`);
   }
 }
 
