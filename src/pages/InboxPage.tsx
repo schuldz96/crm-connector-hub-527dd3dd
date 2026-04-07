@@ -510,12 +510,16 @@ export default function InboxPage() {
   const [editNameValue, setEditNameValue] = useState('');
 
   // Macros & Tags
-  interface Macro { id: string; nome: string; tipo: string; conteudo: string | null; media_url: string | null; }
-  interface TagDef { id: string; nome: string; cor: string; }
-  const [macros, setMacros] = useState<Macro[]>([]);
-  const [accountTags, setAccountTags] = useState<TagDef[]>([]);
+  interface Macro { id: string; nome: string; tipo: string; conteudo: string | null; media_url: string | null; account_ids: string[]; }
+  interface TagDef { id: string; nome: string; cor: string; account_ids: string[]; }
+  const [allMacros, setAllMacros] = useState<Macro[]>([]);
+  const [allTags, setAllTags] = useState<TagDef[]>([]);
   const [showMacroPicker, setShowMacroPicker] = useState(false);
   const [macroFilter, setMacroFilter] = useState('');
+
+  // Filter macros/tags for selected account
+  const macros = selectedAccount ? allMacros.filter(m => (m.account_ids || []).includes(selectedAccount.id)) : [];
+  const accountTags = selectedAccount ? allTags.filter(t => (t.account_ids || []).includes(selectedAccount.id)) : [];
   const [msgInput, setMsgInput] = useState('');
   const [sending, setSending] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -708,12 +712,14 @@ export default function InboxPage() {
     loadConvs();
     // Don't clear selection if coming from URL
     if (!searchParams.get('phone')) { setSelectedConv(null); setMessages([]); }
-    // Load macros and tags for account
+    // Load macros and tags for empresa
     if (selectedAccount) {
-      supabase.from('meta_inbox_macros').select('*').eq('account_id', selectedAccount.id).order('nome')
-        .then(({ data }) => setMacros((data || []) as Macro[]));
-      supabase.from('meta_inbox_tags').select('*').eq('account_id', selectedAccount.id).order('nome')
-        .then(({ data }) => setAccountTags((data || []) as TagDef[]));
+      getSaasEmpresaId().then(empresaId => {
+        supabase.from('meta_inbox_macros').select('*').eq('empresa_id', empresaId).order('nome')
+          .then(({ data }) => setAllMacros((data || []) as Macro[]));
+        supabase.from('meta_inbox_tags').select('*').eq('empresa_id', empresaId).order('nome')
+          .then(({ data }) => setAllTags((data || []) as TagDef[]));
+      });
     }
   }, [loadConvs]);
 
@@ -2291,7 +2297,18 @@ export default function InboxPage() {
       )}
 
       {settingsOpen && (
-        <InboxSettingsModal onClose={() => setSettingsOpen(false)} onSaved={loadAccountsFn}
+        <InboxSettingsModal onClose={() => {
+            setSettingsOpen(false);
+            // Reload macros/tags in case they were updated
+            if (selectedAccount) {
+              getSaasEmpresaId().then(empresaId => {
+                supabase.from('meta_inbox_macros').select('*').eq('empresa_id', empresaId).order('nome')
+                  .then(({ data }) => setAllMacros((data || []) as Macro[]));
+                supabase.from('meta_inbox_tags').select('*').eq('empresa_id', empresaId).order('nome')
+                  .then(({ data }) => setAllTags((data || []) as TagDef[]));
+              });
+            }
+          }} onSaved={loadAccountsFn}
           accounts={accounts} onAccountsChange={setAccounts} />
       )}
 

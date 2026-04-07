@@ -203,16 +203,16 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
   const [accessAccountId, setAccessAccountId] = useState<string>(accounts[0]?.id || '');
 
   // Macros
-  interface Macro { id: string; nome: string; tipo: string; conteudo: string | null; media_url: string | null; media_nome: string | null; }
+  interface Macro { id: string; nome: string; tipo: string; conteudo: string | null; media_url: string | null; media_nome: string | null; account_ids: string[]; }
   const [macros, setMacros] = useState<Macro[]>([]);
-  const [macroForm, setMacroForm] = useState({ nome: '', tipo: 'text', conteudo: '', media_url: '', media_nome: '' });
+  const [macroForm, setMacroForm] = useState({ nome: '', tipo: 'text', conteudo: '', media_url: '', media_nome: '', account_ids: [] as string[] });
   const [editingMacro, setEditingMacro] = useState<string | null>(null);
   const [savingMacro, setSavingMacro] = useState(false);
 
   // Tags
-  interface TagDef { id: string; nome: string; cor: string; }
+  interface TagDef { id: string; nome: string; cor: string; account_ids: string[]; }
   const [tags, setTags] = useState<TagDef[]>([]);
-  const [tagForm, setTagForm] = useState({ nome: '', cor: '#8B5CF6' });
+  const [tagForm, setTagForm] = useState({ nome: '', cor: '#8B5CF6', account_ids: [] as string[] });
   const [savingTag, setSavingTag] = useState(false);
 
   const TAG_COLORS = ['#8B5CF6', '#F59E0B', '#EF4444', '#10B981', '#3B82F6', '#EC4899', '#6366F1', '#14B8A6', '#F97316', '#64748B'];
@@ -262,31 +262,35 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
     }
   }, [tab, accessAccountId]);
 
-  // Load macros for selected account
-  const loadMacros = useCallback(async (accId: string) => {
-    const { data } = await supabase.from('meta_inbox_macros').select('*').eq('account_id', accId).order('nome');
+  // Load all macros/tags for empresa
+  const loadMacros = useCallback(async () => {
+    const empresaId = await getSaasEmpresaId();
+    const { data } = await supabase.from('meta_inbox_macros').select('*').eq('empresa_id', empresaId).order('nome');
     setMacros((data || []) as Macro[]);
   }, []);
 
-  const loadTags = useCallback(async (accId: string) => {
-    const { data } = await supabase.from('meta_inbox_tags').select('*').eq('account_id', accId).order('nome');
+  const loadTags = useCallback(async () => {
+    const empresaId = await getSaasEmpresaId();
+    const { data } = await supabase.from('meta_inbox_tags').select('*').eq('empresa_id', empresaId).order('nome');
     setTags((data || []) as TagDef[]);
   }, []);
 
   useEffect(() => {
-    if (selectedAccount && (tab === 'macros' || tab === 'tags')) {
-      if (tab === 'macros') loadMacros(selectedAccount.id);
-      if (tab === 'tags') loadTags(selectedAccount.id);
-    }
-  }, [selectedAccount, tab]);
+    if (tab === 'macros') loadMacros();
+    if (tab === 'tags') loadTags();
+  }, [tab]);
 
   const saveMacro = async () => {
-    if (!selectedAccount || !macroForm.nome.trim()) return;
+    if (!macroForm.nome.trim() || macroForm.account_ids.length === 0) {
+      toast({ variant: 'destructive', title: 'Selecione ao menos uma caixa de entrada' });
+      return;
+    }
     setSavingMacro(true);
     try {
       const empresaId = await getSaasEmpresaId();
       const payload = {
-        account_id: selectedAccount.id, empresa_id: empresaId,
+        empresa_id: empresaId,
+        account_ids: macroForm.account_ids,
         nome: macroForm.nome.trim().toLowerCase().replace(/\s+/g, '_'),
         tipo: macroForm.tipo, conteudo: macroForm.conteudo || null,
         media_url: macroForm.media_url || null, media_nome: macroForm.media_nome || null,
@@ -296,9 +300,9 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
       } else {
         await supabase.from('meta_inbox_macros').insert(payload);
       }
-      setMacroForm({ nome: '', tipo: 'text', conteudo: '', media_url: '', media_nome: '' });
+      setMacroForm({ nome: '', tipo: 'text', conteudo: '', media_url: '', media_nome: '', account_ids: [] });
       setEditingMacro(null);
-      await loadMacros(selectedAccount.id);
+      await loadMacros();
       toast({ title: editingMacro ? 'Macro atualizada' : 'Macro criada' });
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Erro', description: e.message });
@@ -306,23 +310,26 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
   };
 
   const deleteMacro = async (id: string) => {
-    if (!selectedAccount) return;
     await supabase.from('meta_inbox_macros').delete().eq('id', id);
-    await loadMacros(selectedAccount.id);
+    await loadMacros();
     toast({ title: 'Macro removida' });
   };
 
   const saveTag = async () => {
-    if (!selectedAccount || !tagForm.nome.trim()) return;
+    if (!tagForm.nome.trim() || tagForm.account_ids.length === 0) {
+      toast({ variant: 'destructive', title: 'Selecione ao menos uma caixa de entrada' });
+      return;
+    }
     setSavingTag(true);
     try {
       const empresaId = await getSaasEmpresaId();
       await supabase.from('meta_inbox_tags').insert({
-        account_id: selectedAccount.id, empresa_id: empresaId,
+        empresa_id: empresaId,
+        account_ids: tagForm.account_ids,
         nome: tagForm.nome.trim(), cor: tagForm.cor,
       });
-      setTagForm({ nome: '', cor: '#8B5CF6' });
-      await loadTags(selectedAccount.id);
+      setTagForm({ nome: '', cor: '#8B5CF6', account_ids: [] });
+      await loadTags();
       toast({ title: 'Tag criada' });
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Erro', description: e.message });
@@ -330,11 +337,26 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
   };
 
   const deleteTag = async (id: string) => {
-    if (!selectedAccount) return;
     await supabase.from('meta_inbox_tags').delete().eq('id', id);
-    await loadTags(selectedAccount.id);
+    await loadTags();
     toast({ title: 'Tag removida' });
   };
+
+  const toggleAccountInList = (list: string[], accId: string) =>
+    list.includes(accId) ? list.filter(id => id !== accId) : [...list, accId];
+
+  const AccountCheckboxes = ({ selected, onChange }: { selected: string[]; onChange: (ids: string[]) => void }) => (
+    <div className="flex flex-wrap gap-1.5">
+      {accounts.map(acc => (
+        <button key={acc.id} onClick={() => onChange(toggleAccountInList(selected, acc.id))}
+          className={cn('text-[10px] px-2 py-1 rounded-md border transition-colors',
+            selected.includes(acc.id) ? 'bg-primary text-primary-foreground border-primary' : 'bg-secondary text-muted-foreground border-border hover:text-foreground'
+          )}>
+          {acc.nome}
+        </button>
+      ))}
+    </div>
+  );
 
   const loadAllUsers = async () => {
     try {
@@ -1418,18 +1440,19 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
           </TabsContent>
           {/* ── Tab: Macros ──────────────────────────────── */}
           <TabsContent value="macros" className="flex-1 overflow-y-auto px-5 pb-5 mt-0 pt-4">
-            {!selectedAccount ? (
-              <p className="text-sm text-muted-foreground">Selecione uma conta primeiro (aba Contas).</p>
-            ) : (
               <div className="space-y-4">
                 <p className="text-xs text-muted-foreground">
                   Macros são atalhos rápidos acionados por <code className="bg-muted px-1 rounded">/nome</code> no campo de mensagem.
-                  Macros só aparecem dentro da janela de 24h.
+                  Macros só aparecem dentro da janela de 24h. Selecione em quais caixas de entrada cada macro estará disponível.
                 </p>
 
                 {/* Macro form */}
                 <div className="border border-border rounded-lg p-3 space-y-3 bg-muted/30">
                   <p className="text-xs font-semibold">{editingMacro ? 'Editar macro' : 'Nova macro'}</p>
+                  <div>
+                    <label className="text-[10px] font-medium text-muted-foreground mb-1 block">Caixas de entrada</label>
+                    <AccountCheckboxes selected={macroForm.account_ids} onChange={ids => setMacroForm(f => ({ ...f, account_ids: ids }))} />
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-[10px] font-medium text-muted-foreground mb-1 block">Nome (atalho)</label>
@@ -1466,14 +1489,14 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
                     </div>
                   )}
                   <div className="flex gap-2">
-                    <Button size="sm" className="text-xs h-7 gap-1" onClick={saveMacro} disabled={savingMacro || !macroForm.nome.trim()}>
+                    <Button size="sm" className="text-xs h-7 gap-1" onClick={saveMacro} disabled={savingMacro || !macroForm.nome.trim() || macroForm.account_ids.length === 0}>
                       {savingMacro ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
                       {editingMacro ? 'Atualizar' : 'Salvar'}
                     </Button>
                     {editingMacro && (
                       <Button size="sm" variant="ghost" className="text-xs h-7" onClick={() => {
                         setEditingMacro(null);
-                        setMacroForm({ nome: '', tipo: 'text', conteudo: '', media_url: '', media_nome: '' });
+                        setMacroForm({ nome: '', tipo: 'text', conteudo: '', media_url: '', media_nome: '', account_ids: [] });
                       }}>Cancelar</Button>
                     )}
                   </div>
@@ -1493,11 +1516,14 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
                           <div className="flex-1 min-w-0">
                             <p className="text-xs font-semibold">/{m.nome}</p>
                             <p className="text-[10px] text-muted-foreground truncate">{m.conteudo || m.media_url || '(sem conteúdo)'}</p>
+                            <p className="text-[9px] text-muted-foreground/50 truncate">
+                              {(m.account_ids || []).map(aid => accounts.find(a => a.id === aid)?.nome).filter(Boolean).join(', ') || '(sem caixa)'}
+                            </p>
                           </div>
                           <Badge variant="outline" className="text-[9px] h-4 px-1">{m.tipo}</Badge>
                           <button onClick={() => {
                             setEditingMacro(m.id);
-                            setMacroForm({ nome: m.nome, tipo: m.tipo, conteudo: m.conteudo || '', media_url: m.media_url || '', media_nome: m.media_nome || '' });
+                            setMacroForm({ nome: m.nome, tipo: m.tipo, conteudo: m.conteudo || '', media_url: m.media_url || '', media_nome: m.media_nome || '', account_ids: m.account_ids || [] });
                           }} className="text-muted-foreground hover:text-foreground"><Edit2 className="w-3.5 h-3.5" /></button>
                           <button onClick={() => deleteMacro(m.id)} className="text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
                         </div>
@@ -1506,22 +1532,22 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
                   </div>
                 )}
               </div>
-            )}
           </TabsContent>
 
           {/* ── Tab: Tags ────────────────────────────────── */}
           <TabsContent value="tags" className="flex-1 overflow-y-auto px-5 pb-5 mt-0 pt-4">
-            {!selectedAccount ? (
-              <p className="text-sm text-muted-foreground">Selecione uma conta primeiro (aba Contas).</p>
-            ) : (
               <div className="space-y-4">
                 <p className="text-xs text-muted-foreground">
-                  Tags para categorizar conversas. Uma conversa pode ter múltiplas tags.
+                  Tags para categorizar conversas. Uma conversa pode ter múltiplas tags. Selecione em quais caixas de entrada cada tag estará disponível.
                 </p>
 
                 {/* Tag form */}
                 <div className="border border-border rounded-lg p-3 space-y-3 bg-muted/30">
                   <p className="text-xs font-semibold">Nova tag</p>
+                  <div>
+                    <label className="text-[10px] font-medium text-muted-foreground mb-1 block">Caixas de entrada</label>
+                    <AccountCheckboxes selected={tagForm.account_ids} onChange={ids => setTagForm(f => ({ ...f, account_ids: ids }))} />
+                  </div>
                   <div className="flex items-end gap-2">
                     <div className="flex-1">
                       <label className="text-[10px] font-medium text-muted-foreground mb-1 block">Nome</label>
@@ -1538,7 +1564,7 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
                         ))}
                       </div>
                     </div>
-                    <Button size="sm" className="text-xs h-8 gap-1" onClick={saveTag} disabled={savingTag || !tagForm.nome.trim()}>
+                    <Button size="sm" className="text-xs h-8 gap-1" onClick={saveTag} disabled={savingTag || !tagForm.nome.trim() || tagForm.account_ids.length === 0}>
                       {savingTag ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
                       Criar
                     </Button>
@@ -1554,13 +1580,15 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
                       <div key={t.id} className="flex items-center gap-1.5 border border-border rounded-full px-3 py-1.5 bg-background">
                         <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: t.cor }} />
                         <span className="text-xs font-medium">{t.nome}</span>
+                        <span className="text-[9px] text-muted-foreground/50">
+                          {(t.account_ids || []).map(aid => accounts.find(a => a.id === aid)?.nome?.slice(0, 8)).filter(Boolean).join(', ')}
+                        </span>
                         <button onClick={() => deleteTag(t.id)} className="text-muted-foreground hover:text-destructive ml-1"><X className="w-3 h-3" /></button>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
-            )}
           </TabsContent>
         </Tabs>
 
