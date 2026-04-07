@@ -35,6 +35,10 @@ export interface InboxConversation {
   last_inbound_ts: string | null;
   assigned_user_id: string | null;
   tags: string[];
+  pinned: boolean;
+  pinned_at: string | null;
+  muted: boolean;
+  favorited: boolean;
   status: string;
 }
 

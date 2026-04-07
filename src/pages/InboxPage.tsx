@@ -11,6 +11,7 @@ import {
   Paperclip, Image as ImageIcon, FileText, Mic, MicOff, LayoutTemplate,
   AlertTriangle, X, UserPlus, Trash2, RotateCcw, Archive, ArchiveRestore, Download,
   Ticket, PanelRightOpen, PanelRightClose, User, UserX, Users, Tag, Edit2,
+  Pin, PinOff, BellOff, Bell, Heart, HeartOff, Eye, Eraser,
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
@@ -517,6 +518,15 @@ export default function InboxPage() {
   const [showMacroPicker, setShowMacroPicker] = useState(false);
   const [macroFilter, setMacroFilter] = useState('');
 
+  // Context menu
+  const [ctxMenu, setCtxMenu] = useState<{ conv: InboxConversation; x: number; y: number } | null>(null);
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const close = () => setCtxMenu(null);
+    window.addEventListener('click', close);
+    return () => window.removeEventListener('click', close);
+  }, [ctxMenu]);
+
   // Filter macros/tags for selected account
   const macros = selectedAccount ? allMacros.filter(m => (m.account_ids || []).includes(selectedAccount.id)) : [];
   const accountTags = selectedAccount ? allTags.filter(t => (t.account_ids || []).includes(selectedAccount.id)) : [];
@@ -753,6 +763,9 @@ export default function InboxPage() {
               old.contact_name !== updated.contact_name ||
               old.last_inbound_ts !== updated.last_inbound_ts ||
               old.assigned_user_id !== updated.assigned_user_id ||
+              old.pinned !== updated.pinned ||
+              old.muted !== updated.muted ||
+              old.favorited !== updated.favorited ||
               old.status !== updated.status ||
               JSON.stringify(old.tags) !== JSON.stringify(updated.tags)
             ) {
@@ -774,6 +787,9 @@ export default function InboxPage() {
           if (prev.last_inbound_ts !== updated.last_inbound_ts ||
               prev.status !== updated.status ||
               prev.assigned_user_id !== updated.assigned_user_id ||
+              prev.pinned !== updated.pinned ||
+              prev.muted !== updated.muted ||
+              prev.favorited !== updated.favorited ||
               JSON.stringify(prev.tags) !== JSON.stringify(updated.tags)) {
             return updated;
           }
@@ -1278,6 +1294,53 @@ export default function InboxPage() {
     } catch { /* silent */ }
   };
 
+  // ── Context menu actions ──
+  const updateConv = async (conv: InboxConversation, patch: Record<string, unknown>) => {
+    try {
+      await supabase.from('meta_inbox_conversations').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', conv.id);
+      const updated = { ...conv, ...patch } as InboxConversation;
+      setConversations(prev => prev.map(c => c.id === conv.id ? updated : c));
+      if (selectedConv?.id === conv.id) setSelectedConv(updated);
+    } catch { /* silent */ }
+  };
+
+  const togglePin = async (conv: InboxConversation) => {
+    if (conv.pinned) {
+      await updateConv(conv, { pinned: false, pinned_at: null });
+      toast({ title: 'Conversa desafixada' });
+    } else {
+      const pinnedCount = conversations.filter(c => c.pinned).length;
+      if (pinnedCount >= 5) { toast({ variant: 'destructive', title: 'Máximo de 5 conversas fixadas' }); return; }
+      await updateConv(conv, { pinned: true, pinned_at: new Date().toISOString() });
+      toast({ title: 'Conversa fixada' });
+    }
+  };
+
+  const toggleMute = (conv: InboxConversation) => updateConv(conv, { muted: !conv.muted });
+  const toggleFavorite = (conv: InboxConversation) => updateConv(conv, { favorited: !conv.favorited });
+
+  const markAsUnread = async (conv: InboxConversation) => {
+    await supabase.from('meta_inbox_conversations')
+      .update({ unread_count: Math.max(conv.unread_count, 1), updated_at: new Date().toISOString() })
+      .eq('id', conv.id);
+    setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unread_count: Math.max(c.unread_count, 1) } : c));
+    toast({ title: 'Marcada como não lida' });
+  };
+
+  const clearConversation = async (conv: InboxConversation) => {
+    try {
+      await supabase.from('meta_inbox_messages').delete().eq('conversation_id', conv.id);
+      await supabase.from('meta_inbox_conversations')
+        .update({ last_message: null, last_message_ts: null, unread_count: 0, updated_at: new Date().toISOString() })
+        .eq('id', conv.id);
+      setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, last_message: null, last_message_ts: null, unread_count: 0 } : c));
+      if (selectedConv?.id === conv.id) setMessages([]);
+      toast({ title: 'Mensagens limpas' });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro', description: e.message });
+    }
+  };
+
   // ── Execute macro ──
   const executeMacro = async (macro: Macro) => {
     if (!selectedConv || !selectedAccount) return;
@@ -1338,12 +1401,17 @@ export default function InboxPage() {
       list = list.filter(c => c.status === 'archived');
     }
 
-    // Sort
+    // Sort — pinned always first, then by sort key
     list = [...list].sort((a, b) => {
+      // Pinned first
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      if (a.pinned && b.pinned) return new Date(a.pinned_at || 0).getTime() - new Date(b.pinned_at || 0).getTime();
+      // Regular sort
       if (chatSortKey === 'oldest') return new Date(a.last_message_ts || 0).getTime() - new Date(b.last_message_ts || 0).getTime();
       if (chatSortKey === 'alpha_asc') return (a.contact_name || a.contact_phone).localeCompare(b.contact_name || b.contact_phone, 'pt-BR');
       if (chatSortKey === 'alpha_desc') return (b.contact_name || b.contact_phone).localeCompare(a.contact_name || a.contact_phone, 'pt-BR');
-      return new Date(b.last_message_ts || 0).getTime() - new Date(a.last_message_ts || 0).getTime(); // recent default
+      return new Date(b.last_message_ts || 0).getTime() - new Date(a.last_message_ts || 0).getTime();
     });
 
     return list;
@@ -1549,12 +1617,21 @@ export default function InboxPage() {
                 params.phone = conv.contact_phone;
                 setSearchParams(params, { replace: true });
               }}
+              onContextMenu={e => { e.preventDefault(); setCtxMenu({ conv, x: e.clientX, y: e.clientY }); }}
               className={cn('flex items-start gap-2.5 px-3 py-3 cursor-pointer border-b border-border/50 transition-colors',
-                selectedConv?.id === conv.id ? 'bg-primary/5' : 'hover:bg-muted/40')}>
-              <AvatarInitials name={conv.contact_name || conv.contact_phone} />
+                selectedConv?.id === conv.id ? 'bg-primary/5' : 'hover:bg-muted/40',
+                conv.pinned && 'bg-accent/5')}>
+              <div className="relative flex-shrink-0">
+                <AvatarInitials name={conv.contact_name || conv.contact_phone} />
+                {conv.muted && <BellOff className="absolute -top-1 -right-1 w-3 h-3 text-muted-foreground bg-card rounded-full" />}
+              </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-0.5">
-                  <p className="text-xs font-semibold truncate">{conv.contact_name || conv.contact_phone}</p>
+                  <div className="flex items-center gap-1 min-w-0">
+                    {conv.pinned && <Pin className="w-3 h-3 text-accent flex-shrink-0" />}
+                    {conv.favorited && <Heart className="w-3 h-3 text-pink-500 fill-pink-500 flex-shrink-0" />}
+                    <p className="text-xs font-semibold truncate">{conv.contact_name || conv.contact_phone}</p>
+                  </div>
                   <span className="text-[10px] text-muted-foreground flex-shrink-0 ml-1">
                     {conv.last_message_ts ? formatTime(conv.last_message_ts) : ''}
                   </span>
@@ -1591,6 +1668,32 @@ export default function InboxPage() {
           ))}
         </div>
       </div>
+
+      {/* Context menu */}
+      {ctxMenu && (
+        <div className="fixed z-[100] bg-card border border-border rounded-lg shadow-xl py-1 min-w-[200px]"
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+          onClick={e => e.stopPropagation()}>
+          {[
+            { icon: ctxMenu.conv.pinned ? PinOff : Pin, label: ctxMenu.conv.pinned ? 'Desafixar conversa' : 'Fixar conversa', action: () => togglePin(ctxMenu.conv) },
+            { icon: ctxMenu.conv.muted ? Bell : BellOff, label: ctxMenu.conv.muted ? 'Ativar notificações' : 'Silenciar notificações', action: () => toggleMute(ctxMenu.conv) },
+            { icon: ctxMenu.conv.favorited ? HeartOff : Heart, label: ctxMenu.conv.favorited ? 'Remover dos Favoritos' : 'Adicionar aos Favoritos', action: () => toggleFavorite(ctxMenu.conv) },
+            { icon: Eye, label: 'Marcar como não lida', action: () => markAsUnread(ctxMenu.conv) },
+            { icon: ctxMenu.conv.status === 'archived' ? ArchiveRestore : Archive, label: ctxMenu.conv.status === 'archived' ? 'Desarquivar conversa' : 'Arquivar conversa', action: () => handleArchiveConversation(ctxMenu.conv) },
+            null, // separator
+            { icon: Eraser, label: 'Limpar conversa', action: () => clearConversation(ctxMenu.conv), danger: true },
+          ].map((item, i) => item === null ? (
+            <div key={i} className="border-t border-border my-1" />
+          ) : (
+            <button key={i} onClick={() => { item.action(); setCtxMenu(null); }}
+              className={cn('w-full flex items-center gap-2.5 px-3 py-2 text-left text-xs transition-colors',
+                (item as any).danger ? 'text-destructive hover:bg-destructive/10' : 'text-foreground hover:bg-muted/50')}>
+              <item.icon className="w-4 h-4" />
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Col 3 — Messages */}
       <div className="flex-1 flex flex-col overflow-hidden bg-background">
