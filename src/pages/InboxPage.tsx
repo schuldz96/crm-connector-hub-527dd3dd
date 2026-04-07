@@ -1012,6 +1012,43 @@ export default function InboxPage() {
     setSending(false);
   };
 
+  // ── Paste image from clipboard ──
+  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items || !selectedConv || !selectedAccount) return;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (!file) return;
+        setSending(true);
+        try {
+          const ext = file.type.split('/')[1] || 'png';
+          const storagePath = `image/${Date.now()}.${ext}`;
+          const { error: upErr } = await supabase.storage.from('inbox-media').upload(storagePath, file, { contentType: file.type, upsert: true });
+          if (upErr) throw new Error(upErr.message);
+          const { data: urlData } = supabase.storage.from('inbox-media').getPublicUrl(storagePath);
+          if (!urlData?.publicUrl) throw new Error('URL pública não disponível');
+          const result = await sendMediaMessage(
+            selectedAccount, selectedConv.id, selectedConv.contact_phone,
+            'image', urlData.publicUrl, '', undefined, false, currentUserId || undefined,
+          );
+          if (result.success) {
+            const data = await loadMessages(selectedConv.id, selectedAccount?.id);
+            setMessages(data);
+            toast({ title: 'Imagem enviada' });
+          } else {
+            toast({ variant: 'destructive', title: 'Erro ao enviar imagem', description: result.error });
+          }
+        } catch (err: any) {
+          toast({ variant: 'destructive', title: 'Erro no upload', description: err.message });
+        }
+        setSending(false);
+        return;
+      }
+    }
+  }, [selectedConv, selectedAccount, currentUserId]);
+
   // ── Send template ──────────────────────────────────────
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
   const [pickerSelectedTpl, setPickerSelectedTpl] = useState<any | null>(null);
@@ -1837,6 +1874,7 @@ export default function InboxPage() {
                   placeholder={recording ? '🔴 Gravando áudio...' : within24h ? 'Escreva uma mensagem... (/ para macro)' : 'Fora da janela 24h — use template'}
                   className={cn('h-9 text-sm bg-muted/40 border-border w-full', recording && 'border-destructive/50')}
                   disabled={!within24h || sending || recording}
+                  onPaste={handlePaste}
                   onKeyDown={e => {
                     if (e.key === 'Escape') { setShowMacroPicker(false); return; }
                     if (e.key === 'Enter' && !e.shiftKey) {

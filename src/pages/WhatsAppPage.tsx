@@ -1498,6 +1498,24 @@ export default function WhatsAppPage() {
     setPendingFilePreview(null);
   };
 
+  // ── Paste image from clipboard ──────────────────────────────────────────────
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (!file) return;
+        setPendingFile(file);
+        const reader = new FileReader();
+        reader.onload = () => setPendingFilePreview(reader.result as string);
+        reader.readAsDataURL(file);
+        return;
+      }
+    }
+  }, []);
+
   // ── Audio recording ────────────────────────────────────────────────────────
   const startRecording = async () => {
     if (!activeChat || !activeInstance) return;
@@ -2050,6 +2068,7 @@ export default function WhatsAppPage() {
                       value={inputText}
                       onChange={e => setInputText(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                      onPaste={handlePaste}
                       placeholder={recording ? 'Gravando áudio...' : 'Digite uma mensagem...'}
                       className="flex-1 h-10 text-sm bg-secondary border-border"
                       disabled={sending || recording}
