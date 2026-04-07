@@ -10,7 +10,6 @@ import {
   ArrowUpDown, ArrowDownAZ, SortAsc, SortDesc,
   Brain, Sparkles, AlertTriangle, ChevronRight, Star,
   Paperclip, Mic, MicOff, Image as ImageIcon, FileText, Play, Download, MapPin, Volume2, Trash2, Key,
-  User, UserX, Users, Pencil, Check,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -28,15 +27,6 @@ import { callOpenAI } from '@/lib/openaiProxy';
 import { supabase } from '@/integrations/supabase/client';
 import { getSaasEmpresaId } from '@/lib/saas';
 import { getEvolutionConfig } from '@/lib/evolutionConfig';
-import { listSaasUsers, type SaasUser } from '@/lib/crmService';
-
-// ─── Chat Settings (responsável + nome customizado) ─────────────────────────
-interface ChatSettings {
-  id?: string;
-  responsavel_id: string | null;
-  nome_customizado: string | null;
-}
-type ChatSettingsMap = Record<string, ChatSettings>; // key = phone number
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Chat {
@@ -839,87 +829,6 @@ function MessageContent({
   }
 }
 
-// ─── Chat Header (nome editável + responsável) ─────────────────────────────
-function ChatHeader({ chat, displayName: name, chatSettings, saasUsers, showAiPanel, loadingMsgs,
-  onToggleAi, onRefresh, onClose, onSaveName, onSaveOwner,
-}: {
-  chat: Chat; displayName: string; chatSettings: ChatSettingsMap; saasUsers: SaasUser[];
-  showAiPanel: boolean; loadingMsgs: boolean;
-  onToggleAi: () => void; onRefresh: () => void; onClose: () => void;
-  onSaveName: (name: string) => void; onSaveOwner: (ownerId: string | null) => void;
-}) {
-  const [editingName, setEditingName] = useState(false);
-  const [nameValue, setNameValue] = useState('');
-  const settings = chatSettings[chat.phone];
-  const ownerId = settings?.responsavel_id || '';
-  const ownerUser = saasUsers.find(u => u.id === ownerId);
-
-  return (
-    <div className="flex items-center justify-between px-4 py-2.5 border-b border-border flex-shrink-0 bg-card gap-3">
-      <div className="flex items-center gap-3 min-w-0 flex-1">
-        <AvatarInitials name={name} size="sm" />
-        <div className="min-w-0 flex-1">
-          {/* Editable name */}
-          <div className="flex items-center gap-1.5">
-            {editingName ? (
-              <form className="flex items-center gap-1" onSubmit={e => { e.preventDefault(); onSaveName(nameValue); setEditingName(false); }}>
-                <input
-                  autoFocus
-                  value={nameValue}
-                  onChange={e => setNameValue(e.target.value)}
-                  className="text-sm font-semibold bg-secondary border border-border rounded px-1.5 py-0.5 w-40 focus:outline-none focus:ring-1 focus:ring-ring"
-                  placeholder={chat.name || chat.phone}
-                />
-                <button type="submit" className="text-success hover:text-success/80"><Check className="w-3.5 h-3.5" /></button>
-                <button type="button" onClick={() => setEditingName(false)} className="text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>
-              </form>
-            ) : (
-              <>
-                <p className="text-sm font-semibold leading-tight truncate">{name}</p>
-                <button
-                  onClick={() => { setNameValue(settings?.nome_customizado || chat.name || ''); setEditingName(true); }}
-                  className="text-muted-foreground hover:text-foreground flex-shrink-0"
-                  title="Editar nome do contato">
-                  <Pencil className="w-3 h-3" />
-                </button>
-              </>
-            )}
-          </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <p className="text-[10px] text-muted-foreground font-mono">{chat.phone}</p>
-            {/* Owner selector */}
-            <select
-              value={ownerId}
-              onChange={e => onSaveOwner(e.target.value || null)}
-              className="text-[10px] bg-secondary border border-border rounded px-1.5 py-0.5 text-muted-foreground max-w-[140px] cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring"
-              title="Responsável">
-              <option value="">Sem responsável</option>
-              {saasUsers.map(u => (
-                <option key={u.id} value={u.id}>{u.nome}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <Button
-          size="sm" variant="ghost"
-          className={cn('h-7 px-2 gap-1 text-[10px]', showAiPanel ? 'bg-accent/10 text-accent' : 'text-muted-foreground')}
-          onClick={onToggleAi} title="Análise IA">
-          <Brain className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">IA</span>
-        </Button>
-        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground" onClick={onRefresh}>
-          {loadingMsgs ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-        </Button>
-        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={onClose}>
-          <X className="w-3.5 h-3.5" />
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function WhatsAppPage() {
   const { user, hasRole } = useAuth();
@@ -988,63 +897,6 @@ export default function WhatsAppPage() {
       setActiveInstance(match || visibleInstances[0]);
     }
   }, [visibleInstances.length]);
-
-  // ── Chat Settings (responsável + nome customizado) ───────────────────────
-  const [saasUsers, setSaasUsers] = useState<SaasUser[]>([]);
-  const [chatSettings, setChatSettings] = useState<ChatSettingsMap>({});
-  const [myUserId, setMyUserId] = useState<string | null>(null);
-  type OwnerFilter = 'all' | 'mine' | 'unassigned';
-  const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>('all');
-
-  // Load saas users
-  useEffect(() => {
-    listSaasUsers().then(users => {
-      setSaasUsers(users);
-      const me = users.find(u => u.email.toLowerCase() === user?.email?.toLowerCase());
-      if (me) setMyUserId(me.id);
-    }).catch(() => {});
-  }, [user?.email]);
-
-  // Load chat settings when instance changes
-  const loadChatSettings = useCallback(async (instName: string) => {
-    try {
-      const empresaId = await getSaasEmpresaId();
-      const { data } = await (supabase as any).schema('saas').from('whatsapp_chat_settings')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .eq('instancia', instName);
-      const map: ChatSettingsMap = {};
-      for (const row of (data || [])) {
-        map[row.telefone] = { id: row.id, responsavel_id: row.responsavel_id, nome_customizado: row.nome_customizado };
-      }
-      setChatSettings(map);
-    } catch { /* silent */ }
-  }, []);
-
-  useEffect(() => {
-    if (activeInstance?.name) loadChatSettings(activeInstance.name);
-  }, [activeInstance?.name]);
-
-  const saveChatSetting = useCallback(async (phone: string, patch: Partial<ChatSettings>) => {
-    if (!activeInstance) return;
-    try {
-      const empresaId = await getSaasEmpresaId();
-      const current = chatSettings[phone] || { responsavel_id: null, nome_customizado: null };
-      const updated = { ...current, ...patch };
-      setChatSettings(prev => ({ ...prev, [phone]: updated }));
-
-      await (supabase as any).schema('saas').from('whatsapp_chat_settings').upsert({
-        empresa_id: empresaId,
-        instancia: activeInstance.name,
-        telefone: phone,
-        responsavel_id: updated.responsavel_id,
-        nome_customizado: updated.nome_customizado,
-        atualizado_em: new Date().toISOString(),
-      }, { onConflict: 'empresa_id,instancia,telefone' });
-    } catch (e: any) {
-      toast({ title: 'Erro ao salvar', description: e?.message, variant: 'destructive' });
-    }
-  }, [activeInstance, chatSettings, toast]);
 
   // ── Column 2: chats for selected instance ──────────────────────────────────
   type ChatFilter = 'all' | 'pending' | 'unreplied' | 'replied';
@@ -1395,13 +1247,6 @@ export default function WhatsAppPage() {
       c.lastMessage.toLowerCase().includes(chatSearch.toLowerCase())
     );
 
-    // Owner filter
-    if (ownerFilter === 'mine' && myUserId) {
-      list = list.filter(c => chatSettings[c.phone]?.responsavel_id === myUserId);
-    } else if (ownerFilter === 'unassigned') {
-      list = list.filter(c => !chatSettings[c.phone]?.responsavel_id);
-    }
-
     // Status filter
     if (chatFilter === 'pending') {
       list = list.filter(c => c.unread > 0);
@@ -1424,11 +1269,7 @@ export default function WhatsAppPage() {
   })();
 
 
-  const displayName = (c: Chat) => {
-    const custom = chatSettings[c.phone]?.nome_customizado;
-    if (custom) return custom;
-    return c.name && c.name !== c.phone ? c.name : c.phone;
-  };
+  const displayName = (c: Chat) => (c.name && c.name !== c.phone ? c.name : c.phone);
 
   // ── Column 3: messages ─────────────────────────────────────────────────────
   const [messages, setMessages] = useState<Message[]>([]);
@@ -1912,36 +1753,6 @@ export default function WhatsAppPage() {
             </div>
           </div>
 
-          {/* Owner filters (Minhas / Todas / Sem proprietário) */}
-          <div className="px-2 py-1.5 border-b border-border flex-shrink-0 flex gap-1">
-            {([
-              { key: 'all',        label: 'Todas',         icon: Users },
-              { key: 'mine',       label: 'Minhas',        icon: User },
-              { key: 'unassigned', label: 'Não atribuídas', icon: UserX },
-            ] as const).map(f => {
-              const baseList = chats;
-              const count = f.key === 'all' ? baseList.length
-                : f.key === 'mine' ? baseList.filter(c => chatSettings[c.phone]?.responsavel_id === myUserId).length
-                : baseList.filter(c => !chatSettings[c.phone]?.responsavel_id).length;
-              const Icon = f.icon;
-              return (
-                <button
-                  key={f.key}
-                  onClick={() => setOwnerFilter(f.key)}
-                  className={cn(
-                    'flex-1 flex items-center justify-center gap-1 text-[10px] rounded-md px-1 py-1.5 font-medium transition-colors',
-                    ownerFilter === f.key
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-secondary text-muted-foreground hover:text-foreground'
-                  )}>
-                  <Icon className="w-3 h-3" />
-                  {f.label}
-                  <span className="opacity-70 ml-0.5">{count}</span>
-                </button>
-              );
-            })}
-          </div>
-
           {/* Chat status filters */}
           <div className="px-2 py-1.5 border-b border-border flex-shrink-0 flex gap-1">
             {([
@@ -2071,14 +1882,6 @@ export default function WhatsAppPage() {
                     {chat.name && chat.name !== chat.phone && (
                       <p className="text-[10px] text-muted-foreground/50 font-mono truncate">{chat.phone}</p>
                     )}
-                    {chatSettings[chat.phone]?.responsavel_id && (() => {
-                      const owner = saasUsers.find(u => u.id === chatSettings[chat.phone]?.responsavel_id);
-                      return owner ? (
-                        <span className="text-[9px] text-accent/70 truncate max-w-[80px]" title={`Responsável: ${owner.nome}`}>
-                          {owner.nome.split(' ')[0]}
-                        </span>
-                      ) : null;
-                    })()}
                     {(chatScores.get(chat.phone) ?? chat.aiScore) != null && (() => {
                       const s = chatScores.get(chat.phone) ?? chat.aiScore!;
                       const color = s >= 85 ? 'text-success' : s >= 70 ? 'text-primary' : s >= 50 ? 'text-warning' : 'text-destructive';
@@ -2104,19 +1907,33 @@ export default function WhatsAppPage() {
           ) : (
             <>
               {/* Chat header */}
-              <ChatHeader
-                chat={activeChat}
-                displayName={displayName(activeChat)}
-                chatSettings={chatSettings}
-                saasUsers={saasUsers}
-                showAiPanel={showAiPanel}
-                loadingMsgs={loadingMsgs}
-                onToggleAi={() => setShowAiPanel(v => !v)}
-                onRefresh={() => loadMessages(activeInstance!.name, activeChat, true)}
-                onClose={() => { setActiveChat(null); setMessages([]); setShowAiPanel(false); }}
-                onSaveName={(name) => saveChatSetting(activeChat.phone, { nome_customizado: name || null })}
-                onSaveOwner={(ownerId) => saveChatSetting(activeChat.phone, { responsavel_id: ownerId || null })}
-              />
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0 bg-card">
+                <div className="flex items-center gap-3">
+                  <AvatarInitials name={displayName(activeChat)} size="sm" />
+                  <div>
+                    <p className="text-sm font-semibold leading-tight">{displayName(activeChat)}</p>
+                    <p className="text-[10px] text-muted-foreground font-mono">{activeChat.phone}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm" variant="ghost"
+                    className={cn('h-7 px-2 gap-1 text-[10px]', showAiPanel ? 'bg-accent/10 text-accent' : 'text-muted-foreground')}
+                    onClick={() => setShowAiPanel(v => !v)}
+                    title="Análise IA">
+                    <Brain className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">IA</span>
+                  </Button>
+                  <Button
+                    size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground"
+                    onClick={() => loadMessages(activeInstance!.name, activeChat, true)}>
+                    {loadingMsgs ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                  </Button>
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { setActiveChat(null); setMessages([]); setShowAiPanel(false); }}>
+                    <X className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
 
               {/* Messages area */}
               <div ref={msgContainerRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-1.5">
