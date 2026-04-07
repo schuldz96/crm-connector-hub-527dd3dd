@@ -751,7 +751,10 @@ export default function InboxPage() {
               old.last_message_ts !== updated.last_message_ts ||
               old.unread_count !== updated.unread_count ||
               old.contact_name !== updated.contact_name ||
-              old.status !== updated.status
+              old.last_inbound_ts !== updated.last_inbound_ts ||
+              old.assigned_user_id !== updated.assigned_user_id ||
+              old.status !== updated.status ||
+              JSON.stringify(old.tags) !== JSON.stringify(updated.tags)
             ) {
               changed = true;
               return updated;
@@ -762,6 +765,19 @@ export default function InboxPage() {
           const newConvs = fresh.filter(f => !prev.some(p => p.id === f.id));
           if (newConvs.length > 0) { changed = true; merged.push(...newConvs); }
           return changed ? merged : prev;
+        });
+        // Keep selectedConv in sync with latest data
+        setSelectedConv(prev => {
+          if (!prev) return prev;
+          const updated = fresh.find(f => f.id === prev.id);
+          if (!updated) return prev;
+          if (prev.last_inbound_ts !== updated.last_inbound_ts ||
+              prev.status !== updated.status ||
+              prev.assigned_user_id !== updated.assigned_user_id ||
+              JSON.stringify(prev.tags) !== JSON.stringify(updated.tags)) {
+            return updated;
+          }
+          return prev;
         });
       } catch { /* silent */ }
     }, 5000);
