@@ -10,7 +10,7 @@ import {
   Loader2, RefreshCw, ChevronRight, Phone, Clock, Check,
   Paperclip, Image as ImageIcon, FileText, Mic, MicOff, LayoutTemplate,
   AlertTriangle, X, UserPlus, Trash2, RotateCcw, Archive, ArchiveRestore, Download,
-  Ticket, PanelRightOpen, PanelRightClose, User, Tag, Edit2,
+  Ticket, PanelRightOpen, PanelRightClose, User, UserX, Users, Tag, Edit2,
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
@@ -504,6 +504,10 @@ export default function InboxPage() {
   type InboxSortKey = 'recent' | 'oldest' | 'alpha_asc' | 'alpha_desc';
   const [chatFilter, setChatFilter] = useState<InboxFilter>('all');
   const [chatSortKey, setChatSortKey] = useState<InboxSortKey>('recent');
+  type OwnerFilter = 'all' | 'mine' | 'unassigned';
+  const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>('all');
+  const [editingContactName, setEditingContactName] = useState(false);
+  const [editNameValue, setEditNameValue] = useState('');
   const [msgInput, setMsgInput] = useState('');
   const [sending, setSending] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -744,6 +748,8 @@ export default function InboxPage() {
   }, [selectedAccount?.id]);
 
   // ── Load messages when conversation changes ────────────
+  useEffect(() => { setEditingContactName(false); }, [selectedConv?.id]);
+
   const loadMsgs = useCallback(async () => {
     if (!selectedConv) { setMessages([]); return; }
     setLoadingMsgs(true);
@@ -1156,6 +1162,33 @@ export default function InboxPage() {
     }
   };
 
+  // ── Save contact name ──
+  const saveContactName = async (conv: InboxConversation, newName: string) => {
+    try {
+      await supabase.from('meta_inbox_conversations')
+        .update({ contact_name: newName || null, updated_at: new Date().toISOString() })
+        .eq('id', conv.id);
+      setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, contact_name: newName || null } : c));
+      if (selectedConv?.id === conv.id) setSelectedConv(prev => prev ? { ...prev, contact_name: newName || null } : prev);
+      toast({ title: 'Nome atualizado' });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro ao salvar nome', description: e.message });
+    }
+  };
+
+  // ── Save assigned user ──
+  const saveAssignedUser = async (conv: InboxConversation, userId: string | null) => {
+    try {
+      await supabase.from('meta_inbox_conversations')
+        .update({ assigned_user_id: userId, updated_at: new Date().toISOString() })
+        .eq('id', conv.id);
+      setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, assigned_user_id: userId } : c));
+      if (selectedConv?.id === conv.id) setSelectedConv(prev => prev ? { ...prev, assigned_user_id: userId } : prev);
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Erro ao atribuir', description: e.message });
+    }
+  };
+
   // ── Filter & sort conversations ────────────────────────
   const filteredConvs = (() => {
     let list = conversations.filter(c =>
@@ -1163,6 +1196,13 @@ export default function InboxPage() {
       (c.contact_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.contact_phone.includes(searchQuery)
     );
+
+    // Owner filter
+    if (ownerFilter === 'mine' && currentUserId) {
+      list = list.filter(c => c.assigned_user_id === currentUserId);
+    } else if (ownerFilter === 'unassigned') {
+      list = list.filter(c => !c.assigned_user_id);
+    }
 
     // Hide archived unless explicitly viewing archived filter
     if (chatFilter !== 'archived') {
@@ -1287,6 +1327,36 @@ export default function InboxPage() {
           </div>
         )}
 
+        {/* Owner filters (Minhas / Todas / Sem proprietário) */}
+        <div className="px-2 py-1.5 border-b border-border flex-shrink-0 flex gap-1">
+          {([
+            { key: 'all',        label: 'Todas',         icon: Users },
+            { key: 'mine',       label: 'Minhas',        icon: User },
+            { key: 'unassigned', label: 'Não atribuídas', icon: UserX },
+          ] as const).map(f => {
+            const base = conversations.filter(c => c.status !== 'archived');
+            const count = f.key === 'all' ? base.length
+              : f.key === 'mine' ? base.filter(c => c.assigned_user_id === currentUserId).length
+              : base.filter(c => !c.assigned_user_id).length;
+            const Icon = f.icon;
+            return (
+              <button
+                key={f.key}
+                onClick={() => setOwnerFilter(f.key)}
+                className={cn(
+                  'flex-1 flex items-center justify-center gap-1 text-[10px] rounded-md px-1 py-1.5 font-medium transition-colors',
+                  ownerFilter === f.key
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-secondary text-muted-foreground hover:text-foreground'
+                )}>
+                <Icon className="w-3 h-3" />
+                {f.label}
+                <span className="opacity-70 ml-0.5">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+
         {/* Chat status filters */}
         <div className="px-2 py-1.5 border-b border-border flex-shrink-0 flex gap-1">
           {([
@@ -1379,6 +1449,12 @@ export default function InboxPage() {
                     </Badge>
                   )}
                 </div>
+                {conv.assigned_user_id && (() => {
+                  const owner = accountUsers.find(u => u.id === conv.assigned_user_id);
+                  return owner ? (
+                    <p className="text-[9px] text-accent/70 truncate mt-0.5">{owner.nome.split(' ')[0]}</p>
+                  ) : null;
+                })()}
               </div>
             </div>
           ))}
@@ -1395,13 +1471,51 @@ export default function InboxPage() {
         ) : (
           <>
             {/* Header */}
-            <div className="h-14 border-b border-border flex items-center gap-3 px-4 flex-shrink-0 bg-card">
+            <div className="border-b border-border flex items-center gap-3 px-4 py-2.5 flex-shrink-0 bg-card">
               <AvatarInitials name={selectedConv.contact_name || selectedConv.contact_phone} />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold">{selectedConv.contact_name || selectedConv.contact_phone}</p>
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Phone className="w-3 h-3" /> {selectedConv.contact_phone}
-                </p>
+                {/* Editable contact name */}
+                <div className="flex items-center gap-1.5">
+                  {editingContactName ? (
+                    <form className="flex items-center gap-1" onSubmit={e => { e.preventDefault(); saveContactName(selectedConv, editNameValue); setEditingContactName(false); }}>
+                      <input
+                        autoFocus
+                        value={editNameValue}
+                        onChange={e => setEditNameValue(e.target.value)}
+                        className="text-sm font-semibold bg-secondary border border-border rounded px-1.5 py-0.5 w-44 focus:outline-none focus:ring-1 focus:ring-ring"
+                        placeholder={selectedConv.contact_phone}
+                      />
+                      <button type="submit" className="text-green-500 hover:text-green-400"><Check className="w-3.5 h-3.5" /></button>
+                      <button type="button" onClick={() => setEditingContactName(false)} className="text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>
+                    </form>
+                  ) : (
+                    <>
+                      <p className="text-sm font-semibold truncate">{selectedConv.contact_name || selectedConv.contact_phone}</p>
+                      <button
+                        onClick={() => { setEditNameValue(selectedConv.contact_name || ''); setEditingContactName(true); }}
+                        className="text-muted-foreground hover:text-foreground flex-shrink-0"
+                        title="Editar nome do contato">
+                        <Edit2 className="w-3 h-3" />
+                      </button>
+                    </>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                    <Phone className="w-3 h-3" /> {selectedConv.contact_phone}
+                  </p>
+                  {/* Owner selector */}
+                  <select
+                    value={selectedConv.assigned_user_id || ''}
+                    onChange={e => saveAssignedUser(selectedConv, e.target.value || null)}
+                    className="text-[10px] bg-secondary border border-border rounded px-1.5 py-0.5 text-muted-foreground max-w-[150px] cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring"
+                    title="Responsável">
+                    <option value="">Sem responsável</option>
+                    {accountUsers.map(u => (
+                      <option key={u.id} value={u.id}>{u.nome}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               {/* 24h window indicator */}
               <span className={cn('text-[9px] px-2 py-0.5 rounded-full border font-medium',

@@ -33,6 +33,7 @@ export interface InboxConversation {
   last_message_from_me: boolean;
   unread_count: number;
   last_inbound_ts: string | null;
+  assigned_user_id: string | null;
   status: string;
 }
 
