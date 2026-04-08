@@ -44,8 +44,9 @@ const ROLE_CONFIG: Record<UserRole, { label: string; class: string }> = {
   closer:      { label: 'Closer',       class: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' },
   key_account: { label: 'Key Account',  class: 'bg-amber-500/10 text-amber-500 border-amber-500/20' },
   csm:         { label: 'CSM',          class: 'bg-cyan-500/10 text-cyan-500 border-cyan-500/20' },
-  low_touch:   { label: 'Low Touch',    class: 'bg-slate-500/10 text-slate-500 border-slate-500/20' },
-  member:      { label: 'Membro',       class: 'bg-muted text-muted-foreground border-border' },
+  low_touch:      { label: 'Low Touch',       class: 'bg-slate-500/10 text-slate-500 border-slate-500/20' },
+  sales_engineer: { label: 'Sales Engineer', class: 'bg-rose-500/10 text-rose-500 border-rose-500/20' },
+  member:         { label: 'Membro',         class: 'bg-muted text-muted-foreground border-border' },
   support:     { label: 'Suporte',     class: 'bg-blue-500/10 text-blue-500 border-blue-500/20' },
 };
 
@@ -97,7 +98,8 @@ function CreateUserModal({ onClose, onCreate }: { onClose: () => void; onCreate:
                 <SelectItem value="closer"      className="text-xs">Closer</SelectItem>
                 <SelectItem value="key_account" className="text-xs">Key Account</SelectItem>
                 <SelectItem value="csm"         className="text-xs">CSM</SelectItem>
-                <SelectItem value="low_touch"   className="text-xs">Low Touch</SelectItem>
+                <SelectItem value="low_touch"      className="text-xs">Low Touch</SelectItem>
+                <SelectItem value="sales_engineer" className="text-xs">Sales Engineer</SelectItem>
                 <SelectItem value="supervisor"  className="text-xs">Supervisor</SelectItem>
                 <SelectItem value="coordinator" className="text-xs">Coordenador</SelectItem>
                 <SelectItem value="manager"     className="text-xs">Gerente</SelectItem>
@@ -161,7 +163,8 @@ function ChangeRoleModal({ user, onClose, onSave }: { user: User; onClose: () =>
                 <SelectItem value="closer"      className="text-xs">Closer — fechamento de vendas</SelectItem>
                 <SelectItem value="key_account" className="text-xs">Key Account — contas estratégicas</SelectItem>
                 <SelectItem value="csm"         className="text-xs">CSM — sucesso do cliente</SelectItem>
-                <SelectItem value="low_touch"   className="text-xs">Low Touch — atendimento automatizado</SelectItem>
+                <SelectItem value="low_touch"      className="text-xs">Low Touch — atendimento automatizado</SelectItem>
+                <SelectItem value="sales_engineer" className="text-xs">Sales Engineer — suporte técnico comercial</SelectItem>
                 <SelectItem value="supervisor"  className="text-xs">Supervisor — vê seu time</SelectItem>
                 <SelectItem value="coordinator" className="text-xs">Coordenador — vê sua área</SelectItem>
                 <SelectItem value="manager"     className="text-xs">Gerente — gestão de área</SelectItem>
@@ -697,7 +700,7 @@ function UsersAdminPage() {
     run();
   }, [toast]);
 
-  const ROLE_ORDER: Record<string, number> = { admin: 0, ceo: 1, director: 2, manager: 3, coordinator: 4, supervisor: 5, bdr: 6, sdr: 6, closer: 6, key_account: 6, csm: 6, low_touch: 6, member: 7 };
+  const ROLE_ORDER: Record<string, number> = { admin: 0, ceo: 1, director: 2, manager: 3, coordinator: 4, supervisor: 5, bdr: 6, sdr: 6, closer: 6, key_account: 6, csm: 6, low_touch: 6, sales_engineer: 6, member: 7 };
 
   const filtered = users.filter(u => {
     const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) || u.email.toLowerCase().includes(search.toLowerCase());
@@ -784,11 +787,11 @@ function UsersAdminPage() {
           <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar usuários..." className="pl-9 h-8 text-xs bg-secondary border-border" />
         </div>
         <div className="flex gap-1.5 flex-wrap">
-          {['all', 'admin', 'director', 'supervisor', 'bdr', 'sdr', 'closer', 'key_account', 'csm', 'low_touch', 'support'].map(r => (
+          {['all', 'admin', 'director', 'supervisor', 'bdr', 'sdr', 'closer', 'key_account', 'csm', 'low_touch', 'sales_engineer', 'support'].map(r => (
             <button key={r} onClick={() => setRoleFilter(r)}
               className={cn('text-xs px-3 py-1.5 rounded-lg border transition-all',
                 roleFilter === r ? 'bg-primary/15 border-primary/30 text-primary' : 'border-border text-muted-foreground hover:bg-muted')}>
-              {{ all: 'Todos', admin: 'Admin', director: 'Diretores', supervisor: 'Supervisores', bdr: 'BDR', sdr: 'SDR', closer: 'Closer', key_account: 'Key Account', csm: 'CSM', low_touch: 'Low Touch', support: 'Suporte' }[r]}
+              {{ all: 'Todos', admin: 'Admin', director: 'Diretores', supervisor: 'Supervisores', bdr: 'BDR', sdr: 'SDR', closer: 'Closer', key_account: 'Key Account', csm: 'CSM', low_touch: 'Low Touch', sales_engineer: 'Sales Eng.', support: 'Suporte' }[r]}
             </button>
           ))}
         </div>

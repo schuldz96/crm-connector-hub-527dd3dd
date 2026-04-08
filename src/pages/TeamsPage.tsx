@@ -198,7 +198,7 @@ function DeleteTeamModal({ team, onClose, onConfirm }: { team: Team; onClose: ()
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 const roleLabels: Record<string, string> = {
-  admin: 'Admin', director: 'Diretor', supervisor: 'Supervisor', bdr: 'BDR', sdr: 'SDR', closer: 'Closer', key_account: 'Key Account', csm: 'CSM', low_touch: 'Low Touch', member: 'Membro'
+  admin: 'Admin', director: 'Diretor', supervisor: 'Supervisor', bdr: 'BDR', sdr: 'SDR', closer: 'Closer', key_account: 'Key Account', csm: 'CSM', low_touch: 'Low Touch', sales_engineer: 'Sales Engineer', member: 'Membro'
 };
 
 export default function TeamsPage() {

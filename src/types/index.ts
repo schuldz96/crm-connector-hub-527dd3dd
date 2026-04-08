@@ -13,18 +13,19 @@ export type UserRole =
   | 'key_account'
   | 'csm'
   | 'low_touch'
+  | 'sales_engineer'
   | 'member'
   | 'support';
 
 // Ordered from highest to lowest authority
 export const ROLE_HIERARCHY: UserRole[] = [
   'admin', 'ceo', 'director', 'manager', 'coordinator', 'supervisor',
-  'bdr', 'sdr', 'closer', 'key_account', 'csm', 'low_touch',
+  'bdr', 'sdr', 'closer', 'key_account', 'csm', 'low_touch', 'sales_engineer',
   'member', 'support',
 ];
 
 // Roles that have "self" scope (same access level)
-export const SELF_SCOPE_ROLES: UserRole[] = ['bdr', 'sdr', 'closer', 'key_account', 'csm', 'low_touch', 'member'];
+export const SELF_SCOPE_ROLES: UserRole[] = ['bdr', 'sdr', 'closer', 'key_account', 'csm', 'low_touch', 'sales_engineer', 'member'];
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   admin:       'Administrador',
@@ -38,8 +39,9 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   closer:      'Closer',
   key_account: 'Key Account',
   csm:         'CSM',
-  low_touch:   'Low Touch',
-  member:      'Membro',
+  low_touch:      'Low Touch',
+  sales_engineer: 'Sales Engineer',
+  member:         'Membro',
   support:     'Suporte',
 };
 

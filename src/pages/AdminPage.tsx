@@ -105,6 +105,7 @@ const roleColorMap: Record<string, { bg: string; text: string; border: string }>
   amber:              { bg: 'bg-amber-500/10',         text: 'text-amber-500',         border: 'border-amber-500/20' },
   cyan:               { bg: 'bg-cyan-500/10',          text: 'text-cyan-500',          border: 'border-cyan-500/20' },
   slate:              { bg: 'bg-slate-500/10',         text: 'text-slate-500',         border: 'border-slate-500/20' },
+  rose:               { bg: 'bg-rose-500/10',          text: 'text-rose-500',          border: 'border-rose-500/20' },
   'muted-foreground': { bg: 'bg-muted',                text: 'text-muted-foreground',  border: 'border-border' },
 };
 
@@ -359,7 +360,7 @@ export default function AdminPage() {
   // Depth map: roles at same level share same indent
   const ROLE_DEPTH: Record<UserRole, number> = {
     admin: 0, ceo: 1, director: 2, manager: 3, coordinator: 4, supervisor: 5,
-    bdr: 6, sdr: 6, closer: 6, key_account: 6, csm: 6, low_touch: 6,
+    bdr: 6, sdr: 6, closer: 6, key_account: 6, csm: 6, low_touch: 6, sales_engineer: 6,
     member: 6, support: 7,
   };
 

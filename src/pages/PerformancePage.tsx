@@ -31,9 +31,9 @@ function scoreLabel(s: number) {
 const roleMap: Record<string, string> = {
   admin: 'admin', ceo: 'ceo', diretor: 'director', gerente: 'manager',
   coordenador: 'coordinator', supervisor: 'supervisor', vendedor: 'member',
-  bdr: 'bdr', sdr: 'sdr', closer: 'closer', key_account: 'key_account', csm: 'csm', low_touch: 'low_touch',
+  bdr: 'bdr', sdr: 'sdr', closer: 'closer', key_account: 'key_account', csm: 'csm', low_touch: 'low_touch', sales_engineer: 'sales_engineer',
 };
-const SELF_ROLES = ['member', 'bdr', 'sdr', 'closer', 'key_account', 'csm', 'low_touch'];
+const SELF_ROLES = ['member', 'bdr', 'sdr', 'closer', 'key_account', 'csm', 'low_touch', 'sales_engineer'];
 
 // ─── Score Card ───────────────────────────────────────────────────────────────
 function ScoreCard({ label, value, icon: Icon, sub }: { label: string; value: number | string; icon: any; sub?: string }) {

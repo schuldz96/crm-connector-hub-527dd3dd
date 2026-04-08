@@ -131,6 +131,14 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermission[] = [
     resources: ['dashboard','meetings','whatsapp','inbox','performance','training','crm'],
   },
   {
+    role: 'sales_engineer',
+    label: 'Sales Engineer',
+    color: 'rose',
+    canDelete: true,
+    scope: 'self',
+    resources: ['dashboard','meetings','whatsapp','inbox','performance','training','crm'],
+  },
+  {
     role: 'member',
     label: 'Membro',
     color: 'muted-foreground',

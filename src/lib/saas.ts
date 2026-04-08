@@ -51,6 +51,7 @@ export function roleToDb(role: UserRole): string {
     key_account: 'key_account',
     csm: 'csm',
     low_touch: 'low_touch',
+    sales_engineer: 'sales_engineer',
     member: 'vendedor',
     support: 'suporte',
   };
@@ -71,6 +72,7 @@ export function roleFromDb(role: string | null | undefined): UserRole {
     key_account: 'key_account',
     csm: 'csm',
     low_touch: 'low_touch',
+    sales_engineer: 'sales_engineer',
     vendedor: 'member',
     suporte: 'support',
   };

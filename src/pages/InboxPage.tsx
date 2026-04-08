@@ -650,7 +650,7 @@ export default function InboxPage() {
   }, [selectedAccount?.id]);
 
   // ── Load accounts (filtered by user access for restricted roles) ──
-  const isSelfScope = ['support', 'bdr', 'sdr', 'closer', 'key_account', 'csm', 'low_touch', 'member'].includes(user?.role || '');
+  const isSelfScope = ['support', 'bdr', 'sdr', 'closer', 'key_account', 'csm', 'low_touch', 'sales_engineer', 'member'].includes(user?.role || '');
   const needsAccessFilter = isSelfScope;
 
   const loadAccountsFn = useCallback(async () => {
