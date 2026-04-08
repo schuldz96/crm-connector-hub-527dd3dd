@@ -560,7 +560,8 @@ export default function MeetingsPage() {
   };
 
   const handleEvaluateAll = () => {
-    const concluded = visibleMeetings.filter(m => !m.analisada_por_ia && m.status === 'concluida');
+    // Include: not analyzed OR analyzed with score 0 (likely failed evaluation)
+    const concluded = visibleMeetings.filter(m => m.status === 'concluida' && (!m.analisada_por_ia || m.score === 0 || m.score === null));
     const withTranscript = concluded.filter(m => m.transcricao);
     const withoutTranscript = concluded.length - withTranscript.length;
 
