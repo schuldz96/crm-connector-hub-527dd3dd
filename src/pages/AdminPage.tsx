@@ -99,6 +99,12 @@ const roleColorMap: Record<string, { bg: string; text: string; border: string }>
   accent:             { bg: 'bg-accent/15',            text: 'text-accent',            border: 'border-accent/30' },
   warning:            { bg: 'bg-warning/10',           text: 'text-warning',           border: 'border-warning/20' },
   success:            { bg: 'bg-success/10',           text: 'text-success',           border: 'border-success/20' },
+  violet:             { bg: 'bg-violet-500/10',        text: 'text-violet-500',        border: 'border-violet-500/20' },
+  indigo:             { bg: 'bg-indigo-500/10',        text: 'text-indigo-500',        border: 'border-indigo-500/20' },
+  emerald:            { bg: 'bg-emerald-500/10',       text: 'text-emerald-500',       border: 'border-emerald-500/20' },
+  amber:              { bg: 'bg-amber-500/10',         text: 'text-amber-500',         border: 'border-amber-500/20' },
+  cyan:               { bg: 'bg-cyan-500/10',          text: 'text-cyan-500',          border: 'border-cyan-500/20' },
+  slate:              { bg: 'bg-slate-500/10',         text: 'text-slate-500',         border: 'border-slate-500/20' },
   'muted-foreground': { bg: 'bg-muted',                text: 'text-muted-foreground',  border: 'border-border' },
 };
 
@@ -350,8 +356,16 @@ export default function AdminPage() {
   };
 
   // Build org-tree levels for display
+  // Depth map: roles at same level share same indent
+  const ROLE_DEPTH: Record<UserRole, number> = {
+    admin: 0, ceo: 1, director: 2, manager: 3, coordinator: 4, supervisor: 5,
+    bdr: 6, sdr: 6, closer: 6, key_account: 6, csm: 6, low_touch: 6,
+    member: 6, support: 7,
+  };
+
   const orgLevels = ROLE_HIERARCHY.map(role => ({
     role,
+    depth: ROLE_DEPTH[role] ?? 6,
     perm: permissions.find(p => p.role === role),
     users: MOCK_USERS.filter(u => u.role === role),
   }));
@@ -448,15 +462,15 @@ export default function AdminPage() {
 
                 {/* Org tree */}
                 <div className="space-y-1">
-                  {orgLevels.map((item, idx) => {
+                  {orgLevels.map((item) => {
                     const color = roleColorMap[item.perm?.color ?? 'muted-foreground'];
                     const isAdmin = item.role === 'admin';
                     return (
                       <div key={item.role}>
                         {/* Indent line */}
                         <div className="flex items-stretch gap-0">
-                          {/* Left indent bars */}
-                          {Array.from({ length: idx }).map((_, i) => (
+                          {/* Left indent bars — use depth instead of index */}
+                          {Array.from({ length: item.depth }).map((_, i) => (
                             <div key={i} className="w-5 flex-shrink-0 flex justify-center">
                               <div className="w-px bg-border/50 h-full" />
                             </div>
