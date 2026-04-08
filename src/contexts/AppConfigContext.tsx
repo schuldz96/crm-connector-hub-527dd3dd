@@ -273,17 +273,15 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
     void (async () => {
       try {
         const empresaId = await getSaasEmpresaId();
+        // Only update the model column — never touch token_criptografado
+        // This prevents stale/wrong token values from overwriting the DB
         await (supabase as any)
           .schema('saas')
           .from('tokens_ia_modulo')
-          .upsert({
-            empresa_id: empresaId,
-            modulo_codigo: module,
-            provedor: 'openai',
-            token_criptografado: tokens[module],
-            modelo: model,
-            ativo: true,
-          }, { onConflict: 'empresa_id,modulo_codigo,provedor' });
+          .update({ modelo: model })
+          .eq('empresa_id', empresaId)
+          .eq('modulo_codigo', module)
+          .eq('provedor', 'openai');
       } catch {}
     })();
   };
