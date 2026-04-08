@@ -16,10 +16,6 @@ export const CONFIG = {
   EVOLUTION_API_URL: import.meta.env.VITE_EVOLUTION_API_URL || 'https://evolutionapic.contato-lojavirtual.com',
   EVOLUTION_API_TOKEN: import.meta.env.VITE_EVOLUTION_API_TOKEN || '',
 
-  // OpenAI Tokens
-  OPENAI_TOKEN_MEETINGS: import.meta.env.VITE_OPENAI_TOKEN_MEETINGS || '',
-  OPENAI_TOKEN_TRAINING: import.meta.env.VITE_OPENAI_TOKEN_TRAINING || '',
-  OPENAI_TOKEN_WHATSAPP: import.meta.env.VITE_OPENAI_TOKEN_WHATSAPP || '',
-  OPENAI_TOKEN_REPORTS: import.meta.env.VITE_OPENAI_TOKEN_REPORTS || '',
-  OPENAI_TOKEN_AUTOMATIONS: import.meta.env.VITE_OPENAI_TOKEN_AUTOMATIONS || '',
+  // OpenAI Tokens — loaded ONLY from database, not from env vars
+  // DO NOT add env vars here — they caused token contamination (Evolution token in meetings field)
 } as const;
