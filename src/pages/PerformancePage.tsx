@@ -506,7 +506,7 @@ export default function PerformancePage() {
               value={selectedUserId}
               onChange={setSelectedUserId}
               placeholder="Selecione um analista..."
-              options={visibleUsers.filter(u => u.SELF_ROLES.includes(role)).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map(u => {
+              options={visibleUsers.filter(u => SELF_ROLES.includes(u.role)).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map(u => {
                 const perf = buildUserPerf(u.id);
                 const score = perf?.overallScore;
                 const dot = score != null ? (score >= 85 ? '🟢' : score >= 70 ? '🔵' : score >= 50 ? '🟡' : '🔴') : '';
