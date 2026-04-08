@@ -89,12 +89,14 @@ interface AppConfigContextType {
   saveConfig: () => void;
 }
 
+// Tokens come ONLY from the database — env vars are NOT used as defaults
+// This prevents env misconfiguration (e.g. wrong token in wrong module)
 const DEFAULT_TOKENS: OpenAITokens = {
-  meetings: CONFIG.OPENAI_TOKEN_MEETINGS,
-  training: CONFIG.OPENAI_TOKEN_TRAINING,
-  whatsapp: CONFIG.OPENAI_TOKEN_WHATSAPP,
-  reports: CONFIG.OPENAI_TOKEN_REPORTS,
-  automations: CONFIG.OPENAI_TOKEN_AUTOMATIONS,
+  meetings: '',
+  training: '',
+  whatsapp: '',
+  reports: '',
+  automations: '',
 };
 
 export const DEFAULT_MODULES: ModuleConfig[] = [
