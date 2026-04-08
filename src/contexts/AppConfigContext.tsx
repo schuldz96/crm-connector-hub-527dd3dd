@@ -179,12 +179,15 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
                 if (raw.startsWith('enc:')) {
                   // Legacy encrypted token — try to decrypt
                   const decrypted = await decryptToken(raw);
-                  // If decrypt failed (returned enc: prefix), discard
-                  (nextTokens as any)[row.modulo_codigo] = decrypted.startsWith('enc:') ? '' : decrypted;
-                } else {
-                  // Plaintext token (new format)
+                  // Only accept if it looks like an OpenAI token
+                  if (decrypted.startsWith('sk-')) {
+                    (nextTokens as any)[row.modulo_codigo] = decrypted;
+                  }
+                } else if (raw.startsWith('sk-')) {
+                  // Plaintext OpenAI token
                   (nextTokens as any)[row.modulo_codigo] = raw;
                 }
+                // else: ignore corrupted/non-OpenAI values
               }
               if (row.modelo) (nextModels as any)[row.modulo_codigo] = row.modelo;
             }
@@ -233,6 +236,10 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
   const setToken = useCallback((module: keyof OpenAITokens, value: string) => {
     setTokens(prev => ({ ...prev, [module]: value }));
 
+    // Only persist to DB if value is empty (clearing) or a valid OpenAI token
+    // This prevents env var contamination (e.g. Evolution token in meetings field)
+    if (value && !value.startsWith('sk-')) return;
+
     // Clear previous timer for this module
     if (tokenSaveTimers.current[module]) clearTimeout(tokenSaveTimers.current[module]);
 
@@ -241,19 +248,21 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
       void (async () => {
         try {
           const empresaId = await getSaasEmpresaId();
-          // Save token directly (Supabase RLS protects access)
-          // Avoids encryption key mismatch between environments
-          await (supabase as any)
-            .schema('saas')
-            .from('tokens_ia_modulo')
-            .upsert({
-              empresa_id: empresaId,
-              modulo_codigo: module,
-              provedor: 'openai',
-              token_criptografado: value,
-              modelo: models[module],
-              ativo: true,
-            }, { onConflict: 'empresa_id,modulo_codigo,provedor' });
+          if (!value) {
+            // Clear: delete the row
+            await (supabase as any).schema('saas').from('tokens_ia_modulo')
+              .delete().eq('empresa_id', empresaId).eq('modulo_codigo', module).eq('provedor', 'openai');
+          } else {
+            await (supabase as any).schema('saas').from('tokens_ia_modulo')
+              .upsert({
+                empresa_id: empresaId,
+                modulo_codigo: module,
+                provedor: 'openai',
+                token_criptografado: value,
+                modelo: models[module],
+                ativo: true,
+              }, { onConflict: 'empresa_id,modulo_codigo,provedor' });
+          }
         } catch {}
       })();
     }, 800);
