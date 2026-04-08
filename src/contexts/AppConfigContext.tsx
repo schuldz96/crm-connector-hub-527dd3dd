@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { getSaasEmpresaId } from '@/lib/saas';
 import { CONFIG } from '@/lib/config';
@@ -216,26 +216,36 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
     loadFromDb();
   }, []);
 
-  const setToken = (module: keyof OpenAITokens, value: string) => {
+  // Debounce token saves to avoid race conditions with encryption
+  const tokenSaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  const setToken = useCallback((module: keyof OpenAITokens, value: string) => {
     setTokens(prev => ({ ...prev, [module]: value }));
-    void (async () => {
-      try {
-        const empresaId = await getSaasEmpresaId();
-        const encrypted = await encryptToken(value);
-        await (supabase as any)
-          .schema('saas')
-          .from('tokens_ia_modulo')
-          .upsert({
-            empresa_id: empresaId,
-            modulo_codigo: module,
-            provedor: 'openai',
-            token_criptografado: encrypted,
-            modelo: models[module],
-            ativo: true,
-          }, { onConflict: 'empresa_id,modulo_codigo,provedor' });
-      } catch {}
-    })();
-  };
+
+    // Clear previous timer for this module
+    if (tokenSaveTimers.current[module]) clearTimeout(tokenSaveTimers.current[module]);
+
+    // Debounce: save to DB 800ms after last keystroke
+    tokenSaveTimers.current[module] = setTimeout(() => {
+      void (async () => {
+        try {
+          const empresaId = await getSaasEmpresaId();
+          const encrypted = await encryptToken(value);
+          await (supabase as any)
+            .schema('saas')
+            .from('tokens_ia_modulo')
+            .upsert({
+              empresa_id: empresaId,
+              modulo_codigo: module,
+              provedor: 'openai',
+              token_criptografado: encrypted,
+              modelo: models[module],
+              ativo: true,
+            }, { onConflict: 'empresa_id,modulo_codigo,provedor' });
+        } catch {}
+      })();
+    }, 800);
+  }, [models]);
 
   const setModuleModel = (module: ModuleAIKey, model: AIModelId) => {
     setModels(prev => ({ ...prev, [module]: model }));
