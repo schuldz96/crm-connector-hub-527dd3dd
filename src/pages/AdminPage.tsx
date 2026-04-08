@@ -289,7 +289,7 @@ export default function AdminPage() {
   };
 
   const handleApproveAccess = async (req: AccessRequest) => {
-    const role = triageRoles[req.id] || 'member';
+    const role = triageRoles[req.id] || 'sdr';
     const ok = await approveAccessRequest({
       requestId: req.id,
       role,
@@ -766,7 +766,7 @@ export default function AdminPage() {
 
                           <div className="flex items-center gap-2">
                             <select
-                              value={triageRoles[req.id] || 'member'}
+                              value={triageRoles[req.id] || 'sdr'}
                               onChange={e => setTriageRoles(prev => ({ ...prev, [req.id]: e.target.value as UserRole }))}
                               className="text-xs bg-secondary border border-border rounded-lg px-2 py-1 text-foreground"
                             >

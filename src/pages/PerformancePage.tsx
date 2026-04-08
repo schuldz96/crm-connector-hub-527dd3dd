@@ -31,7 +31,9 @@ function scoreLabel(s: number) {
 const roleMap: Record<string, string> = {
   admin: 'admin', ceo: 'ceo', diretor: 'director', gerente: 'manager',
   coordenador: 'coordinator', supervisor: 'supervisor', vendedor: 'member',
+  bdr: 'bdr', sdr: 'sdr', closer: 'closer', key_account: 'key_account', csm: 'csm', low_touch: 'low_touch',
 };
+const SELF_ROLES = ['member', 'bdr', 'sdr', 'closer', 'key_account', 'csm', 'low_touch'];
 
 // ─── Score Card ───────────────────────────────────────────────────────────────
 function ScoreCard({ label, value, icon: Icon, sub }: { label: string; value: number | string; icon: any; sub?: string }) {
@@ -187,7 +189,7 @@ export default function PerformancePage() {
   // Auto-select first user/team when data loads
   useEffect(() => {
     if (visibleUsers.length > 0 && !selectedUserId) {
-      setSelectedUserId(role === 'member' ? (user?.id ?? visibleUsers[0].id) : visibleUsers[0].id);
+      setSelectedUserId(SELF_ROLES.includes(role) ? (user?.id ?? visibleUsers[0].id) : visibleUsers[0].id);
     }
   }, [visibleUsers, selectedUserId]);
   useEffect(() => {
@@ -415,7 +417,7 @@ export default function PerformancePage() {
     return { team, members, avgOverall, totalMeetings, totalWaAnalyses, teamCriteriaByAgent, teamWaCriteria, allTeamMeetEvals, teamRadarData, teamTrend, teamAvgMeetScore };
   };
 
-  const effectiveUserId = role === 'member' ? (user?.id ?? selectedUserId) : selectedUserId;
+  const effectiveUserId = SELF_ROLES.includes(role) ? (user?.id ?? selectedUserId) : selectedUserId;
   const effectiveTeamId = visibleTeams.length === 1 ? visibleTeams[0]?.id : selectedTeamId;
 
   const userPerf = mode === 'person' && effectiveUserId ? buildUserPerf(effectiveUserId) : null;
@@ -464,7 +466,7 @@ export default function PerformancePage() {
       </div>
 
       {/* ── Role badge ── */}
-      {role === 'member' && (
+      {SELF_ROLES.includes(role) && (
         <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-muted/50 border border-border text-xs text-muted-foreground">
           <Lock className="w-3.5 h-3.5" />
           Você está vendo apenas os seus próprios dados de desempenho.
@@ -494,7 +496,7 @@ export default function PerformancePage() {
         )}
 
         {mode === 'person' ? (
-          role === 'member' ? (
+          SELF_ROLES.includes(role) ? (
             <div className="flex items-center gap-2 px-3 h-9 rounded-lg bg-secondary border border-border text-xs text-foreground">
               <User className="w-3.5 h-3.5 text-muted-foreground" />
               {visibleUsers[0]?.name ?? 'Você'}
@@ -504,7 +506,7 @@ export default function PerformancePage() {
               value={selectedUserId}
               onChange={setSelectedUserId}
               placeholder="Selecione um analista..."
-              options={visibleUsers.filter(u => u.role === 'member').sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map(u => {
+              options={visibleUsers.filter(u => u.SELF_ROLES.includes(role)).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map(u => {
                 const perf = buildUserPerf(u.id);
                 const score = perf?.overallScore;
                 const dot = score != null ? (score >= 85 ? '🟢' : score >= 70 ? '🔵' : score >= 50 ? '🟡' : '🔴') : '';

@@ -43,6 +43,12 @@ function roleToDb(role: UserRole): string {
     manager: 'gerente',
     coordinator: 'coordenador',
     supervisor: 'supervisor',
+    bdr: 'bdr',
+    sdr: 'sdr',
+    closer: 'closer',
+    key_account: 'key_account',
+    csm: 'csm',
+    low_touch: 'low_touch',
     member: 'vendedor',
     support: 'suporte',
   };
@@ -57,6 +63,12 @@ function roleFromDb(role: string | null | undefined): UserRole {
     gerente: 'manager',
     coordenador: 'coordinator',
     supervisor: 'supervisor',
+    bdr: 'bdr',
+    sdr: 'sdr',
+    closer: 'closer',
+    key_account: 'key_account',
+    csm: 'csm',
+    low_touch: 'low_touch',
     vendedor: 'member',
   };
   return map[(role || '').toLowerCase()] || 'member';

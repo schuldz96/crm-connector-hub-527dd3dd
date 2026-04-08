@@ -170,7 +170,7 @@ interface UserAccessRow {
 export default function InboxSettingsModal({ onClose, onSaved, accounts = [], onAccountsChange }: Props) {
   const { toast } = useToast();
   const { user } = useAuth();
-  const isRestrictedRole = user?.role === 'support' || user?.role === 'member';
+  const isRestrictedRole = ['support', 'bdr', 'sdr', 'closer', 'key_account', 'csm', 'low_touch', 'member'].includes(user?.role || '');
   const [tab, setTab] = useState(isRestrictedRole ? 'templates' : 'accounts');
   const [selectedAccount, setSelectedAccount] = useState<MetaInboxAccount | null>(accounts[0] ?? null);
 
