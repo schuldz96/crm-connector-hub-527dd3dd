@@ -1639,6 +1639,9 @@ export default function InboxPage() {
                     {conv.last_message_ts ? formatTime(conv.last_message_ts) : ''}
                   </span>
                 </div>
+                {conv.contact_name && (
+                  <p className="text-[10px] text-foreground/60 font-mono truncate -mt-0.5 mb-0.5">{conv.contact_phone}</p>
+                )}
                 <div className="flex items-center justify-between gap-1">
                   <p className="text-[11px] text-muted-foreground truncate">{conv.last_message || '...'}</p>
                   {conv.unread_count > 0 && (
@@ -1741,7 +1744,7 @@ export default function InboxPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                  <p className="text-[11px] text-foreground/70 font-mono flex items-center gap-1">
                     <Phone className="w-3 h-3" /> {selectedConv.contact_phone}
                   </p>
                   {/* Owner selector */}
