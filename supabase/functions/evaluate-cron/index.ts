@@ -284,16 +284,21 @@ serve(async (req) => {
       for (const meet of meetings || []) {
         if (!meet.transcricao || meet.transcricao.length < 50) continue;
 
-        // Check if already evaluated
+        // Check if already evaluated (skip if has valid score > 0)
         const { data: existing } = await sb.from('analises_ia')
-          .select('id')
+          .select('id,score')
           .eq('tipo_contexto', 'reuniao')
           .eq('entidade_id', meet.id)
           .maybeSingle();
 
-        if (existing) {
+        if (existing && (existing as any).score > 0) {
           log(`  Já avaliada: ${meet.titulo}`);
           continue;
+        }
+        // If score is 0 or null, delete old analysis to re-evaluate
+        if (existing) {
+          await sb.from('analises_ia').delete().eq('id', existing.id);
+          log(`  Reavaliando (score=0): ${meet.titulo}`);
         }
 
         try {
