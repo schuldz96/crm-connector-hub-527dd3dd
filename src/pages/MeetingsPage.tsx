@@ -560,8 +560,18 @@ export default function MeetingsPage() {
   };
 
   const handleEvaluateAll = () => {
-    const pending = visibleMeetings.filter(m => !m.analisada_por_ia && m.transcricao && m.status === 'concluida');
-    runBatchEvaluation(pending, 'Avaliação');
+    const concluded = visibleMeetings.filter(m => !m.analisada_por_ia && m.status === 'concluida');
+    const withTranscript = concluded.filter(m => m.transcricao);
+    const withoutTranscript = concluded.length - withTranscript.length;
+
+    if (concluded.length > 0 && withTranscript.length === 0) {
+      toast({ title: 'Sem transcrição', description: `${withoutTranscript} reunião(ões) concluída(s) sem transcrição. A transcrição é necessária para avaliar.` });
+      return;
+    }
+    if (withoutTranscript > 0) {
+      toast({ title: `${withoutTranscript} reunião(ões) sem transcrição serão ignoradas` });
+    }
+    runBatchEvaluation(withTranscript, 'Avaliação');
   };
 
   const handleCancelEval = () => {
