@@ -11,6 +11,9 @@ import { AuditLogProvider } from "@/contexts/AuditLogContext";
 import { NotificationsProvider } from "@/contexts/NotificationsContext";
 import AppLayout from "@/components/AppLayout";
 import RequireRole from "@/components/RequireRole";
+import { SuperAdminAuthProvider } from "@/contexts/SuperAdminAuthContext";
+import SuperAdminLoginPage from "@/pages/super-admin/SuperAdminLoginPage";
+import SuperAdminProtectedRoutes from "@/components/super-admin/SuperAdminProtectedRoutes";
 import LoginPage from "@/pages/LoginPage";
 import GoogleCallbackPage from "@/pages/GoogleCallbackPage";
 import DashboardPage from "@/pages/DashboardPage";
@@ -143,6 +146,14 @@ const App = () => (
                 <AuthProvider>
                   <NotificationsProvider>
                     <Routes>
+                      {/* Super Admin — independent auth */}
+                      <Route path="/super-admin/login" element={<SuperAdminLoginPage />} />
+                      <Route path="/super-admin/*" element={
+                        <SuperAdminAuthProvider>
+                          <SuperAdminProtectedRoutes />
+                        </SuperAdminAuthProvider>
+                      } />
+
                       {/* Public routes */}
                       <Route path="/login"                element={<LoginPageWrapper />} />
                       <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
