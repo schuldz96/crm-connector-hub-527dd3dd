@@ -85,7 +85,7 @@ function CreateUserModal({ onClose, onCreate }: { onClose: () => void; onCreate:
           </div>
           <div>
             <label className="text-xs font-medium block mb-1.5">E-mail</label>
-            <Input value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="joao@appmax.com.br" type="email" className="h-9 text-xs bg-secondary border-border" />
+            <Input value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="joao@email.com" type="email" className="h-9 text-xs bg-secondary border-border" />
           </div>
           <div>
             <label className="text-xs font-medium block mb-1.5">Perfil</label>
@@ -755,10 +755,7 @@ function UsersAdminPage() {
   };
 
   const handleCreateUser = async (payload: { name: string; email: string; role: UserRole; password: string }) => {
-    if (!payload.email.endsWith('@appmax.com.br')) {
-      toast({ variant: 'destructive', title: 'Domínio inválido', description: 'Use um e-mail @appmax.com.br.' });
-      return;
-    }
+    // Domain validation removed — any email allowed
     if (payload.password.length < 8) {
       toast({ variant: 'destructive', title: 'Senha fraca', description: 'Use pelo menos 8 caracteres.' });
       return;
@@ -917,7 +914,7 @@ function mapAllowedUsersToUsers(allowed: AllowedUser[]): User[] {
     email: u.email.toLowerCase(),
     avatar: u.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(u.email.toLowerCase())}`,
     role: u.role,
-    company: 'Appmax',
+    company: 'LTX',
     status: 'active',
     createdAt: u.createdAt ? new Date(u.createdAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
   }));

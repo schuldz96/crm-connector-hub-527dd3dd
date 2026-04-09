@@ -48,7 +48,7 @@ export type WebhookPayload = {
   data: Record<string, unknown>;
 };
 
-const STORAGE_KEY = 'appmax_webhook_configs';
+const STORAGE_KEY = 'ltx_webhook_configs';
 
 export const DEFAULT_WEBHOOK_CONFIGS: WebhookConfig[] = [
   {
@@ -311,7 +311,7 @@ export async function testWebhook(cfg: WebhookConfig): Promise<'success' | 'erro
   const payload: WebhookPayload = {
     event: cfg.id,
     timestamp: new Date().toISOString(),
-    data: { test: true, message: 'Webhook de teste da plataforma AppMax' },
+    data: { test: true, message: 'Webhook de teste da plataforma LTX' },
   };
   try {
     await fetch(cfg.url, {

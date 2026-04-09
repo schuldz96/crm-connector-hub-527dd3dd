@@ -150,7 +150,7 @@ export default function AdminPage() {
     smtpPort: '587',
     smtpUser: '',
     smtpPassword: '',
-    senderName: 'Appmax Revenue OS',
+    senderName: 'LTX',
     senderEmail: '',
   });
   const [showEmailPassword, setShowEmailPassword] = useState(false);
@@ -300,7 +300,7 @@ export default function AdminPage() {
     const ok = await approveAccessRequest({
       requestId: req.id,
       role,
-      approverEmail: currentUser?.email || 'admin@appmax.com.br',
+      approverEmail: currentUser?.email || 'admin@ltx.com',
     });
     if (!ok) {
       toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível aprovar a solicitação.' });
@@ -315,7 +315,7 @@ export default function AdminPage() {
   const handleRejectAccess = async (req: AccessRequest) => {
     const ok = await rejectAccessRequest({
       requestId: req.id,
-      approverEmail: currentUser?.email || 'admin@appmax.com.br',
+      approverEmail: currentUser?.email || 'admin@ltx.com',
     });
     if (!ok) {
       toast({ variant: 'destructive', title: 'Erro', description: 'Não foi possível rejeitar a solicitação.' });
@@ -406,10 +406,10 @@ export default function AdminPage() {
               <h2 className="font-display font-semibold text-lg">Configurações da Empresa</h2>
               <div className="grid grid-cols-2 gap-4">
                 {[
-                  { label: 'Nome da Empresa', value: 'Appmax', placeholder: 'Sua empresa' },
-                  { label: 'Domínio', value: 'appmax.com.br', placeholder: 'dominio.com.br' },
+                  { label: 'Nome da Empresa', value: 'LTX', placeholder: 'Sua empresa' },
+                  { label: 'Domínio', value: '', placeholder: 'dominio.com.br' },
                   { label: 'CNPJ', value: '', placeholder: '00.000.000/0001-00' },
-                  { label: 'Email de Contato', value: 'admin@appmax.com.br', placeholder: 'admin@empresa.com' },
+                  { label: 'Email de Contato', value: '', placeholder: 'admin@empresa.com' },
                 ].map(f => (
                   <div key={f.label}>
                     <label className="text-xs font-medium block mb-1.5">{f.label}</label>
@@ -442,7 +442,7 @@ export default function AdminPage() {
                       <Save className="w-3 h-3 mr-1" /> Salvar
                     </Button>
                   </div>
-                  <p className="text-[10px] text-muted-foreground mt-1">Aparece como "HUBMAX · {subtitleDraft}" na sidebar e "Hubmax {subtitleDraft}" na aba.</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">Aparece como "LTX · {subtitleDraft}" na sidebar e "LTX {subtitleDraft}" na aba.</p>
                 </div>
               </div>
             </div>
@@ -1546,7 +1546,7 @@ export default function AdminPage() {
                       </label>
                       <Input
                         type="email"
-                        placeholder="equipe@appmax.com.br"
+                        placeholder="equipe@empresa.com"
                         value={emailConfig.gmailAccount}
                         onChange={(e) => setEmailConfig(prev => ({ ...prev, gmailAccount: e.target.value, senderEmail: e.target.value }))}
                       />
@@ -1572,7 +1572,7 @@ export default function AdminPage() {
                         Nome do remetente
                       </label>
                       <Input
-                        placeholder="Appmax Revenue OS"
+                        placeholder="LTX"
                         value={emailConfig.senderName}
                         onChange={(e) => setEmailConfig(prev => ({ ...prev, senderName: e.target.value }))}
                       />
@@ -1640,7 +1640,7 @@ export default function AdminPage() {
                       </label>
                       <Input
                         type="email"
-                        placeholder="noreply@appmax.com.br"
+                        placeholder="noreply@empresa.com"
                         value={emailConfig.senderEmail}
                         onChange={(e) => setEmailConfig(prev => ({ ...prev, senderEmail: e.target.value }))}
                       />
@@ -1650,7 +1650,7 @@ export default function AdminPage() {
                         Nome do remetente
                       </label>
                       <Input
-                        placeholder="Appmax Revenue OS"
+                        placeholder="LTX"
                         value={emailConfig.senderName}
                         onChange={(e) => setEmailConfig(prev => ({ ...prev, senderName: e.target.value }))}
                       />

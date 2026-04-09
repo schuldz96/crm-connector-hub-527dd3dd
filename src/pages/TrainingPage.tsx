@@ -84,7 +84,7 @@ const SCRIPTS: Record<string, ScriptStep[]> = {
       duration: '12–22 min',
       goal: 'Mostrar diferencial além da taxa',
       tips: [
-        'Citar aprovação acima da média do mercado (Appmax ~87% vs ~80%)',
+        'Citar aprovação acima da média do mercado (LTX ~87% vs ~80%)',
         'Recuperação automática de carrinho abandonado',
         'Retentativa inteligente de pagamento',
         'Antifraude por IA + análise humana',
@@ -184,7 +184,7 @@ const SCRIPTS: Record<string, ScriptStep[]> = {
       duration: '22–30 min',
       goal: 'Transmitir segurança e eliminar medos',
       tips: [
-        'Appmax é autorizada pelo Banco Central',
+        'LTX é autorizada pelo Banco Central',
         'Suporte técnico disponível por chat e e-mail',
         'Ofereça agendar uma sessão de setup junto',
         '"Se travar em qualquer etapa da integração, é só me chamar."',
@@ -220,7 +220,7 @@ const SCRIPTS: Record<string, ScriptStep[]> = {
       tips: [
         'Revisão de regras do antifraude (pode estar muito rígido)',
         'Ajuste no checkout: order bump, PIX como primeiro método',
-        'Mostrar que aprovação média da Appmax é 87%',
+        'Mostrar que aprovação média da LTX é 87%',
         'Oferecer acompanhamento semanal por 30 dias',
       ],
     },
@@ -238,16 +238,16 @@ const SCRIPTS: Record<string, ScriptStep[]> = {
   ],
 };
 
-// ─── Mock data — Appmax ────────────────────────────────────────────────────────
+// ─── Mock data — LTX ────────────────────────────────────────────────────────
 const MOCK_SCENARIOS: TrainingScenario[] = [
   {
     id: 'sc_001',
     title: 'Negociação de Taxas — Ecommerce Médio',
-    description: 'Dono de e-commerce está insatisfeito com as taxas atuais e ameaça migrar para a concorrência. Seu objetivo é coletar dados da operação, entender o volume e propor uma revisão de taxas que faça sentido para a Appmax.',
+    description: 'Dono de e-commerce está insatisfeito com as taxas atuais e ameaça migrar para a concorrência. Seu objetivo é coletar dados da operação, entender o volume e propor uma revisão de taxas que faça sentido para a LTX.',
     focusPoints: [
       'Levantar volume mensal de transações (TPV)',
       'Entender ticket médio e mix de bandeiras',
-      'Apresentar benefícios do ecossistema Appmax (antifraude, recuperação, checkout)',
+      'Apresentar benefícios do ecossistema LTX (antifraude, recuperação, checkout)',
       'Propor revisão de taxa com base nos números reais',
       'Citar aprovação acima da média do mercado como diferencial',
     ],
@@ -261,15 +261,15 @@ const MOCK_SCENARIOS: TrainingScenario[] = [
     script: SCRIPTS.sc_001,
     difficulty: 'hard',
     persona: 'Ricardo, dono de e-commerce de moda feminina. Fatura R$180k/mês, ticket médio de R$220. Está com taxa de 3,2% no crédito e ouviu que um concorrente oferece 2,8%. É direto, fala rápido e quer números concretos.',
-    createdBy: 'Appmax Training',
+    createdBy: 'LTX Training',
     createdAt: '2026-02-10',
   },
   {
     id: 'sc_002',
     title: 'Prospecção — Lead Frio (Infoproduto)',
-    description: 'Você está ligando para um produtor digital que nunca ouviu falar da Appmax. Ele usa uma plataforma concorrente há 2 anos. Seu objetivo é qualificar a operação, identificar dores (aprovação baixa, sem recuperação de vendas) e gerar interesse em uma demo.',
+    description: 'Você está ligando para um produtor digital que nunca ouviu falar da LTX. Ele usa uma plataforma concorrente há 2 anos. Seu objetivo é qualificar a operação, identificar dores (aprovação baixa, sem recuperação de vendas) e gerar interesse em uma demo.',
     focusPoints: [
-      'Apresentar a Appmax como fintech focada em conversão, não apenas gateway',
+      'Apresentar a LTX como fintech focada em conversão, não apenas gateway',
       'Fazer perguntas sobre taxa de aprovação atual',
       'Introduzir recuperação de carrinho e retentativa automática',
       'Perguntar sobre volume e tipo de produto (curso, mentoria, assinatura)',
@@ -285,19 +285,19 @@ const MOCK_SCENARIOS: TrainingScenario[] = [
     script: SCRIPTS.sc_002,
     difficulty: 'medium',
     persona: 'Fernanda, criadora de cursos online de nutrição. Vende entre R$40k e R$60k/mês, usa plataforma de infoproduto concorrente. Não está insatisfeita, mas se ouvir que perde vendas pode abrir espaço. É educada mas ocupada.',
-    createdBy: 'Appmax Training',
+    createdBy: 'LTX Training',
     createdAt: '2026-02-15',
   },
   {
     id: 'sc_003',
     title: 'Onboarding — Dúvidas de Integração e Saque',
-    description: 'Cliente recém-ativado está com dúvidas sobre como integrar a Appmax na loja e sobre as regras de saque. Seu objetivo é transmitir segurança, explicar o processo claramente e garantir que ele siga em frente sem abandonar o onboarding.',
+    description: 'Cliente recém-ativado está com dúvidas sobre como integrar a LTX na loja e sobre as regras de saque. Seu objetivo é transmitir segurança, explicar o processo claramente e garantir que ele siga em frente sem abandonar o onboarding.',
     focusPoints: [
       'Explicar opções de integração: plugin nativo, API, link de pagamento',
       'Esclarecer o prazo de saque (D+2 no crédito, instantâneo no PIX)',
       'Citar suporte e equipe técnica disponível para ajudar na integração',
       'Mencionar o dashboard e relatórios de aprovação em tempo real',
-      'Reforçar que a Appmax é autorizada pelo Banco Central — transmitir confiança',
+      'Reforçar que a LTX é autorizada pelo Banco Central — transmitir confiança',
     ],
     avoidPoints: [
       'Usar termos técnicos sem explicar (webhook, payload, OAuth)',
@@ -308,8 +308,8 @@ const MOCK_SCENARIOS: TrainingScenario[] = [
     ],
     script: SCRIPTS.sc_003,
     difficulty: 'easy',
-    persona: 'Carlos, dono de loja virtual de suplementos, 42 anos, não é técnico. Acabou de assinar com a Appmax mas está inseguro. Preocupado com "e se der erro na integração?" e "quando vou receber meu dinheiro?". Precisa de clareza e paciência.',
-    createdBy: 'Appmax Training',
+    persona: 'Carlos, dono de loja virtual de suplementos, 42 anos, não é técnico. Acabou de assinar com a LTX mas está inseguro. Preocupado com "e se der erro na integração?" e "quando vou receber meu dinheiro?". Precisa de clareza e paciência.',
+    createdBy: 'LTX Training',
     createdAt: '2026-03-01',
   },
   {
@@ -320,7 +320,7 @@ const MOCK_SCENARIOS: TrainingScenario[] = [
       'Escutar e validar a frustração do cliente antes de apresentar solução',
       'Investigar a causa da reprovação: tipo de produto, perfil do comprador, bandeiras',
       'Propor revisão no antifraude ou ajuste no checkout',
-      'Apresentar dados: aprovação média da Appmax vs mercado',
+      'Apresentar dados: aprovação média da LTX vs mercado',
       'Oferecer acompanhamento próximo por 30 dias',
     ],
     avoidPoints: [
@@ -333,7 +333,7 @@ const MOCK_SCENARIOS: TrainingScenario[] = [
     script: SCRIPTS.sc_004,
     difficulty: 'hard',
     persona: 'Alexandre, e-commerce de eletrônicos, fatura R$300k/mês. Taxa de aprovação caiu de 82% para 71% nos últimos 2 meses. Está irritado, já pesquisou concorrentes e tem uma reunião com a Cielo amanhã. Quer solução ou vai embora.',
-    createdBy: 'Appmax Training',
+    createdBy: 'LTX Training',
     createdAt: '2026-03-05',
   },
 ];
@@ -630,7 +630,7 @@ function VoiceTrainingSession({
 
   // Build system prompt — AI is the CLIENT, stays reactive, does NOT lead
   const buildSystemPrompt = () => `
-Você é um CLIENTE sendo abordado por um vendedor da Appmax, uma fintech brasileira de processamento de pagamentos para e-commerce e infoprodutos.
+Você é um CLIENTE sendo abordado por um vendedor da LTX, uma fintech brasileira de processamento de pagamentos para e-commerce e infoprodutos.
 
 ━━━ SUA PERSONA ━━━
 ${scenario.persona}
@@ -638,8 +638,8 @@ ${scenario.persona}
 ━━━ CONTEXTO DO CENÁRIO ━━━
 ${scenario.description}
 
-━━━ SOBRE A APPMAX (contexto para suas respostas) ━━━
-A Appmax é uma processadora de pagamentos focada em e-commerce e negócios digitais. Ela oferece:
+━━━ SOBRE A LTX (contexto para suas respostas) ━━━
+A LTX é uma processadora de pagamentos focada em e-commerce e negócios digitais. Ela oferece:
 - Processamento via cartão de crédito, PIX e boleto
 - Checkout de alta conversão com antifraude por IA
 - Recuperação automática de carrinho abandonado e retentativa de pagamento
@@ -758,7 +758,7 @@ A Appmax é uma processadora de pagamentos focada em e-commerce e negócios digi
     try {
       const evalPrompt = `
 Você é um coach especialista em vendas B2B para fintechs e processadoras de pagamentos, com foco em e-commerce.
-Analise esta simulação de vendas da Appmax (processadora de pagamentos) e avalie o desempenho do vendedor.
+Analise esta simulação de vendas da LTX (processadora de pagamentos) e avalie o desempenho do vendedor.
 
 CENÁRIO: ${scenario.title}
 PERSONA DO CLIENTE: ${scenario.persona}

@@ -28,7 +28,7 @@ export async function getSaasEmpresaId(): Promise<string> {
   const { data: created, error: createError } = await (supabase as any)
     .schema('saas')
     .from('empresas')
-    .insert({ nome: 'Appmax', dominio: ALLOWED_DOMAIN, plano: 'enterprise' })
+    .insert({ nome: 'LTX', dominio: ALLOWED_DOMAIN, plano: 'enterprise' })
     .select('id')
     .single();
 

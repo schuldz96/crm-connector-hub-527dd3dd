@@ -67,7 +67,7 @@ function ProtectedRoutes() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
-          <img src="/appmax-favicon.png" alt="Appmax" className="w-10 h-10 rounded-xl animate-pulse" />
+          <img src="/appmax-favicon.png" alt="LTX" className="w-10 h-10 rounded-xl animate-pulse" />
           <p className="text-sm text-muted-foreground">Carregando...</p>
         </div>
       </div>

@@ -26,10 +26,10 @@ import { METHODOLOGY_PRESETS, type MethodologyPreset } from '@/lib/methodologyPr
 
 // ─── Storage keys (shared with WhatsApp analysis panel) ──────────────────────
 export const AI_CONFIG_STORAGE = {
-  WHATSAPP_CRITERIA:   'appmax_ai_whatsapp_criteria',
-  WHATSAPP_PROMPT:     'appmax_ai_whatsapp_prompt',
-  MEETINGS_CRITERIA:   'appmax_ai_meetings_criteria',
-  MEETINGS_PROMPT:     'appmax_ai_meetings_prompt',
+  WHATSAPP_CRITERIA:   'ltx_ai_whatsapp_criteria',
+  WHATSAPP_PROMPT:     'ltx_ai_whatsapp_prompt',
+  MEETINGS_CRITERIA:   'ltx_ai_meetings_criteria',
+  MEETINGS_PROMPT:     'ltx_ai_meetings_prompt',
 };
 
 export interface EvalCriteria {
@@ -1307,12 +1307,12 @@ Avalie cada critério abaixo e retorne APENAS JSON válido (sem markdown):
     produto: {
       nome: 'Agente Produto',
       descricao: 'Avalia posicionamento de produto, aderência ao playbook e comunicação de valor na reunião',
-      prompt: `Você é uma IA especialista em Produto e Go-To-Market da Appmax.
+      prompt: `Você é uma IA especialista em Produto e Go-To-Market da LTX.
 Sua função é avaliar reuniões (calls de vendas, diagnóstico ou demonstração) com base no playbook oficial de produto da empresa.
 Você deve agir como um auditor rigoroso de qualidade de discurso comercial e aderência ao modelo de produto.
 
 ## CONTEXTO OBRIGATÓRIO DO PRODUTO (BASE DE VERDADE)
-A Appmax é uma plataforma de performance para e-commerce que:
+A LTX é uma plataforma de performance para e-commerce que:
 - Processa pagamentos
 - Maximiza conversão
 - Aumenta faturamento
@@ -1362,7 +1362,7 @@ Boa: Problema → perda financeira → solução → ganho
 Ruim: lista de funcionalidades, explicação técnica isolada, discurso genérico.
 
 9. DIFERENCIAÇÃO COMPETITIVA
-Deve ficar claro: Appmax compete por performance, não por taxa.
+Deve ficar claro: LTX compete por performance, não por taxa.
 
 10. ERROS CRÍTICOS DO PLAYBOOK
 Marcar se ocorreram: foco em funcionalidade, comparação por preço/taxa, falta de impacto financeiro, explicação técnica sem contexto, posicionamento errado do produto.
@@ -1427,7 +1427,7 @@ Avalie cada critério e retorne APENAS JSON válido (sem markdown):
         { id: 'conexao_impacto', label: 'Conexão Problema → Impacto', weight: 20, description: 'Seguiu framework: FUNCIONALIDADE → PROBLEMA → IMPACTO FINANCEIRO', examples: ['Multiadquirência → aprovação → mais vendas'], positiveSignals: ['Conexão clara funcionalidade-problema-impacto', 'Quantificou ganho'], neutralSignals: ['Mencionou problema e impacto mas sem conectar com funcionalidade'], negativeSignals: ['Só funcionalidade sem impacto', 'Só problema sem solução', 'Explicação técnica isolada'] },
         { id: 'foco_valor', label: 'Foco em Valor Financeiro', weight: 20, description: 'Comunicou impacto financeiro: aumento receita, recuperação vendas, redução perdas, conversão', examples: ['Recuperação de 10-25% vendas perdidas', 'Aumento de aprovação = mais faturamento'], positiveSignals: ['Impacto financeiro explícito e quantificado', 'ROI claro'], neutralSignals: ['Mencionou valor mas sem quantificar'], negativeSignals: ['Sem menção a impacto financeiro', 'Focou em taxa/preço', 'Discurso técnico'] },
         { id: 'posicionamento', label: 'Posicionamento do Produto', weight: 15, description: 'Posicionou como plataforma de performance/faturamento, não como gateway/ferramenta', examples: ['Compete por performance não por taxa'], positiveSignals: ['Plataforma de performance', 'Gerador de faturamento', 'Funcionalidades como MEIO'], neutralSignals: ['Posicionamento ambíguo'], negativeSignals: ['Posicionou como gateway', 'Como ferramenta técnica', 'Focou em funcionalidades como FIM'] },
-        { id: 'narrativa', label: 'Qualidade da Narrativa', weight: 15, description: 'Seguiu: Problema → perda financeira → solução → ganho. Evitou lista de features', examples: ['Hoje você está perdendo dinheiro por X, a Appmax resolve com Y gerando Z'], positiveSignals: ['Narrativa consultiva', 'Storytelling com impacto', 'Frases-chave do playbook'], neutralSignals: ['Narrativa ok mas genérica'], negativeSignals: ['Lista de funcionalidades', 'Discurso genérico', 'Comparação por preço'] },
+        { id: 'narrativa', label: 'Qualidade da Narrativa', weight: 15, description: 'Seguiu: Problema → perda financeira → solução → ganho. Evitou lista de features', examples: ['Hoje você está perdendo dinheiro por X, a LTX resolve com Y gerando Z'], positiveSignals: ['Narrativa consultiva', 'Storytelling com impacto', 'Frases-chave do playbook'], neutralSignals: ['Narrativa ok mas genérica'], negativeSignals: ['Lista de funcionalidades', 'Discurso genérico', 'Comparação por preço'] },
         { id: 'identificacao_fit', label: 'Identificação de Fit/ICP', weight: 10, description: 'Identificou sinais de fit (volume, escala, dores reais) ou baixo fit (foco em taxa, baixo volume)', examples: ['Perguntou volume de transações', 'Identificou busca por crescimento'], positiveSignals: ['Sinais de fit identificados', 'Qualificou ICP corretamente'], neutralSignals: ['Qualificação superficial'], negativeSignals: ['Ignorou sinais de baixo fit', 'Não qualificou perfil'] },
       ] : [],
       modelo_ia: 'gpt-4o-mini',

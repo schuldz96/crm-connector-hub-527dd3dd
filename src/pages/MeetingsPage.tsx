@@ -11,6 +11,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { getSaasEmpresaId } from '@/lib/saas';
+import { CONFIG } from '@/lib/config';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppConfig } from '@/contexts/AppConfigContext';
@@ -261,7 +262,7 @@ function ManualMeetingModal({
           <div>
             <label className="text-xs font-medium block mb-1">E-mails dos participantes *</label>
             <Textarea value={emails} onChange={e => setEmails(e.target.value)}
-              placeholder="vendedor@appmax.com.br, cliente@empresa.com (separados por vírgula)"
+              placeholder="vendedor@empresa.com, cliente@empresa.com (separados por vírgula)"
               className="text-xs bg-secondary border-border min-h-[60px] resize-none" />
             <p className="text-[10px] text-muted-foreground mt-0.5">O primeiro e-mail será o vendedor responsável</p>
           </div>
@@ -1101,7 +1102,7 @@ export default function MeetingsPage() {
                     <div className="flex items-center gap-2 text-xs">
                       <span className="text-muted-foreground">Participantes externos:</span>
                       <span className="font-medium">
-                        {selectedMeeting.participantes.filter(p => !p.email.endsWith('@appmax.com.br')).length}
+                        {selectedMeeting.participantes.filter(p => !p.email.endsWith(`@${CONFIG.GOOGLE_ALLOWED_DOMAIN}`)).length}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
@@ -1463,12 +1464,12 @@ export default function MeetingsPage() {
                           <div className="space-y-1.5">
                             {allEmails
                               .sort((a, b) => {
-                                const aExt = !a.endsWith('@appmax.com.br') ? 1 : 0;
-                                const bExt = !b.endsWith('@appmax.com.br') ? 1 : 0;
+                                const aExt = !a.endsWith(`@${CONFIG.GOOGLE_ALLOWED_DOMAIN}`) ? 1 : 0;
+                                const bExt = !b.endsWith(`@${CONFIG.GOOGLE_ALLOWED_DOMAIN}`) ? 1 : 0;
                                 return aExt - bExt || a.localeCompare(b);
                               })
                               .map(email => {
-                                const isExternal = !email.endsWith('@appmax.com.br');
+                                const isExternal = !email.endsWith(`@${CONFIG.GOOGLE_ALLOWED_DOMAIN}`);
                                 return (
                                   <div key={email} className={cn('flex items-center gap-2.5 p-2 rounded-lg border', isExternal ? 'bg-accent/5 border-accent/15' : 'bg-secondary border-border')}>
                                     <div className="w-6 h-6 rounded-full bg-muted border border-border flex items-center justify-center text-[9px] font-bold flex-shrink-0">

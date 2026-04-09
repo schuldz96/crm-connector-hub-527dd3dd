@@ -5,7 +5,7 @@
  */
 
 const ENC_PREFIX = 'enc:';
-const DEFAULT_SECRET = 'sdcoach-tok-k3y-2024-appmax';
+const DEFAULT_SECRET = 'ltx-tok-k3y-2024';
 
 function getSecret(): string {
   if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_TOKEN_SECRET) {

@@ -13,7 +13,7 @@ import {
 import { CONFIG } from '@/lib/config';
 
 const ALLOWED_DOMAIN = CONFIG.GOOGLE_ALLOWED_DOMAIN;
-const SESSION_KEY = 'appmax_session';
+const SESSION_KEY = 'ltx_session';
 
 /** Returns the default landing page for a given role */
 export function getDefaultRoute(role?: UserRole): string {
@@ -21,6 +21,7 @@ export function getDefaultRoute(role?: UserRole): string {
 }
 
 export function isAppmaxEmail(email: string): boolean {
+  if (!ALLOWED_DOMAIN) return true; // No domain restriction when not configured
   return email.trim().toLowerCase().endsWith(`@${ALLOWED_DOMAIN}`);
 }
 
@@ -56,7 +57,7 @@ function buildUser(
     role,
     teamId,
     areaId,
-    company: 'Appmax',
+    company: 'LTX',
     status: 'active',
     createdAt: new Date().toISOString().slice(0, 10),
   };
@@ -159,7 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!isAppmaxEmail(normalized)) {
         attempts.count++;
         attempts.lastAttempt = now;
-        throw new Error('Apenas e-mails @appmax.com.br são permitidos.');
+        throw new Error('E-mail não autorizado.');
       }
 
       const allowedMatch = await getAllowedUserByEmail(normalized);
@@ -272,15 +273,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return userIdx <= minIdx;
   };
 
-  // CRM access: restricted by email whitelist (enforced at auth level, not just sidebar)
-  const CRM_ALLOWED_EMAILS = ['marcos.schuldz@appmax.com.br', 'yuri.santos@appmax.com.br', 'leonardo.machado@appmax.com.br'];
-
   const canAccess = (resource: string) => {
     if (!user) return false;
-    // CRM: email-restricted regardless of role
-    if (resource === 'crm') {
-      return CRM_ALLOWED_EMAILS.includes(user.email?.toLowerCase() || '');
-    }
     if (user.role === 'admin') return true;
     return roleCanAccess(user.role, resource as any);
   };

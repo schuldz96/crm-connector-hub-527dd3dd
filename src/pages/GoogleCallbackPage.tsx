@@ -58,7 +58,7 @@ export default function GoogleCallbackPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="flex flex-col items-center gap-4">
-        <img src="/appmax-favicon.png" alt="Appmax" className="w-12 h-12 rounded-xl animate-pulse" />
+        <img src="/appmax-favicon.png" alt="LTX" className="w-12 h-12 rounded-xl animate-pulse" />
         <p className="text-sm text-muted-foreground">{status}</p>
       </div>
     </div>

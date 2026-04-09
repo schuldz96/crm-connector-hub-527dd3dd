@@ -250,7 +250,7 @@ function AIAnalysisPanel({
   const { toast } = useToast();
   const [result, setResult] = useState<AIAnalysisResult | null>(() => {
     try {
-      const stored = localStorage.getItem(`appmax_ai_analysis_${chat.id}`);
+      const stored = localStorage.getItem(`ltx_ai_analysis_${chat.id}`);
       return stored ? JSON.parse(stored) : null;
     } catch { return null; }
   });
@@ -260,7 +260,7 @@ function AIAnalysisPanel({
   // Load cached result when chat changes
   useEffect(() => {
     try {
-      const stored = localStorage.getItem(`appmax_ai_analysis_${chat.id}`);
+      const stored = localStorage.getItem(`ltx_ai_analysis_${chat.id}`);
       setResult(stored ? JSON.parse(stored) : null);
     } catch { setResult(null); }
   }, [chat.id]);
@@ -460,7 +460,7 @@ Responda APENAS com JSON válido no seguinte formato (sem markdown, sem explica�
       const jsonStr = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       const parsed: AIAnalysisResult = { ...JSON.parse(jsonStr), analyzedAt: new Date().toISOString() };
       setResult(parsed);
-      localStorage.setItem(`appmax_ai_analysis_${chat.id}`, JSON.stringify(parsed));
+      localStorage.setItem(`ltx_ai_analysis_${chat.id}`, JSON.stringify(parsed));
       const mediaInfo = [
         imageB64List.length > 0 ? `${imageB64List.length} img` : '',
         audioTranscripts.length > 0 ? `${audioTranscripts.length} áudio` : '',
@@ -909,7 +909,7 @@ export default function WhatsAppPage() {
   const [chatSortKey, setChatSortKey] = useState<ChatSortKey>('recent');
 
   // ── Local "last seen" tracking (independent of WhatsApp read receipts) ────
-  const SEEN_KEY = 'appmax_chat_seen';
+  const SEEN_KEY = 'ltx_chat_seen';
   const getSeenMap = useCallback((): Record<string, number> => {
     try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '{}'); } catch { return {}; }
   }, []);

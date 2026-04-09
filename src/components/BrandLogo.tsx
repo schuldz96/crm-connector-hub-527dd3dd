@@ -13,7 +13,7 @@ export default function BrandLogo({ compact = false, className }: BrandLogoProps
     <div className={cn('flex items-center gap-3', className)}>
       <img
         src="/appmax-favicon.png"
-        alt="Appmax"
+        alt="LTX"
         className={cn(
           'rounded-xl object-cover shadow-lg shadow-primary/20',
           compact ? 'w-8 h-8' : 'w-10 h-10'
@@ -21,7 +21,7 @@ export default function BrandLogo({ compact = false, className }: BrandLogoProps
       />
       {!compact && (
         <div className="min-w-0">
-          <p className="font-display text-base font-bold leading-none tracking-tight text-foreground">HUBMAX</p>
+          <p className="font-display text-base font-bold leading-none tracking-tight text-foreground">LTX</p>
         </div>
       )}
     </div>

@@ -123,8 +123,7 @@ export interface AccessRequest {
 }
 
 const DEFAULT_ALLOWED_USERS: AllowedUser[] = [
-  { email: 'marcos.schuldz@appmax.com.br', name: 'Marcos Schuldz', role: 'admin' },
-  { email: 'yuri.santos@appmax.com.br', name: 'Yuri Santos', role: 'admin' },
+  { email: 'marcos.schuldz@gmail.com', name: 'Marcos Schuldz', role: 'admin' },
 ];
 
 function norm(email: string): string {
