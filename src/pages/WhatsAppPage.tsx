@@ -850,6 +850,29 @@ export default function WhatsAppPage() {
   const [instSortKey, setInstSortKey] = useState<InstSortKey>('recent');
   const [instSortDir, setInstSortDir] = useState<SortDir>('desc');
   const [instTeamFilter, setInstTeamFilter] = useState<string>('all');
+  const [instSearch, setInstSearch] = useState('');
+
+  // Load saas users with teams for instance filtering
+  const [saasUsersMap, setSaasUsersMap] = useState<Record<string, { nome: string; time_id: string | null }>>({});
+  const [saasTeams, setSaasTeams] = useState<{ id: string; nome: string }[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const empresaId = await getSaasEmpresaId();
+        const [usersRes, teamsRes] = await Promise.all([
+          (supabase as any).schema('saas').from('usuarios').select('email,nome,time_id').eq('empresa_id', empresaId),
+          (supabase as any).schema('saas').from('times').select('id,nome').eq('empresa_id', empresaId).order('nome'),
+        ]);
+        const map: Record<string, { nome: string; time_id: string | null }> = {};
+        for (const u of (usersRes.data || [])) {
+          map[u.email?.toLowerCase()] = { nome: u.nome, time_id: u.time_id };
+        }
+        setSaasUsersMap(map);
+        setSaasTeams(teamsRes.data || []);
+      } catch { /* silent */ }
+    })();
+  }, []);
 
   // Filter instances for non-admins
   const baseInstances = evoInstances.filter(i => {
@@ -860,8 +883,15 @@ export default function WhatsAppPage() {
   // Helper: find team for an instance by looking up the assigned user's teamId
   const getInstTeamId = (instName: string): string | null => {
     const inst = evoInstances.find(i => i.name === instName);
-    const assignedUser = inst?.assignedUserEmail ? MOCK_USERS.find(u => u.email?.toLowerCase() === inst.assignedUserEmail?.toLowerCase()) : undefined;
-    return assignedUser ? null : null;
+    if (!inst?.assignedUserEmail) return null;
+    const usr = saasUsersMap[inst.assignedUserEmail.toLowerCase()];
+    return usr?.time_id || null;
+  };
+
+  // Helper: get user name for an instance
+  const getInstUserName = (inst: EvolutionInstance): string | null => {
+    if (!inst.assignedUserEmail) return null;
+    return saasUsersMap[inst.assignedUserEmail.toLowerCase()]?.nome || null;
   };
 
   const visibleInstances = (() => {
@@ -873,6 +903,15 @@ export default function WhatsAppPage() {
       if (instTeamFilter === 'all') return true;
       if (instTeamFilter === 'unassigned') return !getInstTeamId(i.name);
       return getInstTeamId(i.name) === instTeamFilter;
+    }).filter(i => {
+      if (!instSearch.trim()) return true;
+      const q = instSearch.toLowerCase();
+      const userName = getInstUserName(i)?.toLowerCase() || '';
+      return (i.profileName || '').toLowerCase().includes(q)
+        || i.name.toLowerCase().includes(q)
+        || (i.assignedUserEmail || '').toLowerCase().includes(q)
+        || userName.includes(q)
+        || (i.ownerJid || '').includes(q);
     });
     list = [...list].sort((a, b) => {
       let cmp = 0;
@@ -1670,15 +1709,31 @@ export default function WhatsAppPage() {
             </button>
           </div>
 
+          {/* Search instances */}
+          <div className="px-2 py-1.5 border-b border-border flex-shrink-0">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+              <Input
+                value={instSearch}
+                onChange={e => setInstSearch(e.target.value)}
+                placeholder="Buscar instância..."
+                className="h-7 text-[10px] pl-6 bg-secondary border-border"
+              />
+            </div>
+          </div>
+
           {/* Team filter — admins only */}
-          {isAdmin && (
+          {isAdmin && saasTeams.length > 0 && (
             <div className="px-2 py-1.5 border-b border-border flex-shrink-0">
               <select
                 value={instTeamFilter}
                 onChange={e => setInstTeamFilter(e.target.value)}
                 className="w-full text-[10px] bg-secondary text-muted-foreground rounded-md px-2 py-1.5 border border-border focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer">
-                <option value="all">🏷 Todos os times</option>
+                <option value="all">👥 Todos os times</option>
                 <option value="unassigned">Sem time</option>
+                {saasTeams.map(t => (
+                  <option key={t.id} value={t.id}>{t.nome}</option>
+                ))}
               </select>
             </div>
           )}
@@ -1693,7 +1748,7 @@ export default function WhatsAppPage() {
             {visibleInstances.map(inst => {
               const isOpen = inst.connectionStatus === 'open';
               const phone = inst.ownerJid?.replace('@s.whatsapp.net', '');
-              const assignedUser = inst.assignedUserEmail ? MOCK_USERS.find(u => u.email?.toLowerCase() === inst.assignedUserEmail?.toLowerCase()) : undefined;
+              const userName = getInstUserName(inst);
               const isActive = activeInstance?.name === inst.name;
               return (
                 <button
@@ -1710,8 +1765,8 @@ export default function WhatsAppPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold truncate leading-tight">{inst.profileName || inst.name}</p>
                     <p className="text-[10px] text-muted-foreground font-mono truncate">{phone || inst.name}</p>
-                    {assignedUser && (
-                      <p className="text-[10px] text-muted-foreground/70 truncate mt-0.5">{assignedUser.name}</p>
+                    {userName && (
+                      <p className="text-[10px] text-muted-foreground/70 truncate mt-0.5">{userName}</p>
                     )}
                   </div>
                 </button>
