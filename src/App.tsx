@@ -147,7 +147,11 @@ const App = () => (
                   <NotificationsProvider>
                     <Routes>
                       {/* Super Admin — independent auth */}
-                      <Route path="/super-admin/login" element={<SuperAdminLoginPage />} />
+                      <Route path="/super-admin/login" element={
+                        <SuperAdminAuthProvider>
+                          <SuperAdminLoginPage />
+                        </SuperAdminAuthProvider>
+                      } />
                       <Route path="/super-admin/*" element={
                         <SuperAdminAuthProvider>
                           <SuperAdminProtectedRoutes />
