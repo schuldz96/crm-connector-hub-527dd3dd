@@ -208,7 +208,7 @@ export default function PerformancePage() {
     if (ev.tipo_contexto === 'reuniao' && ev.entidade_id) {
       setLoadingMeeting(true);
       try {
-        const { data } = await (supabase as any).schema('saas').from('reunioes')
+        const { data } = await (supabase as any).schema('channels').from('reunioes')
           .select('id,titulo,transcricao,duracao_minutos,data_reuniao,participantes,status')
           .eq('id', ev.entidade_id).maybeSingle();
         setSelectedMeeting(data);

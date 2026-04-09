@@ -90,6 +90,7 @@ export interface User {
   role: UserRole;
   teamId?: string;
   areaId?: string;
+  org?: string;
   company: string;
   status: 'active' | 'inactive';
   createdAt: string;

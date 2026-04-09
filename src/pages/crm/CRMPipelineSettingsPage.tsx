@@ -16,12 +16,12 @@ import {
 import { cn } from '@/lib/utils';
 import { useCrmPipelines } from '@/hooks/useCrm';
 import { supabase } from '@/integrations/supabase/client';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getOrg } from '@/lib/saas';
 import type { CrmPipeline, CrmPipelineStage } from '@/types/crm';
 import { useToast } from '@/hooks/use-toast';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const saas = () => (supabase as any).schema('saas');
+const crm = () => (supabase as any).schema('crm');
 
 const OBJECT_TYPES = [
   { id: 'deal', label: 'Negócios', icon: Briefcase },
@@ -162,13 +162,13 @@ export default function CRMPipelineSettingsPage() {
       const deletedIds = existingIds.filter(id => !currentIds.includes(id));
 
       if (deletedIds.length > 0) {
-        await saas().from('crm_pipeline_estagios').delete().in('id', deletedIds);
+        await crm().from('pipeline_estagios').delete().in('id', deletedIds);
       }
 
       // Upsert stages
       for (const stage of stages) {
         if (stage.isNew) {
-          await saas().from('crm_pipeline_estagios').insert({
+          await crm().from('pipeline_estagios').insert({
             pipeline_id: selectedPipeline.id,
             nome: stage.nome,
             cor: stage.cor,
@@ -176,7 +176,7 @@ export default function CRMPipelineSettingsPage() {
             ordem: stage.ordem,
           });
         } else {
-          await saas().from('crm_pipeline_estagios').update({
+          await crm().from('pipeline_estagios').update({
             nome: stage.nome,
             cor: stage.cor,
             probabilidade: stage.probabilidade,
@@ -199,16 +199,16 @@ export default function CRMPipelineSettingsPage() {
     const nome = window.prompt('Nome do novo pipeline:');
     if (!nome?.trim()) return;
     try {
-      const empresaId = await getSaasEmpresaId();
-      const { data, error } = await saas().from('crm_pipelines').insert({
-        empresa_id: empresaId,
+      const org = await getOrg();
+      const { data, error } = await crm().from('pipelines').insert({
+        empresa_id: org,
         nome: nome.trim(),
         tipo: objectType,
         ordem: pipelines.length,
       }).select().single();
       if (error) throw error;
       // Add default stages
-      await saas().from('crm_pipeline_estagios').insert([
+      await crm().from('pipeline_estagios').insert([
         { pipeline_id: data.id, nome: 'Novo', cor: '#3B82F6', probabilidade: 0, ordem: 0 },
         { pipeline_id: data.id, nome: 'Em progresso', cor: '#F59E0B', probabilidade: 50, ordem: 1 },
         { pipeline_id: data.id, nome: 'Concluído', cor: '#22C55E', probabilidade: 100, ordem: 2 },
@@ -228,7 +228,7 @@ export default function CRMPipelineSettingsPage() {
       return;
     }
     try {
-      await saas().from('crm_pipelines').delete().eq('id', selectedPipeline.id);
+      await crm().from('pipelines').delete().eq('id', selectedPipeline.id);
       setSelectedPipelineId(null);
       await refetch();
       toast({ title: 'Pipeline excluído' });
@@ -242,7 +242,7 @@ export default function CRMPipelineSettingsPage() {
     const newName = prompt('Novo nome do pipeline:', selectedPipeline.nome);
     if (!newName || newName === selectedPipeline.nome) return;
     try {
-      await saas().from('crm_pipelines').update({ nome: newName }).eq('id', selectedPipeline.id);
+      await crm().from('pipelines').update({ nome: newName }).eq('id', selectedPipeline.id);
       await refetch();
       toast({ title: 'Pipeline renomeado' });
     } catch (err) {
@@ -275,7 +275,7 @@ export default function CRMPipelineSettingsPage() {
     setSavingReorder(true);
     try {
       for (const p of reorderList) {
-        await saas().from('crm_pipelines').update({ ordem: p.ordem }).eq('id', p.id);
+        await crm().from('pipelines').update({ ordem: p.ordem }).eq('id', p.id);
       }
       await refetch();
       setReorderMode(false);
@@ -290,9 +290,9 @@ export default function CRMPipelineSettingsPage() {
   const clonePipeline = async () => {
     if (!selectedPipeline) return;
     try {
-      const empresaId = await getSaasEmpresaId();
-      const { data, error } = await saas().from('crm_pipelines').insert({
-        empresa_id: empresaId,
+      const org = await getOrg();
+      const { data, error } = await crm().from('pipelines').insert({
+        empresa_id: org,
         nome: `${selectedPipeline.nome} (cópia)`,
         tipo: objectType,
         ordem: pipelines.length,
@@ -307,7 +307,7 @@ export default function CRMPipelineSettingsPage() {
           probabilidade: s.probabilidade,
           ordem: s.ordem,
         }));
-        await saas().from('crm_pipeline_estagios').insert(clonedStages);
+        await crm().from('pipeline_estagios').insert(clonedStages);
       }
       await refetch();
       setSelectedPipelineId(data.id);

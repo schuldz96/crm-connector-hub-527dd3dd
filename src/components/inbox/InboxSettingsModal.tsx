@@ -18,7 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import SearchableSelect from '@/components/ui/searchable-select';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getOrg } from '@/lib/saas';
 import { useAuth } from '@/contexts/AuthContext';
 import { encryptToken } from '@/lib/tokenCrypto';
 import type { MetaInboxAccount } from '@/pages/InboxPage';
@@ -227,12 +227,12 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
   useEffect(() => {
     (async () => {
       try {
-        const empresaId = await getSaasEmpresaId();
+        const org = await getOrg();
         const { data: pipes } = await (supabase as any)
-          .schema('saas')
-          .from('crm_pipelines')
+          .schema('crm')
+          .from('pipelines')
           .select('id, nome')
-          .eq('empresa_id', empresaId)
+          .eq('org', org)
           .eq('tipo', 'ticket')
           .eq('ativo', true)
           .order('ordem');
@@ -241,8 +241,8 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
           const pipelinesWithStages: TicketPipeline[] = [];
           for (const p of pipes) {
             const { data: stages } = await (supabase as any)
-              .schema('saas')
-              .from('crm_pipeline_estagios')
+              .schema('crm')
+              .from('pipeline_estagios')
               .select('id, nome, ordem')
               .eq('pipeline_id', p.id)
               .order('ordem');
@@ -264,14 +264,14 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
 
   // Load all macros/tags for empresa
   const loadMacros = useCallback(async () => {
-    const empresaId = await getSaasEmpresaId();
-    const { data } = await supabase.from('meta_inbox_macros').select('*').eq('empresa_id', empresaId).order('nome');
+    const org = await getOrg();
+    const { data } = await supabase.schema('channels').from('meta_macros').select('*').eq('org', org).order('nome');
     setMacros((data || []) as Macro[]);
   }, []);
 
   const loadTags = useCallback(async () => {
-    const empresaId = await getSaasEmpresaId();
-    const { data } = await supabase.from('meta_inbox_tags').select('*').eq('empresa_id', empresaId).order('nome');
+    const org = await getOrg();
+    const { data } = await supabase.schema('channels').from('meta_tags').select('*').eq('org', org).order('nome');
     setTags((data || []) as TagDef[]);
   }, []);
 
@@ -287,18 +287,18 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
     }
     setSavingMacro(true);
     try {
-      const empresaId = await getSaasEmpresaId();
+      const org = await getOrg();
       const payload = {
-        empresa_id: empresaId,
+        empresa_id: org,
         account_ids: macroForm.account_ids,
         nome: macroForm.nome.trim().toLowerCase().replace(/\s+/g, '_'),
         tipo: macroForm.tipo, conteudo: macroForm.conteudo || null,
         media_url: macroForm.media_url || null, media_nome: macroForm.media_nome || null,
       };
       if (editingMacro) {
-        await supabase.from('meta_inbox_macros').update(payload).eq('id', editingMacro);
+        await supabase.schema('channels').from('meta_macros').update(payload).eq('id', editingMacro);
       } else {
-        await supabase.from('meta_inbox_macros').insert(payload);
+        await supabase.schema('channels').from('meta_macros').insert(payload);
       }
       setMacroForm({ nome: '', tipo: 'text', conteudo: '', media_url: '', media_nome: '', account_ids: [] });
       setEditingMacro(null);
@@ -310,7 +310,7 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
   };
 
   const deleteMacro = async (id: string) => {
-    await supabase.from('meta_inbox_macros').delete().eq('id', id);
+    await supabase.schema('channels').from('meta_macros').delete().eq('id', id);
     await loadMacros();
     toast({ title: 'Macro removida' });
   };
@@ -322,9 +322,9 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
     }
     setSavingTag(true);
     try {
-      const empresaId = await getSaasEmpresaId();
-      await supabase.from('meta_inbox_tags').insert({
-        empresa_id: empresaId,
+      const org = await getOrg();
+      await supabase.schema('channels').from('meta_tags').insert({
+        empresa_id: org,
         account_ids: tagForm.account_ids,
         nome: tagForm.nome.trim(), cor: tagForm.cor,
       });
@@ -337,7 +337,7 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
   };
 
   const deleteTag = async (id: string) => {
-    await supabase.from('meta_inbox_tags').delete().eq('id', id);
+    await supabase.schema('channels').from('meta_tags').delete().eq('id', id);
     await loadTags();
     toast({ title: 'Tag removida' });
   };
@@ -360,12 +360,12 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
 
   const loadAllUsers = async () => {
     try {
-      const empresaId = await getSaasEmpresaId();
+      const org = await getOrg();
       const { data } = await (supabase as any)
-        .schema('saas')
+        .schema('core')
         .from('usuarios')
         .select('id,nome,email')
-        .eq('empresa_id', empresaId)
+        .eq('org', org)
         .eq('status', 'ativo')
         .order('nome');
       setAllUsers(data || []);
@@ -376,7 +376,7 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
     setLoadingAccess(true);
     try {
       const { data, error } = await (supabase as any)
-        .from('meta_inbox_user_access')
+        .schema('channels').from('meta_user_access')
         .select('id, usuario_id')
         .eq('account_id', accountId);
       if (error) throw error;
@@ -388,13 +388,13 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
 
       // If allUsers hasn't loaded yet, resolve names from DB
       if (allUsers.length === 0 && data?.length) {
-        const empresaId = await getSaasEmpresaId();
+        const org = await getOrg();
         const ids = data.map((r: any) => r.usuario_id);
         const { data: usrs } = await (supabase as any)
-          .schema('saas')
+          .schema('core')
           .from('usuarios')
           .select('id,nome,email')
-          .eq('empresa_id', empresaId)
+          .eq('org', org)
           .in('id', ids);
         const usrMap = new Map((usrs || []).map((u: any) => [u.id, u]));
         for (const row of rows) {
@@ -412,7 +412,7 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
     setSavingAccess(true);
     try {
       const { data, error } = await (supabase as any)
-        .from('meta_inbox_user_access')
+        .schema('channels').from('meta_user_access')
         .insert({ usuario_id: userId, account_id: accessAccountId })
         .select('id, usuario_id')
         .single();
@@ -428,7 +428,7 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
   const removeUserAccess = async (accessId: string, userName: string) => {
     try {
       const { error } = await (supabase as any)
-        .from('meta_inbox_user_access')
+        .schema('channels').from('meta_user_access')
         .delete()
         .eq('id', accessId);
       if (error) throw error;
@@ -470,10 +470,10 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
 
     setSavingAccount(true);
     try {
-      const empresaId = await getSaasEmpresaId();
+      const org = await getOrg();
       const encryptedToken = await encryptToken(accountForm.access_token.trim());
       const payload: Record<string, unknown> = {
-        empresa_id: empresaId,
+        empresa_id: org,
         nome: accountForm.nome.trim(),
         phone_number_id: accountForm.phone_number_id.trim(),
         waba_id: accountForm.waba_id.trim() || null,
@@ -490,7 +490,7 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
       let result;
       if (editingAccount) {
         const { data, error } = await (supabase as any)
-          .from('meta_inbox_accounts')
+          .schema('channels').from('meta_accounts')
           .update(payload)
           .eq('id', editingAccount.id)
           .select()
@@ -499,7 +499,7 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
         result = data;
       } else {
         const { data, error } = await (supabase as any)
-          .from('meta_inbox_accounts')
+          .schema('channels').from('meta_accounts')
           .insert(payload)
           .select()
           .single();
@@ -522,7 +522,7 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
   const deleteAccount = async (id: string) => {
     setDeletingAccountId(id);
     try {
-      const { error } = await (supabase as any).from('meta_inbox_accounts').delete().eq('id', id);
+      const { error } = await (supabase as any).schema('channels').from('meta_accounts').delete().eq('id', id);
       if (error) throw error;
       toast({ title: 'Conta removida.' });
       onSaved();
@@ -642,11 +642,11 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
     if (!selectedAccount?.waba_id || !selectedAccount?.access_token) return;
     setRecreatingId(tmpl.id);
     try {
-      const empresaId = (await import('@/lib/saas')).getSaasEmpresaId();
+      const org = await (await import('@/lib/saas')).getOrg();
 
       // Find current version from DB
       const { data: existing } = await (supabase as any)
-        .from('meta_inbox_templates')
+        .schema('channels').from('meta_templates')
         .select('version, display_name')
         .eq('account_id', selectedAccount.id)
         .eq('name', tmpl.name)
@@ -710,17 +710,17 @@ export default function InboxSettingsModal({ onClose, onSaved, accounts = [], on
 
       // Mark old version as inactive in local DB
       await (supabase as any)
-        .from('meta_inbox_templates')
+        .schema('channels').from('meta_templates')
         .update({ is_active: false })
         .eq('account_id', selectedAccount.id)
         .eq('name', tmpl.name);
 
       // Save new version in local DB
       await (supabase as any)
-        .from('meta_inbox_templates')
+        .schema('channels').from('meta_templates')
         .upsert({
           account_id: selectedAccount.id,
-          empresa_id: await empresaId,
+          empresa_id: org,
           meta_template_id: newTemplateId,
           name: newMetaName,
           display_name: displayName,

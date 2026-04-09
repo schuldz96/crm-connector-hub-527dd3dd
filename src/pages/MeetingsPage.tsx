@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getOrg } from '@/lib/saas';
 import { CONFIG } from '@/lib/config';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
@@ -155,7 +155,7 @@ function ManualMeetingModal({
 
     setSaving(true);
     try {
-      const empresaId = await getSaasEmpresaId();
+      const org = await getOrg();
 
       // Extract text from file
       let transcricao = descricao.trim();
@@ -187,10 +187,10 @@ function ManualMeetingModal({
       let vendedorId: string | null = null;
       if (emailList.length > 0) {
         const { data: vendedor } = await (supabase as any)
-          .schema('saas')
+          .schema('core')
           .from('usuarios')
           .select('id')
-          .eq('empresa_id', empresaId)
+          .eq('org', org)
           .eq('email', emailList[0])
           .maybeSingle();
         vendedorId = vendedor?.id || null;
@@ -205,10 +205,10 @@ function ManualMeetingModal({
 
       // Insert meeting
       const { data: reuniao, error: insertErr } = await (supabase as any)
-        .schema('saas')
+        .schema('channels')
         .from('reunioes')
         .insert({
-          empresa_id: empresaId,
+          empresa_id: org,
           titulo: titulo.trim(),
           data_reuniao: new Date(dataReuniao + 'T12:00:00').toISOString(),
           duracao_minutos: duracao,
@@ -229,9 +229,9 @@ function ManualMeetingModal({
       // Enqueue for automatic evaluation (trigger should handle it, but force it)
       if (transcricao && transcricao.length > 50) {
         await (supabase as any)
-          .schema('saas')
+          .schema('ai')
           .from('fila_avaliacoes')
-          .insert({ empresa_id: empresaId, reuniao_id: reuniao.id, status: 'pendente' })
+          .insert({ empresa_id: org, reuniao_id: reuniao.id, status: 'pendente' })
           .then(() => {})
           .catch(() => {});
       }
@@ -367,12 +367,12 @@ export default function MeetingsPage() {
   const [loadingComments, setLoadingComments] = useState(false);
   const [commentsLoaded, setCommentsLoaded] = useState<string | null>(null);
 
-  const saas = () => (supabase as any).schema('saas');
+  const channels = () => (supabase as any).schema('channels');
 
   const loadComments = async (meetingId: string) => {
     setLoadingComments(true);
     try {
-      const { data } = await saas().from('comentarios_reuniao').select('*').eq('reuniao_id', meetingId).order('criado_em', { ascending: false });
+      const { data } = await channels().from('comentarios_reuniao').select('*').eq('reuniao_id', meetingId).order('criado_em', { ascending: false });
       setComments(data || []);
       setCommentsLoaded(meetingId);
     } catch { setComments([]); }
@@ -382,9 +382,9 @@ export default function MeetingsPage() {
   const addComment = async () => {
     if (!newComment.trim() || !selectedMeeting) return;
     try {
-      const empresaId = await getSaasEmpresaId();
-      await saas().from('comentarios_reuniao').insert({
-        empresa_id: empresaId, reuniao_id: selectedMeeting.id,
+      const org = await getOrg();
+      await channels().from('comentarios_reuniao').insert({
+        empresa_id: org, reuniao_id: selectedMeeting.id,
         autor_nome: user?.name || 'Anônimo', conteudo: newComment.trim(),
       });
       setNewComment('');
@@ -393,13 +393,13 @@ export default function MeetingsPage() {
   };
 
   const deleteComment = async (id: string) => {
-    await saas().from('comentarios_reuniao').delete().eq('id', id);
+    await channels().from('comentarios_reuniao').delete().eq('id', id);
     if (selectedMeeting) loadComments(selectedMeeting.id);
   };
 
   const saveEditComment = async (id: string) => {
     if (!editCommentText.trim()) return;
-    await saas().from('comentarios_reuniao').update({ conteudo: editCommentText.trim(), atualizado_em: new Date().toISOString() }).eq('id', id);
+    await channels().from('comentarios_reuniao').update({ conteudo: editCommentText.trim(), atualizado_em: new Date().toISOString() }).eq('id', id);
     setEditingCommentId(null);
     if (selectedMeeting) loadComments(selectedMeeting.id);
   };
@@ -918,7 +918,7 @@ export default function MeetingsPage() {
                             onClick={e => e.stopPropagation()}
                             onChange={async (e) => {
                               const newStatus = e.target.value;
-                              await (supabase as any).schema('saas').from('reunioes').update({ status: newStatus || null }).eq('id', m.id);
+                              await (supabase as any).schema('channels').from('reunioes').update({ status: newStatus || null }).eq('id', m.id);
                               await loadMeetings();
                             }}
                             className={cn('text-[11px] px-2 py-0.5 rounded-full border font-medium bg-transparent cursor-pointer appearance-none text-center',

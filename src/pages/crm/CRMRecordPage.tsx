@@ -451,10 +451,10 @@ export default function CRMRecordPage() {
 
   const handleSetPrimaryContact = async (contactId: string) => {
     if (!recordId) return;
-    const table = objectType === 'deal' ? 'crm_negocios' : objectType === 'ticket' ? 'crm_tickets' : null;
+    const table = objectType === 'deal' ? 'negocios' : objectType === 'ticket' ? 'tickets' : null;
     if (!table) return;
     try {
-      await (supabase as any).schema('saas').from(table)
+      await (supabase as any).schema('crm').from(table)
         .update({ contato_principal_id: contactId || null })
         .eq('id', recordId);
       (rec as any).contato_principal_id = contactId || null;

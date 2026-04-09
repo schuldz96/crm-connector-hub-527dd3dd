@@ -182,7 +182,7 @@ export function RolePermissionsProvider({ children }: { children: React.ReactNod
     const run = async () => {
       try {
         const { data, error } = await (supabaseSaas as any)
-          .schema('saas')
+          .schema('core')
           .from('permissoes_papeis')
           .select('papel,recurso,escopo,permitido');
         if (error) throw error;
@@ -230,7 +230,7 @@ export function RolePermissionsProvider({ children }: { children: React.ReactNod
               permitido: updated.resources.includes(r.id),
             }));
             const { error } = await (supabaseSaas as any)
-              .schema('saas')
+              .schema('core')
               .from('permissoes_papeis')
               .upsert(rows, { onConflict: 'papel,recurso' });
             if (error) throw error;

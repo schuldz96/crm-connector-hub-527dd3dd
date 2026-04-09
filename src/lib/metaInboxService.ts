@@ -4,7 +4,7 @@
  * loading conversations/messages from DB, and 24h window check.
  */
 import { supabase } from '@/integrations/supabase/client';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getOrgAndEmpresaId } from '@/lib/saas';
 import type { MetaInboxAccount } from '@/pages/InboxPage';
 
 const META_API = 'https://graph.facebook.com/v19.0';
@@ -72,8 +72,8 @@ export interface InboxMessage {
 
 // ─── Load conversations for an account ──────────────────────────────────────
 export async function loadConversations(accountId: string): Promise<InboxConversation[]> {
-  const { data, error } = await supabase
-    .from('meta_inbox_conversations')
+  const { data, error } = await (supabase as any)
+    .schema('channels').from('meta_conversations')
     .select('*')
     .eq('account_id', accountId)
     .order('last_message_ts', { ascending: false });
@@ -84,8 +84,8 @@ export async function loadConversations(accountId: string): Promise<InboxConvers
 
 // ─── Load messages for a conversation ───────────────────────────────────────
 export async function loadMessages(conversationId: string, accountId?: string): Promise<InboxMessage[]> {
-  let query = supabase
-    .from('meta_inbox_messages')
+  let query = (supabase as any)
+    .schema('channels').from('meta_messages')
     .select('*')
     .eq('conversation_id', conversationId);
   if (accountId) query = query.eq('account_id', accountId);
@@ -97,8 +97,8 @@ export async function loadMessages(conversationId: string, accountId?: string): 
 
 // ─── Mark conversation as read ──────────────────────────────────────────────
 export async function markConversationRead(conversationId: string, accountId?: string) {
-  let query = supabase
-    .from('meta_inbox_conversations')
+  let query = (supabase as any)
+    .schema('channels').from('meta_conversations')
     .update({ unread_count: 0 })
     .eq('id', conversationId);
   if (accountId) query = query.eq('account_id', accountId);
@@ -141,11 +141,12 @@ export async function sendTextMessage(
     const wamid = data?.messages?.[0]?.id;
 
     // Save to DB
-    const empresaId = await getSaasEmpresaId();
-    await supabase.from('meta_inbox_messages').insert({
+    const { org, empresaId } = await getOrgAndEmpresaId();
+    await (supabase as any).schema('channels').from('meta_messages').insert({
       conversation_id: conversationId,
       account_id: account.id,
       empresa_id: empresaId,
+      org,
       wamid,
       from_me: true,
       from_phone: account.phone_display || account.phone_number_id,
@@ -159,7 +160,7 @@ export async function sendTextMessage(
     });
 
     // Update conversation
-    await supabase.from('meta_inbox_conversations').update({
+    await (supabase as any).schema('channels').from('meta_conversations').update({
       last_message: text,
       last_message_ts: new Date().toISOString(),
       last_message_from_me: true,
@@ -215,15 +216,16 @@ export async function sendMediaMessage(
     if (!res.ok) throw new Error(data?.error?.message || `HTTP ${res.status}`);
 
     const wamid = data?.messages?.[0]?.id;
-    const empresaId = await getSaasEmpresaId();
+    const { org, empresaId } = await getOrgAndEmpresaId();
 
     const labels: Record<string, string> = { image: '[Imagem]', audio: '[Áudio]', video: '[Vídeo]', document: '[Documento]' };
     const bodyText = caption || labels[mediaType] || `[${mediaType}]`;
 
-    await supabase.from('meta_inbox_messages').insert({
+    await (supabase as any).schema('channels').from('meta_messages').insert({
       conversation_id: conversationId,
       account_id: account.id,
       empresa_id: empresaId,
+      org,
       wamid,
       from_me: true,
       to_phone: toPhone,
@@ -239,7 +241,7 @@ export async function sendMediaMessage(
       sent_by_user_id: sentByUserId || null,
     });
 
-    await supabase.from('meta_inbox_conversations').update({
+    await (supabase as any).schema('channels').from('meta_conversations').update({
       last_message: bodyText,
       last_message_ts: new Date().toISOString(),
       last_message_from_me: true,
@@ -315,12 +317,13 @@ export async function sendTemplateMessage(
     if (!res.ok) throw new Error(data?.error?.message || `HTTP ${res.status}`);
 
     const wamid = data?.messages?.[0]?.id;
-    const empresaId = await getSaasEmpresaId();
+    const { org, empresaId } = await getOrgAndEmpresaId();
 
-    await supabase.from('meta_inbox_messages').insert({
+    await (supabase as any).schema('channels').from('meta_messages').insert({
       conversation_id: conversationId,
       account_id: account.id,
       empresa_id: empresaId,
+      org,
       wamid,
       from_me: true,
       to_phone: toPhone,
@@ -336,7 +339,7 @@ export async function sendTemplateMessage(
     });
 
     const displayMsg = renderedBody || `[Template] ${templateName}`;
-    await supabase.from('meta_inbox_conversations').update({
+    await (supabase as any).schema('channels').from('meta_conversations').update({
       last_message: displayMsg,
       last_message_ts: new Date().toISOString(),
       last_message_from_me: true,

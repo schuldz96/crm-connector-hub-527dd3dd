@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getOrg, getOrgAndEmpresaId } from '@/lib/saas';
 import type { EvalCriteria } from '@/pages/AIConfigPage';
 
 export interface AIModuleConfig {
@@ -14,12 +14,12 @@ export interface AIModuleConfig {
  */
 export async function loadAIConfig(moduloCodigo: string): Promise<AIModuleConfig | null> {
   try {
-    const empresaId = await getSaasEmpresaId();
+    const org = await getOrg();
     const { data, error } = await (supabase as any)
-      .schema('saas')
-      .from('configuracoes_ia')
+      .schema('ai')
+      .from('configuracoes')
       .select('criterios, prompt_sistema, palavras_proibidas')
-      .eq('empresa_id', empresaId)
+      .eq('org', org)
       .eq('modulo_codigo', moduloCodigo)
       .maybeSingle();
 
@@ -43,10 +43,11 @@ export async function saveAIConfig(
   promptSistema: string,
   palavrasProibidas?: string[],
 ): Promise<void> {
-  const empresaId = await getSaasEmpresaId();
+  const { org, empresaId } = await getOrgAndEmpresaId();
 
   const payload: Record<string, unknown> = {
     empresa_id: empresaId,
+    org,
     modulo_codigo: moduloCodigo,
     criterios: JSON.parse(JSON.stringify(criterios)),
     prompt_sistema: promptSistema,
@@ -57,7 +58,7 @@ export async function saveAIConfig(
   }
 
   await (supabase as any)
-    .schema('saas')
-    .from('configuracoes_ia')
+    .schema('ai')
+    .from('configuracoes')
     .upsert(payload, { onConflict: 'empresa_id,modulo_codigo' });
 }

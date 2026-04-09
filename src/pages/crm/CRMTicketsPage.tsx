@@ -19,7 +19,7 @@ import StageAIConfigModal, { type StageAIConfig } from '@/components/crm/StageAI
 import { useCrmPipelines, useCrmTicketsByPipeline, useCreateTicket, useUpdateTicket, useSaasUsers } from '@/hooks/useCrm';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getOrg } from '@/lib/saas';
 import { triggerCrmAI } from '@/lib/crmService';
 import { useToast } from '@/hooks/use-toast';
 import type { CrmTicket, CrmPipelineStage, TicketPriority } from '@/types/crm';
@@ -215,7 +215,7 @@ export default function CRMTicketsPage() {
   useEffect(() => {
     if (!stages.length) return;
     const ids = stages.map(s => s.id);
-    (supabase as any).schema('saas').from('crm_estagio_ia_config')
+    (supabase as any).schema('crm').from('estagio_ia_config')
       .select('*').in('estagio_id', ids)
       .then(({ data }: { data: any[] | null }) => {
         if (!data?.length) return;
@@ -255,7 +255,7 @@ export default function CRMTicketsPage() {
       setNewStage('');
       toast({ title: 'Ticket criado com sucesso' });
       if (created?.id && stageId) {
-        getSaasEmpresaId().then(eid => triggerCrmAI('ticket', created.id, stageId, eid, 'create')).catch(() => {});
+        getOrg().then(eid => triggerCrmAI('ticket', created.id, stageId, eid, 'create')).catch(() => {});
       }
     } catch {
       toast({ title: 'Erro ao criar ticket', variant: 'destructive' });
@@ -506,7 +506,7 @@ export default function CRMTicketsPage() {
                     if (ref && ref.fromStageId !== stage.id) {
                       updateTicket.mutate({ id: ref.ticketId, estagio_id: stage.id });
                       toast({ title: `Ticket movido para ${stage.nome}` });
-                      getSaasEmpresaId().then(eid => triggerCrmAI('ticket', ref.ticketId, stage.id, eid, 'move')).catch(() => {});
+                      getOrg().then(eid => triggerCrmAI('ticket', ref.ticketId, stage.id, eid, 'move')).catch(() => {});
                     }
                     dragItemRef.current = null;
                   }}
@@ -776,9 +776,9 @@ export default function CRMTicketsPage() {
           onSave={async (id, cfg) => {
             setStageAIConfigs(prev => ({ ...prev, [id]: cfg }));
             try {
-              const empresaId = await getSaasEmpresaId();
-              await (supabase as any).schema('saas').from('crm_estagio_ia_config').upsert({
-                empresa_id: empresaId, estagio_id: id, ativo: cfg.active,
+              const org = await getOrg();
+              await (supabase as any).schema('crm').from('estagio_ia_config').upsert({
+                empresa_id: org, estagio_id: id, ativo: cfg.active,
                 nome_ia: cfg.aiName, provider: cfg.provider, instancia_id: cfg.instance,
                 prompt_sistema: cfg.systemPrompt, auto_complemento: cfg.autoComplement,
                 mensagem_boas_vindas: { enabled: cfg.welcomeEnabled, type: cfg.welcomeType, text: cfg.welcomeText },

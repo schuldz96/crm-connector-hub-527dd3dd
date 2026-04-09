@@ -10,6 +10,7 @@ import {
   hashPasswordForLogin,
   recordLastLogin,
 } from '@/lib/accessControl';
+import { getOrg } from '@/lib/saas';
 import { CONFIG } from '@/lib/config';
 
 const ALLOWED_DOMAIN = CONFIG.GOOGLE_ALLOWED_DOMAIN;
@@ -48,6 +49,7 @@ function buildUser(
   avatar?: string,
   areaId?: string,
   teamId?: string,
+  org?: string,
 ): User {
   return {
     id,
@@ -57,6 +59,7 @@ function buildUser(
     role,
     teamId,
     areaId,
+    org,
     company: 'LTX',
     status: 'active',
     createdAt: new Date().toISOString().slice(0, 10),
@@ -96,16 +99,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     setUser(restored);
-    // Background refresh: fetch current role/data from DB
-    getAllowedUserByEmail(restored.email)
-      .then(match => {
+    // Background refresh: fetch current role/data from DB + resolve org
+    Promise.all([
+      getAllowedUserByEmail(restored.email),
+      getOrg().catch(() => restored.org),
+    ])
+      .then(([match, org]) => {
         if (!match) {
           // User deactivated or removed — force logout
           clearSession();
           setUser(null);
           return;
         }
-        if (match.role !== restored.role || match.areaId !== restored.areaId || match.teamId !== restored.teamId) {
+        if (match.role !== restored.role || match.areaId !== restored.areaId || match.teamId !== restored.teamId || org !== restored.org) {
           const refreshed = buildUser(
             restored.id,
             match.email,
@@ -114,6 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             restored.avatar,
             match.areaId,
             match.teamId,
+            org,
           );
           setUser(refreshed);
           saveSession(refreshed);
@@ -177,6 +184,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error('Credenciais inválidas.');
       }
 
+      const org = await getOrg().catch(() => undefined);
       const u = buildUser(
         `user_${normalized}`,
         allowedMatch.email,
@@ -185,6 +193,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         allowedMatch.avatar,
         allowedMatch.areaId,
         allowedMatch.teamId,
+        org,
       );
       setUser(u);
       saveSession(u);
@@ -213,6 +222,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Acesso pendente de aprovação. Um administrador precisa aprovar sua conta.');
     }
 
+    const org = await getOrg().catch(() => undefined);
     const u = buildUser(
       `google_${normalized}`,
       match.email,
@@ -221,6 +231,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       googleUser.picture,
       match.areaId,
       match.teamId,
+      org,
     );
 
     setUser(u);

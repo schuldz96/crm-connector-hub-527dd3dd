@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getOrg, getOrgAndEmpresaId } from '@/lib/saas';
 
 export interface AreaRecord {
   id: string;
@@ -12,12 +12,12 @@ export interface AreaRecord {
 
 /** Load all areas for the current company */
 export async function loadAreas(): Promise<AreaRecord[]> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const { data, error } = await (supabase as any)
-    .schema('saas')
+    .schema('core')
     .from('areas')
     .select('id, nome, gerente_id, criado_em')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .order('nome', { ascending: true });
 
   if (error) throw error;
@@ -27,10 +27,10 @@ export async function loadAreas(): Promise<AreaRecord[]> {
   let gerenteMap: Record<string, { nome: string; email: string }> = {};
   if (gerenteIds.length > 0) {
     const { data: users } = await (supabase as any)
-      .schema('saas')
+      .schema('core')
       .from('usuarios')
       .select('id, nome, email')
-      .eq('empresa_id', empresaId)
+      .eq('org', org)
       .in('id', gerenteIds);
     for (const u of (users || [])) {
       gerenteMap[u.id] = { nome: u.nome, email: u.email };
@@ -49,25 +49,26 @@ export async function loadAreas(): Promise<AreaRecord[]> {
 
 /** Create a new area */
 export async function createArea(nome: string, gerenteEmail?: string, memberEmails?: string[]): Promise<void> {
-  const empresaId = await getSaasEmpresaId();
+  const { org, empresaId } = await getOrgAndEmpresaId();
   let gerenteId: string | null = null;
 
   if (gerenteEmail) {
     const { data } = await (supabase as any)
-      .schema('saas')
+      .schema('core')
       .from('usuarios')
       .select('id')
-      .eq('empresa_id', empresaId)
+      .eq('org', org)
       .eq('email', gerenteEmail.trim().toLowerCase())
       .maybeSingle();
     gerenteId = data?.id ?? null;
   }
 
   const { data: row, error } = await (supabase as any)
-    .schema('saas')
+    .schema('core')
     .from('areas')
     .insert({
       empresa_id: empresaId,
+      org,
       nome: nome.trim(),
       gerente_id: gerenteId,
     })
@@ -83,22 +84,22 @@ export async function createArea(nome: string, gerenteEmail?: string, memberEmai
 
 /** Update an area */
 export async function updateArea(areaId: string, nome: string, gerenteEmail?: string, memberEmails?: string[]): Promise<void> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   let gerenteId: string | null = null;
 
   if (gerenteEmail) {
     const { data } = await (supabase as any)
-      .schema('saas')
+      .schema('core')
       .from('usuarios')
       .select('id')
-      .eq('empresa_id', empresaId)
+      .eq('org', org)
       .eq('email', gerenteEmail.trim().toLowerCase())
       .maybeSingle();
     gerenteId = data?.id ?? null;
   }
 
   const { error } = await (supabase as any)
-    .schema('saas')
+    .schema('core')
     .from('areas')
     .update({
       nome: nome.trim(),
@@ -117,7 +118,7 @@ export async function updateArea(areaId: string, nome: string, gerenteEmail?: st
 /** Delete an area */
 export async function deleteArea(areaId: string): Promise<void> {
   const { error } = await (supabase as any)
-    .schema('saas')
+    .schema('core')
     .from('areas')
     .delete()
     .eq('id', areaId);
@@ -127,12 +128,12 @@ export async function deleteArea(areaId: string): Promise<void> {
 
 /** Load teams associated with an area */
 export async function loadTeamsByArea(areaId: string): Promise<{ id: string; nome: string }[]> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const { data, error } = await (supabase as any)
-    .schema('saas')
+    .schema('core')
     .from('times')
     .select('id, nome')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('area_id', areaId);
 
   if (error) return [];
@@ -141,12 +142,12 @@ export async function loadTeamsByArea(areaId: string): Promise<{ id: string; nom
 
 /** Count users in an area */
 export async function countUsersInArea(areaId: string): Promise<number> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const { data } = await (supabase as any)
-    .schema('saas')
+    .schema('core')
     .from('usuarios')
     .select('id')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('area_id', areaId);
 
   return data?.length || 0;
@@ -154,12 +155,12 @@ export async function countUsersInArea(areaId: string): Promise<number> {
 
 /** Load members directly assigned to an area */
 export async function loadAreaMembers(areaId: string): Promise<{ id: string; nome: string; email: string; papel: string }[]> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const { data } = await (supabase as any)
-    .schema('saas')
+    .schema('core')
     .from('usuarios')
     .select('id, nome, email, papel')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('area_id', areaId);
 
   return data || [];
@@ -167,23 +168,23 @@ export async function loadAreaMembers(areaId: string): Promise<{ id: string; nom
 
 /** Assign members to an area (set area_id on usuarios) */
 export async function assignAreaMembers(areaId: string, memberEmails: string[]): Promise<void> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
 
   // Remove current direct members from this area (only those NOT in a team of this area)
   await (supabase as any)
-    .schema('saas')
+    .schema('core')
     .from('usuarios')
     .update({ area_id: null })
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('area_id', areaId);
 
   // Assign new members
   for (const email of memberEmails) {
     await (supabase as any)
-      .schema('saas')
+      .schema('core')
       .from('usuarios')
       .update({ area_id: areaId })
-      .eq('empresa_id', empresaId)
+      .eq('org', org)
       .eq('email', email.trim().toLowerCase());
   }
 }

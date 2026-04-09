@@ -25,7 +25,7 @@ import { loadAIConfig } from '@/lib/aiConfigService';
 
 import { callOpenAI } from '@/lib/openaiProxy';
 import { supabase } from '@/integrations/supabase/client';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getOrg } from '@/lib/saas';
 import { getEvolutionConfig } from '@/lib/evolutionConfig';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -1212,12 +1212,12 @@ export default function WhatsAppPage() {
     if (!activeInstance) return;
     const loadScores = async () => {
       try {
-        const empresaId = await getSaasEmpresaId();
+        const org = await getOrg();
         const { data } = await (supabase as any)
-          .schema('saas')
-          .from('analises_ia')
+          .schema('ai')
+          .from('analises')
           .select('contato_telefone,score,periodo_ref')
-          .eq('empresa_id', empresaId)
+          .eq('org', org)
           .eq('tipo_contexto', 'whatsapp')
           .eq('instancia_nome', activeInstance.name)
           .not('contato_telefone', 'is', null)

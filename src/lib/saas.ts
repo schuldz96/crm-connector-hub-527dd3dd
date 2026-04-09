@@ -3,38 +3,63 @@ import type { UserRole } from '@/types';
 import { CONFIG } from '@/lib/config';
 
 const ALLOWED_DOMAIN = CONFIG.GOOGLE_ALLOWED_DOMAIN;
-let empresaIdCache: string | null = null;
+let orgCache: { org: string; empresaId: string } | null = null;
 
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-export async function getSaasEmpresaId(): Promise<string> {
-  if (empresaIdCache) return empresaIdCache;
+/**
+ * Returns the org identifier (e.g. 'F9283200581J') for the current tenant.
+ * Queries core.empresas by domain and caches both org and empresaId.
+ */
+export async function getOrg(): Promise<string> {
+  if (orgCache) return orgCache.org;
+  await resolveOrgCache();
+  return orgCache!.org;
+}
 
+/**
+ * Returns both org and empresaId for insert operations that need both columns
+ * during the migration period.
+ */
+export async function getOrgAndEmpresaId(): Promise<{ org: string; empresaId: string }> {
+  if (orgCache) return orgCache;
+  await resolveOrgCache();
+  return orgCache!;
+}
+
+/**
+ * Backward-compatible alias — returns the empresa UUID (id).
+ * Prefer getOrg() for new code.
+ */
+export async function getSaasEmpresaId(): Promise<string> {
+  return (await getOrgAndEmpresaId()).empresaId;
+}
+
+async function resolveOrgCache(): Promise<void> {
   const { data, error } = await (supabase as any)
-    .schema('saas')
+    .schema('core')
     .from('empresas')
-    .select('id')
+    .select('id, org')
     .eq('dominio', ALLOWED_DOMAIN)
     .maybeSingle();
 
   if (error) throw error;
-  if (data?.id) {
-    empresaIdCache = data.id;
-    return data.id;
+  if (data?.id && data?.org) {
+    orgCache = { org: data.org, empresaId: data.id };
+    return;
   }
 
   const { data: created, error: createError } = await (supabase as any)
-    .schema('saas')
+    .schema('core')
     .from('empresas')
     .insert({ nome: 'LTX', dominio: ALLOWED_DOMAIN, plano: 'enterprise' })
-    .select('id')
+    .select('id, org')
     .single();
 
   if (createError) throw createError;
-  empresaIdCache = created.id;
-  return created.id;
+  orgCache = { org: created.org, empresaId: created.id };
 }
 
 export function roleToDb(role: UserRole): string {

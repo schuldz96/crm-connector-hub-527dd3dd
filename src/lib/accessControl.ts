@@ -1,7 +1,8 @@
 import { supabase, supabaseSaas } from '@/integrations/supabase/client';
 import type { UserRole } from '@/types';
 import {
-  getSaasEmpresaId,
+  getOrg,
+  getOrgAndEmpresaId,
   normalizeEmail,
   roleFromDb,
   roleToDb,
@@ -138,12 +139,12 @@ function mergeDefaults(users: AllowedUser[]): AllowedUser[] {
 }
 
 export async function loadAllowedUsers(): Promise<AllowedUser[]> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const { data, error } = await (supabaseSaas as any)
-    .schema('saas')
+    .schema('core')
     .from('usuarios')
     .select('email,nome,papel,senha_hash,avatar_url,criado_em,status')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('status', 'ativo')
     .order('nome', { ascending: true });
 
@@ -161,15 +162,15 @@ export async function loadAllowedUsers(): Promise<AllowedUser[]> {
 }
 
 export async function upsertAllowedUser(user: AllowedUser): Promise<void> {
-  const empresaId = await getSaasEmpresaId();
+  const { org, empresaId } = await getOrgAndEmpresaId();
   const email = norm(user.email);
 
   // Check if user already exists
   const { data: existing } = await (supabaseSaas as any)
-    .schema('saas')
+    .schema('core')
     .from('usuarios')
     .select('id')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('email', email)
     .maybeSingle();
 
@@ -184,19 +185,20 @@ export async function upsertAllowedUser(user: AllowedUser): Promise<void> {
     if (user.avatar !== undefined) patch.avatar_url = user.avatar || null;
 
     const { error } = await (supabaseSaas as any)
-      .schema('saas')
+      .schema('core')
       .from('usuarios')
       .update(patch)
       .eq('id', existing.id);
 
     if (error) throw error;
   } else {
-    // INSERT new user
+    // INSERT new user — include both empresa_id and org during migration
     const { error } = await (supabaseSaas as any)
-      .schema('saas')
+      .schema('core')
       .from('usuarios')
       .insert({
         empresa_id: empresaId,
+        org,
         email,
         nome: user.name,
         papel: roleToDb(user.role),
@@ -210,12 +212,12 @@ export async function upsertAllowedUser(user: AllowedUser): Promise<void> {
 }
 
 export async function updateUserRole(email: string, role: UserRole): Promise<void> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const { error } = await (supabaseSaas as any)
-    .schema('saas')
+    .schema('core')
     .from('usuarios')
     .update({ papel: roleToDb(role) })
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('email', norm(email));
 
   if (error) throw error;
@@ -226,12 +228,12 @@ export async function removeAllowedUser(email: string): Promise<boolean> {
   const defaults = new Set(DEFAULT_ALLOWED_USERS.map(u => norm(u.email)));
   if (defaults.has(key)) return false;
 
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const { error } = await (supabaseSaas as any)
-    .schema('saas')
+    .schema('core')
     .from('usuarios')
     .update({ status: 'inativo' })
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('email', key);
 
   if (error) throw error;
@@ -239,12 +241,12 @@ export async function removeAllowedUser(email: string): Promise<boolean> {
 }
 
 export async function getPendingAccessRequests(): Promise<AccessRequest[]> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const { data, error } = await (supabaseSaas as any)
-    .schema('saas')
+    .schema('core')
     .from('solicitacoes_acesso')
     .select('id,email,nome,foto_url,solicitado_em,status,decidido_em,papel_sugerido,decidido_por_usuario_id')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('status', 'pendente')
     .order('solicitado_em', { ascending: false });
 
@@ -263,14 +265,14 @@ export async function getPendingAccessRequests(): Promise<AccessRequest[]> {
 }
 
 export async function createOrRefreshAccessRequest(payload: { email: string; name: string; picture?: string }) {
-  const empresaId = await getSaasEmpresaId();
+  const { org, empresaId } = await getOrgAndEmpresaId();
   const email = norm(payload.email);
 
   const { data: existing, error: findErr } = await (supabaseSaas as any)
-    .schema('saas')
+    .schema('core')
     .from('solicitacoes_acesso')
     .select('id')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('email', email)
     .eq('status', 'pendente')
     .maybeSingle();
@@ -279,7 +281,7 @@ export async function createOrRefreshAccessRequest(payload: { email: string; nam
 
   if (existing?.id) {
     const { data: updated, error: updErr } = await (supabaseSaas as any)
-      .schema('saas')
+      .schema('core')
       .from('solicitacoes_acesso')
       .update({ nome: payload.name || email.split('@')[0], foto_url: payload.picture || null, solicitado_em: new Date().toISOString() })
       .eq('id', existing.id)
@@ -301,10 +303,11 @@ export async function createOrRefreshAccessRequest(payload: { email: string; nam
   }
 
   const { data: created, error: createErr } = await (supabaseSaas as any)
-    .schema('saas')
+    .schema('core')
     .from('solicitacoes_acesso')
     .insert({
       empresa_id: empresaId,
+      org,
       email,
       nome: payload.name || email.split('@')[0],
       foto_url: payload.picture || null,
@@ -328,12 +331,12 @@ export async function createOrRefreshAccessRequest(payload: { email: string; nam
 }
 
 async function findApproverIdByEmail(email: string): Promise<string | null> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const { data, error } = await (supabaseSaas as any)
-    .schema('saas')
+    .schema('core')
     .from('usuarios')
     .select('id')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('email', norm(email))
     .maybeSingle();
   if (error) throw error;
@@ -342,18 +345,19 @@ async function findApproverIdByEmail(email: string): Promise<string | null> {
 
 export async function approveAccessRequest(params: { requestId: string; approverEmail: string; role: UserRole }) {
   const approverId = await findApproverIdByEmail(params.approverEmail);
+  const { org, empresaId } = await getOrgAndEmpresaId();
 
   const { data: req, error: reqErr } = await (supabaseSaas as any)
-    .schema('saas')
+    .schema('core')
     .from('solicitacoes_acesso')
-    .select('id,empresa_id,email,nome,foto_url,status')
+    .select('id,empresa_id,org,email,nome,foto_url,status')
     .eq('id', params.requestId)
     .maybeSingle();
 
   if (reqErr || !req) return false;
 
   const { error: updErr } = await (supabaseSaas as any)
-    .schema('saas')
+    .schema('core')
     .from('solicitacoes_acesso')
     .update({
       status: 'aprovada',
@@ -366,11 +370,12 @@ export async function approveAccessRequest(params: { requestId: string; approver
   if (updErr) return false;
 
   const { error: upsertErr } = await (supabaseSaas as any)
-    .schema('saas')
+    .schema('core')
     .from('usuarios')
     .upsert(
       {
-        empresa_id: req.empresa_id,
+        empresa_id: req.empresa_id || empresaId,
+        org: req.org || org,
         email: norm(req.email),
         nome: req.nome,
         avatar_url: req.foto_url || null,
@@ -388,7 +393,7 @@ export async function approveAccessRequest(params: { requestId: string; approver
 export async function rejectAccessRequest(params: { requestId: string; approverEmail: string }) {
   const approverId = await findApproverIdByEmail(params.approverEmail);
   const { error } = await (supabaseSaas as any)
-    .schema('saas')
+    .schema('core')
     .from('solicitacoes_acesso')
     .update({
       status: 'rejeitada',
@@ -401,14 +406,14 @@ export async function rejectAccessRequest(params: { requestId: string; approverE
 }
 
 export async function getAllowedUserByEmail(email: string): Promise<AllowedUser | null> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const normalized = norm(email);
 
   const { data, error } = await (supabaseSaas as any)
-    .schema('saas')
+    .schema('core')
     .from('usuarios')
     .select('email,nome,papel,senha_hash,avatar_url,status,criado_em,area_id,time_id')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('email', normalized)
     .eq('status', 'ativo')
     .maybeSingle();
@@ -429,32 +434,32 @@ export async function getAllowedUserByEmail(email: string): Promise<AllowedUser 
 }
 
 export async function updateAllowedUserProfile(params: { email: string; name?: string; avatar?: string }) {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const patch: Record<string, unknown> = {};
   if (typeof params.name === 'string' && params.name.trim()) patch.nome = params.name.trim();
   if (typeof params.avatar === 'string') patch.avatar_url = params.avatar;
   if (!Object.keys(patch).length) return;
 
   const { error } = await (supabaseSaas as any)
-    .schema('saas')
+    .schema('core')
     .from('usuarios')
     .update(patch)
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('email', norm(params.email));
 
   if (error) throw error;
 }
 
 export async function autoCreateAppmaxUser(email: string): Promise<void> {
-  const empresaId = await getSaasEmpresaId();
+  const { org, empresaId } = await getOrgAndEmpresaId();
   const normalized = norm(email);
 
   // Check if already exists
   const { data: existing } = await (supabaseSaas as any)
-    .schema('saas')
+    .schema('core')
     .from('usuarios')
     .select('id')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('email', normalized)
     .maybeSingle();
 
@@ -469,10 +474,11 @@ export async function autoCreateAppmaxUser(email: string): Promise<void> {
   const name = namePart.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
   const { error } = await (supabaseSaas as any)
-    .schema('saas')
+    .schema('core')
     .from('usuarios')
     .insert({
       empresa_id: empresaId,
+      org,
       email: normalized,
       nome: name,
       papel: 'vendedor',
@@ -484,24 +490,24 @@ export async function autoCreateAppmaxUser(email: string): Promise<void> {
 }
 
 export async function resetUserPassword(email: string, newPassword: string): Promise<void> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const hash = await hashPassword(newPassword);
   const { error } = await (supabaseSaas as any)
-    .schema('saas')
+    .schema('core')
     .from('usuarios')
     .update({ senha_hash: hash })
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('email', norm(email));
 
   if (error) throw error;
 }
 
 export async function recordLastLogin(email: string): Promise<void> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   await (supabaseSaas as any)
-    .schema('saas')
+    .schema('core')
     .from('usuarios')
     .update({ ultimo_login_em: new Date().toISOString() })
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('email', norm(email));
 }

@@ -19,7 +19,7 @@ import StageAIConfigModal, { type StageAIConfig } from '@/components/crm/StageAI
 import { useCrmPipelines, useCrmDealsByPipeline, useCreateDeal, useUpdateDeal, useSaasUsers } from '@/hooks/useCrm';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getOrg } from '@/lib/saas';
 import { triggerCrmAI } from '@/lib/crmService';
 import { useToast } from '@/hooks/use-toast';
 import type { CrmDeal, CrmPipelineStage } from '@/types/crm';
@@ -205,7 +205,7 @@ export default function CRMDealsPage() {
   useEffect(() => {
     if (!stages.length) return;
     const ids = stages.map(s => s.id);
-    (supabase as any).schema('saas').from('crm_estagio_ia_config')
+    (supabase as any).schema('crm').from('estagio_ia_config')
       .select('*').in('estagio_id', ids)
       .then(({ data }: { data: any[] | null }) => {
         if (!data?.length) return;
@@ -285,7 +285,7 @@ export default function CRMDealsPage() {
       toast({ title: 'Negócio criado com sucesso' });
       // Trigger AI for create
       if (created?.id && stageId) {
-        getSaasEmpresaId().then(eid => triggerCrmAI('deal', created.id, stageId, eid, 'create')).catch(() => {});
+        getOrg().then(eid => triggerCrmAI('deal', created.id, stageId, eid, 'create')).catch(() => {});
       }
     } catch {
       toast({ title: 'Erro ao criar negócio', variant: 'destructive' });
@@ -573,7 +573,7 @@ export default function CRMDealsPage() {
                       updateDeal.mutate({ id: ref.dealId, estagio_id: stage.id });
                       toast({ title: `Negócio movido para ${stage.nome}` });
                       // Trigger AI for stage move
-                      getSaasEmpresaId().then(eid => triggerCrmAI('deal', ref.dealId, stage.id, eid, 'move')).catch(() => {});
+                      getOrg().then(eid => triggerCrmAI('deal', ref.dealId, stage.id, eid, 'move')).catch(() => {});
                     }
                     dragItemRef.current = null;
                   }}
@@ -934,9 +934,9 @@ export default function CRMDealsPage() {
           onSave={async (id, cfg) => {
             setStageAIConfigs(prev => ({ ...prev, [id]: cfg }));
             try {
-              const empresaId = await getSaasEmpresaId();
-              await (supabase as any).schema('saas').from('crm_estagio_ia_config').upsert({
-                empresa_id: empresaId, estagio_id: id, ativo: cfg.active,
+              const org = await getOrg();
+              await (supabase as any).schema('crm').from('estagio_ia_config').upsert({
+                empresa_id: org, estagio_id: id, ativo: cfg.active,
                 nome_ia: cfg.aiName, provider: cfg.provider, instancia_id: cfg.instance,
                 prompt_sistema: cfg.systemPrompt, auto_complemento: cfg.autoComplement,
                 mensagem_boas_vindas: { enabled: cfg.welcomeEnabled, type: cfg.welcomeType, text: cfg.welcomeText },

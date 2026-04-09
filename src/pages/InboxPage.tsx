@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getOrg } from '@/lib/saas';
 import { useAuth } from '@/contexts/AuthContext';
 import InboxSettingsModal from '@/components/inbox/InboxSettingsModal';
 import BulkSendModal from '@/components/inbox/BulkSendModal';
@@ -321,12 +321,12 @@ function NewConversationDialog({
     if (!normalizedPhone || !selectedTpl || !account) return;
     setSending(true);
     try {
-      const empresaId = await getSaasEmpresaId();
+      const org = await getOrg();
 
       // 1. Create or find conversation (normalized phone)
       let convId: string;
       const { data: existing } = await (supabase as any)
-        .from('meta_inbox_conversations')
+        .schema('channels').from('meta_conversations')
         .select('id')
         .eq('account_id', account.id)
         .eq('contact_phone', normalizedPhone)
@@ -336,10 +336,10 @@ function NewConversationDialog({
         convId = existing.id;
       } else {
         const { data: created, error } = await (supabase as any)
-          .from('meta_inbox_conversations')
+          .schema('channels').from('meta_conversations')
           .insert({
             account_id: account.id,
-            empresa_id: empresaId,
+            empresa_id: org,
             contact_phone: normalizedPhone,
             contact_name: name.trim() || normalizedPhone,
             status: 'open',
@@ -557,12 +557,12 @@ export default function InboxPage() {
     if (!user?.email) return;
     (async () => {
       try {
-        const empresaId = await getSaasEmpresaId();
+        const org = await getOrg();
         const { data } = await (supabase as any)
-          .schema('saas')
+          .schema('core')
           .from('usuarios')
           .select('id')
-          .eq('empresa_id', empresaId)
+          .eq('org', org)
           .eq('email', user.email.toLowerCase())
           .maybeSingle();
         if (data?.id) setCurrentUserId(data.id);
@@ -573,7 +573,7 @@ export default function InboxPage() {
   // ── Load owner history for ticket ──
   const loadOwnerHistory = useCallback(async (ticketId: string) => {
     try {
-      const { data } = await (supabase as any).schema('saas').from('crm_ticket_owner_history')
+      const { data } = await (supabase as any).schema('crm').from('ticket_owner_history')
         .select('id, usuario_id, usuario_nome, atribuido_por, inicio_em, fim_em')
         .eq('ticket_id', ticketId)
         .order('inicio_em', { ascending: true });
@@ -590,13 +590,13 @@ export default function InboxPage() {
   useEffect(() => {
     (async () => {
       try {
-        const empresaId = await getSaasEmpresaId();
-        const { data: pipes } = await (supabase as any).schema('saas').from('crm_pipelines')
-          .select('id, nome').eq('empresa_id', empresaId).eq('tipo', 'ticket').eq('ativo', true).order('ordem');
+        const org = await getOrg();
+        const { data: pipes } = await (supabase as any).schema('crm').from('pipelines')
+          .select('id, nome').eq('org', org).eq('tipo', 'ticket').eq('ativo', true).order('ordem');
         if (!pipes) return;
         const result: typeof ticketPipelines = [];
         for (const p of pipes) {
-          const { data: stages } = await (supabase as any).schema('saas').from('crm_pipeline_estagios')
+          const { data: stages } = await (supabase as any).schema('crm').from('pipeline_estagios')
             .select('id, nome').eq('pipeline_id', p.id).order('ordem');
           result.push({ id: p.id, nome: p.nome, estagios: stages || [] });
         }
@@ -611,7 +611,7 @@ export default function InboxPage() {
     if (!selectedConv) return;
     (async () => {
       try {
-        const { data } = await (supabase as any).schema('saas').from('crm_tickets')
+        const { data } = await (supabase as any).schema('crm').from('tickets')
           .select('id, numero_registro, titulo, descricao, status, prioridade, categoria, plataforma, tags, pipeline_id, estagio_id, proprietario_id, sla_minutos, primeira_resposta_em, criado_em, resolvido_em, ultima_atividade_em, dados_custom')
           .eq('dados_custom->>conversation_id', selectedConv.id)
           .is('deletado_em', null)
@@ -629,20 +629,20 @@ export default function InboxPage() {
     (async () => {
       try {
         const { data: accessRows } = await (supabase as any)
-          .from('meta_inbox_user_access')
+          .schema('channels').from('meta_user_access')
           .select('usuario_id')
           .eq('account_id', selectedAccount.id);
         const userIds = (accessRows || []).map((r: any) => r.usuario_id).filter(Boolean);
         if (userIds.length === 0) {
           // No access restrictions — load all active users
-          const empresaId = await getSaasEmpresaId();
-          const { data } = await (supabase as any).schema('saas').from('usuarios')
-            .select('id, nome, email').eq('empresa_id', empresaId).eq('status', 'ativo').order('nome');
+          const org = await getOrg();
+          const { data } = await (supabase as any).schema('core').from('usuarios')
+            .select('id, nome, email').eq('org', org).eq('status', 'ativo').order('nome');
           setAccountUsers(data || []);
         } else {
-          const empresaId = await getSaasEmpresaId();
-          const { data } = await (supabase as any).schema('saas').from('usuarios')
-            .select('id, nome, email').eq('empresa_id', empresaId).in('id', userIds).order('nome');
+          const org = await getOrg();
+          const { data } = await (supabase as any).schema('core').from('usuarios')
+            .select('id, nome, email').eq('org', org).in('id', userIds).order('nome');
           setAccountUsers(data || []);
         }
       } catch { setAccountUsers([]); }
@@ -656,11 +656,11 @@ export default function InboxPage() {
   const loadAccountsFn = useCallback(async () => {
     setLoadingAccounts(true);
     try {
-      const empresaId = await getSaasEmpresaId();
+      const org = await getOrg();
       const { data: allAccounts, error } = await (supabase as any)
-        .from('meta_inbox_accounts')
+        .schema('channels').from('meta_accounts')
         .select('*')
-        .eq('empresa_id', empresaId)
+        .eq('org', org)
         .order('created_at', { ascending: true });
       if (error) throw error;
 
@@ -670,16 +670,16 @@ export default function InboxPage() {
       if (needsAccessFilter && user?.email) {
         // Resolve saas.usuarios.id from email
         const { data: usr } = await (supabase as any)
-          .schema('saas')
+          .schema('core')
           .from('usuarios')
           .select('id')
-          .eq('empresa_id', empresaId)
+          .eq('org', org)
           .eq('email', user.email.toLowerCase())
           .maybeSingle();
 
         if (usr?.id) {
           const { data: accessRows } = await (supabase as any)
-            .from('meta_inbox_user_access')
+            .schema('channels').from('meta_user_access')
             .select('account_id')
             .eq('usuario_id', usr.id);
 
@@ -728,10 +728,10 @@ export default function InboxPage() {
     if (!searchParams.get('phone')) { setSelectedConv(null); setMessages([]); }
     // Load macros and tags for empresa
     if (selectedAccount) {
-      getSaasEmpresaId().then(empresaId => {
-        supabase.from('meta_inbox_macros').select('*').eq('empresa_id', empresaId).order('nome')
+      getOrg().then(org => {
+        supabase.schema('channels').from('meta_macros').select('*').eq('org', org).order('nome')
           .then(({ data }) => setAllMacros((data || []) as Macro[]));
-        supabase.from('meta_inbox_tags').select('*').eq('empresa_id', empresaId).order('nome')
+        supabase.schema('channels').from('meta_tags').select('*').eq('org', org).order('nome')
           .then(({ data }) => setAllTags((data || []) as TagDef[]));
       });
     }
@@ -850,12 +850,12 @@ export default function InboxPage() {
     if (unknown.length === 0) return;
     (async () => {
       try {
-        const empresaId = await getSaasEmpresaId();
+        const org = await getOrg();
         const { data } = await (supabase as any)
-          .schema('saas')
+          .schema('core')
           .from('usuarios')
           .select('id, nome')
-          .eq('empresa_id', empresaId)
+          .eq('org', org)
           .in('id', unknown);
         if (data) {
           const newEntries: Record<string, string> = {};
@@ -871,7 +871,7 @@ export default function InboxPage() {
     if (!selectedConv || !selectedAccount) return;
     setCreatingTicket(true);
     try {
-      const empresaId = await getSaasEmpresaId();
+      const org = await getOrg();
       const pipelineId = selectedAccount.ticket_pipeline_id;
       const estagioId = selectedAccount.ticket_estagio_id;
       const prioridade = selectedAccount.ticket_prioridade || 'medium';
@@ -885,8 +885,8 @@ export default function InboxPage() {
       const titulo = `${selectedConv.contact_name || selectedConv.contact_phone} — WhatsApp`;
       const descricao = selectedConv.last_message || '';
 
-      const { data, error } = await (supabase as any).schema('saas').from('crm_tickets').insert({
-        empresa_id: empresaId,
+      const { data, error } = await (supabase as any).schema('crm').from('tickets').insert({
+        empresa_id: org,
         titulo,
         descricao,
         pipeline_id: pipelineId,
@@ -908,7 +908,7 @@ export default function InboxPage() {
       // Register initial owner in history
       if (currentUserId) {
         const ownerName = accountUsers.find(u => u.id === currentUserId)?.nome || '';
-        await (supabase as any).schema('saas').from('crm_ticket_owner_history').insert({
+        await (supabase as any).schema('crm').from('ticket_owner_history').insert({
           ticket_id: data.id,
           usuario_id: currentUserId,
           usuario_nome: ownerName,
@@ -934,7 +934,7 @@ export default function InboxPage() {
       if (field === 'status' && value === 'resolvido') extra.resolvido_em = new Date().toISOString();
       if (field === 'status' && value === 'fechado') extra.resolvido_em = convTicket.resolvido_em || new Date().toISOString();
 
-      await (supabase as any).schema('saas').from('crm_tickets')
+      await (supabase as any).schema('crm').from('tickets')
         .update({ [field]: value || null, ...extra })
         .eq('id', convTicket.id);
 
@@ -945,7 +945,7 @@ export default function InboxPage() {
         const now = new Date().toISOString();
 
         // Close current owner period
-        const { error: closeErr } = await (supabase as any).schema('saas').from('crm_ticket_owner_history')
+        const { error: closeErr } = await (supabase as any).schema('crm').from('ticket_owner_history')
           .update({ fim_em: now })
           .eq('ticket_id', convTicket.id)
           .is('fim_em', null);
@@ -954,7 +954,7 @@ export default function InboxPage() {
         // Open new owner period (if assigning someone, not unassigning)
         if (newOwner) {
           const ownerName = accountUsers.find(u => u.id === newOwner)?.nome || '';
-          const { error: insertErr } = await (supabase as any).schema('saas').from('crm_ticket_owner_history').insert({
+          const { error: insertErr } = await (supabase as any).schema('crm').from('ticket_owner_history').insert({
             ticket_id: convTicket.id,
             usuario_id: newOwner,
             usuario_nome: ownerName,
@@ -1154,7 +1154,7 @@ export default function InboxPage() {
       }
       if (result.success) {
         // Delete the failed message
-        await (supabase as any).from('meta_inbox_messages').delete().eq('id', msg.id);
+        await (supabase as any).schema('channels').from('meta_messages').delete().eq('id', msg.id);
         const data = await loadMessages(selectedConv.id, selectedAccount?.id);
         setMessages(data);
         toast({ title: 'Mensagem reenviada!' });
@@ -1227,7 +1227,7 @@ export default function InboxPage() {
   const handleArchiveConversation = async (conv: InboxConversation) => {
     const newStatus = conv.status === 'archived' ? 'open' : 'archived';
     try {
-      await (supabase as any).from('meta_inbox_conversations')
+      await (supabase as any).schema('channels').from('meta_conversations')
         .update({ status: newStatus })
         .eq('id', conv.id);
       setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, status: newStatus } : c));
@@ -1244,8 +1244,8 @@ export default function InboxPage() {
   const handleDeleteConversation = async (conv: InboxConversation) => {
     try {
       // Delete messages first, then conversation
-      await (supabase as any).from('meta_inbox_messages').delete().eq('conversation_id', conv.id).eq('account_id', selectedAccount?.id);
-      await (supabase as any).from('meta_inbox_conversations').delete().eq('id', conv.id).eq('account_id', selectedAccount?.id);
+      await (supabase as any).schema('channels').from('meta_messages').delete().eq('conversation_id', conv.id).eq('account_id', selectedAccount?.id);
+      await (supabase as any).schema('channels').from('meta_conversations').delete().eq('id', conv.id).eq('account_id', selectedAccount?.id);
       if (selectedConv?.id === conv.id) { setSelectedConv(null); setMessages([]); }
       setConfirmDeleteConv(null);
       await loadConvs();
@@ -1258,7 +1258,7 @@ export default function InboxPage() {
   // ── Save contact name ──
   const saveContactName = async (conv: InboxConversation, newName: string) => {
     try {
-      await supabase.from('meta_inbox_conversations')
+      await supabase.schema('channels').from('meta_conversations')
         .update({ contact_name: newName || null, updated_at: new Date().toISOString() })
         .eq('id', conv.id);
       setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, contact_name: newName || null } : c));
@@ -1272,7 +1272,7 @@ export default function InboxPage() {
   // ── Save assigned user ──
   const saveAssignedUser = async (conv: InboxConversation, userId: string | null) => {
     try {
-      await supabase.from('meta_inbox_conversations')
+      await supabase.schema('channels').from('meta_conversations')
         .update({ assigned_user_id: userId, updated_at: new Date().toISOString() })
         .eq('id', conv.id);
       setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, assigned_user_id: userId } : c));
@@ -1289,7 +1289,7 @@ export default function InboxPage() {
       ? currentTags.filter(t => t !== tagName)
       : [...currentTags, tagName];
     try {
-      await supabase.from('meta_inbox_conversations')
+      await supabase.schema('channels').from('meta_conversations')
         .update({ tags: newTags, updated_at: new Date().toISOString() })
         .eq('id', conv.id);
       setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, tags: newTags } : c));
@@ -1300,7 +1300,7 @@ export default function InboxPage() {
   // ── Context menu actions ──
   const updateConv = async (conv: InboxConversation, patch: Record<string, unknown>) => {
     try {
-      await supabase.from('meta_inbox_conversations').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', conv.id);
+      await supabase.schema('channels').from('meta_conversations').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', conv.id);
       const updated = { ...conv, ...patch } as InboxConversation;
       setConversations(prev => prev.map(c => c.id === conv.id ? updated : c));
       if (selectedConv?.id === conv.id) setSelectedConv(updated);
@@ -1323,7 +1323,7 @@ export default function InboxPage() {
   const toggleFavorite = (conv: InboxConversation) => updateConv(conv, { favorited: !conv.favorited });
 
   const markAsUnread = async (conv: InboxConversation) => {
-    await supabase.from('meta_inbox_conversations')
+    await supabase.schema('channels').from('meta_conversations')
       .update({ unread_count: Math.max(conv.unread_count, 1), updated_at: new Date().toISOString() })
       .eq('id', conv.id);
     setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unread_count: Math.max(c.unread_count, 1) } : c));
@@ -1332,8 +1332,8 @@ export default function InboxPage() {
 
   const clearConversation = async (conv: InboxConversation) => {
     try {
-      await supabase.from('meta_inbox_messages').delete().eq('conversation_id', conv.id);
-      await supabase.from('meta_inbox_conversations')
+      await supabase.schema('channels').from('meta_messages').delete().eq('conversation_id', conv.id);
+      await supabase.schema('channels').from('meta_conversations')
         .update({ last_message: null, last_message_ts: null, unread_count: 0, updated_at: new Date().toISOString() })
         .eq('id', conv.id);
       setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, last_message: null, last_message_ts: null, unread_count: 0 } : c));
@@ -2500,10 +2500,10 @@ export default function InboxPage() {
             setSettingsOpen(false);
             // Reload macros/tags in case they were updated
             if (selectedAccount) {
-              getSaasEmpresaId().then(empresaId => {
-                supabase.from('meta_inbox_macros').select('*').eq('empresa_id', empresaId).order('nome')
+              getOrg().then(org => {
+                supabase.schema('channels').from('meta_macros').select('*').eq('org', org).order('nome')
                   .then(({ data }) => setAllMacros((data || []) as Macro[]));
-                supabase.from('meta_inbox_tags').select('*').eq('empresa_id', empresaId).order('nome')
+                supabase.schema('channels').from('meta_tags').select('*').eq('org', org).order('nome')
                   .then(({ data }) => setAllTags((data || []) as TagDef[]));
               });
             }

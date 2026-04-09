@@ -3,7 +3,7 @@
  * Each agent has its own prompt, criteria, and optional reference files.
  */
 import { supabase } from '@/integrations/supabase/client';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getOrg, getOrgAndEmpresaId } from '@/lib/saas';
 import type { EvalCriteria } from '@/pages/AIConfigPage';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -42,17 +42,17 @@ export interface AgentFile {
 
 // ─── Load full agent tree for current empresa (filtered by modulo) ───────────
 export async function loadAgentTree(modulo: AgentModulo = 'meetings'): Promise<AgentNode[]> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
 
   // Try with modulo filter first; fall back to unfiltered if column doesn't exist yet
   let data: any[] | null = null;
   let error: any = null;
 
   const res = await (supabase as any)
-    .schema('saas')
-    .from('agentes_ia')
+    .schema('ai')
+    .from('agentes')
     .select('*')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('modulo', modulo)
     .order('ordem', { ascending: true });
 
@@ -63,10 +63,10 @@ export async function loadAgentTree(modulo: AgentModulo = 'meetings'): Promise<A
   if (error && (error.message?.includes('modulo') || error.code === '42703')) {
     console.warn('[agentService] modulo column not found, loading all agents');
     const fallback = await (supabase as any)
-      .schema('saas')
-      .from('agentes_ia')
+      .schema('ai')
+      .from('agentes')
       .select('*')
-      .eq('empresa_id', empresaId)
+      .eq('org', org)
       .order('ordem', { ascending: true });
 
     if (fallback.error) {
@@ -85,10 +85,11 @@ export async function loadAgentTree(modulo: AgentModulo = 'meetings'): Promise<A
 
 // ─── Save (upsert) a single agent ───────────────────────────────────────────
 export async function saveAgent(agent: Partial<AgentNode> & { tipo: AgentTipo; nome: string }): Promise<AgentNode | null> {
-  const empresaId = await getSaasEmpresaId();
+  const { org, empresaId } = await getOrgAndEmpresaId();
   const payload: Record<string, any> = {
     ...agent,
     empresa_id: empresaId,
+    org,
     criterios: JSON.parse(JSON.stringify(agent.criterios || [])),
     atualizado_em: new Date().toISOString(),
   };
@@ -98,8 +99,8 @@ export async function saveAgent(agent: Partial<AgentNode> & { tipo: AgentTipo; n
   if (agent.id) {
     // Update existing
     const { data, error } = await (supabase as any)
-      .schema('saas')
-      .from('agentes_ia')
+      .schema('ai')
+      .from('agentes')
       .update(payload)
       .eq('id', agent.id)
       .select()
@@ -109,8 +110,8 @@ export async function saveAgent(agent: Partial<AgentNode> & { tipo: AgentTipo; n
   } else {
     // Insert new
     const { data, error } = await (supabase as any)
-      .schema('saas')
-      .from('agentes_ia')
+      .schema('ai')
+      .from('agentes')
       .insert(payload)
       .select()
       .single();
@@ -122,8 +123,8 @@ export async function saveAgent(agent: Partial<AgentNode> & { tipo: AgentTipo; n
 // ─── Delete an agent (cascades to children and files) ────────────────────────
 export async function deleteAgent(agentId: string): Promise<void> {
   const { error } = await (supabase as any)
-    .schema('saas')
-    .from('agentes_ia')
+    .schema('ai')
+    .from('agentes')
     .delete()
     .eq('id', agentId);
   if (error) console.error('[agentService] delete error:', error);
@@ -131,7 +132,7 @@ export async function deleteAgent(agentId: string): Promise<void> {
 
 // ─── Initialize default agent tree ──────────────────────────────────────────
 export async function initializeAgentTree(modulo: AgentModulo = 'meetings'): Promise<AgentNode[]> {
-  const empresaId = await getSaasEmpresaId();
+  const { org, empresaId } = await getOrgAndEmpresaId();
 
   const isMeetings = modulo === 'meetings';
   const gerenteDesc = isMeetings
@@ -149,10 +150,11 @@ export async function initializeAgentTree(modulo: AgentModulo = 'meetings'): Pro
 
   // Create Gerente
   const { data: gerente } = await (supabase as any)
-    .schema('saas')
-    .from('agentes_ia')
+    .schema('ai')
+    .from('agentes')
     .insert({
       empresa_id: empresaId,
+      org,
       modulo,
       tipo: 'gerente',
       nome: 'Gerente',
@@ -167,10 +169,11 @@ export async function initializeAgentTree(modulo: AgentModulo = 'meetings'): Pro
 
   // Create Classificador
   const { data: classificador } = await (supabase as any)
-    .schema('saas')
-    .from('agentes_ia')
+    .schema('ai')
+    .from('agentes')
     .insert({
       empresa_id: empresaId,
+      org,
       modulo,
       parent_id: gerente.id,
       tipo: 'classificador',
@@ -274,10 +277,11 @@ export async function initializeAgentTree(modulo: AgentModulo = 'meetings'): Pro
       ];
 
   const { data: avaliador } = await (supabase as any)
-    .schema('saas')
-    .from('agentes_ia')
+    .schema('ai')
+    .from('agentes')
     .insert({
       empresa_id: empresaId,
+      org,
       modulo,
       parent_id: classificador.id,
       tipo: 'avaliador',
@@ -296,7 +300,7 @@ export async function initializeAgentTree(modulo: AgentModulo = 'meetings'): Pro
 // ─── File management ─────────────────────────────────────────────────────────
 export async function loadAgentFiles(agentId: string): Promise<AgentFile[]> {
   const { data, error } = await (supabase as any)
-    .schema('saas')
+    .schema('ai')
     .from('agente_arquivos')
     .select('*')
     .eq('agente_id', agentId)
@@ -314,7 +318,7 @@ export async function saveAgentFile(
   file: File,
   extractedText: string,
 ): Promise<AgentFile | null> {
-  const empresaId = await getSaasEmpresaId();
+  const { org, empresaId } = await getOrgAndEmpresaId();
   const fileId = crypto.randomUUID();
   const storagePath = `${empresaId}/${agentId}/${fileId}_${file.name}`;
 
@@ -330,11 +334,12 @@ export async function saveAgentFile(
 
   // Save metadata
   const { data, error } = await (supabase as any)
-    .schema('saas')
+    .schema('ai')
     .from('agente_arquivos')
     .insert({
       agente_id: agentId,
       empresa_id: empresaId,
+      org,
       nome: file.name,
       tipo_mime: file.type,
       tamanho: file.size,
@@ -351,7 +356,7 @@ export async function saveAgentFile(
 export async function deleteAgentFile(fileId: string, storagePath: string): Promise<void> {
   await supabase.storage.from('agente-arquivos').remove([storagePath]);
   await (supabase as any)
-    .schema('saas')
+    .schema('ai')
     .from('agente_arquivos')
     .delete()
     .eq('id', fileId);

@@ -4,7 +4,7 @@
  * Caches in memory to avoid repeated DB calls.
  */
 import { supabase } from '@/integrations/supabase/client';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getOrg, getOrgAndEmpresaId } from '@/lib/saas';
 import { encryptToken, decryptToken } from '@/lib/tokenCrypto';
 import { CONFIG } from '@/lib/config';
 
@@ -22,10 +22,10 @@ export async function getEvolutionConfig(): Promise<EvolutionApiConfig> {
 
   inflight = (async () => {
     try {
-      const empresaId = await getSaasEmpresaId();
-      const { data, error } = await (supabase as any).schema('saas').from('integracoes')
+      const org = await getOrg();
+      const { data, error } = await (supabase as any).schema('automation').from('integracoes')
         .select('configuracao')
-        .eq('empresa_id', empresaId)
+        .eq('org', org)
         .eq('tipo', 'evolution_api')
         .eq('status', 'conectada')
         .limit(1)
@@ -55,12 +55,13 @@ export async function getEvolutionConfig(): Promise<EvolutionApiConfig> {
 }
 
 export async function saveEvolutionConfig(url: string, token: string): Promise<void> {
-  const empresaId = await getSaasEmpresaId();
+  const { org, empresaId } = await getOrgAndEmpresaId();
   const encrypted = await encryptToken(token);
 
   // Try upsert first (requires unique constraint empresa_id,tipo,nome)
-  const { error: upsertErr } = await (supabase as any).schema('saas').from('integracoes').upsert({
+  const { error: upsertErr } = await (supabase as any).schema('automation').from('integracoes').upsert({
     empresa_id: empresaId,
+    org,
     tipo: 'evolution_api',
     nome: 'Evolution API',
     status: 'conectada',
@@ -71,21 +72,22 @@ export async function saveEvolutionConfig(url: string, token: string): Promise<v
   if (upsertErr) {
     console.warn('[evolutionConfig] upsert failed, trying update:', upsertErr.message);
     // Fallback: try update existing row
-    const { error: updateErr } = await (supabase as any).schema('saas').from('integracoes')
+    const { error: updateErr } = await (supabase as any).schema('automation').from('integracoes')
       .update({
         status: 'conectada',
         configuracao: { url, token_encrypted: encrypted },
         conectado_em: new Date().toISOString(),
       })
-      .eq('empresa_id', empresaId)
+      .eq('org', org)
       .eq('tipo', 'evolution_api');
 
     if (updateErr) {
       console.warn('[evolutionConfig] update also failed, trying insert:', updateErr.message);
       // Last resort: plain insert
-      const { error: insertErr } = await (supabase as any).schema('saas').from('integracoes')
+      const { error: insertErr } = await (supabase as any).schema('automation').from('integracoes')
         .insert({
           empresa_id: empresaId,
+          org,
           tipo: 'evolution_api',
           nome: 'Evolution API',
           status: 'conectada',
@@ -102,10 +104,10 @@ export async function saveEvolutionConfig(url: string, token: string): Promise<v
 
 export async function disconnectEvolution(): Promise<void> {
   try {
-    const empresaId = await getSaasEmpresaId();
-    await (supabase as any).schema('saas').from('integracoes')
+    const org = await getOrg();
+    await (supabase as any).schema('automation').from('integracoes')
       .update({ status: 'desconectada', configuracao: {} })
-      .eq('empresa_id', empresaId)
+      .eq('org', org)
       .eq('tipo', 'evolution_api');
   } catch { /* best-effort */ }
   cached = null;

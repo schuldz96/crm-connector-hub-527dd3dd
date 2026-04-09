@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useCallback, useRef } from 'react';
 import type { UserRole } from '@/types';
 import { supabase, supabaseSaas } from '@/integrations/supabase/client';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getOrg } from '@/lib/saas';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -95,12 +95,12 @@ export function AuditLogProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     const run = async () => {
       try {
-        const empresaId = await getSaasEmpresaId();
+        const org = await getOrg();
         const { data, error } = await (supabaseSaas as any)
-          .schema('saas')
-          .from('logs_auditoria')
+          .schema('audit')
+          .from('logs')
           .select('id,usuario_id,tipo_evento,pagina,pagina_label,metadados,criado_em')
-          .eq('empresa_id', empresaId)
+          .eq('org', org)
           .order('criado_em', { ascending: false })
           .limit(MAX_ENTRIES);
         if (error) throw error;
@@ -134,23 +134,23 @@ export function AuditLogProvider({ children }: { children: React.ReactNode }) {
       logsRef.current = [entry, ...logsRef.current].slice(0, MAX_ENTRIES);
       void (async () => {
         try {
-          const empresaId = await getSaasEmpresaId();
+          const org = await getOrg();
 
           // Resolve email → UUID for usuario_id column
           let usuarioId: string | null = null;
           if (entry.userEmail) {
             const { data: usr } = await (supabaseSaas as any)
-              .schema('saas')
+              .schema('core')
               .from('usuarios')
               .select('id')
-              .eq('empresa_id', empresaId)
+              .eq('org', org)
               .eq('email', entry.userEmail.trim().toLowerCase())
               .maybeSingle();
             usuarioId = usr?.id ?? null;
           }
 
-          await (supabaseSaas as any).schema('saas').from('logs_auditoria').insert({
-            empresa_id: empresaId,
+          await (supabaseSaas as any).schema('audit').from('logs').insert({
+            empresa_id: org,
             usuario_id: usuarioId,
             tipo_evento: entry.type,
             pagina: entry.page || null,
@@ -175,8 +175,8 @@ export function AuditLogProvider({ children }: { children: React.ReactNode }) {
     logsRef.current = [];
     void (async () => {
       try {
-        const empresaId = await getSaasEmpresaId();
-        await (supabaseSaas as any).schema('saas').from('logs_auditoria').delete().eq('empresa_id', empresaId);
+        const org = await getOrg();
+        await (supabaseSaas as any).schema('audit').from('logs').delete().eq('org', org);
       } catch {
         // no-op
       }

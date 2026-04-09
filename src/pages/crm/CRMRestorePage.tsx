@@ -9,19 +9,19 @@ import {
 import { ChevronLeft, Search, Loader2, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getOrg } from '@/lib/saas';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useSaasUsers } from '@/hooks/useCrm';
 import type { CrmObjectType } from '@/types/crm';
 
-const saas = () => (supabase as any).schema('saas');
+const crm = () => (supabase as any).schema('crm');
 
 const OBJECT_CONFIG: Record<CrmObjectType, { table: string; label: string; labelPlural: string; nameField: string }> = {
-  contact: { table: 'crm_contatos', label: 'Contato', labelPlural: 'Contatos', nameField: 'nome' },
-  company: { table: 'crm_empresas', label: 'Empresa', labelPlural: 'Empresas', nameField: 'nome' },
-  deal:    { table: 'crm_negocios', label: 'Negócio', labelPlural: 'Negócios', nameField: 'nome' },
-  ticket:  { table: 'crm_tickets',  label: 'Ticket',  labelPlural: 'Tickets',  nameField: 'titulo' },
+  contact: { table: 'contatos', label: 'Contato', labelPlural: 'Contatos', nameField: 'nome' },
+  company: { table: 'empresas_crm', label: 'Empresa', labelPlural: 'Empresas', nameField: 'nome' },
+  deal:    { table: 'negocios', label: 'Negócio', labelPlural: 'Negócios', nameField: 'nome' },
+  ticket:  { table: 'tickets',  label: 'Ticket',  labelPlural: 'Tickets',  nameField: 'titulo' },
 };
 
 const TYPE_ID_MAP: Record<string, CrmObjectType> = { '0-1': 'contact', '0-2': 'company', '0-3': 'deal', '0-4': 'ticket' };
@@ -52,11 +52,11 @@ export default function CRMRestorePage() {
   const { data: deletedRecords = [], isLoading, refetch } = useQuery({
     queryKey: ['crm.deleted', objectType],
     queryFn: async () => {
-      const empresaId = await getSaasEmpresaId();
-      const { data, error } = await saas()
+      const org = await getOrg();
+      const { data, error } = await crm()
         .from(config.table)
         .select('*')
-        .eq('empresa_id', empresaId)
+        .eq('org', org)
         .not('deletado_em', 'is', null)
         .gte('deletado_em', ninetyDaysAgo)
         .order('deletado_em', { ascending: false });
@@ -98,7 +98,7 @@ export default function CRMRestorePage() {
     setRestoring(true);
     try {
       const ids = Array.from(selectedIds);
-      const { error } = await saas()
+      const { error } = await crm()
         .from(config.table)
         .update({ deletado_em: null })
         .in('id', ids);

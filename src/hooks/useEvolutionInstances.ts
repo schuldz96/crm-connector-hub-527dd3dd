@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, supabaseSaas } from '@/integrations/supabase/client';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getOrg } from '@/lib/saas';
 import { getEvolutionConfig } from '@/lib/evolutionConfig';
 
 export interface EvolutionInstance {
@@ -31,14 +31,14 @@ function emailFromFrontendId(userId: string): string {
   return userId.replace(/^(user_|google_)/, '').trim().toLowerCase();
 }
 
-/** Resolve email → UUID in saas.usuarios */
+/** Resolve email → UUID in core.usuarios */
 async function resolveEmailToUuid(email: string): Promise<string | null> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const { data } = await (supabase as any)
-    .schema('saas')
+    .schema('core')
     .from('usuarios')
     .select('id')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('email', email.trim().toLowerCase())
     .maybeSingle();
   return data?.id ?? null;
@@ -46,15 +46,15 @@ async function resolveEmailToUuid(email: string): Promise<string | null> {
 
 async function syncInstancesToDb(apiInstances: EvolutionInstance[]) {
   try {
-    const empresaId = await getSaasEmpresaId();
+    const org = await getOrg();
     for (const inst of apiInstances) {
       const dbStatus = STATUS_TO_DB[inst.connectionStatus] || 'desconectada';
       await (supabaseSaas as any)
-        .schema('saas')
+        .schema('channels')
         .from('instancias_whatsapp')
         .upsert(
           {
-            empresa_id: empresaId,
+            empresa_id: org,
             nome: inst.name,
             telefone: inst.ownerJid?.replace('@s.whatsapp.net', '') || null,
             status: dbStatus,
@@ -70,12 +70,12 @@ async function syncInstancesToDb(apiInstances: EvolutionInstance[]) {
 }
 
 async function loadInstancesFromDb(): Promise<EvolutionInstance[]> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const { data, error } = await (supabaseSaas as any)
-    .schema('saas')
+    .schema('channels')
     .from('instancias_whatsapp')
     .select('id,nome,telefone,status,owner_jid,usuario_id')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .order('nome', { ascending: true });
 
   if (error) throw error;
@@ -85,10 +85,10 @@ async function loadInstancesFromDb(): Promise<EvolutionInstance[]> {
   let uuidToEmail: Record<string, string> = {};
   if (uuids.length > 0) {
     const { data: users } = await (supabase as any)
-      .schema('saas')
+      .schema('core')
       .from('usuarios')
       .select('id, email')
-      .eq('empresa_id', empresaId)
+      .eq('org', org)
       .in('id', uuids);
     for (const u of (users || [])) {
       uuidToEmail[u.id] = u.email;
@@ -169,17 +169,17 @@ export function useEvolutionInstances() {
  * Pass empty userId to unassign.
  */
 export async function assignInstanceToUser(instanceName: string, userId: string): Promise<void> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const email = userId ? emailFromFrontendId(userId) : '';
   const usuarioId = email ? await resolveEmailToUuid(email) : null;
 
   // Ensure the instance row exists in DB (it may only exist in the API so far)
   await (supabase as any)
-    .schema('saas')
+    .schema('channels')
     .from('instancias_whatsapp')
     .upsert(
       {
-        empresa_id: empresaId,
+        empresa_id: org,
         nome: instanceName,
         status: 'desconectada',
         usuario_id: usuarioId,
@@ -189,10 +189,10 @@ export async function assignInstanceToUser(instanceName: string, userId: string)
 
   // Also update explicitly in case upsert on conflict didn't touch usuario_id
   await (supabase as any)
-    .schema('saas')
+    .schema('channels')
     .from('instancias_whatsapp')
     .update({ usuario_id: usuarioId })
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('nome', instanceName);
 }
 

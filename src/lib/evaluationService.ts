@@ -4,7 +4,7 @@
  * Salva scores na tabela saas.analises_ia (sem duplicatas).
  */
 import { supabase } from '@/integrations/supabase/client';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getOrg, getOrgAndEmpresaId } from '@/lib/saas';
 import { loadAIConfig } from '@/lib/aiConfigService';
 import { callOpenAI } from '@/lib/openaiProxy';
 import { DEFAULT_WHATSAPP_CRITERIA, DEFAULT_MEETING_CRITERIA } from '@/pages/AIConfigPage';
@@ -100,15 +100,16 @@ Responda APENAS com JSON válido (sem markdown):
   const result: EvaluationResult = JSON.parse(jsonStr);
 
   // Persist to DB
-  const empresaId = await getSaasEmpresaId();
+  const { org, empresaId } = await getOrgAndEmpresaId();
   const refDate = periodoRef || new Date().toISOString().split('T')[0];
 
   await (supabase as any)
-    .schema('saas')
-    .from('analises_ia')
+    .schema('ai')
+    .from('analises')
     .upsert(
       {
         empresa_id: empresaId,
+        org,
         tipo_contexto: 'whatsapp',
         vendedor_id: vendedorId,
         instancia_nome: instanceName,
@@ -313,23 +314,24 @@ Responda APENAS com JSON válido (sem markdown):
   const result: EvaluationResult = JSON.parse(jsonStr);
 
   // Persist to DB - delete first then insert to avoid upsert issues
-  const empresaId = await getSaasEmpresaId();
+  const { org, empresaId } = await getOrgAndEmpresaId();
   const scoreVal = Math.round(result.totalScore);
 
   // Delete existing evaluation
   await (supabase as any)
-    .schema('saas')
-    .from('analises_ia')
+    .schema('ai')
+    .from('analises')
     .delete()
     .eq('tipo_contexto', 'reuniao')
     .eq('entidade_id', reuniaoId);
 
   // Insert new evaluation
   const { error: insertErr } = await (supabase as any)
-    .schema('saas')
-    .from('analises_ia')
+    .schema('ai')
+    .from('analises')
     .insert({
       empresa_id: empresaId,
+      org,
       tipo_contexto: 'reuniao',
       entidade_id: reuniaoId,
       vendedor_id: vendedorId,
@@ -350,7 +352,7 @@ Responda APENAS com JSON válido (sem markdown):
 
   // Also update reunioes table
   await (supabase as any)
-    .schema('saas')
+    .schema('channels')
     .from('reunioes')
     .update({ score: scoreVal, analisada_por_ia: true })
     .eq('id', reuniaoId);
@@ -360,12 +362,12 @@ Responda APENAS com JSON válido (sem markdown):
 
 // ─── Load a single evaluation by entity ──────────────────────────────────────
 export async function loadEvaluationByEntity(entidadeId: string): Promise<StoredEvaluation | null> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const { data } = await (supabase as any)
-    .schema('saas')
-    .from('analises_ia')
+    .schema('ai')
+    .from('analises')
     .select('id,tipo_contexto,vendedor_id,score,criterios,resumo,payload,instancia_nome,contato_telefone,periodo_ref,entidade_id,criado_em,agente_avaliador_id,tipo_reuniao_detectado,chain_log')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('entidade_id', entidadeId)
     .maybeSingle();
   return data || null;
@@ -373,12 +375,12 @@ export async function loadEvaluationByEntity(entidadeId: string): Promise<Stored
 
 // ─── Load ALL evaluations for an entity (multi-agent support) ────────────────
 export async function loadAllEvaluationsForEntity(entidadeId: string): Promise<(StoredEvaluation & { payload?: any })[]> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const { data } = await (supabase as any)
-    .schema('saas')
-    .from('analises_ia')
+    .schema('ai')
+    .from('analises')
     .select('id,tipo_contexto,vendedor_id,score,criterios,resumo,payload,instancia_nome,contato_telefone,periodo_ref,entidade_id,criado_em,agente_avaliador_id,tipo_reuniao_detectado,chain_log')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('entidade_id', entidadeId)
     .order('criado_em', { ascending: true });
   return data || [];
@@ -391,13 +393,13 @@ export async function loadEvaluations(opts?: {
   dataInicio?: string;
   dataFim?: string;
 }): Promise<StoredEvaluation[]> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
 
   let query = (supabase as any)
-    .schema('saas')
-    .from('analises_ia')
+    .schema('ai')
+    .from('analises')
     .select('id,tipo_contexto,vendedor_id,score,criterios,resumo,instancia_nome,contato_telefone,periodo_ref,entidade_id,payload,agente_avaliador_id,criado_em')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .order('criado_em', { ascending: false });
 
   if (opts?.tipoContexto) query = query.eq('tipo_contexto', opts.tipoContexto);
@@ -415,12 +417,12 @@ export async function loadEvaluations(opts?: {
 
 // ─── Load users from DB (for Desempenho page) ───────────────────────────────
 export async function loadUsersForPerformance(): Promise<any[]> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const { data, error } = await (supabase as any)
-    .schema('saas')
+    .schema('core')
     .from('usuarios')
     .select('id,nome,email,avatar_url,papel,status,area_id,time_id')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('status', 'ativo');
 
   if (error) {
@@ -432,12 +434,12 @@ export async function loadUsersForPerformance(): Promise<any[]> {
 
 // ─── Load teams from DB ──────────────────────────────────────────────────────
 export async function loadTeamsForPerformance(): Promise<any[]> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const { data, error } = await (supabase as any)
-    .schema('saas')
+    .schema('core')
     .from('times')
     .select('id,nome,area_id,supervisor_id')
-    .eq('empresa_id', empresaId);
+    .eq('org', org);
 
   if (error) {
     console.error('[Evaluation] Load teams error:', error);
@@ -448,12 +450,12 @@ export async function loadTeamsForPerformance(): Promise<any[]> {
 
 // ─── Load agent names (for methodology labels) ─────────────────────────────────
 export async function loadAgentNames(): Promise<Record<string, string>> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const { data, error } = await (supabase as any)
-    .schema('saas')
-    .from('agentes_ia')
+    .schema('ai')
+    .from('agentes')
     .select('id,nome')
-    .eq('empresa_id', empresaId);
+    .eq('org', org);
   if (error) return {};
   const map: Record<string, string> = {};
   for (const a of (data || [])) map[a.id] = a.nome;
@@ -462,12 +464,12 @@ export async function loadAgentNames(): Promise<Record<string, string>> {
 
 // ─── Load meeting durations (for avg call time metric) ────────────────────────
 export async function loadMeetingDurations(): Promise<Record<string, number>> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const { data, error } = await (supabase as any)
-    .schema('saas')
+    .schema('channels')
     .from('reunioes')
     .select('id,duracao_minutos,vendedor_id')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .gt('duracao_minutos', 0);
   if (error) return {};
   const map: Record<string, number> = {};
@@ -487,12 +489,12 @@ export async function loadRecentChainLogs(limit = 20): Promise<{
   criado_em: string;
   payload: any;
 }[]> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const { data, error } = await (supabase as any)
-    .schema('saas')
-    .from('analises_ia')
+    .schema('ai')
+    .from('analises')
     .select('id,entidade_id,score,resumo,chain_log,tipo_reuniao_detectado,agente_avaliador_id,criado_em,payload')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('tipo_contexto', 'reuniao')
     .not('chain_log', 'is', null)
     .order('criado_em', { ascending: false })

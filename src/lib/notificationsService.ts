@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getOrg, getOrgAndEmpresaId } from '@/lib/saas';
 import type { Notification, NotificationType } from '@/contexts/NotificationsContext';
 
 // Map DB tipo to frontend type
@@ -19,12 +19,12 @@ const tipoToDb: Record<NotificationType, string> = {
 
 // Resolve email → UUID from saas.usuarios
 async function resolveUserUuid(email: string): Promise<string | null> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const { data } = await (supabase as any)
-    .schema('saas')
+    .schema('core')
     .from('usuarios')
     .select('id')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('email', email.trim().toLowerCase())
     .maybeSingle();
   return data?.id ?? null;
@@ -35,7 +35,7 @@ export async function loadNotifications(userEmail: string): Promise<Notification
   if (!uuid) return [];
 
   const { data, error } = await (supabase as any)
-    .schema('saas')
+    .schema('automation')
     .from('notificacoes')
     .select('*')
     .eq('usuario_id', uuid)
@@ -60,7 +60,7 @@ export async function loadNotifications(userEmail: string): Promise<Notification
 
 export async function markNotificationRead(notificationId: string): Promise<void> {
   await (supabase as any)
-    .schema('saas')
+    .schema('automation')
     .from('notificacoes')
     .update({ status: 'lida', lida_em: new Date().toISOString() })
     .eq('id', notificationId);
@@ -71,7 +71,7 @@ export async function markAllNotificationsRead(userEmail: string): Promise<void>
   if (!uuid) return;
 
   await (supabase as any)
-    .schema('saas')
+    .schema('automation')
     .from('notificacoes')
     .update({ status: 'lida', lida_em: new Date().toISOString() })
     .eq('usuario_id', uuid)
@@ -80,7 +80,7 @@ export async function markAllNotificationsRead(userEmail: string): Promise<void>
 
 export async function deleteNotification(notificationId: string): Promise<void> {
   await (supabase as any)
-    .schema('saas')
+    .schema('automation')
     .from('notificacoes')
     .update({ status: 'arquivada' })
     .eq('id', notificationId);
@@ -100,14 +100,14 @@ export async function createInternalAlert(params: {
   link?: string;
   targetRoles?: string[];
 }): Promise<void> {
-  const empresaId = await getSaasEmpresaId();
+  const { org, empresaId } = await getOrgAndEmpresaId();
 
   // Build user query
   let query = (supabase as any)
-    .schema('saas')
+    .schema('core')
     .from('usuarios')
     .select('id, cargo')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('ativo', true);
 
   // Filter by roles if specified
@@ -138,6 +138,7 @@ export async function createInternalAlert(params: {
   // Insert a notification for each user
   const rows = users.map((u: any) => ({
     empresa_id: empresaId,
+    org,
     usuario_id: u.id,
     tipo,
     titulo: params.title,
@@ -149,7 +150,7 @@ export async function createInternalAlert(params: {
   console.log('[notifications] createInternalAlert inserting', rows.length, 'notifications for roles:', roles.length > 0 ? roles : 'all');
 
   const { error } = await (supabase as any)
-    .schema('saas')
+    .schema('automation')
     .from('notificacoes')
     .insert(rows);
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getOrg } from '@/lib/saas';
 import type { User, UserRole } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -312,20 +312,20 @@ function UserProfileModal({ user, onClose }: { user: User; onClose: () => void }
 
   useEffect(() => {
     const load = async () => {
-      const empresaId = await getSaasEmpresaId();
+      const org = await getOrg();
       // Load all Meta accounts
       const { data: accounts } = await (supabase as any)
-        .from('meta_inbox_accounts').select('id, nome, phone_display').eq('empresa_id', empresaId);
+        .schema('channels').from('meta_accounts').select('id, nome, phone_display').eq('org', org);
       setMetaAccounts(accounts || []);
 
       // Load user's access
       const userUuid = user.id.replace(/^(user_|google_)/, '');
-      const { data: resolvedUser } = await (supabase as any).schema('saas').from('usuarios')
-        .select('id').eq('empresa_id', empresaId).eq('email', userUuid).maybeSingle();
+      const { data: resolvedUser } = await (supabase as any).schema('core').from('usuarios')
+        .select('id').eq('org', org).eq('email', userUuid).maybeSingle();
 
       if (resolvedUser) {
         const { data: access } = await (supabase as any)
-          .from('meta_inbox_user_access').select('account_id').eq('usuario_id', resolvedUser.id);
+          .schema('channels').from('meta_user_access').select('account_id').eq('usuario_id', resolvedUser.id);
         setUserAccountAccess(new Set((access || []).map((a: any) => a.account_id)));
       }
     };
@@ -354,18 +354,18 @@ function UserProfileModal({ user, onClose }: { user: User; onClose: () => void }
     assignInstanceToUser(selectedInstance, user.id).catch(() => {});
 
     // Save Meta inbox access
-    const empresaId = await getSaasEmpresaId();
+    const org = await getOrg();
     const userEmail = user.id.replace(/^(user_|google_)/, '');
-    const { data: resolvedUser } = await (supabase as any).schema('saas').from('usuarios')
-      .select('id').eq('empresa_id', empresaId).eq('email', userEmail).maybeSingle();
+    const { data: resolvedUser } = await (supabase as any).schema('core').from('usuarios')
+      .select('id').eq('org', org).eq('email', userEmail).maybeSingle();
 
     if (resolvedUser) {
       // Delete all existing access
-      await (supabase as any).from('meta_inbox_user_access').delete().eq('usuario_id', resolvedUser.id);
+      await (supabase as any).schema('channels').from('meta_user_access').delete().eq('usuario_id', resolvedUser.id);
       // Insert new access
       if (userAccountAccess.size > 0) {
         const rows = [...userAccountAccess].map(accountId => ({ usuario_id: resolvedUser.id, account_id: accountId }));
-        await (supabase as any).from('meta_inbox_user_access').insert(rows);
+        await (supabase as any).schema('channels').from('meta_user_access').insert(rows);
       }
     }
 

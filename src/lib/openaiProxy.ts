@@ -20,7 +20,7 @@ export async function callOpenAI(apiToken: string, payload: OpenAIRequest): Prom
     // 1) Try server-side call via Supabase RPC (avoids browser CORS/CSP)
     try {
       const { data, error } = await (supabase as any)
-        .schema('saas')
+        .schema('ai')
         .rpc('openai_chat', {
           p_token: apiToken,
           p_model: payload.model || 'gpt-4o-mini',

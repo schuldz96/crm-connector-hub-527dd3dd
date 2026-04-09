@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { sendTemplateMessage, normalizePhone } from '@/lib/metaInboxService';
 import { supabase } from '@/integrations/supabase/client';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getOrg } from '@/lib/saas';
 import type { MetaInboxAccount } from '@/pages/InboxPage';
 
 const STORAGE_KEY = 'bulk_send_state';
@@ -155,11 +155,11 @@ export default function BulkSendModal({
   // Load logs
   const loadLogs = useCallback(async () => {
     if (!account) return;
-    const empresaId = await getSaasEmpresaId();
+    const org = await getOrg();
     const { data } = await (supabase as any)
       .from('meta_bulk_send_logs')
       .select('*')
-      .eq('empresa_id', empresaId)
+      .eq('org', org)
       .order('created_at', { ascending: false })
       .limit(20);
     setLogs(data || []);
@@ -186,7 +186,7 @@ export default function BulkSendModal({
     setRefreshingLog(true);
     try {
       const { data } = await (supabase as any)
-        .from('meta_inbox_messages')
+        .schema('channels').from('meta_messages')
         .select('wamid, status')
         .in('wamid', wamids);
       if (!data || data.length === 0) { setRefreshingLog(false); return log; }
@@ -330,10 +330,10 @@ export default function BulkSendModal({
     if (!row || !processingRef.current) return;
 
     // Create or find conversation
-    const empresaId = await getSaasEmpresaId();
+    const org = await getOrg();
     let convId: string;
     const { data: existing } = await (supabase as any)
-      .from('meta_inbox_conversations')
+      .schema('channels').from('meta_conversations')
       .select('id')
       .eq('account_id', account.id)
       .eq('contact_phone', row.phone)
@@ -343,8 +343,8 @@ export default function BulkSendModal({
       convId = existing.id;
     } else {
       const { data: created } = await (supabase as any)
-        .from('meta_inbox_conversations')
-        .insert({ account_id: account.id, empresa_id: empresaId, contact_phone: row.phone, contact_name: row.phone, status: 'open' })
+        .schema('channels').from('meta_conversations')
+        .insert({ account_id: account.id, empresa_id: org, contact_phone: row.phone, contact_name: row.phone, status: 'open' })
         .select('id').single();
       convId = created?.id;
     }
@@ -460,9 +460,9 @@ export default function BulkSendModal({
         return { ...prev, processedRows: rows };
       });
 
-      const empresaId = await getSaasEmpresaId();
+      const org = await getOrg();
       const { data: conv } = await (supabase as any)
-        .from('meta_inbox_conversations').select('id')
+        .schema('channels').from('meta_conversations').select('id')
         .eq('account_id', account.id).eq('contact_phone', row.phone).maybeSingle();
 
       const components: any[] = [];
@@ -510,7 +510,7 @@ export default function BulkSendModal({
         const wamids = state.processedRows.filter(r => r.wamid).map(r => r.wamid!);
         if (wamids.length === 0) return;
         const { data } = await (supabase as any)
-          .from('meta_inbox_messages')
+          .schema('channels').from('meta_messages')
           .select('wamid, status')
           .in('wamid', wamids);
         if (!data || data.length === 0) return;
@@ -557,14 +557,14 @@ export default function BulkSendModal({
     logSavedRef.current = true;
     (async () => {
       try {
-        const empresaId = await getSaasEmpresaId();
+        const org = await getOrg();
         const sent = state.processedRows.filter(r => ['sent', 'delivered', 'read'].includes(r.status)).length;
         const failed = state.processedRows.filter(r => ['failed', 'fallback_failed'].includes(r.status)).length;
         const delivered = state.processedRows.filter(r => r.status === 'delivered').length;
         const readCount = state.processedRows.filter(r => r.status === 'read').length;
         const fallbackSent = state.processedRows.filter(r => r.status === 'fallback_sent').length;
         await (supabase as any).from('meta_bulk_send_logs').insert({
-          account_id: account.id, empresa_id: empresaId,
+          account_id: account.id, empresa_id: org,
           template_name: state.templateName, template_language: state.templateLanguage,
           template_body: state.templateBody || null, fallback_template: state.fallbackTemplateName || null,
           total_rows: state.processedRows.length, sent_count: sent, delivered_count: delivered,
@@ -601,7 +601,7 @@ export default function BulkSendModal({
       try {
         const wamids = state.processedRows.filter(r => r.wamid).map(r => r.wamid!);
         const { data } = await (supabase as any)
-          .from('meta_inbox_messages')
+          .schema('channels').from('meta_messages')
           .select('wamid, status, error_code, error_message')
           .in('wamid', wamids);
 

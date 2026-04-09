@@ -15,7 +15,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { assignInstanceToUser, getInstanceForUserFromList, type EvolutionInstance as EvoInstance } from '@/hooks/useEvolutionInstances';
 import { loadAllowedUsers } from '@/lib/accessControl';
 import { supabase, supabaseSaas } from '@/integrations/supabase/client';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getOrg } from '@/lib/saas';
 
 import { getEvolutionConfig, saveEvolutionConfig, clearEvolutionConfigCache, type EvolutionApiConfig } from '@/lib/evolutionConfig';
 
@@ -66,15 +66,15 @@ function StatusBadge({ status }: { status: string }) {
 
 // Sync API instances to DB so that assignInstanceToUser can find them
 async function syncInstancesToDbFromPage(apiInstances: EvolutionInstance[]) {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const statusMap: Record<string, string> = { open: 'conectada', close: 'desconectada', connecting: 'conectando' };
   for (const inst of apiInstances) {
     await (supabase as any)
-      .schema('saas')
+      .schema('channels')
       .from('instancias_whatsapp')
       .upsert(
         {
-          empresa_id: empresaId,
+          empresa_id: org,
           nome: inst.name,
           telefone: inst.ownerJid?.replace('@s.whatsapp.net', '') || null,
           status: statusMap[inst.connectionStatus] || 'desconectada',
@@ -167,12 +167,12 @@ function EvolutionPanel() {
     try {
       // Load from DB first for instant display
       try {
-        const empresaId = await getSaasEmpresaId();
+        const org = await getOrg();
         const { data: dbData } = await (supabase as any)
-          .schema('saas')
+          .schema('channels')
           .from('instancias_whatsapp')
           .select('id,nome,telefone,status,owner_jid,usuario_id')
-          .eq('empresa_id', empresaId)
+          .eq('org', org)
           .order('nome', { ascending: true });
 
         if (dbData && dbData.length > 0) {
@@ -181,8 +181,8 @@ function EvolutionPanel() {
           let uuidToEmail: Record<string, string> = {};
           if (uuids.length > 0) {
             const { data: usrs } = await (supabase as any)
-              .schema('saas').from('usuarios').select('id, email')
-              .eq('empresa_id', empresaId).in('id', uuids);
+              .schema('core').from('usuarios').select('id, email')
+              .eq('org', org).in('id', uuids);
             for (const u of (usrs || [])) uuidToEmail[u.id] = u.email;
           }
 
@@ -515,12 +515,12 @@ function WebhookLogs() {
 
   const loadLogs = useCallback(async () => {
     try {
-      const empresaId = await getSaasEmpresaId();
+      const org = await getOrg();
       const { data, error } = await (supabase as any)
-        .schema('saas')
-        .from('eventos_webhooks')
+        .schema('automation')
+        .from('webhook_eventos')
         .select('id, evento, status, payload, tentativas, ultimo_erro, processado_em, criado_em')
-        .eq('empresa_id', empresaId)
+        .eq('org', org)
         .order('criado_em', { ascending: false })
         .limit(200);
 
@@ -702,16 +702,16 @@ function DatabasePanel() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const empresaId = await getSaasEmpresaId();
+      const org = await getOrg();
 
       const [intRes, tokRes] = await Promise.all([
-        (supabaseSaas as any).schema('saas').from('integracoes')
+        (supabaseSaas as any).schema('automation').from('integracoes')
           .select('id,tipo,nome,status,configuracao,conectado_em')
-          .eq('empresa_id', empresaId)
+          .eq('org', org)
           .order('tipo', { ascending: true }),
-        (supabaseSaas as any).schema('saas').from('tokens_ia_modulo')
+        (supabaseSaas as any).schema('ai').from('tokens_modulo')
           .select('id,modulo_codigo,provedor,modelo,ativo')
-          .eq('empresa_id', empresaId)
+          .eq('org', org)
           .order('modulo_codigo', { ascending: true }),
       ]);
 

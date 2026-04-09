@@ -2,7 +2,7 @@
  * Service for loading and syncing meetings from the database.
  */
 import { supabase } from '@/integrations/supabase/client';
-import { getSaasEmpresaId, normalizeEmail } from '@/lib/saas';
+import { getOrg, getOrgAndEmpresaId, getSaasEmpresaId, normalizeEmail } from '@/lib/saas';
 import { autoCreateAppmaxUser } from '@/lib/accessControl';
 import { CONFIG } from '@/lib/config';
 
@@ -96,7 +96,7 @@ export async function syncMeetConferences(): Promise<{ inserted: number; updated
   const empresaId = await getSaasEmpresaId();
 
   const { data, error } = await (supabase as any)
-    .schema('saas')
+    .schema('channels')
     .rpc('sincronizar_reunioes', { p_empresa_id: empresaId });
 
   if (error) throw new Error(`Sync error: ${error.message}`);
@@ -107,13 +107,13 @@ export async function syncMeetConferences(): Promise<{ inserted: number; updated
  * Trigger conference-by-conference transcription fetch using meet-gateway.
  */
 export async function triggerTranscriptionFetch(): Promise<{ queued: number; ok: number; fail: number }> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
 
   const { data, error } = await (supabase as any)
-    .schema('saas')
+    .schema('channels')
     .from('reunioes')
     .select('google_event_id')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .is('transcricao', null)
     .not('google_event_id', 'is', null);
 
@@ -143,22 +143,22 @@ export async function triggerTranscriptionFetch(): Promise<{ queued: number; ok:
  * Used before a full re-import.
  */
 export async function clearAllMeetings(): Promise<void> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
 
   // Delete AI analyses for meetings first (FK dependency)
   await (supabase as any)
-    .schema('saas')
-    .from('analises_ia')
+    .schema('ai')
+    .from('analises')
     .delete()
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('tipo_contexto', 'reuniao');
 
   // Delete all meetings
   const { error } = await (supabase as any)
-    .schema('saas')
+    .schema('channels')
     .from('reunioes')
     .delete()
-    .eq('empresa_id', empresaId);
+    .eq('org', org);
 
   if (error) throw new Error(`Clear meetings error: ${error.message}`);
 }
@@ -168,7 +168,7 @@ export async function clearAllMeetings(): Promise<void> {
  */
 export async function fetchTranscriptInfo(conferenceKey: string): Promise<TranscriptInfo> {
   const { data } = await (supabase as any)
-    .schema('saas')
+    .schema('channels')
     .rpc('buscar_transcript_file', { p_conference_key: conferenceKey });
   return (data as TranscriptInfo) || {};
 }
@@ -182,7 +182,7 @@ export async function dispararTranscricoes(): Promise<{ dispatched: number; skip
   const empresaId = await getSaasEmpresaId();
 
   const { data, error } = await (supabase as any)
-    .schema('saas')
+    .schema('channels')
     .rpc('disparar_transcricoes', { p_empresa_id: empresaId });
 
   if (error) {
@@ -212,13 +212,14 @@ export async function pullTranscriptions(): Promise<{ updated: number; pending: 
   const empresaId = await getSaasEmpresaId();
 
   const { data, error } = await (supabase as any)
-    .schema('saas')
+    .schema('channels')
     .rpc('pull_transcricoes', { p_empresa_id: empresaId });
 
   if (error) {
     console.error('[meetings] pull_transcricoes error:', error);
     // Fallback to old N+1 approach if RPC doesn't exist yet
-    return await pullTranscriptionsFallback(empresaId);
+    const org = await getOrg();
+    return await pullTranscriptionsFallback(org);
   }
 
   console.log('[meetings] pull_transcricoes result:', data);
@@ -230,12 +231,12 @@ export async function pullTranscriptions(): Promise<{ updated: number; pending: 
 }
 
 /** Fallback for when the RPC hasn't been deployed yet */
-async function pullTranscriptionsFallback(empresaId: string): Promise<{ updated: number; pending: number; total: number }> {
+async function pullTranscriptionsFallback(org: string): Promise<{ updated: number; pending: number; total: number }> {
   const { data: meetings } = await (supabase as any)
-    .schema('saas')
+    .schema('channels')
     .from('reunioes')
     .select('id, google_event_id, transcricao')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .is('transcricao', null);
 
   if (!meetings || meetings.length === 0) return { updated: 0, pending: 0, total: 0 };
@@ -246,7 +247,7 @@ async function pullTranscriptionsFallback(empresaId: string): Promise<{ updated:
     if (!m.google_event_id) continue;
 
     const { data: fileData } = await (supabase as any)
-      .schema('saas')
+      .schema('channels')
       .rpc('buscar_transcript_file', { p_conference_key: m.google_event_id });
 
     const status = fileData?.status;
@@ -259,7 +260,7 @@ async function pullTranscriptionsFallback(empresaId: string): Promise<{ updated:
         : `[Transcrição no Drive: ${fileId}]`;
       try {
         await (supabase as any)
-          .schema('saas')
+          .schema('channels')
           .from('reunioes')
           .update({ transcricao: text, transcript_file_id: fileId || null })
           .eq('id', m.id);
@@ -280,7 +281,7 @@ async function pullTranscriptionsFallback(empresaId: string): Promise<{ updated:
  * Reads Google Docs using the service account and stores the text in reunioes.
  */
 export async function fetchTranscriptsFromDrive(): Promise<{ fetched: number; errors: number; total: number }> {
-  const empresaId = await getSaasEmpresaId();
+  const empresaId = await getSaasEmpresaId(); // Edge function still uses empresa_id
 
   const { data, error } = await supabase.functions.invoke('fetch-transcripts', {
     body: { empresa_id: empresaId },
@@ -307,7 +308,7 @@ export async function resolveMeetingTranscript(
   if (!transcript) return null;
 
   const { error } = await (supabase as any)
-    .schema('saas')
+    .schema('channels')
     .from('reunioes')
     .update({
       transcricao: transcript.transcript_text,
@@ -326,13 +327,13 @@ export async function resolveMeetingTranscript(
 }
 
 export async function loadMeetingsFromDb(): Promise<DbMeeting[]> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
 
   const { data, error } = await (supabase as any)
-    .schema('saas')
+    .schema('channels')
     .from('reunioes')
     .select('*')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .order('data_reuniao', { ascending: false });
 
   if (error) {
@@ -345,7 +346,7 @@ export async function loadMeetingsFromDb(): Promise<DbMeeting[]> {
 
   if (googleEventIds.length > 0) {
     const { data: internalRows, error: internalError } = await (supabase as any)
-      .schema('saas')
+      .schema('channels')
       .from('meet_conferences')
       .select('conference_key')
       .in('conference_key', googleEventIds)
@@ -369,7 +370,7 @@ export async function loadMeetingsFromDb(): Promise<DbMeeting[]> {
 
   if (vendedorIds.length > 0) {
     const { data: users } = await (supabase as any)
-      .schema('saas')
+      .schema('core')
       .from('usuarios')
       .select('id,nome,email')
       .in('id', vendedorIds);
@@ -432,7 +433,7 @@ export async function loadMeetingsFromDb(): Promise<DbMeeting[]> {
   // Update durations in DB in background (fire-and-forget)
   if (toUpdateDuration.length > 0) {
     Promise.all(toUpdateDuration.map(({ id, minutos }) =>
-      (supabase as any).schema('saas').from('reunioes').update({ duracao_minutos: minutos }).eq('id', id)
+      (supabase as any).schema('channels').from('reunioes').update({ duracao_minutos: minutos }).eq('id', id)
     )).catch(() => {});
   }
 
@@ -463,12 +464,12 @@ export async function ensureAppmaxParticipantsRegistered(meetings: DbMeeting[]):
   if (internalEmails.size === 0) return [];
 
   // Check which already exist
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const { data: existing } = await (supabase as any)
-    .schema('saas')
+    .schema('core')
     .from('usuarios')
     .select('email')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .in('email', Array.from(internalEmails));
 
   const existingSet = new Set((existing || []).map((u: any) => normalizeEmail(u.email)));

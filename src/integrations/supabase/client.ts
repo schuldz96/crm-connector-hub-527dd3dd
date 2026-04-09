@@ -19,9 +19,11 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
 });
 
 /**
- * Untyped Supabase client for use with custom schemas (e.g. 'saas')
+ * Untyped Supabase client for use with custom schemas
+ * (core, crm, ai, channels, audit, automation, admin)
  * that are not present in the generated types.ts.
- * Use this when querying tables from the 'saas' schema.
+ * Use this with .schema('core'), .schema('crm'), etc. per query.
+ * Legacy 'saas' schema references still work via compatibility views.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const supabaseSaas: ReturnType<typeof createClient> = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {

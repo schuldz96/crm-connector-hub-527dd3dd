@@ -1,14 +1,14 @@
 import { supabase } from '@/integrations/supabase/client';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getOrg, getOrgAndEmpresaId } from '@/lib/saas';
 
 // Resolve email → UUID
 async function resolveUserUuid(email: string): Promise<string | null> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const { data } = await (supabase as any)
-    .schema('saas')
+    .schema('core')
     .from('usuarios')
     .select('id')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('email', email.trim().toLowerCase())
     .maybeSingle();
   return data?.id ?? null;
@@ -30,22 +30,22 @@ export async function upsertUserIntegration(
   nome: string,
   status: 'conectada' | 'desconectada',
 ): Promise<void> {
-  const empresaId = await getSaasEmpresaId();
+  const { org, empresaId } = await getOrgAndEmpresaId();
   const usuarioId = await resolveUserUuid(userEmail);
   if (!usuarioId) return;
 
   const { data: existing } = await (supabase as any)
-    .schema('saas')
+    .schema('automation')
     .from('integracoes')
     .select('id')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('usuario_id', usuarioId)
     .eq('tipo', tipo)
     .maybeSingle();
 
   if (existing) {
     await (supabase as any)
-      .schema('saas')
+      .schema('automation')
       .from('integracoes')
       .update({
         status,
@@ -55,10 +55,11 @@ export async function upsertUserIntegration(
       .eq('id', existing.id);
   } else {
     await (supabase as any)
-      .schema('saas')
+      .schema('automation')
       .from('integracoes')
       .insert({
         empresa_id: empresaId,
+        org,
         usuario_id: usuarioId,
         tipo,
         nome,
@@ -73,16 +74,16 @@ export async function deleteUserIntegrations(
   userEmail: string,
   tipos: IntegrationType[],
 ): Promise<void> {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
   const usuarioId = await resolveUserUuid(userEmail);
   if (!usuarioId) return;
 
   for (const tipo of tipos) {
     await (supabase as any)
-      .schema('saas')
+      .schema('automation')
       .from('integracoes')
       .delete()
-      .eq('empresa_id', empresaId)
+      .eq('org', org)
       .eq('usuario_id', usuarioId)
       .eq('tipo', tipo);
   }
@@ -92,13 +93,13 @@ export async function deleteUserIntegrations(
 export async function loadAllUserIntegrations(): Promise<
   { email: string; tipo: string; status: string; nome: string; conectado_em?: string }[]
 > {
-  const empresaId = await getSaasEmpresaId();
+  const org = await getOrg();
 
   const { data, error } = await (supabase as any)
-    .schema('saas')
+    .schema('automation')
     .from('integracoes')
     .select('tipo, nome, status, conectado_em, usuario_id')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .eq('status', 'conectada');
 
   if (error || !data) return [];
@@ -108,10 +109,10 @@ export async function loadAllUserIntegrations(): Promise<
   if (uuids.length === 0) return [];
 
   const { data: users } = await (supabase as any)
-    .schema('saas')
+    .schema('core')
     .from('usuarios')
     .select('id, email')
-    .eq('empresa_id', empresaId)
+    .eq('org', org)
     .in('id', uuids);
 
   const uuidToEmail: Record<string, string> = {};

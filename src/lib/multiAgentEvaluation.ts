@@ -3,7 +3,7 @@
  * Flow: Gerente → Classificador → Avaliador específico
  */
 import { supabase } from '@/integrations/supabase/client';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getOrgAndEmpresaId } from '@/lib/saas';
 import { callOpenAI } from '@/lib/openaiProxy';
 import { loadAgentTree, loadAgentFiles, buildAgentTree, type AgentNode } from '@/lib/agentService';
 import { parseTranscriptParticipation, type EvaluationResult } from '@/lib/evaluationService';
@@ -315,11 +315,11 @@ export async function evaluateMeetingMultiAgent(
   const participation = parseTranscriptParticipation(transcricao, participantEmails || []);
 
   // Persist to DB — delete ALL existing evaluations for this meeting
-  const empresaId = await getSaasEmpresaId();
+  const { org, empresaId } = await getOrgAndEmpresaId();
 
   await (supabase as any)
-    .schema('saas')
-    .from('analises_ia')
+    .schema('ai')
+    .from('analises')
     .delete()
     .eq('tipo_contexto', 'reuniao')
     .eq('entidade_id', reuniaoId);
@@ -337,10 +337,11 @@ export async function evaluateMeetingMultiAgent(
     const scoreVal = Math.round(er.result.totalScore);
 
     const { error: insertErr } = await (supabase as any)
-      .schema('saas')
-      .from('analises_ia')
+      .schema('ai')
+      .from('analises')
       .insert({
         empresa_id: empresaId,
+        org,
         tipo_contexto: 'reuniao',
         entidade_id: reuniaoId,
         vendedor_id: vendedorId,
@@ -376,7 +377,7 @@ export async function evaluateMeetingMultiAgent(
   if (sentimento) reuniaoUpdate.sentimento = sentimento;
 
   await (supabase as any)
-    .schema('saas')
+    .schema('channels')
     .from('reunioes')
     .update(reuniaoUpdate)
     .eq('id', reuniaoId);

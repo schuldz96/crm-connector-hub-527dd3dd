@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getOrg } from '@/lib/saas';
 import { CONFIG } from '@/lib/config';
 import { encryptToken, decryptToken } from '@/lib/tokenCrypto';
 
@@ -136,32 +136,32 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const loadFromDb = async () => {
       try {
-        const empresaId = await getSaasEmpresaId();
+        const org = await getOrg();
 
         const [tokensRes, modulesRes, usersRes, userModsRes, empresaRes] = await Promise.all([
           (supabase as any)
-            .schema('saas')
-            .from('tokens_ia_modulo')
+            .schema('ai')
+            .from('tokens_modulo')
             .select('modulo_codigo,token_criptografado,modelo')
-            .eq('empresa_id', empresaId)
+            .eq('org', org)
             .eq('provedor', 'openai'),
           (supabase as any)
-            .schema('saas')
+            .schema('core')
             .from('configuracoes_modulos_empresa')
             .select('modulo_codigo,habilitado')
-            .eq('empresa_id', empresaId),
+            .eq('org', org),
           (supabase as any)
-            .schema('saas')
+            .schema('core')
             .from('usuarios')
             .select('id,email')
-            .eq('empresa_id', empresaId)
+            .eq('org', org)
             .eq('status', 'ativo'),
           (supabase as any)
-            .schema('saas')
+            .schema('core')
             .from('configuracoes_modulos_usuario')
             .select('usuario_id,modulo_codigo,habilitado'),
           (supabase as any)
-            .schema('saas')
+            .schema('core')
             .from('empresas')
             .select('subtitulo')
             .eq('id', empresaId)
@@ -247,15 +247,15 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
     tokenSaveTimers.current[module] = setTimeout(() => {
       void (async () => {
         try {
-          const empresaId = await getSaasEmpresaId();
+          const org = await getOrg();
           if (!value) {
             // Clear: delete the row
-            await (supabase as any).schema('saas').from('tokens_ia_modulo')
-              .delete().eq('empresa_id', empresaId).eq('modulo_codigo', module).eq('provedor', 'openai');
+            await (supabase as any).schema('ai').from('tokens_modulo')
+              .delete().eq('org', org).eq('modulo_codigo', module).eq('provedor', 'openai');
           } else {
-            await (supabase as any).schema('saas').from('tokens_ia_modulo')
+            await (supabase as any).schema('ai').from('tokens_modulo')
               .upsert({
-                empresa_id: empresaId,
+                empresa_id: org,
                 modulo_codigo: module,
                 provedor: 'openai',
                 token_criptografado: value,
@@ -272,14 +272,14 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
     setModels(prev => ({ ...prev, [module]: model }));
     void (async () => {
       try {
-        const empresaId = await getSaasEmpresaId();
+        const org = await getOrg();
         // Only update the model column — never touch token_criptografado
         // This prevents stale/wrong token values from overwriting the DB
         await (supabase as any)
-          .schema('saas')
-          .from('tokens_ia_modulo')
+          .schema('ai')
+          .from('tokens_modulo')
           .update({ modelo: model })
-          .eq('empresa_id', empresaId)
+          .eq('org', org)
           .eq('modulo_codigo', module)
           .eq('provedor', 'openai');
       } catch {}
@@ -290,11 +290,11 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
     setModules(prev => prev.map(m => m.id === id ? { ...m, enabled } : m));
     void (async () => {
       try {
-        const empresaId = await getSaasEmpresaId();
+        const org = await getOrg();
         await (supabase as any)
-          .schema('saas')
+          .schema('core')
           .from('configuracoes_modulos_empresa')
-          .upsert({ empresa_id: empresaId, modulo_codigo: id, habilitado: enabled }, { onConflict: 'empresa_id,modulo_codigo' });
+          .upsert({ empresa_id: org, modulo_codigo: id, habilitado: enabled }, { onConflict: 'empresa_id,modulo_codigo' });
       } catch {}
     })();
   };
@@ -311,18 +311,18 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
     const email = normalizedId.replace(/^user_/, '').toLowerCase();
     void (async () => {
       try {
-        const empresaId = await getSaasEmpresaId();
+        const org = await getOrg();
         const { data: u } = await (supabase as any)
-          .schema('saas')
+          .schema('core')
           .from('usuarios')
           .select('id')
-          .eq('empresa_id', empresaId)
+          .eq('org', org)
           .eq('email', email)
           .maybeSingle();
         if (!u?.id) return;
 
         await (supabase as any)
-          .schema('saas')
+          .schema('core')
           .from('configuracoes_modulos_usuario')
           .delete()
           .eq('usuario_id', u.id);
@@ -333,7 +333,7 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
           habilitado: !disabledModules.includes(m.id),
         }));
         await (supabase as any)
-          .schema('saas')
+          .schema('core')
           .from('configuracoes_modulos_usuario')
           .upsert(rows, { onConflict: 'usuario_id,modulo_codigo' });
       } catch {}
@@ -358,9 +358,9 @@ export function AppConfigProvider({ children }: { children: React.ReactNode }) {
     document.title = 'LTX';
     void (async () => {
       try {
-        const empresaId = await getSaasEmpresaId();
+        const org = await getOrg();
         await (supabase as any)
-          .schema('saas')
+          .schema('core')
           .from('empresas')
           .update({ subtitulo: value })
           .eq('id', empresaId);

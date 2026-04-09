@@ -12,7 +12,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { getSaasEmpresaId } from '@/lib/saas';
+import { getOrg } from '@/lib/saas';
 import { encryptToken, decryptToken } from '@/lib/tokenCrypto';
 import {
   verifyConnection, getObject, getDeepEngagements, getPipelines, getOwners, ENGAGEMENT_TYPES,
@@ -161,10 +161,10 @@ export default function HubSpotIntegration() {
     let cancelled = false;
     (async () => {
       try {
-        const empresaId = await getSaasEmpresaId();
-        const { data } = await (supabase as any).schema('saas').from('integracoes')
+        const org = await getOrg();
+        const { data } = await (supabase as any).schema('automation').from('integracoes')
           .select('configuracao, status')
-          .eq('empresa_id', empresaId)
+          .eq('org', org)
           .eq('tipo', 'hubspot')
           .eq('status', 'conectada')
           .limit(1)
@@ -225,10 +225,10 @@ export default function HubSpotIntegration() {
       setDealPipelines(dealPipes);
       setTicketPipelines(ticketPipes);
 
-      const empresaId = await getSaasEmpresaId();
+      const org = await getOrg();
       const encrypted = await encryptToken(token.trim());
-      await (supabase as any).schema('saas').from('integracoes').upsert({
-        empresa_id: empresaId,
+      await (supabase as any).schema('automation').from('integracoes').upsert({
+        empresa_id: org,
         tipo: 'hubspot',
         nome: `HubSpot Portal ${result.portalId}`,
         status: 'conectada',
@@ -256,10 +256,10 @@ export default function HubSpotIntegration() {
     setTicketPipelines([]);
 
     try {
-      const empresaId = await getSaasEmpresaId();
-      await (supabase as any).schema('saas').from('integracoes')
+      const org = await getOrg();
+      await (supabase as any).schema('automation').from('integracoes')
         .update({ status: 'desconectada', configuracao: {} })
-        .eq('empresa_id', empresaId)
+        .eq('org', org)
         .eq('tipo', 'hubspot');
     } catch { /* best-effort cleanup */ }
 
