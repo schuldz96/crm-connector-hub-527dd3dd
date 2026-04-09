@@ -5,7 +5,7 @@
 export const CONFIG = {
   // Supabase
   SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL || 'https://ugdojctvzifycofqzelf.supabase.co',
-  SUPABASE_PUBLISHABLE_KEY: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '',
+  SUPABASE_PUBLISHABLE_KEY: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVnZG9qY3R2emlmeWNvZnF6ZWxmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2OTY4NzEsImV4cCI6MjA5MTI3Mjg3MX0.wWeGE9Vd0Fu50gq3tfuJBaDiTs_S3Jzgb2rbaIxSiWk',
 
   // Google SSO
   GOOGLE_CLIENT_ID: import.meta.env.VITE_GOOGLE_CLIENT_ID || '19779916042-ur7fs5qdorm32bsen7vtfcurkoka4sp7.apps.googleusercontent.com',
