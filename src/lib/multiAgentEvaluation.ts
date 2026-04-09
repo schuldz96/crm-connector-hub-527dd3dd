@@ -93,25 +93,35 @@ async function evaluateWithAgent(
     fileContext = `\n\nMATERIAL DE REFERÊNCIA (use para avaliar se o vendedor segue as boas práticas):\n${fileTexts.join('\n---\n').slice(0, 8000)}`;
   }
 
-  const userPrompt = `Analise a seguinte transcrição de reunião.
+  const userPrompt = `Analise a seguinte transcrição de reunião de vendas com RIGOR.
 
 REUNIÃO: ${titulo}
 
-CRITÉRIOS DE AVALIAÇÃO:
+CRITÉRIOS DE AVALIAÇÃO (use SOMENTE estes critérios — cada um deve ter evidência na transcrição):
 ${criteriaText}
 ${fileContext}
+
+REGRAS DE PONTUAÇÃO:
+- Score 0-30: Critério NÃO foi executado ou executado muito mal
+- Score 31-50: Executado parcialmente, com falhas significativas
+- Score 51-70: Executado de forma básica, sem destaque
+- Score 71-85: Bem executado com evidências claras na transcrição
+- Score 86-100: Executado de forma excepcional, acima do esperado
+- O totalScore deve ser a MÉDIA PONDERADA dos criteriaScores (respeitando os pesos)
+- Seja RIGOROSO: só dê nota alta se houver evidência CLARA na transcrição
+- Se não encontrar evidência de um critério, a nota desse critério deve ser ABAIXO de 50
 
 TRANSCRIÇÃO:
 ${transcricao.slice(0, 15000)}
 
 Responda APENAS com JSON válido (sem markdown):
 {
-  "totalScore": <0-100>,
+  "totalScore": <0-100 média ponderada>,
   "summary": "<resumo 2-3 frases>",
   "insights": "<insights 2-3 frases>",
   "criticalAlerts": ["<alerta se houver>"],
   "criteriaScores": [
-    { "id": "<id>", "label": "<nome>", "weight": <peso>, "score": <0-100>, "feedback": "<feedback>" }
+    { "id": "<id>", "label": "<nome>", "weight": <peso>, "score": <0-100>, "feedback": "<feedback com evidência>" }
   ]
 }`;
 
@@ -126,7 +136,18 @@ Responda APENAS com JSON válido (sem markdown):
   });
 
   const raw = (data.choices?.[0]?.message?.content || '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-  return JSON.parse(raw);
+  try {
+    const parsed = JSON.parse(raw);
+    // Validate score is within range
+    if (typeof parsed.totalScore !== 'number' || parsed.totalScore < 0 || parsed.totalScore > 100) {
+      console.warn(`[multiAgent] Invalid totalScore from "${avaliador.nome}": ${parsed.totalScore}`);
+      parsed.totalScore = 0;
+    }
+    return parsed;
+  } catch (parseErr) {
+    console.error(`[multiAgent] JSON parse error for "${avaliador.nome}":`, raw.slice(0, 200));
+    throw new Error(`Invalid JSON from agent "${avaliador.nome}"`);
+  }
 }
 
 // ─── Step 3: Sentimental — classify relationship level ───────────────────────
@@ -246,6 +267,12 @@ export async function evaluateMeetingMultiAgent(
   const evalResults: { avaliador: AgentNode; result: EvaluationResult; step: ChainStep }[] = [];
 
   for (const avaliador of activeAvaliadores) {
+    // SKIP agents with no criteria — they produce inflated scores (70+)
+    if (!avaliador.criterios || avaliador.criterios.length === 0) {
+      console.warn(`[multiAgent] ⚠️ SKIPPING "${avaliador.nome}" — no criteria configured`);
+      continue;
+    }
+
     try {
       const files = await loadAgentFiles(avaliador.id);
       const fileTexts = files
@@ -253,7 +280,7 @@ export async function evaluateMeetingMultiAgent(
         .map(f => `[${f.nome}]\n${f.texto_extraido}`);
 
       const t1 = Date.now();
-      console.log(`[multiAgent] → Evaluating: ${avaliador.nome}...`);
+      console.log(`[multiAgent] → Evaluating: ${avaliador.nome} (${avaliador.criterios.length} criteria)...`);
       const result = await evaluateWithAgent(avaliador, apiToken, titulo, transcricao, fileTexts);
       const step: ChainStep = {
         agente: avaliador.nome, tipo: 'avaliador',
