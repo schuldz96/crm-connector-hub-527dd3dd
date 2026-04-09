@@ -450,7 +450,7 @@ export async function updateAllowedUserProfile(params: { email: string; name?: s
   if (error) throw error;
 }
 
-export async function autoCreateAppmaxUser(email: string): Promise<void> {
+export async function autoCreateUser(email: string): Promise<void> {
   const { org, empresaId } = await getOrgAndEmpresaId();
   const normalized = norm(email);
 

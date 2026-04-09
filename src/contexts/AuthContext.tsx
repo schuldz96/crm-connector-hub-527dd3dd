@@ -21,7 +21,7 @@ export function getDefaultRoute(role?: UserRole): string {
   return role === 'support' ? '/inbox' : '/dashboard';
 }
 
-export function isAppmaxEmail(email: string): boolean {
+export function isAllowedEmail(email: string): boolean {
   if (!ALLOWED_DOMAIN) return true; // No domain restriction when not configured
   return email.trim().toLowerCase().endsWith(`@${ALLOWED_DOMAIN}`);
 }
@@ -164,7 +164,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const normalized = email.trim().toLowerCase();
 
-      if (!isAppmaxEmail(normalized)) {
+      if (!isAllowedEmail(normalized)) {
         attempts.count++;
         attempts.lastAttempt = now;
         throw new Error('E-mail não autorizado.');
@@ -208,7 +208,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loginWithGoogle = async (googleUser: { email: string; name: string; picture?: string }) => {
     const normalized = googleUser.email.trim().toLowerCase();
 
-    if (!isAppmaxEmail(normalized)) {
+    if (!isAllowedEmail(normalized)) {
       throw new Error(`Apenas contas @${ALLOWED_DOMAIN} podem acessar a plataforma.`);
     }
 

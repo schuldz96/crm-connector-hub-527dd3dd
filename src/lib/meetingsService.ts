@@ -3,7 +3,7 @@
  */
 import { supabase } from '@/integrations/supabase/client';
 import { getOrg, getOrgAndEmpresaId, getSaasEmpresaId, normalizeEmail } from '@/lib/saas';
-import { autoCreateAppmaxUser } from '@/lib/accessControl';
+import { autoCreateUser } from '@/lib/accessControl';
 import { CONFIG } from '@/lib/config';
 
 export interface DbMeeting {
@@ -90,7 +90,7 @@ async function getTranscriptFromCollector(conferenceKey: string): Promise<Collec
 
 
 /**
- * Step 1: Sync appmax.meet_conferences → saas.reunioes via RPC
+ * Step 1: Sync channels.meet_conferences → saas.reunioes via RPC
  */
 export async function syncMeetConferences(): Promise<{ inserted: number; updated: number }> {
   const empresaId = await getSaasEmpresaId();
@@ -164,7 +164,7 @@ export async function clearAllMeetings(): Promise<void> {
 }
 
 /**
- * Fetch transcript info from appmax.meet_conferences via RPC.
+ * Fetch transcript info from channels.meet_conferences via RPC.
  */
 export async function fetchTranscriptInfo(conferenceKey: string): Promise<TranscriptInfo> {
   const { data } = await (supabase as any)
@@ -199,12 +199,12 @@ export async function dispararTranscricoes(): Promise<{ dispatched: number; skip
 }
 
 /**
- * Step 3: Pull transcript_text from appmax.meet_conferences into saas.reunioes.
+ * Step 3: Pull transcript_text from channels.meet_conferences into saas.reunioes.
  * The transcription text is populated by the external service (Cloudflare worker)
  * that reads Google Docs and saves the content into meet_conferences.transcript_text.
  */
 /**
- * Pull transcriptions from appmax.meet_conferences → saas.reunioes via server-side RPC.
+ * Pull transcriptions from channels.meet_conferences → saas.reunioes via server-side RPC.
  * Looks for meetings where status=TRANSCRIPT_DONE in meet_conferences and copies
  * transcript_text + transcript_copied_file_id into reunioes.
  */
@@ -445,7 +445,7 @@ export async function loadMeetingsFromDb(): Promise<DbMeeting[]> {
  * Creates missing users with random MD5-hashed passwords.
  * Returns the list of newly created emails.
  */
-export async function ensureAppmaxParticipantsRegistered(meetings: DbMeeting[]): Promise<string[]> {
+export async function ensureInternalParticipantsRegistered(meetings: DbMeeting[]): Promise<string[]> {
   const domain = CONFIG.GOOGLE_ALLOWED_DOMAIN;
   if (!domain) return [];
   // Collect all unique internal emails from participants
@@ -479,7 +479,7 @@ export async function ensureAppmaxParticipantsRegistered(meetings: DbMeeting[]):
   const created: string[] = [];
   for (const email of missing) {
     try {
-      await autoCreateAppmaxUser(email);
+      await autoCreateUser(email);
       created.push(email);
     } catch (e) {
       console.warn(`[meetings] Failed to auto-create user ${email}:`, e);

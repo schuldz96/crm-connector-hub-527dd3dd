@@ -17,7 +17,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useToast } from '@/hooks/use-toast';
 import {
-  loadMeetingsFromDb, clearAllMeetings, ensureAppmaxParticipantsRegistered, fetchTranscriptInfo, resolveMeetingTranscript,
+  loadMeetingsFromDb, clearAllMeetings, ensureInternalParticipantsRegistered, fetchTranscriptInfo, resolveMeetingTranscript,
   type DbMeeting, type TranscriptInfo
 } from '@/lib/meetingsService';
 import { loadAllEvaluationsForEntity, parseTranscriptParticipation, type StoredEvaluation } from '@/lib/evaluationService';
@@ -414,10 +414,10 @@ export default function MeetingsPage() {
     try {
       const data = await loadMeetingsFromDb();
       setMeetings(data);
-      // Auto-create missing @appmax users in background
-      ensureAppmaxParticipantsRegistered(data).then(created => {
+      // Auto-create missing internal users in background
+      ensureInternalParticipantsRegistered(data).then(created => {
         if (created.length > 0) {
-          console.log(`[meetings] Auto-created ${created.length} @appmax users:`, created);
+          console.log(`[meetings] Auto-created ${created.length} internal users:`, created);
         }
       }).catch(e => console.warn('[meetings] Auto-create check failed:', e));
     } catch (err) {
