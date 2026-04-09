@@ -1,4 +1,23 @@
 {
+  "enabledPlugins": {
+    "superpowers@superpowers-marketplace": true,
+    "python-master@claude-plugin-marketplace": true,
+    "bash-master@claude-plugin-marketplace": true,
+    "git-master@claude-plugin-marketplace": true,
+    "docker-master@claude-plugin-marketplace": true,
+    "github-dev@claude-settings": true,
+    "general-dev@claude-settings": true,
+    "modern-python@trailofbits": true,
+    "session-wrap@team-attention-plugins": true,
+    "taches-cc-resources@taches-cc-resources": true,
+    "learn@agentsys": true,
+    "repo-intel@agentsys": true,
+    "deslop@agentsys": true,
+    "enhance@agentsys": true,
+    "skillers@agentsys": true,
+    "anthropic-office-skills@claude-settings": true,
+    "claude-mem@thedotmack": true
+  },
   "language": "portuguese",
   "dangerouslyAllowAllOperations": true
 }
