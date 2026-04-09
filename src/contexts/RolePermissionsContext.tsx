@@ -88,7 +88,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermission[] = [
     color: 'violet',
     canDelete: true,
     scope: 'self',
-    resources: ['dashboard','meetings','whatsapp','inbox','performance','training','crm'],
+    resources: ['dashboard','meetings','whatsapp','inbox','performance','training'],
   },
   {
     role: 'sdr',
@@ -96,7 +96,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermission[] = [
     color: 'indigo',
     canDelete: true,
     scope: 'self',
-    resources: ['dashboard','meetings','whatsapp','inbox','performance','training','crm'],
+    resources: ['dashboard','meetings','whatsapp','inbox','performance','training'],
   },
   {
     role: 'closer',
@@ -104,7 +104,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermission[] = [
     color: 'emerald',
     canDelete: true,
     scope: 'self',
-    resources: ['dashboard','meetings','whatsapp','inbox','performance','training','crm'],
+    resources: ['dashboard','meetings','whatsapp','inbox','performance','training'],
   },
   {
     role: 'key_account',
@@ -112,7 +112,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermission[] = [
     color: 'amber',
     canDelete: true,
     scope: 'self',
-    resources: ['dashboard','meetings','whatsapp','inbox','performance','training','crm'],
+    resources: ['dashboard','meetings','whatsapp','inbox','performance','training'],
   },
   {
     role: 'csm',
@@ -120,7 +120,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermission[] = [
     color: 'cyan',
     canDelete: true,
     scope: 'self',
-    resources: ['dashboard','meetings','whatsapp','inbox','performance','training','crm'],
+    resources: ['dashboard','meetings','whatsapp','inbox','performance','training'],
   },
   {
     role: 'low_touch',
@@ -128,7 +128,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermission[] = [
     color: 'slate',
     canDelete: true,
     scope: 'self',
-    resources: ['dashboard','meetings','whatsapp','inbox','performance','training','crm'],
+    resources: ['dashboard','meetings','whatsapp','inbox','performance','training'],
   },
   {
     role: 'sales_engineer',
@@ -136,7 +136,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermission[] = [
     color: 'rose',
     canDelete: true,
     scope: 'self',
-    resources: ['dashboard','meetings','whatsapp','inbox','performance','training','crm'],
+    resources: ['dashboard','meetings','whatsapp','inbox','performance','training'],
   },
   {
     role: 'member',
