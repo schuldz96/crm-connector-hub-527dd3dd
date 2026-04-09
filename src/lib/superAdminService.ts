@@ -433,3 +433,93 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     mrr,
   };
 }
+
+// ─── Modules ────────────────────────────────────────────────────────────────────
+
+export interface SystemModule {
+  codigo: string;
+  nome: string;
+  descricao?: string;
+  ativo: boolean;
+}
+
+export interface PlanFeature {
+  id: string;
+  plano_id: string;
+  feature_codigo: string;
+  feature_nome: string;
+  habilitado: boolean;
+  limite?: number;
+}
+
+export interface OrgModuleOverride {
+  id: number;
+  org: string;
+  modulo_codigo: string;
+  habilitado: boolean;
+}
+
+export async function getSystemModules(): Promise<SystemModule[]> {
+  const { data, error } = await core().from('modulos_sistema').select('*').order('codigo');
+  if (error) throw error;
+  return data || [];
+}
+
+export async function updateSystemModule(codigo: string, updates: Partial<SystemModule>) {
+  const { error } = await core().from('modulos_sistema').update(updates).eq('codigo', codigo);
+  if (error) throw error;
+}
+
+export async function createSystemModule(module: { codigo: string; nome: string; descricao?: string }) {
+  const { error } = await core().from('modulos_sistema').insert({ ...module, ativo: true });
+  if (error) throw error;
+}
+
+export async function getPlanFeatures(planoId: string): Promise<PlanFeature[]> {
+  const { data, error } = await admin().from('plano_features').select('*').eq('plano_id', planoId).order('feature_codigo');
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getAllPlanFeatures(): Promise<(PlanFeature & { plano_codigo?: string })[]> {
+  const { data: features, error } = await admin().from('plano_features').select('*').order('feature_codigo');
+  if (error) throw error;
+  return features || [];
+}
+
+export async function updatePlanFeature(id: string, habilitado: boolean, limite?: number) {
+  const updates: any = { habilitado };
+  if (limite !== undefined) updates.limite = limite;
+  const { error } = await admin().from('plano_features').update(updates).eq('id', id);
+  if (error) throw error;
+}
+
+export async function getOrgModuleOverrides(org: string): Promise<OrgModuleOverride[]> {
+  const { data, error } = await core().from('configuracoes_modulos_empresa').select('*').eq('org', org);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function setOrgModuleOverride(org: string, moduloCodigo: string, habilitado: boolean) {
+  const { data: empresa } = await core().from('empresas').select('id').eq('org', org).maybeSingle();
+  const empresaId = empresa?.id;
+
+  const { data: existing } = await core().from('configuracoes_modulos_empresa')
+    .select('id').eq('org', org).eq('modulo_codigo', moduloCodigo).maybeSingle();
+
+  if (existing) {
+    const { error } = await core().from('configuracoes_modulos_empresa')
+      .update({ habilitado }).eq('id', existing.id);
+    if (error) throw error;
+  } else {
+    const { error } = await core().from('configuracoes_modulos_empresa')
+      .insert({ empresa_id: empresaId, org, modulo_codigo: moduloCodigo, habilitado });
+    if (error) throw error;
+  }
+}
+
+export async function removeOrgModuleOverride(org: string, moduloCodigo: string) {
+  const { error } = await core().from('configuracoes_modulos_empresa')
+    .delete().eq('org', org).eq('modulo_codigo', moduloCodigo);
+  if (error) throw error;
+}

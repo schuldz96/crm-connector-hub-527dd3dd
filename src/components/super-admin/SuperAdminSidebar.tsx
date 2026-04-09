@@ -9,6 +9,7 @@ import {
   Receipt,
   BarChart3,
   ToggleLeft,
+  Puzzle,
   FileText,
   Settings,
 } from 'lucide-react';
@@ -22,6 +23,7 @@ const NAV_ITEMS = [
   { label: 'Assinaturas', icon: Receipt, path: '/super-admin/subscriptions' },
   { label: 'Uso de Recursos', icon: BarChart3, path: '/super-admin/usage' },
   { label: 'Feature Flags', icon: ToggleLeft, path: '/super-admin/feature-flags' },
+  { label: 'Módulos', icon: Puzzle, path: '/super-admin/modules' },
   { label: 'Auditoria', icon: FileText, path: '/super-admin/audit' },
   { label: 'Configurações', icon: Settings, path: '/super-admin/settings' },
 ];

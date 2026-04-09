@@ -9,6 +9,7 @@ import SAPlansPage from '@/pages/super-admin/SAPlansPage';
 import SASubscriptionsPage from '@/pages/super-admin/SASubscriptionsPage';
 import SAUsagePage from '@/pages/super-admin/SAUsagePage';
 import SAFeatureFlagsPage from '@/pages/super-admin/SAFeatureFlagsPage';
+import SAModulesPage from '@/pages/super-admin/SAModulesPage';
 import SAAuditPage from '@/pages/super-admin/SAAuditPage';
 import SASettingsPage from '@/pages/super-admin/SASettingsPage';
 
@@ -41,6 +42,7 @@ export default function SuperAdminProtectedRoutes() {
         <Route path="subscriptions" element={<SASubscriptionsPage />} />
         <Route path="usage" element={<SAUsagePage />} />
         <Route path="feature-flags" element={<SAFeatureFlagsPage />} />
+        <Route path="modules" element={<SAModulesPage />} />
         <Route path="audit" element={<SAAuditPage />} />
         <Route path="settings" element={<SASettingsPage />} />
       </Route>
