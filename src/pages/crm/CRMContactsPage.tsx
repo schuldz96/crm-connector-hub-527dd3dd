@@ -7,6 +7,7 @@ import {
   Search, Plus, Filter, ExternalLink, MoreHorizontal, X,
   ChevronLeft, ChevronRight, ChevronDown, Download, Contact, Settings2,
   ArrowUpDown, BarChart3, Copy, Table2, SlidersHorizontal, Loader2,
+  Trash2, PlusCircle,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -92,11 +93,31 @@ export default function CRMContactsPage() {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(25);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newEmail, setNewEmail] = useState('');
-  const [newNome, setNewNome] = useState('');
-  const [newSobrenome, setNewSobrenome] = useState('');
-  const [newTelefone, setNewTelefone] = useState('');
-  const [newCargo, setNewCargo] = useState('');
+
+  // Dynamic form fields — can be customized per org via CRM properties
+  type FormField = { key: string; label: string; required?: boolean; type?: string; placeholder?: string; dbField?: string };
+  const defaultFields: FormField[] = [
+    { key: 'email', label: 'E-mail', required: true, type: 'email', placeholder: 'email@exemplo.com', dbField: 'email' },
+    { key: 'nome', label: 'Nome', required: true, placeholder: 'Nome', dbField: 'nome' },
+    { key: 'sobrenome', label: 'Sobrenome', placeholder: 'Sobrenome' },
+    { key: 'telefone', label: 'Número de telefone', type: 'tel', placeholder: '+55 11 99999-0000', dbField: 'telefone' },
+  ];
+  const [formFields, setFormFields] = useState<FormField[]>(defaultFields);
+  const [formData, setFormData] = useState<Record<string, string>>({});
+
+  const updateFormField = (key: string, value: string) => setFormData(prev => ({ ...prev, [key]: value }));
+  const removeField = (key: string) => {
+    setFormFields(prev => prev.filter(f => f.key !== key));
+    setFormData(prev => { const next = { ...prev }; delete next[key]; return next; });
+  };
+  const addField = () => {
+    const name = prompt('Nome da propriedade:');
+    if (!name?.trim()) return;
+    const key = name.trim().toLowerCase().replace(/\s+/g, '_');
+    if (formFields.some(f => f.key === key)) return;
+    setFormFields(prev => [...prev, { key, label: name.trim(), placeholder: name.trim() }]);
+  };
+
   const createContact = useCreateContact();
   const { data: saasUsers = [] } = useSaasUsers();
   const [showFilters, setShowFilters] = useState(true);
@@ -132,18 +153,35 @@ export default function CRMContactsPage() {
   const totalPages = result?.totalPages || 1;
 
   const handleCreateContact = async () => {
-    if (!newEmail.trim() || !newNome.trim()) return;
+    const email = (formData.email || '').trim();
+    const nome = (formData.nome || '').trim();
+    const sobrenome = (formData.sobrenome || '').trim();
+    if (!email || !nome) return;
+
+    // Build DB payload from form data
+    const dbPayload: Record<string, any> = {
+      nome: sobrenome ? `${nome} ${sobrenome}` : nome,
+      email,
+      status: 'lead',
+      fonte: 'outros',
+    };
+
+    // Map known fields
+    for (const field of formFields) {
+      const val = (formData[field.key] || '').trim();
+      if (!val || field.key === 'email' || field.key === 'nome' || field.key === 'sobrenome') continue;
+      if (field.dbField) {
+        dbPayload[field.dbField] = val;
+      } else {
+        // Custom fields go into dados_custom
+        dbPayload.dados_custom = { ...(dbPayload.dados_custom || {}), [field.key]: val };
+      }
+    }
+
     try {
-      await createContact.mutateAsync({
-        nome: `${newNome} ${newSobrenome}`.trim(),
-        email: newEmail,
-        telefone: newTelefone || null,
-        cargo: newCargo || null,
-        status: 'lead',
-        fonte: 'outros',
-      } as any);
+      await createContact.mutateAsync(dbPayload as any);
       setShowCreateModal(false);
-      setNewEmail(''); setNewNome(''); setNewSobrenome(''); setNewTelefone(''); setNewCargo('');
+      setFormData({});
       toast({ title: 'Contato criado com sucesso' });
     } catch (err: any) {
       const msg = err?.message?.includes('idx_crm_contatos_email_unique') ? 'Já existe um contato com este e-mail' : 'Erro ao criar contato';
@@ -486,29 +524,40 @@ export default function CRMContactsPage() {
               <button onClick={() => setShowCreateModal(false)}><X className="w-5 h-5 text-muted-foreground" /></button>
             </div>
             <div className="px-6 py-4 space-y-4">
-              <div>
-                <label className="text-sm font-medium">E-mail *</label>
-                <Input value={newEmail} onChange={e => setNewEmail(e.target.value)} placeholder="email@exemplo.com" className="mt-1" type="email" />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Nome *</label>
-                <Input value={newNome} onChange={e => setNewNome(e.target.value)} placeholder="Nome" className="mt-1" />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Sobrenome</label>
-                <Input value={newSobrenome} onChange={e => setNewSobrenome(e.target.value)} placeholder="Sobrenome" className="mt-1" />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Cargo</label>
-                <Input value={newCargo} onChange={e => setNewCargo(e.target.value)} placeholder="Cargo" className="mt-1" />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Número de telefone</label>
-                <Input value={newTelefone} onChange={e => setNewTelefone(e.target.value)} placeholder="+55 11 99999-0000" className="mt-1" />
-              </div>
+              {formFields.map(field => (
+                <div key={field.key}>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-sm font-medium">
+                      {field.label}{field.required ? ' *' : ''}
+                    </label>
+                    {!field.required && (
+                      <button
+                        onClick={() => removeField(field.key)}
+                        className="text-muted-foreground hover:text-destructive transition-colors p-0.5"
+                        title={`Remover ${field.label}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <Input
+                    value={formData[field.key] || ''}
+                    onChange={e => updateFormField(field.key, e.target.value)}
+                    placeholder={field.placeholder || field.label}
+                    type={field.type || 'text'}
+                    className="mt-0.5"
+                  />
+                </div>
+              ))}
+              <button
+                onClick={addField}
+                className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors py-1"
+              >
+                <PlusCircle className="w-3.5 h-3.5" /> Adicionar propriedade
+              </button>
             </div>
             <div className="px-6 py-4 border-t border-border flex gap-2">
-              <Button onClick={handleCreateContact} disabled={!newEmail.trim() || !newNome.trim() || createContact.isPending}>
+              <Button onClick={handleCreateContact} disabled={!(formData.email || '').trim() || !(formData.nome || '').trim() || createContact.isPending}>
                 {createContact.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
                 Criar
               </Button>
