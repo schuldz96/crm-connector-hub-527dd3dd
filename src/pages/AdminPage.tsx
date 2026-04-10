@@ -13,6 +13,7 @@ import {
   Layers, Plus, Trash2, ChevronDown, ChevronUp, GitBranch,
   ScrollText, LogIn, LogOut, MonitorSmartphone, Search, RefreshCw, Trash,
   Filter, Plug, Copy, ExternalLink, Check, ShieldCheck, Network,
+  CreditCard, Gauge, ArrowUpCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppConfig, DEFAULT_MODULES, type ModuleId, AI_MODELS, type ModuleAIKey } from '@/contexts/AppConfigContext';
@@ -37,6 +38,7 @@ import {
   type AccessRequest,
 } from '@/lib/accessControl';
 import AgentOrgChart from '@/components/admin/AgentOrgChart';
+import { useLicense } from '@/contexts/LicenseContext';
 import {
   loadAreas,
   createArea,
@@ -58,6 +60,7 @@ const ADMIN_SECTIONS = [
   { id: 'security',     label: 'Segurança & RLS',      icon: Lock },
   { id: 'logs',         label: 'Logs de Acesso',       icon: ScrollText },
   { id: 'agents',       label: 'Agentes & Projeto',    icon: Network },
+  { id: 'meu-plano',    label: 'Meu Plano',             icon: CreditCard },
 ];
 
 // ── Helpers para salvar Client ID criptografado (ofuscado) no localStorage ──
@@ -1715,8 +1718,186 @@ export default function AdminPage() {
           {/* ── Agentes & Projeto ── */}
           {section === 'agents' && <AgentOrgChart />}
 
+          {/* ── Meu Plano ── */}
+          {section === 'meu-plano' && <MeuPlanoSection />}
+
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ── Meu Plano Section ────────────────────────────────────────────── */
+
+function MeuPlanoSection() {
+  const license = useLicense();
+
+  if (license.isLoading) {
+    return <div className="text-sm text-muted-foreground animate-pulse py-8 text-center">Carregando informações do plano...</div>;
+  }
+
+  const statusColor: Record<string, string> = {
+    ativa: 'bg-green-500/10 text-green-400 border-green-500/20',
+    trial: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+    suspensa: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+    cancelada: 'bg-red-500/10 text-red-400 border-red-500/20',
+    expirada: 'bg-red-500/10 text-red-400 border-red-500/20',
+  };
+
+  const statusLabel: Record<string, string> = {
+    ativa: 'Ativa', trial: 'Período de teste', suspensa: 'Suspensa',
+    cancelada: 'Cancelada', expirada: 'Expirada',
+  };
+
+  const status = license.subscription?.status ?? 'sem-plano';
+  const enabledModules = license.features.filter(f => f.habilitado);
+  const disabledModules = license.features.filter(f => !f.habilitado);
+
+  function usageBar(used: number, max: number, label: string) {
+    const pct = max > 0 ? Math.min(100, (used / max) * 100) : 0;
+    const isUnlimited = max <= 0;
+    return (
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground">{label}</span>
+          <span className="font-medium">{isUnlimited ? `${used} / Ilimitado` : `${used} / ${max}`}</span>
+        </div>
+        <div className="h-2 rounded-full bg-muted overflow-hidden">
+          <div
+            className={cn('h-full rounded-full transition-all', pct > 90 ? 'bg-destructive' : pct > 70 ? 'bg-warning' : 'bg-primary')}
+            style={{ width: isUnlimited ? '5%' : `${Math.max(2, pct)}%` }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Plan info card */}
+      <div className="glass-card p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-primary" />
+              {license.planName}
+            </h3>
+            {license.plan?.descricao && (
+              <p className="text-sm text-muted-foreground mt-0.5">{license.plan.descricao}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {license.isTrial && (
+              <Badge className="bg-yellow-500/10 text-yellow-400 border-yellow-500/20">
+                {license.trialDaysLeft} dias restantes
+              </Badge>
+            )}
+            <Badge className={statusColor[status] ?? 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20'}>
+              {statusLabel[status] ?? 'Sem plano'}
+            </Badge>
+          </div>
+        </div>
+
+        {/* Pricing */}
+        {license.plan && (
+          <div className="grid grid-cols-3 gap-4 pt-2 border-t border-border">
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Plataforma/mês</p>
+              <p className="text-lg font-bold">R$ {license.plan.preco_mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Por usuário/mês</p>
+              <p className="text-lg font-bold">R$ {license.plan.preco_por_usuario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Ciclo</p>
+              <p className="text-lg font-bold capitalize">{license.subscription?.ciclo ?? '—'}</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Usage */}
+      <div className="glass-card p-6 space-y-4">
+        <h3 className="text-sm font-semibold flex items-center gap-2">
+          <Gauge className="w-4 h-4 text-primary" />
+          Uso atual
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {usageBar(license.usage?.usuarios_ativos ?? 0, license.maxUsers, 'Usuários')}
+          {usageBar(license.usage?.instancias_whatsapp ?? 0, license.maxWhatsApp, 'Instâncias WhatsApp')}
+          {usageBar(license.usage?.avaliacoes_ia ?? 0, license.maxAI, 'Avaliações IA (mês)')}
+          {usageBar(license.usage?.storage_usado_mb ?? 0, license.maxStorageMb, `Storage (MB)`)}
+        </div>
+      </div>
+
+      {/* Modules */}
+      <div className="glass-card p-6 space-y-4">
+        <h3 className="text-sm font-semibold flex items-center gap-2">
+          <ToggleRight className="w-4 h-4 text-primary" />
+          Módulos do plano
+        </h3>
+
+        {enabledModules.length > 0 && (
+          <div>
+            <p className="text-xs text-muted-foreground mb-2">Incluídos no seu plano</p>
+            <div className="flex flex-wrap gap-2">
+              {enabledModules.map(f => (
+                <Badge key={f.feature_codigo} className="bg-green-500/10 text-green-400 border-green-500/20">
+                  <CheckCircle2 className="w-3 h-3 mr-1" />
+                  {f.feature_nome}
+                  {f.limite != null && <span className="ml-1 opacity-70">(até {f.limite})</span>}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {license.trialModules.length > 0 && (
+          <div>
+            <p className="text-xs text-muted-foreground mb-2">Em período de teste</p>
+            <div className="flex flex-wrap gap-2">
+              {license.trialModules.map(t => (
+                <Badge key={t.modulo} className="bg-blue-500/10 text-blue-400 border-blue-500/20">
+                  <Gauge className="w-3 h-3 mr-1" />
+                  {t.modulo}
+                  <span className="ml-1 opacity-70">({license.moduleTrialDaysLeft(t.modulo)}d)</span>
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {disabledModules.length > 0 && (
+          <div>
+            <p className="text-xs text-muted-foreground mb-2">Não incluídos — disponíveis para upgrade</p>
+            <div className="flex flex-wrap gap-2">
+              {disabledModules.map(f => (
+                <Badge key={f.feature_codigo} className="bg-zinc-500/10 text-zinc-500 border-zinc-500/20">
+                  <Lock className="w-3 h-3 mr-1" />
+                  {f.feature_nome}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Upgrade CTA */}
+      {(disabledModules.length > 0 || license.isTrial) && (
+        <div className="glass-card p-6 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold">Precisa de mais recursos?</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Entre em contato para fazer upgrade do seu plano ou adicionar módulos individuais.
+            </p>
+          </div>
+          <Button size="sm" className="bg-gradient-primary text-xs gap-1.5">
+            <ArrowUpCircle className="w-3.5 h-3.5" />
+            Solicitar upgrade
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

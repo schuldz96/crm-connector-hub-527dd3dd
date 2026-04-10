@@ -69,13 +69,24 @@ export default function RequireLicense({ children, module }: RequireLicenseProps
     );
   }
 
-  // Trial warning (show content but with banner)
+  // Trial warning — full plan trial
   const trialBanner = license.isTrial ? (
     <div className="bg-warning/10 border border-warning/30 rounded-lg px-4 py-2 mb-4 flex items-center gap-2">
       <Clock className="w-4 h-4 text-warning flex-shrink-0" />
       <span className="text-sm text-warning">
         Período de teste: <strong>{license.trialDaysLeft} dias restantes</strong>.
         Faça upgrade para manter o acesso.
+      </span>
+    </div>
+  ) : null;
+
+  // Module-level trial banner
+  const moduleTrialBanner = module && license.isModuleOnTrial(module) ? (
+    <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg px-4 py-2 mb-4 flex items-center gap-2">
+      <Clock className="w-4 h-4 text-blue-400 flex-shrink-0" />
+      <span className="text-sm text-blue-400">
+        Trial deste módulo: <strong>{license.moduleTrialDaysLeft(module)} dias restantes</strong>.
+        Contrate para manter o acesso.
       </span>
     </div>
   ) : null;
@@ -96,6 +107,7 @@ export default function RequireLicense({ children, module }: RequireLicenseProps
   return (
     <>
       {trialBanner}
+      {moduleTrialBanner}
       {children}
     </>
   );

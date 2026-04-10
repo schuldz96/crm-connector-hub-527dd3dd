@@ -30,6 +30,11 @@ export interface LicensePlan {
   permite_venda_modulo: boolean;
 }
 
+export interface ModuleTrial {
+  modulo: string;
+  expira_em: string;
+}
+
 export interface LicenseSubscription {
   id: string;
   org: string;
@@ -38,6 +43,7 @@ export interface LicenseSubscription {
   ciclo: 'mensal' | 'anual';
   trial_ate?: string;
   inicio_em: string;
+  trial_modulos: ModuleTrial[];
 }
 
 export interface LicenseFeature {
@@ -72,6 +78,11 @@ export interface LicenseContextType {
   trialDaysLeft: number;
   planName: string;
   planCode: string;
+
+  // Module trials
+  trialModules: ModuleTrial[];
+  isModuleOnTrial: (moduleCode: string) => boolean;
+  moduleTrialDaysLeft: (moduleCode: string) => number;
 
   // Access checks
   canAccessModule: (moduleCode: string) => boolean;
@@ -136,7 +147,10 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      setSubscription(subData as LicenseSubscription);
+      setSubscription({
+        ...subData,
+        trial_modulos: Array.isArray(subData.trial_modulos) ? subData.trial_modulos : [],
+      } as LicenseSubscription);
 
       // 2. Get plan details
       const { data: planData } = await admin()
@@ -213,6 +227,22 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
   const maxStorageMb = plan?.storage_mb ?? 0;
   const pricePerUser = plan?.preco_por_usuario ?? 0;
 
+  // ── Module trials ──────────────────────────────────────────────────────────────
+
+  const activeTrialModules = (subscription?.trial_modulos ?? []).filter(t => {
+    return new Date(t.expira_em) > now;
+  });
+
+  const isModuleOnTrial = useCallback((moduleCode: string): boolean => {
+    return activeTrialModules.some(t => t.modulo === moduleCode);
+  }, [activeTrialModules]);
+
+  const moduleTrialDaysLeft = useCallback((moduleCode: string): number => {
+    const trial = activeTrialModules.find(t => t.modulo === moduleCode);
+    if (!trial) return 0;
+    return Math.max(0, daysBetween(now, new Date(trial.expira_em)));
+  }, [activeTrialModules]);
+
   // ── Access checks ─────────────────────────────────────────────────────────────
 
   const canAccessModule = useCallback((moduleCode: string): boolean => {
@@ -220,6 +250,9 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
     if (!subscription || isExpired || isSuspended) {
       return moduleCode === 'dashboard';
     }
+
+    // Check if module is on individual trial (even if not in plan)
+    if (isModuleOnTrial(moduleCode)) return true;
 
     // If no features loaded yet, allow (avoid flash of blocked content)
     if (features.length === 0) return true;
@@ -229,7 +262,7 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
     if (!feat) return true;
 
     return feat.habilitado;
-  }, [subscription, features, isExpired, isSuspended]);
+  }, [subscription, features, isExpired, isSuspended, isModuleOnTrial]);
 
   const getFeatureLimit = useCallback((featureCode: string): number | null => {
     const feat = features.find(f => f.feature_codigo === featureCode);
@@ -264,6 +297,7 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
       plan, subscription, features, usage, isLoading, loaded,
       isActive, isTrial, isExpired, isSuspended, trialDaysLeft,
       planName, planCode,
+      trialModules: activeTrialModules, isModuleOnTrial, moduleTrialDaysLeft,
       canAccessModule, getFeatureLimit,
       isWithinUserLimit, isWithinWhatsAppLimit, isWithinAILimit, isWithinStorageLimit,
       maxUsers, maxWhatsApp, maxAI, maxStorageMb, pricePerUser,
