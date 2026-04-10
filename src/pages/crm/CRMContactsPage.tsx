@@ -86,8 +86,16 @@ const VIEWS_STORAGE_KEY = 'ltx_crm_contact_views';
 function loadSavedViews(): SavedView[] {
   try {
     const raw = localStorage.getItem(VIEWS_STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch { /* ignore */ }
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      // Validate each view has required fields
+      return parsed.filter((v: any) => v && typeof v.id === 'string' && typeof v.label === 'string')
+        .map((v: any) => ({ ...v, filters: v.filters && typeof v.filters === 'object' ? v.filters : {} }));
+    }
+  } catch {
+    localStorage.removeItem(VIEWS_STORAGE_KEY);
+  }
   return [];
 }
 
@@ -241,12 +249,16 @@ export default function CRMContactsPage() {
     setFormFields(prev => prev.filter(f => f.key !== key));
     setFormData(prev => { const next = { ...prev }; delete next[key]; return next; });
   };
-  const addField = () => {
-    const name = prompt('Nome da propriedade:');
-    if (!name?.trim()) return;
-    const key = name.trim().toLowerCase().replace(/\s+/g, '_');
-    if (formFields.some(f => f.key === key)) return;
-    setFormFields(prev => [...prev, { key, label: name.trim(), placeholder: name.trim() }]);
+  const [addingField, setAddingField] = useState(false);
+  const [newFieldName, setNewFieldName] = useState('');
+  const confirmAddField = () => {
+    if (!newFieldName.trim()) { setAddingField(false); return; }
+    const key = newFieldName.trim().toLowerCase().replace(/\s+/g, '_');
+    if (!formFields.some(f => f.key === key)) {
+      setFormFields(prev => [...prev, { key, label: newFieldName.trim(), placeholder: newFieldName.trim() }]);
+    }
+    setAddingField(false);
+    setNewFieldName('');
   };
 
   const createContact = useCreateContact();
@@ -394,7 +406,7 @@ export default function CRMContactsPage() {
                 </div>
               ) : (
                 <button
-                  onClick={() => { setActiveTab(view.id); setActiveFilters(view.filters); setPage(1); }}
+                  onClick={() => { setActiveTab(view.id); setActiveFilters(view.filters || {}); setPage(1); }}
                   onDoubleClick={() => { setEditingViewId(view.id); setEditingViewName(view.label); }}
                   className={cn(
                     'flex items-center gap-1 px-3 py-2.5 text-sm transition-colors border-b-2 -mb-px',
@@ -486,7 +498,7 @@ export default function CRMContactsPage() {
                       key={v.id}
                       onClick={() => {
                         setActiveTab(v.id);
-                        setActiveFilters(v.filters);
+                        setActiveFilters(v.filters || {});
                         setPage(1);
                         setShowViewMenu(false);
                         setShowViewList(false);
@@ -858,12 +870,27 @@ export default function CRMContactsPage() {
                   )}
                 </div>
               ))}
-              <button
-                onClick={addField}
-                className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors py-1"
-              >
-                <PlusCircle className="w-3.5 h-3.5" /> Adicionar propriedade
-              </button>
+              {addingField ? (
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    autoFocus
+                    value={newFieldName}
+                    onChange={e => setNewFieldName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') confirmAddField(); if (e.key === 'Escape') setAddingField(false); }}
+                    placeholder="Nome da propriedade"
+                    className="h-8 text-xs w-40"
+                  />
+                  <button onClick={confirmAddField} className="text-primary"><CheckCircle2 className="w-4 h-4" /></button>
+                  <button onClick={() => setAddingField(false)} className="text-muted-foreground hover:text-destructive"><X className="w-4 h-4" /></button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => { setAddingField(true); setNewFieldName(''); }}
+                  className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors py-1"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" /> Adicionar propriedade
+                </button>
+              )}
             </div>
             <div className="px-6 py-4 border-t border-border flex gap-2">
               <Button onClick={handleCreateContact} disabled={!(formData.email || '').trim() || !(formData.nome || '').trim() || createContact.isPending || emailStatus === 'exists'}>
