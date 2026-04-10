@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, type ReactNode } from 'react';
+import { useState, useMemo, useEffect, useRef, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -153,7 +153,10 @@ export default function CRMCompaniesPage() {
   const [openChip, setOpenChip] = useState<string | null>(null);
   const [chipSearch, setChipSearch] = useState('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [advancedFilters, setAdvancedFilters] = useState<{property: string; operator: string; value: string}[]>([]);
+  const [advancedFilters, setAdvancedFilters] = useState<{property: string; operator: string; value: string}[]>(() => {
+    try { const s = localStorage.getItem('crm_companies_adv_filters'); return s ? JSON.parse(s) : []; } catch { return []; }
+  });
+  useEffect(() => { localStorage.setItem('crm_companies_adv_filters', JSON.stringify(advancedFilters)); }, [advancedFilters]);
   // Create company form — dynamic fields
   type FormField = { key: string; label: string; required?: boolean; type?: string; placeholder?: string; dbField?: string };
   const defaultCompanyFields: FormField[] = [
@@ -212,10 +215,13 @@ export default function CRMCompaniesPage() {
   const activeColumns = useMemo(() => COMPANY_COLUMNS.filter(col => col.pinned || visibleColumns.includes(col.key)), [visibleColumns]);
   useEffect(() => { localStorage.setItem(COMPANIES_COLUMNS_KEY, JSON.stringify(visibleColumns)); }, [visibleColumns]);
 
+  const submittingRef = useRef(false);
   const handleCreateCompany = async () => {
+    if (submittingRef.current) return;
     const nome = (formData.nome || '').trim();
     if (!nome) return;
     if (domainExists) { toast({ title: 'Domínio já existe', description: 'Use uma empresa existente ou altere o domínio.', variant: 'destructive' }); return; }
+    submittingRef.current = true;
     try {
       const dbPayload: Record<string, any> = { nome };
       // Map known fields
@@ -236,7 +242,7 @@ export default function CRMCompaniesPage() {
       toast({ title: 'Empresa criada com sucesso' });
     } catch {
       toast({ title: 'Erro ao criar empresa', variant: 'destructive' });
-    }
+    } finally { submittingRef.current = false; }
   };
 
   const { data: result, isLoading } = useCrmCompanies({

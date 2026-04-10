@@ -134,7 +134,10 @@ export default function CRMTicketsPage() {
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const [openChip, setOpenChip] = useState<string | null>(null);
   const [chipSearch, setChipSearch] = useState('');
-  const [advancedFilters, setAdvancedFilters] = useState<{property: string; operator: string; value: string}[]>([]);
+  const [advancedFilters, setAdvancedFilters] = useState<{property: string; operator: string; value: string}[]>(() => {
+    try { const s = localStorage.getItem('crm_tickets_adv_filters'); return s ? JSON.parse(s) : []; } catch { return []; }
+  });
+  useEffect(() => { localStorage.setItem('crm_tickets_adv_filters', JSON.stringify(advancedFilters)); }, [advancedFilters]);
   const [sortField, setSortField] = useState<'criado_em' | 'atualizado_em'>('criado_em');
   const [sortDirection, setSortDirection] = useState<'desc' | 'asc'>('desc');
 
@@ -304,9 +307,12 @@ export default function CRMTicketsPage() {
       });
   }, [pipelineId]);
 
+  const submittingRef = useRef(false);
   const handleCreateTicket = async () => {
+    if (submittingRef.current) return;
     const titulo = (formData.titulo || '').trim();
     if (!titulo) return;
+    submittingRef.current = true;
     try {
       const stageId = formData.estagio || stages[0]?.id;
       const dbPayload: Record<string, any> = {
@@ -336,7 +342,7 @@ export default function CRMTicketsPage() {
       }
     } catch {
       toast({ title: 'Erro ao criar ticket', variant: 'destructive' });
-    }
+    } finally { submittingRef.current = false; }
   };
 
   return (

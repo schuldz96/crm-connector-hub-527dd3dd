@@ -199,7 +199,10 @@ export default function CRMContactsPage() {
   const [chipSearch, setChipSearch] = useState('');
   const chipAreaRef = useRef<HTMLDivElement>(null);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [advancedFilters, setAdvancedFilters] = useState<{property: string; operator: string; value: string}[]>([]);
+  const [advancedFilters, setAdvancedFilters] = useState<{property: string; operator: string; value: string}[]>(() => {
+    try { const s = localStorage.getItem('crm_contacts_adv_filters'); return s ? JSON.parse(s) : []; } catch { return []; }
+  });
+  useEffect(() => { localStorage.setItem('crm_contacts_adv_filters', JSON.stringify(advancedFilters)); }, [advancedFilters]);
 
   // Column editor state
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
@@ -426,11 +429,14 @@ export default function CRMContactsPage() {
     URL.revokeObjectURL(url);
   };
 
+  const submittingRef = useRef(false);
   const handleCreateContact = async () => {
+    if (submittingRef.current) return;
     const email = (formData.email || '').trim();
     const nome = (formData.nome || '').trim();
     const sobrenome = (formData.sobrenome || '').trim();
     if (!email || !nome) return;
+    submittingRef.current = true;
 
     // Build DB payload from form data
     const dbPayload: Record<string, any> = {
@@ -460,7 +466,7 @@ export default function CRMContactsPage() {
     } catch (err: any) {
       const msg = err?.message?.includes('idx_crm_contatos_email_unique') ? 'Já existe um contato com este e-mail' : 'Erro ao criar contato';
       toast({ title: msg, variant: 'destructive' });
-    }
+    } finally { submittingRef.current = false; }
   };
 
   const paginationNumbers = useMemo(() => {

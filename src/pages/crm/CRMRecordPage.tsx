@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -171,6 +171,7 @@ export default function CRMRecordPage() {
   const [checkingEmail, setCheckingEmail] = useState(false);
   const [domainExists, setDomainExists] = useState(false);
   const [creatingAssoc, setCreatingAssoc] = useState(false);
+  const submittingRef = useRef(false);
 
   // Activity form states
   const [noteContent, setNoteContent] = useState('');
@@ -433,7 +434,8 @@ export default function CRMRecordPage() {
   };
 
   const handleCreateAndAssociate = async () => {
-    if (!associationDialog || creatingAssoc) return;
+    if (!associationDialog || creatingAssoc || submittingRef.current) return;
+    submittingRef.current = true;
     setCreatingAssoc(true);
     try {
       let newId: string | null = null;
@@ -471,7 +473,7 @@ export default function CRMRecordPage() {
         setNewTicketForm({ titulo: '', prioridade: 'medium' });
       }
     } catch (e) { toast({ title: 'Erro ao criar', description: String(e), variant: 'destructive' }); }
-    finally { setCreatingAssoc(false); }
+    finally { setCreatingAssoc(false); submittingRef.current = false; }
   };
 
   const handleRemoveAssociation = (assocId: string) => {

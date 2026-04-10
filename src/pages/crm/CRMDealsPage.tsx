@@ -123,7 +123,10 @@ export default function CRMDealsPage() {
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const [openChip, setOpenChip] = useState<string | null>(null);
   const [chipSearch, setChipSearch] = useState('');
-  const [advancedFilters, setAdvancedFilters] = useState<{property: string; operator: string; value: string}[]>([]);
+  const [advancedFilters, setAdvancedFilters] = useState<{property: string; operator: string; value: string}[]>(() => {
+    try { const s = localStorage.getItem('crm_deals_adv_filters'); return s ? JSON.parse(s) : []; } catch { return []; }
+  });
+  useEffect(() => { localStorage.setItem('crm_deals_adv_filters', JSON.stringify(advancedFilters)); }, [advancedFilters]);
   const [sortField, setSortField] = useState<'criado_em' | 'atualizado_em' | 'valor'>('criado_em');
   const [sortDirection, setSortDirection] = useState<'desc' | 'asc'>('desc');
 
@@ -331,9 +334,12 @@ export default function CRMDealsPage() {
     finally { setBulkAction(false); }
   };
 
+  const submittingRef = useRef(false);
   const handleCreateDeal = async () => {
+    if (submittingRef.current) return;
     const nome = (formData.nome || '').trim();
     if (!nome) return;
+    submittingRef.current = true;
     try {
       const stageId = formData.estagio || stages[0]?.id;
       const dbPayload: Record<string, any> = {
@@ -364,7 +370,7 @@ export default function CRMDealsPage() {
       }
     } catch {
       toast({ title: 'Erro ao criar negócio', variant: 'destructive' });
-    }
+    } finally { submittingRef.current = false; }
   };
 
   return (
