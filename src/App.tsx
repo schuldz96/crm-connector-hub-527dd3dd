@@ -38,6 +38,12 @@ import CRMPipelineSettingsPage from "@/pages/crm/CRMPipelineSettingsPage";
 import CRMPropertiesPage from "@/pages/crm/CRMPropertiesPage";
 import CRMRecordPage from "@/pages/crm/CRMRecordPage";
 import CRMRestorePage from "@/pages/crm/CRMRestorePage";
+import CampaignsPage from "@/pages/marketing/CampaignsPage";
+import EmailMarketingPage from "@/pages/marketing/EmailMarketingPage";
+import FormsPage from "@/pages/marketing/FormsPage";
+import HealthScorePage from "@/pages/cs/HealthScorePage";
+import OnboardingPage from "@/pages/cs/OnboardingPage";
+import NpsSurveysPage from "@/pages/cs/NpsSurveysPage";
 import NotFound from "@/pages/NotFound";
 
 import { CONFIG } from '@/lib/config';
@@ -101,6 +107,16 @@ function ProtectedRoutes() {
         <Route path="/automations"  element={R(<AutomationsPage />,  { resource: 'automations' })} />
         <Route path="/ai-config"    element={R(<AIConfigPage />,     { resource: 'ai-config' })} />
         <Route path="/admin"        element={R(<AdminPage />,        { resource: 'admin' })} />
+
+        {/* Marketing */}
+        <Route path="/marketing/campaigns"      element={R(<CampaignsPage />,      { resource: 'campaigns' })} />
+        <Route path="/marketing/email-marketing" element={R(<EmailMarketingPage />, { resource: 'email-marketing' })} />
+        <Route path="/marketing/forms"          element={R(<FormsPage />,          { resource: 'forms' })} />
+
+        {/* CS — Customer Success */}
+        <Route path="/cs/health-score" element={R(<HealthScorePage />, { resource: 'health-score' })} />
+        <Route path="/cs/onboarding"   element={R(<OnboardingPage />,  { resource: 'onboarding' })} />
+        <Route path="/cs/nps-surveys"  element={R(<NpsSurveysPage />,  { resource: 'nps-surveys' })} />
 
         {/* CRM — URLs primárias: /crm/0-{N}/{view} (padrão HubSpot) */}
         <Route path="/crm/0-1"                 element={R(<CRMContactsPage />,         { resource: 'crm' })} />

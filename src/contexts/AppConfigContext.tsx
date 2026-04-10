@@ -9,7 +9,9 @@ export type ModuleId =
   | 'dashboard' | 'meetings' | 'whatsapp' | 'training'
   | 'teams' | 'users' | 'reports' | 'integrations'
   | 'automations' | 'ai-config' | 'inbox' | 'admin'
-  | 'crm';
+  | 'crm'
+  | 'campaigns' | 'email-marketing' | 'forms'
+  | 'health-score' | 'onboarding' | 'nps-surveys';
 
 export interface ModuleConfig {
   id: ModuleId;
@@ -111,8 +113,14 @@ export const DEFAULT_MODULES: ModuleConfig[] = [
   { id: 'automations',  label: 'Automações',     enabled: true },
   { id: 'ai-config',    label: 'Config. IA',     enabled: true },
   { id: 'inbox',        label: 'Caixa de Entrada', enabled: true },
-  { id: 'admin',        label: 'Admin',          enabled: true },
-  { id: 'crm',          label: 'CRM',            enabled: true },
+  { id: 'admin',          label: 'Admin',            enabled: true },
+  { id: 'crm',            label: 'CRM',              enabled: true },
+  { id: 'campaigns',      label: 'Campanhas',        enabled: true },
+  { id: 'email-marketing', label: 'E-mail Marketing', enabled: true },
+  { id: 'forms',          label: 'Formulários',      enabled: true },
+  { id: 'health-score',   label: 'Health Score',     enabled: true },
+  { id: 'onboarding',     label: 'Onboarding',       enabled: true },
+  { id: 'nps-surveys',    label: 'Pesquisas NPS',    enabled: true },
 ];
 
 const DEFAULT_MODELS: ModuleModels = {
