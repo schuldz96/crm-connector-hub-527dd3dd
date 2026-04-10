@@ -526,3 +526,47 @@ export async function removeOrgModuleOverride(org: string, moduloCodigo: string)
     .delete().eq('org', org).eq('modulo_codigo', moduloCodigo);
   if (error) throw error;
 }
+
+// ─── Backlog Board ─────────────────────────────────────────────────────────────
+
+export interface BacklogTask {
+  id: string;
+  titulo: string;
+  descricao: string;
+  status: string;
+  prioridade: string;
+  tipo: string;
+  agente_atual: string | null;
+  agente_historico: { agente: string; status: string; timestamp: string; nota?: string }[];
+  tags: string[];
+  estimativa_horas: number | null;
+  modulo: string | null;
+  criado_por: string;
+  atualizado_em: string;
+  criado_em: string;
+}
+
+export async function getBacklogTasks(): Promise<BacklogTask[]> {
+  const { data, error } = await admin().from('backlog_tasks').select('*').order('criado_em', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as BacklogTask[];
+}
+
+export async function createBacklogTask(task: Partial<BacklogTask>): Promise<BacklogTask> {
+  const { data, error } = await admin().from('backlog_tasks').insert(task).select().single();
+  if (error) throw error;
+  return data as BacklogTask;
+}
+
+export async function updateBacklogTask(id: string, updates: Partial<BacklogTask>): Promise<BacklogTask> {
+  const { data, error } = await admin().from('backlog_tasks')
+    .update({ ...updates, atualizado_em: new Date().toISOString() })
+    .eq('id', id).select().single();
+  if (error) throw error;
+  return data as BacklogTask;
+}
+
+export async function deleteBacklogTask(id: string): Promise<void> {
+  const { error } = await admin().from('backlog_tasks').delete().eq('id', id);
+  if (error) throw error;
+}

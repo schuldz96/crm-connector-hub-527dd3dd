@@ -12,6 +12,7 @@ import SAFeatureFlagsPage from '@/pages/super-admin/SAFeatureFlagsPage';
 import SAModulesPage from '@/pages/super-admin/SAModulesPage';
 import SAAuditPage from '@/pages/super-admin/SAAuditPage';
 import SASettingsPage from '@/pages/super-admin/SASettingsPage';
+import SABacklogPage from '@/pages/super-admin/SABacklogPage';
 
 export default function SuperAdminProtectedRoutes() {
   const { isAuthenticated, isLoading } = useSuperAdminAuth();
@@ -45,6 +46,7 @@ export default function SuperAdminProtectedRoutes() {
         <Route path="modules" element={<SAModulesPage />} />
         <Route path="audit" element={<SAAuditPage />} />
         <Route path="settings" element={<SASettingsPage />} />
+        <Route path="backlog" element={<SABacklogPage />} />
       </Route>
     </Routes>
   );

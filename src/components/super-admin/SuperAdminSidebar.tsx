@@ -12,6 +12,7 @@ import {
   Puzzle,
   FileText,
   Settings,
+  KanbanSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -24,6 +25,7 @@ const NAV_ITEMS = [
   { label: 'Uso de Recursos', icon: BarChart3, path: '/super-admin/usage' },
   { label: 'Feature Flags', icon: ToggleLeft, path: '/super-admin/feature-flags' },
   { label: 'Módulos', icon: Puzzle, path: '/super-admin/modules' },
+  { label: 'Backlog Board', icon: KanbanSquare, path: '/super-admin/backlog' },
   { label: 'Auditoria', icon: FileText, path: '/super-admin/audit' },
   { label: 'Configurações', icon: Settings, path: '/super-admin/settings' },
 ];
