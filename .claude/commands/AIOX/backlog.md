@@ -51,9 +51,9 @@ curl -s "${SUPABASE_URL}/rest/v1/backlog_tasks?status=neq.done&order=criado_em.a
   -H "Accept-Profile: admin"
 ```
 3. Se não houver tasks: informar "✅ Backlog limpo! Nenhuma task pendente." e parar.
-4. Se houver tasks: listar para o usuário com número, título, tipo e prioridade.
-5. Perguntar qual task resolver (ou pegar a primeira automaticamente se só houver uma).
-6. Guardar: TASK_ID, titulo, descricao, tipo, prioridade, imagem_url, agente_historico existente.
+4. Se houver tasks: listar todas para o usuário com número, título, tipo e prioridade.
+5. **EXECUTAR TODAS automaticamente** da mais antiga para a mais recente (order by criado_em ASC). NÃO perguntar qual resolver.
+6. Para cada task, guardar: TASK_ID, titulo, descricao, tipo, prioridade, imagem_url, agente_historico existente.
 
 ### PASSO 1 — Análise (status: analyzing)
 
@@ -291,6 +291,5 @@ EOF
 
 ## Se o usuário passar argumentos
 
-- `/backlog` → lista tasks pendentes, pergunta qual resolver
-- `/backlog all` → resolve TODAS as tasks pendentes em sequência
+- `/backlog` → resolve TODAS as tasks pendentes automaticamente (mais antiga primeiro)
 - `/backlog {task_id}` → resolve task específica direto
