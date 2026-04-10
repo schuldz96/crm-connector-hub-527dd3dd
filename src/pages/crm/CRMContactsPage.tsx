@@ -176,6 +176,9 @@ export default function CRMContactsPage() {
 
   // Filter state — must be declared before activeView/hasUnsavedFilters
   const [showFilters, setShowFilters] = useState(true);
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const [sortField, setSortField] = useState<'criado_em' | 'atualizado_em' | 'nome'>('criado_em');
+  const [sortDirection, setSortDirection] = useState<'desc' | 'asc'>('desc');
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const [openChip, setOpenChip] = useState<string | null>(null);
   const [chipSearch, setChipSearch] = useState('');
@@ -364,10 +367,39 @@ export default function CRMContactsPage() {
         list = list.filter(c => { const t = new Date(c.criado_em).getTime(); return t >= start.getTime() && t < end.getTime(); });
       }
     }
+    list.sort((a: any, b: any) => {
+      const aVal = sortField === 'nome' ? (a.nome || '').toLowerCase() : new Date(a[sortField]).getTime();
+      const bVal = sortField === 'nome' ? (b.nome || '').toLowerCase() : new Date(b[sortField]).getTime();
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
     return list;
-  }, [result?.data, activeFilters]);
+  }, [result?.data, activeFilters, sortField, sortDirection]);
   const total = result?.total || 0;
   const totalPages = result?.totalPages || 1;
+
+  const handleExport = () => {
+    const headers = ['Nome', 'E-mail', 'Telefone', 'Status', 'Fonte', 'Cargo', 'Score', 'Data de criação'];
+    const rows = contacts.map(c => [
+      c.nome,
+      c.email,
+      c.telefone,
+      c.status,
+      c.fonte,
+      (c as any).cargo,
+      c.score,
+      c.criado_em ? new Date(c.criado_em).toLocaleDateString('pt-BR') : '',
+    ]);
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `contatos_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const handleCreateContact = async () => {
     const email = (formData.email || '').trim();
@@ -639,17 +671,27 @@ export default function CRMContactsPage() {
           <Button variant="outline" size="sm" className={cn("h-8 gap-1.5 text-xs font-medium", showFilters && "bg-muted")} onClick={() => setShowFilters(f => !f)}>
             <Filter className="w-3.5 h-3.5" /> Filtros
           </Button>
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
-            <ArrowUpDown className="w-3.5 h-3.5" /> Classificar
-          </Button>
+          <DropdownMenu open={showSortMenu} onOpenChange={setShowSortMenu}>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs"><ArrowUpDown className="w-3.5 h-3.5" /> Classificar</Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <p className="text-[11px] text-muted-foreground font-semibold px-2 py-1">Classificar por</p>
+              {([['criado_em', 'Data de criação'], ['atualizado_em', 'Última modificação'], ['nome', 'Nome']] as const).map(([key, label]) => (
+                <DropdownMenuItem key={key} onClick={() => setSortField(key)} className={cn(sortField === key && 'bg-muted font-medium')}>{label}</DropdownMenuItem>
+              ))}
+              <div className="border-t border-border my-1" />
+              <div className="flex gap-1 px-2 py-1">
+                <button onClick={() => { setSortDirection('desc'); setShowSortMenu(false); }} className={cn('flex-1 text-xs py-1 rounded', sortDirection === 'desc' ? 'bg-foreground text-background font-medium' : 'hover:bg-muted')}>Mais recente</button>
+                <button onClick={() => { setSortDirection('asc'); setShowSortMenu(false); }} className={cn('flex-1 text-xs py-1 rounded', sortDirection === 'asc' ? 'bg-foreground text-background font-medium' : 'hover:bg-muted')}>Mais antigo</button>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
             <BarChart3 className="w-3.5 h-3.5" /> Métrica
           </Button>
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={handleExport}>
             <Download className="w-3.5 h-3.5" /> Exportar
-          </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8">
-            <Copy className="w-3.5 h-3.5" />
           </Button>
         </div>
       </div>
@@ -752,7 +794,7 @@ export default function CRMContactsPage() {
             <p className="text-sm">Nenhum contato encontrado</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full min-w-max text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-border bg-muted/50">
                 <th className="w-10 px-3 py-2.5">

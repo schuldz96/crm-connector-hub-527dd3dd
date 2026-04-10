@@ -189,6 +189,27 @@ export default function CRMDealsPage() {
     return list;
   }, [allDeals, search, activeTab, myUserId, sortField, sortDirection, activeFilters]);
 
+  const handleExport = () => {
+    const headers = ['Nome', 'Valor', 'Status', 'Pipeline', 'Estágio', 'Proprietário', 'Data de criação'];
+    const rows = filteredDeals.map(d => [
+      d.nome,
+      d.valor,
+      d.status,
+      pipeline?.nome ?? '',
+      stages.find(s => s.id === d.estagio_id)?.nome ?? '',
+      d.proprietario_nome ?? '',
+      d.criado_em ? new Date(d.criado_em).toLocaleDateString('pt-BR') : '',
+    ]);
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `negocios_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const dealsByStage = useMemo(() => {
     const map: Record<string, CrmDeal[]> = {};
     for (const stage of (pipeline?.estagios || [])) map[stage.id] = [];
@@ -412,8 +433,7 @@ export default function CRMDealsPage() {
             </DropdownMenuContent>
           </DropdownMenu>
           <Button variant="outline" size="sm" className={cn("h-8 gap-1.5 text-xs", showMetrics && "bg-muted")} onClick={() => setShowMetrics(m => !m)}><BarChart3 className="w-3.5 h-3.5" /> Métrica</Button>
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs"><Download className="w-3.5 h-3.5" /> Exportar</Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8"><Copy className="w-3.5 h-3.5" /></Button>
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={handleExport}><Download className="w-3.5 h-3.5" /> Exportar</Button>
         </div>
       </div>
 
@@ -649,7 +669,7 @@ export default function CRMDealsPage() {
           </div>
         ) : (
           /* ========== TABLE VIEW ========== */
-          <table className="w-full text-sm">
+          <table className="w-full min-w-max text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-border bg-muted/50">
                 <th className="w-10 px-3 py-2.5"><input type="checkbox" className="rounded border-border" /></th>

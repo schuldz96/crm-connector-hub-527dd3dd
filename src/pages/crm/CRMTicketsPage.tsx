@@ -199,6 +199,28 @@ export default function CRMTicketsPage() {
     return list;
   }, [allTickets, search, activeTab, myUserId, sortField, sortDirection, activeFilters]);
 
+  const handleExport = () => {
+    const headers = ['Título', 'Prioridade', 'Status', 'Categoria', 'Pipeline', 'Estágio', 'Proprietário', 'Data de criação'];
+    const rows = filteredTickets.map(t => [
+      t.titulo,
+      t.prioridade,
+      t.status,
+      t.categoria,
+      pipeline?.nome ?? '',
+      stages.find(s => s.id === t.estagio_id)?.nome ?? '',
+      t.proprietario_nome ?? '',
+      t.criado_em ? new Date(t.criado_em).toLocaleDateString('pt-BR') : '',
+    ]);
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tickets_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const ticketsByStage = useMemo(() => {
     const map: Record<string, CrmTicket[]> = {};
     for (const stage of (pipeline?.estagios || [])) map[stage.id] = [];
@@ -376,8 +398,7 @@ export default function CRMTicketsPage() {
             </DropdownMenuContent>
           </DropdownMenu>
           <Button variant="outline" size="sm" className={cn("h-8 gap-1.5 text-xs", showMetrics && "bg-muted")} onClick={() => setShowMetrics(m => !m)}><BarChart3 className="w-3.5 h-3.5" /> Métrica</Button>
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs"><Download className="w-3.5 h-3.5" /> Exportar</Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8"><Copy className="w-3.5 h-3.5" /></Button>
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={handleExport}><Download className="w-3.5 h-3.5" /> Exportar</Button>
         </div>
       </div>
 
@@ -579,7 +600,7 @@ export default function CRMTicketsPage() {
           </div>
         ) : (
           /* ========== TABLE VIEW ========== */
-          <table className="w-full text-sm">
+          <table className="w-full min-w-max text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-border bg-muted/50">
                 <th className="w-10 px-3 py-2.5"><input type="checkbox" className="rounded border-border" /></th>
