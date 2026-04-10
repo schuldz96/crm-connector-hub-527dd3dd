@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import type { ElementType } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppConfig } from '@/contexts/AppConfigContext';
@@ -16,6 +17,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+/* ── Types ─────────────────────────────────────────────────────────── */
+
 interface NavItem {
   path: string;
   label: string;
@@ -29,6 +32,8 @@ interface NavSection {
   items: NavItem[];
 }
 
+/* ── Navigation data ───────────────────────────────────────────────── */
+
 const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Auditoria',
@@ -39,10 +44,10 @@ const NAV_SECTIONS: NavSection[] = [
         icon: ClipboardCheck,
         resource: 'dashboard',
         children: [
-          { path: '/dashboard',   label: 'Dashboard',   icon: LayoutDashboard, resource: 'dashboard' },
-          { path: '/meetings',    label: 'Reuniões',     icon: Video,           resource: 'meetings' },
-          { path: '/whatsapp',    label: 'WhatsApp',     icon: MessageSquare,   resource: 'whatsapp' },
-          { path: '/performance', label: 'Desempenho',   icon: Activity,        resource: 'performance' },
+          { path: '/dashboard',   label: 'Dashboard',  icon: LayoutDashboard, resource: 'dashboard' },
+          { path: '/meetings',    label: 'Reuniões',    icon: Video,           resource: 'meetings' },
+          { path: '/whatsapp',    label: 'WhatsApp',    icon: MessageSquare,   resource: 'whatsapp' },
+          { path: '/performance', label: 'Desempenho',  icon: Activity,        resource: 'performance' },
         ],
       },
     ],
@@ -121,8 +126,8 @@ const NAV_SECTIONS: NavSection[] = [
         icon: ShoppingCart,
         resource: 'meetings',
         children: [
-          { path: '/teams',    label: 'Times',          icon: Target,        resource: 'teams' },
-          { path: '/training', label: 'Treinamentos',   icon: GraduationCap, resource: 'training' },
+          { path: '/teams',    label: 'Times',         icon: Target,        resource: 'teams' },
+          { path: '/training', label: 'Treinamentos',  icon: GraduationCap, resource: 'training' },
         ],
       },
     ],
@@ -136,9 +141,9 @@ const NAV_SECTIONS: NavSection[] = [
         icon: HeartPulse,
         resource: 'health-score',
         children: [
-          { path: '/cs/health-score', label: 'Health Score',   icon: HeartPulse, resource: 'health-score' },
-          { path: '/cs/onboarding',   label: 'Onboarding',     icon: Rocket,     resource: 'onboarding' },
-          { path: '/cs/nps-surveys',  label: 'Pesquisas NPS',  icon: Star,       resource: 'nps-surveys' },
+          { path: '/cs/health-score', label: 'Health Score',  icon: HeartPulse, resource: 'health-score' },
+          { path: '/cs/onboarding',   label: 'Onboarding',    icon: Rocket,     resource: 'onboarding' },
+          { path: '/cs/nps-surveys',  label: 'Pesquisas NPS', icon: Star,       resource: 'nps-surveys' },
         ],
       },
     ],
@@ -146,11 +151,15 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Sistema',
     items: [
-      { path: '/users',         label: 'Usuários', icon: Users,  resource: 'users' },
+      { path: '/users',           label: 'Usuários', icon: Users,  resource: 'users' },
       { path: '/admin?s=company', label: 'Admin',    icon: Shield, resource: 'admin' },
     ],
   },
 ];
+
+const SIDEBAR_WIDTH = 60;
+
+/* ── Component ─────────────────────────────────────────────────────── */
 
 export default function AppSidebar() {
   const { user, logout, canAccess } = useAuth();
@@ -158,25 +167,37 @@ export default function AppSidebar() {
   const { getPermission } = useRolePermissions();
   const location = useLocation();
   const navigate = useNavigate();
+
+  // Hover state: which item path is hovered + its rect for flyout positioning
   const [hoverItem, setHoverItem] = useState<string | null>(null);
+  const [hoverRect, setHoverRect] = useState<DOMRect | null>(null);
   const [profileHover, setProfileHover] = useState(false);
+  const [profileRect, setProfileRect] = useState<DOMRect | null>(null);
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const profileTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleMouseEnter = useCallback((path: string) => {
+  const handleMouseEnter = useCallback((path: string, el: HTMLElement) => {
     if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
     setHoverItem(path);
+    setHoverRect(el.getBoundingClientRect());
   }, []);
   const handleMouseLeave = useCallback(() => {
-    hoverTimeout.current = setTimeout(() => setHoverItem(null), 150);
+    hoverTimeout.current = setTimeout(() => { setHoverItem(null); setHoverRect(null); }, 150);
+  }, []);
+  const handleFlyoutEnter = useCallback(() => {
+    if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
   }, []);
 
-  const handleProfileEnter = useCallback(() => {
+  const handleProfileEnter = useCallback((el: HTMLElement) => {
     if (profileTimeout.current) clearTimeout(profileTimeout.current);
     setProfileHover(true);
+    setProfileRect(el.getBoundingClientRect());
   }, []);
   const handleProfileLeave = useCallback(() => {
-    profileTimeout.current = setTimeout(() => setProfileHover(false), 150);
+    profileTimeout.current = setTimeout(() => { setProfileHover(false); setProfileRect(null); }, 150);
+  }, []);
+  const handleProfileFlyoutEnter = useCallback(() => {
+    if (profileTimeout.current) clearTimeout(profileTimeout.current);
   }, []);
 
   const isActive = (path: string) => location.pathname === path.split('?')[0];
@@ -195,163 +216,166 @@ export default function AppSidebar() {
   const visibleSections = configLoaded ? NAV_SECTIONS.map(section => ({
     ...section,
     items: section.items.filter(item => {
-      if (item.children) {
-        return item.children.some(child => isItemVisible(child));
-      }
+      if (item.children) return item.children.some(child => isItemVisible(child));
       return isItemVisible(item);
     }),
   })).filter(section => section.items.length > 0) : [];
 
   const roleLabel = user?.role ? (ROLE_LABELS[user.role] ?? user.role) : 'Usuário';
   const rolePerm = user?.role ? getPermission(user.role) : undefined;
-
   const roleColorClass: Record<string, string> = {
-    destructive: 'text-destructive',
-    primary: 'text-primary',
-    accent: 'text-accent',
-    warning: 'text-warning',
-    success: 'text-success',
-    'muted-foreground': 'text-muted-foreground',
+    destructive: 'text-destructive', primary: 'text-primary',
+    accent: 'text-accent', warning: 'text-warning',
+    success: 'text-success', 'muted-foreground': 'text-muted-foreground',
   };
 
+  // Find the currently hovered item data for the flyout
+  const hoveredItemData = hoverItem
+    ? visibleSections.flatMap(s => s.items).find(i => i.path === hoverItem)
+    : null;
+
   return (
-    <aside
-      className="flex flex-col h-screen sticky top-0 border-r border-sidebar-border z-20 w-[60px]"
-      style={{ background: 'var(--gradient-sidebar)' }}
-    >
-      {/* Logo */}
-      <div className="flex items-center justify-center border-b border-sidebar-border h-14 flex-shrink-0">
-        <BrandLogo compact />
-      </div>
-
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-2 px-1.5 space-y-0.5">
-        {visibleSections.map((section, sIdx) => (
-          <div key={section.label}>
-            {sIdx > 0 && (
-              <div className="h-px bg-sidebar-border/40 mx-1.5 my-1.5" />
-            )}
-            <div className="space-y-0.5">
-              {section.items.map((item) => {
-                const hasChildren = item.children && item.children.length > 0;
-                const isHovered = hoverItem === item.path;
-                const active = hasChildren ? isChildActive(item) : isActive(item.path);
-
-                return (
-                  <div
-                    key={item.path}
-                    className="relative"
-                    onMouseEnter={() => handleMouseEnter(item.path)}
-                    onMouseLeave={handleMouseLeave}
-                  >
-                    {/* Icon button */}
-                    <div
-                      className={cn(
-                        'flex items-center justify-center w-[44px] h-[44px] mx-auto rounded-lg cursor-pointer transition-colors',
-                        active
-                          ? 'bg-primary/15 text-primary'
-                          : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'
-                      )}
-                      onClick={() => {
-                        if (hasChildren) {
-                          navigate(item.children![0].path);
-                        } else {
-                          navigate(item.path);
-                        }
-                      }}
-                    >
-                      <item.icon className="w-[20px] h-[20px]" />
-                    </div>
-
-                    {/* Flyout on hover */}
-                    {isHovered && hasChildren && (
-                      <div
-                        className="absolute left-full top-0 ml-2 z-50 min-w-[200px] py-2 rounded-lg border border-border bg-card shadow-xl"
-                        onMouseEnter={() => handleMouseEnter(item.path)}
-                        onMouseLeave={handleMouseLeave}
-                      >
-                        <p className="text-xs font-semibold text-foreground px-4 pb-2 border-b border-border mb-1">
-                          {item.label}
-                        </p>
-                        {item.children!.map((child) => (
-                          <button
-                            key={child.path}
-                            className={cn(
-                              'flex items-center gap-2.5 w-full px-4 py-2 text-sm transition-colors',
-                              isActive(child.path)
-                                ? 'bg-primary/10 text-primary font-medium'
-                                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                            )}
-                            onClick={() => { navigate(child.path); setHoverItem(null); }}
-                          >
-                            <child.icon className="w-4 h-4" />
-                            {child.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Tooltip for items without children */}
-                    {isHovered && !hasChildren && (
-                      <div
-                        className="absolute left-full top-1/2 -translate-y-1/2 ml-2 z-50 px-3 py-1.5 rounded-md border border-border bg-card shadow-lg text-xs font-medium text-foreground whitespace-nowrap"
-                        onMouseEnter={() => handleMouseEnter(item.path)}
-                        onMouseLeave={handleMouseLeave}
-                      >
-                        {item.label}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </nav>
-
-      {/* Profile */}
-      <div
-        className="relative border-t border-sidebar-border p-2 flex-shrink-0"
-        onMouseEnter={handleProfileEnter}
-        onMouseLeave={handleProfileLeave}
+    <>
+      <aside
+        className="flex flex-col h-screen sticky top-0 border-r border-sidebar-border z-20"
+        style={{ background: 'var(--gradient-sidebar)', width: SIDEBAR_WIDTH }}
       >
-        <div className="flex items-center justify-center p-1.5 rounded-lg cursor-pointer transition-colors hover:bg-sidebar-accent">
-          <img
-            src={user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name}`}
-            alt={user?.name}
-            className="w-8 h-8 rounded-full border border-sidebar-border flex-shrink-0"
-          />
+        {/* Logo */}
+        <div className="flex items-center justify-center border-b border-sidebar-border h-14 flex-shrink-0">
+          <BrandLogo compact />
         </div>
 
-        {/* Profile flyout */}
-        {profileHover && (
-          <div
-            className="absolute left-full bottom-0 ml-2 z-50 min-w-[200px] py-2 rounded-lg border border-border bg-card shadow-xl"
-            onMouseEnter={handleProfileEnter}
-            onMouseLeave={handleProfileLeave}
-          >
-            <div className="px-4 pb-2 border-b border-border mb-1">
-              <p className="text-sm font-semibold text-foreground truncate">{user?.name}</p>
-              <p className={cn('text-xs', rolePerm ? roleColorClass[rolePerm.color] : 'text-muted-foreground')}>
-                {roleLabel}
-              </p>
-              <p className="text-[10px] text-muted-foreground/60 truncate mt-0.5">{user?.email}</p>
+        {/* Nav */}
+        <nav className="flex-1 overflow-y-auto py-2 px-1.5 space-y-0.5">
+          {visibleSections.map((section, sIdx) => (
+            <div key={section.label}>
+              {sIdx > 0 && (
+                <div className="h-px bg-sidebar-border/40 mx-1.5 my-1.5" />
+              )}
+              <div className="space-y-0.5">
+                {section.items.map((item) => {
+                  const hasChildren = item.children && item.children.length > 0;
+                  const active = hasChildren ? isChildActive(item) : isActive(item.path);
+
+                  return (
+                    <div
+                      key={item.path}
+                      onMouseEnter={(e) => handleMouseEnter(item.path, e.currentTarget)}
+                      onMouseLeave={handleMouseLeave}
+                    >
+                      <div
+                        className={cn(
+                          'flex items-center justify-center w-[44px] h-[44px] mx-auto rounded-lg cursor-pointer transition-colors',
+                          active
+                            ? 'bg-primary/15 text-primary'
+                            : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'
+                        )}
+                        onClick={() => {
+                          if (hasChildren) navigate(item.children![0].path);
+                          else navigate(item.path);
+                        }}
+                      >
+                        <item.icon className="w-5 h-5" />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            <button
-              onClick={() => { navigate('/me'); setProfileHover(false); }}
-              className="flex items-center gap-2.5 w-full px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-            >
-              <User className="w-4 h-4" /> Meu Perfil
-            </button>
-            <button
-              onClick={logout}
-              className="flex items-center gap-2.5 w-full px-4 py-2 text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-            >
-              <LogOut className="w-4 h-4" /> Sair da conta
-            </button>
+          ))}
+        </nav>
+
+        {/* Profile */}
+        <div
+          className="border-t border-sidebar-border p-2 flex-shrink-0"
+          onMouseEnter={(e) => handleProfileEnter(e.currentTarget)}
+          onMouseLeave={handleProfileLeave}
+        >
+          <div className="flex items-center justify-center p-1.5 rounded-lg cursor-pointer transition-colors hover:bg-sidebar-accent">
+            <img
+              src={user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name}`}
+              alt={user?.name}
+              className="w-8 h-8 rounded-full border border-sidebar-border flex-shrink-0"
+            />
           </div>
-        )}
-      </div>
-    </aside>
+        </div>
+      </aside>
+
+      {/* ── Flyout portals (rendered outside sidebar to avoid overflow clip) ── */}
+
+      {/* Nav flyout */}
+      {hoveredItemData && hoverRect && hoveredItemData.children && createPortal(
+        <div
+          className="fixed z-[9999] min-w-[200px] py-2 rounded-lg border border-border bg-card shadow-xl animate-in fade-in-0 zoom-in-95 duration-100"
+          style={{ left: SIDEBAR_WIDTH + 8, top: hoverRect.top }}
+          onMouseEnter={handleFlyoutEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          <p className="text-xs font-semibold text-foreground px-4 pb-2 border-b border-border mb-1">
+            {hoveredItemData.label}
+          </p>
+          {hoveredItemData.children.map((child) => (
+            <button
+              key={child.path}
+              className={cn(
+                'flex items-center gap-2.5 w-full px-4 py-2 text-sm transition-colors',
+                isActive(child.path)
+                  ? 'bg-primary/10 text-primary font-medium'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              )}
+              onClick={() => { navigate(child.path); setHoverItem(null); }}
+            >
+              <child.icon className="w-4 h-4" />
+              {child.label}
+            </button>
+          ))}
+        </div>,
+        document.body,
+      )}
+
+      {/* Tooltip for items without children */}
+      {hoveredItemData && hoverRect && !hoveredItemData.children && createPortal(
+        <div
+          className="fixed z-[9999] px-3 py-1.5 rounded-md border border-border bg-card shadow-lg text-xs font-medium text-foreground whitespace-nowrap"
+          style={{ left: SIDEBAR_WIDTH + 8, top: hoverRect.top + hoverRect.height / 2, transform: 'translateY(-50%)' }}
+          onMouseEnter={handleFlyoutEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          {hoveredItemData.label}
+        </div>,
+        document.body,
+      )}
+
+      {/* Profile flyout */}
+      {profileHover && profileRect && createPortal(
+        <div
+          className="fixed z-[9999] min-w-[200px] py-2 rounded-lg border border-border bg-card shadow-xl"
+          style={{ left: SIDEBAR_WIDTH + 8, bottom: 8 }}
+          onMouseEnter={handleProfileFlyoutEnter}
+          onMouseLeave={handleProfileLeave}
+        >
+          <div className="px-4 pb-2 border-b border-border mb-1">
+            <p className="text-sm font-semibold text-foreground truncate">{user?.name}</p>
+            <p className={cn('text-xs', rolePerm ? roleColorClass[rolePerm.color] : 'text-muted-foreground')}>
+              {roleLabel}
+            </p>
+            <p className="text-[10px] text-muted-foreground/60 truncate mt-0.5">{user?.email}</p>
+          </div>
+          <button
+            onClick={() => { navigate('/me'); setProfileHover(false); }}
+            className="flex items-center gap-2.5 w-full px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          >
+            <User className="w-4 h-4" /> Meu Perfil
+          </button>
+          <button
+            onClick={logout}
+            className="flex items-center gap-2.5 w-full px-4 py-2 text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+          >
+            <LogOut className="w-4 h-4" /> Sair da conta
+          </button>
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
