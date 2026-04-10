@@ -9,7 +9,8 @@ import {
   X, Play, Sparkles, CheckCircle2,
   BookOpen, BarChart3, Mic, MicOff, Volume2, VolumeX,
   Key, Eye, EyeOff, PhoneOff, Phone,
-  Loader2, Waves, MessageSquare, ListChecks, ChevronDown, ChevronUp
+  Loader2, Waves, MessageSquare, ListChecks, ChevronDown, ChevronUp,
+  Pencil, Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -408,11 +409,18 @@ function APIKeyModal({ onClose, onSave }: { onClose: () => void; onSave: (key: s
   );
 }
 
-// ─── Create Scenario Modal ────────────────────────────────────────────────────
-function CreateScenarioModal({ onClose }: { onClose: () => void }) {
+// ─── Create/Edit Scenario Modal ──────────────────────────────────────────────
+function CreateScenarioModal({ onClose, onSave, editing }: {
+  onClose: () => void;
+  onSave: (scenario: TrainingScenario) => void;
+  editing?: TrainingScenario | null;
+}) {
   const [form, setForm] = useState({
-    title: '', description: '', persona: '', difficulty: 'medium',
-    focusPoint: '', avoidPoint: '', focusPoints: [] as string[], avoidPoints: [] as string[],
+    title: editing?.title ?? '', description: editing?.description ?? '',
+    persona: editing?.persona ?? '', difficulty: editing?.difficulty ?? 'medium',
+    focusPoint: '', avoidPoint: '',
+    focusPoints: editing?.focusPoints ?? [] as string[],
+    avoidPoints: editing?.avoidPoints ?? [] as string[],
   });
 
   const addFocus = () => {
@@ -432,7 +440,7 @@ function CreateScenarioModal({ onClose }: { onClose: () => void }) {
         <DialogHeader>
           <DialogTitle className="text-sm font-semibold flex items-center gap-2">
             <Plus className="w-4 h-4 text-primary" />
-            Criar Cenário de Treinamento
+            {editing ? 'Editar Cenário' : 'Criar Cenário de Treinamento'}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-1">
@@ -489,7 +497,25 @@ function CreateScenarioModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
           <div className="flex gap-2 pt-1">
-            <Button size="sm" className="flex-1 bg-gradient-primary text-xs h-9"><Plus className="w-3.5 h-3.5 mr-1.5" /> Criar Cenário</Button>
+            <Button size="sm" className="flex-1 bg-gradient-primary text-xs h-9" onClick={() => {
+              if (!form.title.trim()) return;
+              const scenario: TrainingScenario = {
+                id: editing?.id ?? `sc_${Date.now()}`,
+                title: form.title.trim(),
+                description: form.description.trim(),
+                persona: form.persona.trim(),
+                difficulty: form.difficulty as any,
+                focusPoints: form.focusPoints,
+                avoidPoints: form.avoidPoints,
+                script: editing?.script ?? [],
+                createdBy: editing?.createdBy ?? 'Usuário',
+                createdAt: editing?.createdAt ?? new Date().toISOString().slice(0, 10),
+              };
+              onSave(scenario);
+              onClose();
+            }}>
+              <Plus className="w-3.5 h-3.5 mr-1.5" /> {editing ? 'Salvar' : 'Criar Cenário'}
+            </Button>
             <Button size="sm" variant="outline" className="text-xs border-border h-9" onClick={onClose}>Cancelar</Button>
           </div>
         </div>
@@ -1192,15 +1218,52 @@ const DIFF_CONFIG = {
   hard: { label: 'Difícil', class: 'bg-destructive/10 text-destructive border-destructive/20' },
 };
 
+const STORAGE_KEY = 'ltx_training_scenarios';
+
+function loadScenarios(): TrainingScenario[] {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch { /* ignore */ }
+  return MOCK_SCENARIOS;
+}
+
+function saveScenarios(scenarios: TrainingScenario[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(scenarios));
+}
+
 export default function TrainingPage() {
   const { user, hasRole } = useAuth();
   const { tokens } = useAppConfig();
+  const { toast } = useToast();
   const isAdmin = hasRole(['admin', 'director', 'supervisor']);
   const [tab, setTab] = useState<'scenarios' | 'history'>('scenarios');
   const [activeSession, setActiveSession] = useState<TrainingScenario | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [editingScenario, setEditingScenario] = useState<TrainingScenario | null>(null);
+  const [scenarios, setScenarios] = useState<TrainingScenario[]>(loadScenarios);
 
   const apiKey = tokens.training;
+
+  const handleSaveScenario = (scenario: TrainingScenario) => {
+    setScenarios(prev => {
+      const exists = prev.find(s => s.id === scenario.id);
+      const next = exists ? prev.map(s => s.id === scenario.id ? scenario : s) : [...prev, scenario];
+      saveScenarios(next);
+      return next;
+    });
+    toast({ title: editingScenario ? 'Cenário atualizado' : 'Cenário criado com sucesso' });
+    setEditingScenario(null);
+  };
+
+  const handleDeleteScenario = (id: string) => {
+    setScenarios(prev => {
+      const next = prev.filter(s => s.id !== id);
+      saveScenarios(next);
+      return next;
+    });
+    toast({ title: 'Cenário excluído' });
+  };
 
   const myHistory = MOCK_SESSIONS.filter(s => s.userId === user?.id || isAdmin);
   const avgScore = myHistory.length ? Math.round(myHistory.reduce((a, s) => a + s.score, 0) / myHistory.length) : 0;
@@ -1285,7 +1348,7 @@ export default function TrainingPage() {
         {[
           { label: 'Treinamentos', value: myHistory.length, icon: BookOpen, color: 'text-primary' },
           { label: 'Média de Score', value: `${avgScore}`, icon: Target, color: avgScore >= 80 ? 'text-success' : 'text-warning' },
-          { label: 'Cenários Ativos', value: MOCK_SCENARIOS.length, icon: Brain, color: 'text-accent' },
+          { label: 'Cenários Ativos', value: scenarios.length, icon: Brain, color: 'text-accent' },
           { label: 'Tempo Total', value: `${myHistory.reduce((a, s) => a + s.duration, 0)}min`, icon: Clock, color: 'text-info' },
         ].map(stat => (
           <div key={stat.label} className="glass-card p-4 rounded-xl">
@@ -1315,7 +1378,7 @@ export default function TrainingPage() {
       {/* Scenarios */}
       {tab === 'scenarios' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {MOCK_SCENARIOS.map(scenario => {
+          {scenarios.map(scenario => {
             const myBest = MOCK_SESSIONS.filter(s => s.scenarioId === scenario.id && s.userId === user?.id);
             const bestScore = myBest.length ? Math.max(...myBest.map(s => s.score)) : null;
             return (
@@ -1331,6 +1394,18 @@ export default function TrainingPage() {
                     <span className={cn('text-[10px] px-2 py-0.5 rounded-full border font-medium', DIFF_CONFIG[scenario.difficulty].class)}>
                       {DIFF_CONFIG[scenario.difficulty].label}
                     </span>
+                    {isAdmin && (
+                      <>
+                        <button onClick={() => { setEditingScenario(scenario); setShowCreate(true); }}
+                          className="w-6 h-6 rounded-md hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                        <button onClick={() => handleDeleteScenario(scenario.id)}
+                          className="w-6 h-6 rounded-md hover:bg-destructive/10 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors">
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
                 <div>
@@ -1380,7 +1455,10 @@ export default function TrainingPage() {
                     <span className="text-xs text-muted-foreground">Não realizado</span>
                   )}
                   <Button size="sm" className="bg-gradient-primary text-xs h-7" onClick={() => {
-                    if (!apiKey.startsWith('sk-')) { return; }
+                    if (!apiKey.startsWith('sk-')) {
+                      toast({ title: 'Token necessário', description: 'Configure o token OpenAI em Admin → Tokens OpenAI', variant: 'destructive' });
+                      return;
+                    }
                     setActiveSession(scenario);
                   }}>
                     <Mic className="w-3 h-3 mr-1" /> Iniciar
@@ -1447,7 +1525,11 @@ export default function TrainingPage() {
         </div>
       )}
 
-      {showCreate && <CreateScenarioModal onClose={() => setShowCreate(false)} />}
+      {showCreate && <CreateScenarioModal
+        editing={editingScenario}
+        onSave={handleSaveScenario}
+        onClose={() => { setShowCreate(false); setEditingScenario(null); }}
+      />}
     </div>
   );
 }
