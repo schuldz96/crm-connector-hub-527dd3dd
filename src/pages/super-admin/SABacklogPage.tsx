@@ -280,7 +280,7 @@ export default function SABacklogPage() {
 
       {/* Kanban View */}
       {view === 'kanban' && (
-        <div className="flex gap-3 flex-1 overflow-x-auto pb-4">
+        <div className="flex gap-3 flex-1 overflow-x-auto pb-4 scrollbar-thick" style={{ scrollbarWidth: 'auto', scrollbarColor: 'hsl(var(--muted-foreground) / 0.3) transparent' }}>
           {COLUMNS.map(col => {
             const colTasks = tasks.filter(t => t.status === col.id);
             return (
