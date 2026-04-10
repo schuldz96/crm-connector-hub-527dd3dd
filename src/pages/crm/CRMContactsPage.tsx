@@ -125,6 +125,13 @@ export default function CRMContactsPage() {
   const [newViewName, setNewViewName] = useState('');
   const viewMenuRef = useRef<HTMLDivElement>(null);
 
+  // Filter state — must be declared before activeView/hasUnsavedFilters
+  const [showFilters, setShowFilters] = useState(true);
+  const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
+  const [openChip, setOpenChip] = useState<string | null>(null);
+  const [chipSearch, setChipSearch] = useState('');
+  const chipAreaRef = useRef<HTMLDivElement>(null);
+
   // Track if active view has unsaved filter changes
   const activeView = savedViews.find(v => v.id === activeTab);
   const hasUnsavedFilters = activeView
@@ -263,11 +270,6 @@ export default function CRMContactsPage() {
 
   const createContact = useCreateContact();
   const { data: saasUsers = [] } = useSaasUsers();
-  const [showFilters, setShowFilters] = useState(true);
-  const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
-  const [openChip, setOpenChip] = useState<string | null>(null);
-  const [chipSearch, setChipSearch] = useState('');
-  const chipAreaRef = useRef<HTMLDivElement>(null);
 
   // Close filter dropdown on outside click
   useEffect(() => {
