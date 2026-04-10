@@ -643,7 +643,7 @@ export default function CRMRecordPage() {
 
           {/* Activity buttons — HubSpot style */}
           <div className="pt-3 border-t border-border">
-            <div className="flex items-center justify-center flex-wrap gap-3">
+            <div className="flex items-center justify-center gap-2">
               {[
                 { icon: <StickyNote className="w-4 h-4" />, label: 'Observação', type: 'nota' as const },
                 { icon: <Mail className="w-4 h-4" />, label: 'E-mail', type: 'email' as const },
@@ -652,19 +652,19 @@ export default function CRMRecordPage() {
                 { icon: <CalendarDays className="w-4 h-4" />, label: 'Reunião', type: 'reuniao' as const },
               ].map(a => (
                 <button key={a.type} onClick={() => setActiveModal(a.type)} className="flex flex-col items-center gap-1 group">
-                  <div className="w-9 h-9 rounded-full border border-border flex items-center justify-center text-muted-foreground group-hover:text-foreground group-hover:border-foreground transition-colors">
+                  <div className="w-8 h-8 rounded-full border border-border flex items-center justify-center text-muted-foreground group-hover:text-foreground group-hover:border-foreground transition-colors">
                     {a.icon}
                   </div>
-                  <span className="text-[10px] text-muted-foreground group-hover:text-foreground whitespace-nowrap">{a.label}</span>
+                  <span className="text-[9px] text-muted-foreground group-hover:text-foreground whitespace-nowrap">{a.label}</span>
                 </button>
               ))}
               <DropdownMenu open={showMoreActions} onOpenChange={setShowMoreActions}>
                 <DropdownMenuTrigger asChild>
                   <button className="flex flex-col items-center gap-1 group">
-                    <div className="w-9 h-9 rounded-full border border-border flex items-center justify-center text-muted-foreground group-hover:text-foreground group-hover:border-foreground transition-colors">
+                    <div className="w-8 h-8 rounded-full border border-border flex items-center justify-center text-muted-foreground group-hover:text-foreground group-hover:border-foreground transition-colors">
                       <MoreHorizontal className="w-4 h-4" />
                     </div>
-                    <span className="text-[10px] text-muted-foreground group-hover:text-foreground">Mais</span>
+                    <span className="text-[9px] text-muted-foreground group-hover:text-foreground">Mais</span>
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-64">
