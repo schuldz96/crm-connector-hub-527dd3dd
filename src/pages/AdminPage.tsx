@@ -1749,6 +1749,7 @@ function MeuPlanoSection() {
     cancelada: 'Cancelada', expirada: 'Expirada',
   };
 
+  const hasPlan = !!license.subscription && !!license.plan;
   const status = license.subscription?.status ?? 'sem-plano';
   const enabledModules = license.features.filter(f => f.habilitado);
   const disabledModules = license.features.filter(f => !f.habilitado);
@@ -1767,6 +1768,25 @@ function MeuPlanoSection() {
             className={cn('h-full rounded-full transition-all', pct > 90 ? 'bg-destructive' : pct > 70 ? 'bg-warning' : 'bg-primary')}
             style={{ width: isUnlimited ? '5%' : `${Math.max(2, pct)}%` }}
           />
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasPlan) {
+    return (
+      <div className="space-y-4">
+        <div className="glass-card p-8 flex flex-col items-center text-center gap-4">
+          <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+            <CreditCard className="w-7 h-7 text-primary" />
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold">Nenhum plano configurado</h3>
+            <p className="text-sm text-muted-foreground mt-1 max-w-md">
+              Sua organização ainda não possui um plano ativo. Todos os módulos estão liberados por padrão.
+              Quando um plano for atribuído, os limites e módulos serão aplicados automaticamente.
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -1799,22 +1819,20 @@ function MeuPlanoSection() {
         </div>
 
         {/* Pricing */}
-        {license.plan && (
-          <div className="grid grid-cols-3 gap-4 pt-2 border-t border-border">
-            <div>
-              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Plataforma/mês</p>
-              <p className="text-lg font-bold">R$ {license.plan.preco_mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Por usuário/mês</p>
-              <p className="text-lg font-bold">R$ {license.plan.preco_por_usuario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Ciclo</p>
-              <p className="text-lg font-bold capitalize">{license.subscription?.ciclo ?? '—'}</p>
-            </div>
+        <div className="grid grid-cols-3 gap-4 pt-2 border-t border-border">
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Plataforma/mês</p>
+            <p className="text-lg font-bold">R$ {license.plan!.preco_mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
           </div>
-        )}
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Por usuário/mês</p>
+            <p className="text-lg font-bold">R$ {license.plan!.preco_por_usuario.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Ciclo</p>
+            <p className="text-lg font-bold capitalize">{license.subscription?.ciclo ?? '—'}</p>
+          </div>
+        </div>
       </div>
 
       {/* Usage */}
