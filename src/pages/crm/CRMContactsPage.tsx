@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
   Search, Plus, Filter, ExternalLink, MoreHorizontal, X,
-  ChevronLeft, ChevronRight, ChevronDown, Download, Contact, Settings2,
+  ChevronLeft, ChevronRight, ChevronDown, Download, Contact,
   ArrowUpDown, BarChart3, Copy, Table2, SlidersHorizontal, Loader2,
   Trash2, PlusCircle, Save, CheckCircle2,
 } from 'lucide-react';
@@ -555,13 +555,6 @@ export default function CRMContactsPage() {
           />
         </div>
         <div className="flex items-center gap-1.5">
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
-            <Table2 className="w-3.5 h-3.5" /> Exibição de tabela
-          </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8">
-            <Settings2 className="w-3.5 h-3.5" />
-          </Button>
-          <div className="w-px h-5 bg-border mx-1" />
           <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
             Editar colunas
           </Button>

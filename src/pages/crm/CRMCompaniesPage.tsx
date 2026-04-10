@@ -5,8 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
   Search, Plus, Filter, MoreHorizontal, X, ChevronDown,
-  ChevronLeft, ChevronRight, Download, Factory, Settings2,
-  ArrowUpDown, BarChart3, Copy, Table2, SlidersHorizontal, Loader2,
+  ChevronLeft, ChevronRight, Download, Factory,
+  ArrowUpDown, BarChart3, Copy, SlidersHorizontal, Loader2,
 } from 'lucide-react';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -215,9 +215,6 @@ export default function CRMCompaniesPage() {
           <Input placeholder="Pesquisar" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-9 h-8 text-sm" />
         </div>
         <div className="flex items-center gap-1.5">
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs"><Table2 className="w-3.5 h-3.5" /> Exibição de tabela</Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8"><Settings2 className="w-3.5 h-3.5" /></Button>
-          <div className="w-px h-5 bg-border mx-1" />
           <Button variant="outline" size="sm" className="h-8 text-xs">Editar colunas</Button>
           <Button variant="outline" size="sm" className={cn("h-8 gap-1.5 text-xs font-medium", showFilters && "bg-muted")} onClick={() => setShowFilters(f => !f)}><Filter className="w-3.5 h-3.5" /> Filtros</Button>
           <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs"><ArrowUpDown className="w-3.5 h-3.5" /> Classificar</Button>
