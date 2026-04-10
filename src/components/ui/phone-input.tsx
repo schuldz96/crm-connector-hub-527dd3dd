@@ -86,8 +86,9 @@ export default function PhoneInput({ value, onChange, placeholder, className }: 
 
   const handleNumberChange = (raw: string) => {
     const digits = raw.replace(/\D/g, '');
-    setNumber(digits);
-    onChange(digits ? `${country.dial}${digits}` : '');
+    const normalized = country.code === 'BR' ? normalizeBR(digits) : digits;
+    setNumber(normalized);
+    onChange(normalized ? `${country.dial}${normalized}` : '');
   };
 
   const handleCountrySelect = (c: Country) => {
@@ -162,13 +163,54 @@ export default function PhoneInput({ value, onChange, placeholder, className }: 
       {/* Phone number input */}
       <input
         type="tel"
-        value={number}
+        value={country.code === 'BR' ? formatBR(number) : number}
         onChange={e => handleNumberChange(e.target.value)}
         placeholder={placeholder || '11 99999-0000'}
         className="flex-1 h-10 px-3 rounded-r-md border border-border bg-background text-sm outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 font-mono"
+        maxLength={country.code === 'BR' ? 15 : 20}
       />
     </div>
   );
+}
+
+/**
+ * Normalize Brazilian phone numbers:
+ * - Celular: DDD (2) + 9 + 8 dígitos = 11 dígitos total
+ * - Fixo: DDD (2) + 8 dígitos = 10 dígitos total
+ * - Se o número tem 10 dígitos e o 3º dígito é 9,7,8,6 → é celular sem o 9 → adiciona
+ * - Se tem mais de 11 dígitos → trunca
+ */
+function normalizeBR(digits: string): string {
+  if (digits.length <= 2) return digits; // só DDD ainda
+
+  const ddd = digits.slice(0, 2);
+  let local = digits.slice(2);
+
+  // Celular sem o 9: DDD + 8 dígitos começando com 9,8,7,6
+  if (local.length === 8 && ['9', '8', '7', '6'].includes(local[0])) {
+    local = '9' + local;
+  }
+
+  // Limitar tamanho
+  if (local.length > 9) {
+    local = local.slice(0, 9);
+  }
+
+  return ddd + local;
+}
+
+/** Format Brazilian number for display: (42) 99982-24190 */
+function formatBR(digits: string): string {
+  if (!digits) return '';
+  if (digits.length <= 2) return digits;
+
+  const ddd = digits.slice(0, 2);
+  const local = digits.slice(2);
+
+  if (local.length <= 4) return `${ddd} ${local}`;
+  if (local.length <= 8) return `${ddd} ${local.slice(0, 4)}-${local.slice(4)}`;
+  // Celular: 9 dígitos → 5-4
+  return `${ddd} ${local.slice(0, 5)}-${local.slice(5)}`;
 }
 
 /** Parse a full phone string like "+5511999990000" into country + local number */
