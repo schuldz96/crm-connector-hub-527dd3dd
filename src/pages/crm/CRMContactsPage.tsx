@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import PhoneInput from '@/components/ui/phone-input';
 import { useCrmContacts, useCreateContact, useSaasUsers } from '@/hooks/useCrm';
 import { supabaseSaas } from '@/integrations/supabase/client';
@@ -29,6 +30,54 @@ const STATUS_CONFIG: Record<ContactStatus, { label: string; class: string }> = {
   customer:  { label: 'Cliente',     class: 'bg-success/15 text-success' },
   churned:   { label: 'Churned',     class: 'bg-destructive/15 text-destructive' },
 };
+
+// Column editor — all available contact properties
+const CONTACTS_COLUMNS_KEY = 'crm_contacts_visible_columns';
+const CONTACT_DEFAULT_COLUMNS = ['nome', 'numero_registro', 'criado_em', 'email', 'telefone', 'fonte', 'status'];
+
+type ContactColumnDef = { key: string; label: string; pinned?: boolean; render: (c: any) => ReactNode };
+
+const CONTACT_COLUMNS: ContactColumnDef[] = [
+  { key: 'nome', label: 'Nome', pinned: true, render: (c) => (
+    <div className="flex items-center gap-2">
+      <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+        {c.nome.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+      </div>
+      <span className="font-medium text-primary hover:underline cursor-pointer text-sm truncate max-w-[200px]">{c.nome}</span>
+    </div>
+  )},
+  { key: 'numero_registro', label: 'ID do registro', render: (c) => (
+    <span className="text-muted-foreground text-xs font-mono">{c.numero_registro}</span>
+  )},
+  { key: 'criado_em', label: 'Data de criação', render: (c) => (
+    <span className="text-muted-foreground text-xs">{new Date(c.criado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+  )},
+  { key: 'email', label: 'E-mail', render: (c) => c.email ? (
+    <a href={`mailto:${c.email}`} className="text-muted-foreground hover:text-primary text-xs flex items-center gap-1 truncate max-w-[200px]">
+      {c.email} <ExternalLink className="w-2.5 h-2.5 flex-shrink-0 opacity-0 group-hover:opacity-100" />
+    </a>
+  ) : <span className="text-muted-foreground/40 text-xs">--</span> },
+  { key: 'telefone', label: 'Número de telefone', render: (c) => c.telefone ? (
+    <span className="text-primary text-xs font-medium">{c.telefone}</span>
+  ) : <span className="text-muted-foreground/40 text-xs">--</span> },
+  { key: 'fonte', label: 'Fonte', render: (c) => <span className="text-muted-foreground text-xs">{c.fonte || '--'}</span> },
+  { key: 'status', label: 'Status', render: (c) => {
+    const st = STATUS_CONFIG[c.status as ContactStatus];
+    return st ? <Badge className={cn('text-[10px] px-1.5 rounded-sm', st.class)}>{st.label}</Badge> : <span className="text-muted-foreground/40 text-xs">--</span>;
+  }},
+  { key: 'cargo', label: 'Cargo', render: (c) => <span className="text-muted-foreground text-xs">{c.cargo || '--'}</span> },
+  { key: 'score', label: 'Score', render: (c) => <span className="text-muted-foreground text-xs font-medium">{c.score ?? '--'}</span> },
+  { key: 'tags', label: 'Tags', render: (c) => c.tags?.length ? (
+    <div className="flex gap-1 flex-wrap">{c.tags.map((t: string) => <Badge key={t} variant="outline" className="text-[10px]">{t}</Badge>)}</div>
+  ) : <span className="text-muted-foreground/40 text-xs">--</span> },
+  { key: 'proprietario_nome', label: 'Proprietário', render: (c) => <span className="text-muted-foreground text-xs">{c.proprietario_nome || '--'}</span> },
+  { key: 'ultima_atividade_em', label: 'Última atividade', render: (c) => c.ultima_atividade_em ? (
+    <span className="text-muted-foreground text-xs">{new Date(c.ultima_atividade_em).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+  ) : <span className="text-muted-foreground/40 text-xs">--</span> },
+  { key: 'atualizado_em', label: 'Atualizado em', render: (c) => (
+    <span className="text-muted-foreground text-xs">{new Date(c.atualizado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+  )},
+];
 
 type FilterDef = { key: string; label: string; type: 'select' | 'text'; options?: { value: string; label: string; sub?: string }[] };
 
@@ -131,6 +180,15 @@ export default function CRMContactsPage() {
   const [openChip, setOpenChip] = useState<string | null>(null);
   const [chipSearch, setChipSearch] = useState('');
   const chipAreaRef = useRef<HTMLDivElement>(null);
+
+  // Column editor state
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
+    try { const s = localStorage.getItem(CONTACTS_COLUMNS_KEY); return s ? JSON.parse(s) : CONTACT_DEFAULT_COLUMNS; }
+    catch { return CONTACT_DEFAULT_COLUMNS; }
+  });
+  const [columnSearch, setColumnSearch] = useState('');
+  const activeColumns = useMemo(() => CONTACT_COLUMNS.filter(col => col.pinned || visibleColumns.includes(col.key)), [visibleColumns]);
+  useEffect(() => { localStorage.setItem(CONTACTS_COLUMNS_KEY, JSON.stringify(visibleColumns)); }, [visibleColumns]);
 
   // Track if active view has unsaved filter changes
   const activeView = savedViews.find(v => v.id === activeTab);
@@ -555,9 +613,29 @@ export default function CRMContactsPage() {
           />
         </div>
         <div className="flex items-center gap-1.5">
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
-            Editar colunas
-          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                <SlidersHorizontal className="w-3.5 h-3.5" /> Editar colunas
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-64 p-0">
+              <div className="p-2 border-b border-border">
+                <Input placeholder="Pesquisar coluna..." value={columnSearch} onChange={e => setColumnSearch(e.target.value)} className="h-7 text-xs" />
+              </div>
+              <div className="max-h-64 overflow-y-auto py-1">
+                {CONTACT_COLUMNS.filter(col => col.label.toLowerCase().includes(columnSearch.toLowerCase())).map(col => (
+                  <label key={col.key} className={cn("flex items-center gap-2 px-3 py-1.5 cursor-pointer text-xs hover:bg-muted/50", col.pinned && "opacity-60")}>
+                    <input type="checkbox" checked={col.pinned || visibleColumns.includes(col.key)} disabled={col.pinned}
+                      onChange={() => setVisibleColumns(prev => prev.includes(col.key) ? prev.filter(k => k !== col.key) : [...prev, col.key])}
+                      className="rounded border-border accent-primary" />
+                    <span>{col.label}</span>
+                    {col.pinned && <span className="text-[10px] text-muted-foreground ml-auto">Fixada</span>}
+                  </label>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
           <Button variant="outline" size="sm" className={cn("h-8 gap-1.5 text-xs font-medium", showFilters && "bg-muted")} onClick={() => setShowFilters(f => !f)}>
             <Filter className="w-3.5 h-3.5" /> Filtros
           </Button>
@@ -680,64 +758,26 @@ export default function CRMContactsPage() {
                 <th className="w-10 px-3 py-2.5">
                   <input type="checkbox" className="rounded border-border" />
                 </th>
-                <th className="text-left px-3 py-2.5 font-medium text-muted-foreground text-xs">Nome</th>
-                <th className="text-left px-3 py-2.5 font-medium text-muted-foreground text-xs">ID do registro</th>
-                <th className="text-left px-3 py-2.5 font-medium text-muted-foreground text-xs">
-                  <button className="flex items-center gap-1">Data de criação (GMT-3) <ArrowUpDown className="w-3 h-3" /></button>
-                </th>
-                <th className="text-left px-3 py-2.5 font-medium text-muted-foreground text-xs">E-mail</th>
-                <th className="text-left px-3 py-2.5 font-medium text-muted-foreground text-xs">Número de telefone</th>
-                <th className="text-left px-3 py-2.5 font-medium text-muted-foreground text-xs">Fonte</th>
-                <th className="text-left px-3 py-2.5 font-medium text-muted-foreground text-xs">Status</th>
+                {activeColumns.map(col => (
+                  <th key={col.key} className="text-left px-3 py-2.5 font-medium text-muted-foreground text-xs">
+                    {col.key === 'criado_em' ? (
+                      <button className="flex items-center gap-1">{col.label} (GMT-3) <ArrowUpDown className="w-3 h-3" /></button>
+                    ) : col.label}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {contacts.map(contact => {
-                const st = STATUS_CONFIG[contact.status];
-                return (
-                  <tr key={contact.id} onClick={() => navigate(`/crm/record/0-1/${contact.numero_registro}`)} className="border-b border-border hover:bg-muted/20 transition-colors group cursor-pointer">
-                    <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
-                      <input type="checkbox" className="rounded border-border" />
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold flex-shrink-0">
-                          {contact.nome.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                        </div>
-                        <span className="font-medium text-primary hover:underline cursor-pointer text-sm truncate max-w-[200px]">
-                          {contact.nome}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 text-muted-foreground text-xs font-mono">
-                      {contact.numero_registro}
-                    </td>
-                    <td className="px-3 py-2.5 text-muted-foreground text-xs">
-                      {new Date(contact.criado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      {contact.email ? (
-                        <a href={`mailto:${contact.email}`} className="text-muted-foreground hover:text-primary text-xs flex items-center gap-1 truncate max-w-[200px]">
-                          {contact.email} <ExternalLink className="w-2.5 h-2.5 flex-shrink-0 opacity-0 group-hover:opacity-100" />
-                        </a>
-                      ) : (
-                        <span className="text-muted-foreground/40 text-xs">--</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      {contact.telefone ? (
-                        <span className="text-primary text-xs font-medium">{contact.telefone}</span>
-                      ) : (
-                        <span className="text-muted-foreground/40 text-xs">--</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5 text-muted-foreground text-xs">{contact.fonte || '--'}</td>
-                    <td className="px-3 py-2.5">
-                      <Badge className={cn('text-[10px] px-1.5 rounded-sm', st.class)}>{st.label}</Badge>
-                    </td>
-                  </tr>
-                );
-              })}
+              {contacts.map(contact => (
+                <tr key={contact.id} onClick={() => navigate(`/crm/record/0-1/${contact.numero_registro}`)} className="border-b border-border hover:bg-muted/20 transition-colors group cursor-pointer">
+                  <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}>
+                    <input type="checkbox" className="rounded border-border" />
+                  </td>
+                  {activeColumns.map(col => (
+                    <td key={col.key} className="px-3 py-2.5">{col.render(contact)}</td>
+                  ))}
+                </tr>
+              ))}
             </tbody>
           </table>
         )}

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,9 +15,57 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { useCrmCompanies, useCreateCompany, useSaasUsers } from '@/hooks/useCrm';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+
+// Column editor — all available company properties
+const COMPANIES_COLUMNS_KEY = 'crm_companies_visible_columns';
+const COMPANY_DEFAULT_COLUMNS = ['nome', 'numero_registro', 'criado_em', 'telefone', 'plataforma', 'cidade', 'pais'];
+
+type CompanyColumnDef = { key: string; label: string; pinned?: boolean; render: (c: any) => ReactNode };
+
+const COMPANY_COLUMNS: CompanyColumnDef[] = [
+  { key: 'nome', label: 'Nome da empresa', pinned: true, render: (c) => (
+    <div className="flex items-center gap-2">
+      <div className="w-7 h-7 rounded bg-muted flex items-center justify-center flex-shrink-0">
+        <Factory className="w-3.5 h-3.5 text-muted-foreground" />
+      </div>
+      <span className="font-medium text-primary hover:underline cursor-pointer text-sm">{c.nome}</span>
+    </div>
+  )},
+  { key: 'numero_registro', label: 'ID do registro', render: (c) => <span className="text-muted-foreground text-xs font-mono">{c.numero_registro}</span> },
+  { key: 'criado_em', label: 'Data de criação', render: (c) => (
+    <span className="text-muted-foreground text-xs">{new Date(c.criado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+  )},
+  { key: 'telefone', label: 'Número de telefone', render: (c) => c.telefone ? (
+    <span className="text-primary text-xs font-medium">{c.telefone}</span>
+  ) : <span className="text-muted-foreground/40 text-xs">--</span> },
+  { key: 'plataforma', label: 'Plataforma', render: (c) => <span className="text-muted-foreground text-xs">{c.plataforma || '--'}</span> },
+  { key: 'cidade', label: 'Cidade', render: (c) => <span className="text-muted-foreground text-xs">{c.cidade || '--'}</span> },
+  { key: 'pais', label: 'País/Região', render: (c) => <span className="text-muted-foreground text-xs">{c.pais || '--'}</span> },
+  { key: 'dominio', label: 'Domínio', render: (c) => <span className="text-muted-foreground text-xs">{c.dominio || '--'}</span> },
+  { key: 'cnpj', label: 'CNPJ', render: (c) => <span className="text-muted-foreground text-xs font-mono">{c.cnpj || '--'}</span> },
+  { key: 'website', label: 'Website', render: (c) => c.website ? (
+    <a href={c.website} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary text-xs truncate max-w-[200px]">{c.website}</a>
+  ) : <span className="text-muted-foreground/40 text-xs">--</span> },
+  { key: 'endereco', label: 'Endereço', render: (c) => <span className="text-muted-foreground text-xs">{c.endereco || '--'}</span> },
+  { key: 'estado', label: 'Estado', render: (c) => <span className="text-muted-foreground text-xs">{c.estado || '--'}</span> },
+  { key: 'cep', label: 'CEP', render: (c) => <span className="text-muted-foreground text-xs font-mono">{c.cep || '--'}</span> },
+  { key: 'setor', label: 'Setor', render: (c) => <span className="text-muted-foreground text-xs">{c.setor || '--'}</span> },
+  { key: 'porte', label: 'Porte', render: (c) => <span className="text-muted-foreground text-xs">{c.porte || '--'}</span> },
+  { key: 'tags', label: 'Tags', render: (c) => c.tags?.length ? (
+    <div className="flex gap-1 flex-wrap">{c.tags.map((t: string) => <Badge key={t} variant="outline" className="text-[10px]">{t}</Badge>)}</div>
+  ) : <span className="text-muted-foreground/40 text-xs">--</span> },
+  { key: 'proprietario_nome', label: 'Proprietário', render: (c) => <span className="text-muted-foreground text-xs">{c.proprietario_nome || '--'}</span> },
+  { key: 'ultima_atividade_em', label: 'Última atividade', render: (c) => c.ultima_atividade_em ? (
+    <span className="text-muted-foreground text-xs">{new Date(c.ultima_atividade_em).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+  ) : <span className="text-muted-foreground/40 text-xs">--</span> },
+  { key: 'atualizado_em', label: 'Atualizado em', render: (c) => (
+    <span className="text-muted-foreground text-xs">{new Date(c.atualizado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+  )},
+];
 
 type FilterDef = { key: string; label: string; type: 'select' | 'text'; options?: { value: string; label: string; sub?: string }[] };
 
@@ -87,6 +135,15 @@ export default function CRMCompaniesPage() {
   const [newCnpj, setNewCnpj] = useState('');
   const [newTelefone, setNewTelefone] = useState('');
   const createCompany = useCreateCompany();
+
+  // Column editor state
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
+    try { const s = localStorage.getItem(COMPANIES_COLUMNS_KEY); return s ? JSON.parse(s) : COMPANY_DEFAULT_COLUMNS; }
+    catch { return COMPANY_DEFAULT_COLUMNS; }
+  });
+  const [columnSearch, setColumnSearch] = useState('');
+  const activeColumns = useMemo(() => COMPANY_COLUMNS.filter(col => col.pinned || visibleColumns.includes(col.key)), [visibleColumns]);
+  useEffect(() => { localStorage.setItem(COMPANIES_COLUMNS_KEY, JSON.stringify(visibleColumns)); }, [visibleColumns]);
 
   const handleCreateCompany = async () => {
     if (!newNome.trim()) return;
@@ -215,7 +272,29 @@ export default function CRMCompaniesPage() {
           <Input placeholder="Pesquisar" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="pl-9 h-8 text-sm" />
         </div>
         <div className="flex items-center gap-1.5">
-          <Button variant="outline" size="sm" className="h-8 text-xs">Editar colunas</Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                <SlidersHorizontal className="w-3.5 h-3.5" /> Editar colunas
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-64 p-0">
+              <div className="p-2 border-b border-border">
+                <Input placeholder="Pesquisar coluna..." value={columnSearch} onChange={e => setColumnSearch(e.target.value)} className="h-7 text-xs" />
+              </div>
+              <div className="max-h-64 overflow-y-auto py-1">
+                {COMPANY_COLUMNS.filter(col => col.label.toLowerCase().includes(columnSearch.toLowerCase())).map(col => (
+                  <label key={col.key} className={cn("flex items-center gap-2 px-3 py-1.5 cursor-pointer text-xs hover:bg-muted/50", col.pinned && "opacity-60")}>
+                    <input type="checkbox" checked={col.pinned || visibleColumns.includes(col.key)} disabled={col.pinned}
+                      onChange={() => setVisibleColumns(prev => prev.includes(col.key) ? prev.filter(k => k !== col.key) : [...prev, col.key])}
+                      className="rounded border-border accent-primary" />
+                    <span>{col.label}</span>
+                    {col.pinned && <span className="text-[10px] text-muted-foreground ml-auto">Fixada</span>}
+                  </label>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
           <Button variant="outline" size="sm" className={cn("h-8 gap-1.5 text-xs font-medium", showFilters && "bg-muted")} onClick={() => setShowFilters(f => !f)}><Filter className="w-3.5 h-3.5" /> Filtros</Button>
           <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs"><ArrowUpDown className="w-3.5 h-3.5" /> Classificar</Button>
           <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs"><BarChart3 className="w-3.5 h-3.5" /> Métrica</Button>
@@ -326,43 +405,22 @@ export default function CRMCompaniesPage() {
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-border bg-muted/50">
                 <th className="w-10 px-3 py-2.5"><input type="checkbox" className="rounded border-border" /></th>
-                <th className="text-left px-3 py-2.5 font-medium text-muted-foreground text-xs">Nome da empresa</th>
-                <th className="text-left px-3 py-2.5 font-medium text-muted-foreground text-xs">ID do registro</th>
-                <th className="text-left px-3 py-2.5 font-medium text-muted-foreground text-xs">
-                  <button className="flex items-center gap-1">Data de criação (GMT-3) <ArrowUpDown className="w-3 h-3" /></button>
-                </th>
-                <th className="text-left px-3 py-2.5 font-medium text-muted-foreground text-xs">Número de telefone</th>
-                <th className="text-left px-3 py-2.5 font-medium text-muted-foreground text-xs">Plataforma</th>
-                <th className="text-left px-3 py-2.5 font-medium text-muted-foreground text-xs">Cidade</th>
-                <th className="text-left px-3 py-2.5 font-medium text-muted-foreground text-xs">País/Região</th>
+                {activeColumns.map(col => (
+                  <th key={col.key} className="text-left px-3 py-2.5 font-medium text-muted-foreground text-xs">
+                    {col.key === 'criado_em' ? (
+                      <button className="flex items-center gap-1">{col.label} (GMT-3) <ArrowUpDown className="w-3 h-3" /></button>
+                    ) : col.label}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {companies.map(company => (
                 <tr key={company.id} onClick={() => navigate(`/crm/record/0-2/${company.numero_registro}`)} className="border-b border-border hover:bg-muted/20 transition-colors group cursor-pointer">
                   <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}><input type="checkbox" className="rounded border-border" /></td>
-                  <td className="px-3 py-2.5">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded bg-muted flex items-center justify-center flex-shrink-0">
-                        <Factory className="w-3.5 h-3.5 text-muted-foreground" />
-                      </div>
-                      <span className="font-medium text-primary hover:underline cursor-pointer text-sm">{company.nome}</span>
-                    </div>
-                  </td>
-                  <td className="px-3 py-2.5 text-muted-foreground text-xs font-mono">{company.numero_registro}</td>
-                  <td className="px-3 py-2.5 text-muted-foreground text-xs">
-                    {new Date(company.criado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
-                  </td>
-                  <td className="px-3 py-2.5">
-                    {company.telefone ? (
-                      <span className="text-primary text-xs font-medium">{company.telefone}</span>
-                    ) : (
-                      <span className="text-muted-foreground/40 text-xs">--</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5 text-muted-foreground text-xs">{company.plataforma || '--'}</td>
-                  <td className="px-3 py-2.5 text-muted-foreground text-xs">{company.cidade || '--'}</td>
-                  <td className="px-3 py-2.5 text-muted-foreground text-xs">{company.pais || '--'}</td>
+                  {activeColumns.map(col => (
+                    <td key={col.key} className="px-3 py-2.5">{col.render(company)}</td>
+                  ))}
                 </tr>
               ))}
             </tbody>
