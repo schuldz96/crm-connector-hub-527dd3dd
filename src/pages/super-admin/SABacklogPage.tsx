@@ -18,7 +18,7 @@ import {
   Loader2, Plus, KanbanSquare, List, Trash2, GripVertical,
   Bug, Sparkles, Wrench, FileCode, FileText, Clock, User,
   ChevronRight, AlertCircle, ArrowUp, ArrowRight, ArrowDown, Flame,
-  Settings2, MessageSquare,
+  Settings2, MessageSquare, Timer,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -61,6 +61,38 @@ const TYPE_CONFIG: Record<string, { label: string; icon: typeof Bug; class: stri
   refactor:    { label: 'Refactor',    icon: FileCode,  class: 'text-cyan-400' },
   docs:        { label: 'Docs',        icon: FileText,  class: 'text-green-400' },
 };
+
+// ─── Pipeline metrics ──────────────────────────────────────────────────────────
+
+interface PipelineMetrics {
+  totalMs: number;
+  phases: { agente: string; status: string; durationMs: number; nota?: string }[];
+  qaCycles: number;
+  agents: string[];
+}
+
+function computeMetrics(historico: { agente: string; status: string; timestamp: string; nota?: string }[]): PipelineMetrics | null {
+  if (!historico || historico.length < 2) return null;
+  const sorted = [...historico].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const phases: PipelineMetrics['phases'] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const start = new Date(sorted[i].timestamp).getTime();
+    const end = i < sorted.length - 1 ? new Date(sorted[i + 1].timestamp).getTime() : start;
+    phases.push({ agente: sorted[i].agente, status: sorted[i].status, durationMs: end - start, nota: sorted[i].nota });
+  }
+  const totalMs = new Date(sorted[sorted.length - 1].timestamp).getTime() - new Date(sorted[0].timestamp).getTime();
+  const qaCycles = sorted.filter(h => h.status === 'testing').length;
+  const agents = [...new Set(sorted.map(h => h.agente))];
+  return { totalMs, phases, qaCycles, agents };
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
+  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}min`;
+  const h = Math.floor(ms / 3_600_000);
+  const m = Math.round((ms % 3_600_000) / 60_000);
+  return m > 0 ? `${h}h ${m}min` : `${h}h`;
+}
 
 // ─── Image helpers (stores single base64 or JSON array in imagem_url) ──────────
 
@@ -439,9 +471,24 @@ export default function SABacklogPage() {
               })()}
             </div>
 
-            {/* Agent history (edit mode only) */}
+            {/* Pipeline metrics + Agent history (edit mode only) */}
             {isEditing && editingTask.agente_historico && editingTask.agente_historico.length > 0 && (
               <div>
+                {editingTask.agente_historico.length >= 2 && (() => {
+                  const m = computeMetrics(editingTask.agente_historico);
+                  if (!m) return null;
+                  return (
+                    <div className="flex items-center gap-3 mb-2 p-2 rounded-lg bg-muted/40 border border-border/50">
+                      <div className="flex items-center gap-1 text-xs"><Timer className="w-3.5 h-3.5 text-primary" /><span className="font-medium">{formatDuration(m.totalMs)}</span></div>
+                      <div className="w-px h-4 bg-border" />
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground"><User className="w-3 h-3" />{m.agents.length} agentes</div>
+                      <div className="w-px h-4 bg-border" />
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">{m.qaCycles}x QA</div>
+                      <div className="w-px h-4 bg-border" />
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">{m.phases.length} fases</div>
+                    </div>
+                  );
+                })()}
                 <label className="text-xs font-medium block mb-1.5">Histórico de Agentes</label>
                 <div className="space-y-0 max-h-48 overflow-y-auto">
                   {editingTask.agente_historico.map((h, i, arr) => {
@@ -553,6 +600,17 @@ function TaskCard({ task, onEdit, onDelete, onDragStart }: {
       {task.descricao && (
         <p className="text-[10px] text-muted-foreground leading-relaxed line-clamp-2 mb-2">{task.descricao}</p>
       )}
+      {task.status === 'done' && task.agente_historico?.length >= 2 && (() => {
+        const m = computeMetrics(task.agente_historico);
+        if (!m) return null;
+        return (
+          <div className="flex items-center gap-2 text-[10px] text-muted-foreground mb-1.5 px-1">
+            <span className="flex items-center gap-0.5"><Timer className="w-2.5 h-2.5" />{formatDuration(m.totalMs)}</span>
+            <span>{m.agents.length} agentes</span>
+            {m.qaCycles > 1 && <span className="text-yellow-500">{m.qaCycles}x QA</span>}
+          </div>
+        );
+      })()}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           {agent && (
