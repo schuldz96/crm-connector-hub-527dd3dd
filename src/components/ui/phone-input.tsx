@@ -174,32 +174,23 @@ export default function PhoneInput({ value, onChange, placeholder, className }: 
 }
 
 /**
- * Normalize Brazilian phone numbers:
- * - Celular: DDD (2) + 9 + 8 dígitos = 11 dígitos total
- * - Fixo: DDD (2) + 8 dígitos = 10 dígitos total
- * - Se o número tem 10 dígitos e o 3º dígito é 9,7,8,6 → é celular sem o 9 → adiciona
- * - Se tem mais de 11 dígitos → trunca
+ * Normalize Brazilian phone numbers — aceita ambos os formatos:
+ * - Celular: DDD (2) + 9 dígitos (9 XXXX-XXXX) = 11 total
+ * - Fixo:    DDD (2) + 8 dígitos (XXXX-XXXX)   = 10 total
+ * Não força adicionar 9 — o usuário digita como quiser.
+ * Apenas limita o tamanho máximo.
  */
 function normalizeBR(digits: string): string {
-  if (digits.length <= 2) return digits; // só DDD ainda
-
-  const ddd = digits.slice(0, 2);
-  let local = digits.slice(2);
-
-  // Celular sem o 9: DDD + 8 dígitos começando com 9,8,7,6
-  if (local.length === 8 && ['9', '8', '7', '6'].includes(local[0])) {
-    local = '9' + local;
-  }
-
-  // Limitar tamanho
-  if (local.length > 9) {
-    local = local.slice(0, 9);
-  }
-
-  return ddd + local;
+  if (digits.length <= 2) return digits;
+  // Max: DDD (2) + 9 dígitos = 11
+  return digits.slice(0, 11);
 }
 
-/** Format Brazilian number for display: (42) 99982-24190 */
+/**
+ * Format Brazilian number for display:
+ * - 8 dígitos local (fixo):   42 3222-1234
+ * - 9 dígitos local (celular): 42 9 9822-4190
+ */
 function formatBR(digits: string): string {
   if (!digits) return '';
   if (digits.length <= 2) return digits;
@@ -207,10 +198,14 @@ function formatBR(digits: string): string {
   const ddd = digits.slice(0, 2);
   const local = digits.slice(2);
 
+  // Digitando ainda
   if (local.length <= 4) return `${ddd} ${local}`;
+
+  // Fixo: 8 dígitos → 4-4
   if (local.length <= 8) return `${ddd} ${local.slice(0, 4)}-${local.slice(4)}`;
-  // Celular: 9 dígitos → 5-4
-  return `${ddd} ${local.slice(0, 5)}-${local.slice(5)}`;
+
+  // Celular: 9 dígitos → 9 + 4-4
+  return `${ddd} ${local[0]} ${local.slice(1, 5)}-${local.slice(5)}`;
 }
 
 /** Parse a full phone string like "+5511999990000" into country + local number */
