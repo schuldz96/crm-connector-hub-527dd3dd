@@ -541,24 +541,75 @@ export interface BacklogTask {
   tags: string[];
   estimativa_horas: number | null;
   modulo: string | null;
+  imagem_url: string | null;
   criado_por: string;
   atualizado_em: string;
   criado_em: string;
 }
 
+// Storage key for localStorage fallback
+const BACKLOG_STORAGE = 'ltx_sa_backlog_tasks';
+let useLocalStorage = false;
+
+function loadLocal(): BacklogTask[] {
+  try { return JSON.parse(localStorage.getItem(BACKLOG_STORAGE) || '[]'); } catch { return []; }
+}
+function saveLocal(tasks: BacklogTask[]) {
+  localStorage.setItem(BACKLOG_STORAGE, JSON.stringify(tasks));
+}
+
 export async function getBacklogTasks(): Promise<BacklogTask[]> {
-  const { data, error } = await admin().from('backlog_tasks').select('*').order('criado_em', { ascending: false });
-  if (error) throw error;
-  return (data ?? []) as BacklogTask[];
+  try {
+    const { data, error } = await admin().from('backlog_tasks').select('*').order('criado_em', { ascending: false });
+    if (error) throw error;
+    useLocalStorage = false;
+    return (data ?? []) as BacklogTask[];
+  } catch {
+    // Table doesn't exist yet — fallback to localStorage
+    useLocalStorage = true;
+    return loadLocal();
+  }
 }
 
 export async function createBacklogTask(task: Partial<BacklogTask>): Promise<BacklogTask> {
+  const now = new Date().toISOString();
+  if (useLocalStorage) {
+    const newTask: BacklogTask = {
+      id: crypto.randomUUID(),
+      titulo: task.titulo ?? '',
+      descricao: task.descricao ?? '',
+      status: task.status ?? 'backlog',
+      prioridade: task.prioridade ?? 'medium',
+      tipo: task.tipo ?? 'feature',
+      agente_atual: task.agente_atual ?? null,
+      agente_historico: task.agente_historico ?? [],
+      tags: task.tags ?? [],
+      estimativa_horas: task.estimativa_horas ?? null,
+      modulo: task.modulo ?? null,
+      imagem_url: task.imagem_url ?? null,
+      criado_por: task.criado_por ?? 'super-admin',
+      atualizado_em: now,
+      criado_em: now,
+    };
+    const tasks = loadLocal();
+    tasks.unshift(newTask);
+    saveLocal(tasks);
+    return newTask;
+  }
   const { data, error } = await admin().from('backlog_tasks').insert(task).select().single();
   if (error) throw error;
   return data as BacklogTask;
 }
 
 export async function updateBacklogTask(id: string, updates: Partial<BacklogTask>): Promise<BacklogTask> {
+  if (useLocalStorage) {
+    const tasks = loadLocal();
+    const idx = tasks.findIndex(t => t.id === id);
+    if (idx === -1) throw new Error('Task não encontrada');
+    tasks[idx] = { ...tasks[idx], ...updates, atualizado_em: new Date().toISOString() };
+    saveLocal(tasks);
+    return tasks[idx];
+  }
   const { data, error } = await admin().from('backlog_tasks')
     .update({ ...updates, atualizado_em: new Date().toISOString() })
     .eq('id', id).select().single();
@@ -567,6 +618,11 @@ export async function updateBacklogTask(id: string, updates: Partial<BacklogTask
 }
 
 export async function deleteBacklogTask(id: string): Promise<void> {
+  if (useLocalStorage) {
+    const tasks = loadLocal().filter(t => t.id !== id);
+    saveLocal(tasks);
+    return;
+  }
   const { error } = await admin().from('backlog_tasks').delete().eq('id', id);
   if (error) throw error;
 }
