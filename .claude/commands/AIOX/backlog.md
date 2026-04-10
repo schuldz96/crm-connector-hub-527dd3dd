@@ -273,9 +273,10 @@ EOF
 ✨ Concluído
 ```
 
-4. Perguntar: "Próxima task do backlog? (S/N)"
-   - Se sim: voltar para PASSO 0
-   - Se não: encerrar
+4. **Revalidar backlog:** Buscar novamente tasks pendentes no banco (mesma query do PASSO 0).
+   - Se houver mais tasks pendentes: informar quantas novas tasks foram encontradas e voltar para PASSO 0 automaticamente.
+   - Se não houver mais tasks: informar "✅ Backlog limpo! Nenhuma task pendente." e encerrar.
+   - **NUNCA declarar backlog limpo sem revalidar no banco.**
 
 ## Regras Críticas
 
