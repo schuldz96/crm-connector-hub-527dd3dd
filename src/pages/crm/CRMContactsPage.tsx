@@ -168,6 +168,20 @@ export default function CRMContactsPage() {
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const [openChip, setOpenChip] = useState<string | null>(null);
   const [chipSearch, setChipSearch] = useState('');
+  const chipAreaRef = useRef<HTMLDivElement>(null);
+
+  // Close filter dropdown on outside click
+  useEffect(() => {
+    if (!openChip) return;
+    const handler = (e: MouseEvent) => {
+      if (chipAreaRef.current && !chipAreaRef.current.contains(e.target as Node)) {
+        setOpenChip(null);
+        setChipSearch('');
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [openChip]);
 
   const { data: result, isLoading } = useCrmContacts({
     search: search || undefined,
@@ -341,7 +355,7 @@ export default function CRMContactsPage() {
 
       {/* Filter chips row */}
       {showFilters && (
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-card flex-shrink-0 text-xs flex-wrap">
+        <div ref={chipAreaRef} className="flex items-center gap-2 px-4 py-2 border-b border-border bg-card flex-shrink-0 text-xs flex-wrap">
           {CONTACT_FILTERS.map(f => {
             const isOpen = openChip === f.key;
             const hasValue = !!activeFilters[f.key];
