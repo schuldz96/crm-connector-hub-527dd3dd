@@ -207,6 +207,13 @@ async function logWebhookEvent(accountId: string | null, empresaId: string | nul
   } catch { /* silent */ }
 }
 
+// ─── Update webhook health timestamp on account ────────────────────────────
+async function touchWebhookHealth(accountId: string) {
+  try {
+    await sb.from('meta_inbox_accounts').update({ last_webhook_at: new Date().toISOString() }).eq('id', accountId);
+  } catch { /* best-effort */ }
+}
+
 // ─── Handle: messages (inbound + statuses) ──────────────────────────────────
 async function handleMessages(value: any) {
   const metadata = value.metadata || {};
@@ -215,6 +222,9 @@ async function handleMessages(value: any) {
 
   const account = await findAccount(phoneNumberId);
   if (!account) { log(`No account for phone_number_id: ${phoneNumberId}`); return; }
+
+  // Track webhook health
+  touchWebhookHealth(account.id);
 
   // Inbound messages
   for (const msg of (value.messages || [])) {

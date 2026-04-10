@@ -91,6 +91,7 @@ export type Database = {
           created_at: string
           empresa_id: string
           id: string
+          last_webhook_at: string | null
           nome: string
           phone_display: string | null
           phone_number_id: string
@@ -105,6 +106,7 @@ export type Database = {
           created_at?: string
           empresa_id: string
           id?: string
+          last_webhook_at?: string | null
           nome: string
           phone_display?: string | null
           phone_number_id: string
@@ -119,6 +121,7 @@ export type Database = {
           created_at?: string
           empresa_id?: string
           id?: string
+          last_webhook_at?: string | null
           nome?: string
           phone_display?: string | null
           phone_number_id?: string

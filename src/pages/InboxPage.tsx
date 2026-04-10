@@ -24,8 +24,8 @@ import BulkSendModal from '@/components/inbox/BulkSendModal';
 import {
   loadConversations, loadMessages, markConversationRead,
   sendTextMessage, sendMediaMessage, sendTemplateMessage,
-  uploadMediaToMeta, isWithin24hWindow, normalizePhone,
-  type InboxConversation, type InboxMessage,
+  uploadMediaToMeta, isWithin24hWindow, get24hWindowInfo, normalizePhone,
+  type InboxConversation, type InboxMessage, type Window24hInfo,
 } from '@/lib/metaInboxService';
 import { decryptAccountTokens } from '@/lib/tokenCrypto';
 
@@ -47,6 +47,7 @@ export interface MetaInboxAccount {
   ticket_pipeline_id?: string | null;
   ticket_estagio_id?: string | null;
   ticket_prioridade?: string;
+  last_webhook_at?: string | null;
 }
 
 /* ── Avatar ────────────────────────────────────────────── */
@@ -91,10 +92,21 @@ function formatTime(ts: string | number) {
 }
 
 /* ── Status icon for sent messages ─────────────────────── */
-function MsgStatusIcon({ status }: { status: string }) {
+function MsgStatusIcon({ status, sentAt }: { status: string; sentAt?: string | null }) {
   if (status === 'read') return <CheckCheck className="w-3 h-3 text-blue-400" />;
   if (status === 'delivered') return <CheckCheck className="w-3 h-3 opacity-60" />;
-  if (status === 'sent') return <Check className="w-3 h-3 opacity-60" />;
+  if (status === 'sent') {
+    // Warn if stuck at "sent" for >2 hours with no delivery confirmation
+    const stuckHours = sentAt ? (Date.now() - new Date(sentAt).getTime()) / 3600000 : 0;
+    if (stuckHours > 2) {
+      return (
+        <span title={`Sem confirmação de entrega há ${stuckHours.toFixed(0)}h — possível problema no webhook ou número inválido`}>
+          <AlertTriangle className="w-3 h-3 text-warning" />
+        </span>
+      );
+    }
+    return <Check className="w-3 h-3 opacity-60" />;
+  }
   if (status === 'failed') return <AlertTriangle className="w-3 h-3 text-destructive" />;
   return <Clock className="w-2.5 h-2.5 opacity-40" />;
 }
@@ -975,7 +987,8 @@ export default function InboxPage() {
   };
 
   // ── 24h window check ───────────────────────────────────
-  const within24h = selectedConv ? isWithin24hWindow(selectedConv.last_inbound_ts) : false;
+  const windowInfo: Window24hInfo = selectedConv ? get24hWindowInfo(selectedConv.last_inbound_ts) : { status: 'never_received', canSendFreeText: false, hoursRemaining: null, lastInboundTs: null };
+  const within24h = windowInfo.canSendFreeText;
 
   // ── Send text ──────────────────────────────────────────
   const handleSendText = async () => {
@@ -1516,6 +1529,22 @@ export default function InboxPage() {
           </div>
         )}
 
+        {/* Webhook health warning */}
+        {selectedAccount?.last_webhook_at && (() => {
+          const webhookAge = Date.now() - new Date(selectedAccount.last_webhook_at!).getTime();
+          const staleMinutes = Math.round(webhookAge / 60000);
+          if (staleMinutes < 60) return null;
+          const staleHours = (staleMinutes / 60).toFixed(1);
+          return (
+            <div className="px-3 py-1.5 bg-destructive/5 border-b border-destructive/20 flex items-center gap-2">
+              <AlertTriangle className="w-3 h-3 text-destructive flex-shrink-0" />
+              <p className="text-[10px] text-destructive">
+                Webhook sem atividade há {staleHours}h — mensagens e confirmações de entrega podem estar atrasadas
+              </p>
+            </div>
+          );
+        })()}
+
         {/* Owner filters (Minhas / Todas / Sem proprietário) */}
         <div className="px-2 py-1.5 border-b border-border flex-shrink-0 flex gap-1">
           {([
@@ -1779,12 +1808,26 @@ export default function InboxPage() {
                 )}
               </div>
               {/* 24h window indicator */}
-              <span className={cn('text-[9px] px-2 py-0.5 rounded-full border font-medium',
-                within24h
-                  ? 'bg-green-500/10 text-green-500 border-green-500/20'
-                  : 'bg-warning/10 text-warning border-warning/20'
-              )}>
-                {within24h ? '24h ativa' : 'Fora da janela'}
+              <span
+                className={cn('text-[9px] px-2 py-0.5 rounded-full border font-medium',
+                  windowInfo.status === 'active'
+                    ? 'bg-green-500/10 text-green-500 border-green-500/20'
+                    : windowInfo.status === 'never_received'
+                      ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                      : 'bg-warning/10 text-warning border-warning/20'
+                )}
+                title={windowInfo.status === 'active'
+                  ? `Janela ativa — ${windowInfo.hoursRemaining}h restantes`
+                  : windowInfo.status === 'expired'
+                    ? `Expirada há ${windowInfo.hoursRemaining}h — última msg do contato: ${new Date(windowInfo.lastInboundTs!).toLocaleString('pt-BR')}`
+                    : 'O contato ainda não enviou mensagem. Envie um template para iniciar.'
+                }
+              >
+                {windowInfo.status === 'active'
+                  ? `24h ativa · ${windowInfo.hoursRemaining}h`
+                  : windowInfo.status === 'never_received'
+                    ? 'Aguardando resposta'
+                    : `Expirada · ${windowInfo.hoursRemaining}h`}
               </span>
               {/* Ticket button */}
               {selectedAccount?.ticket_enabled && (
@@ -1821,12 +1864,24 @@ export default function InboxPage() {
 
             {/* 24h warning banner */}
             {!within24h && (
-              <div className="px-4 py-2 bg-warning/5 border-b border-warning/20 flex items-center gap-2">
-                <AlertTriangle className="w-3.5 h-3.5 text-warning flex-shrink-0" />
-                <p className="text-[10px] text-warning">
-                  Fora da janela de 24h — apenas templates aprovados podem ser enviados.
+              <div className={cn('px-4 py-2 border-b flex items-center gap-2',
+                windowInfo.status === 'never_received'
+                  ? 'bg-blue-500/5 border-blue-500/20'
+                  : 'bg-warning/5 border-warning/20'
+              )}>
+                <AlertTriangle className={cn('w-3.5 h-3.5 flex-shrink-0',
+                  windowInfo.status === 'never_received' ? 'text-blue-400' : 'text-warning'
+                )} />
+                <p className={cn('text-[10px]', windowInfo.status === 'never_received' ? 'text-blue-400' : 'text-warning')}>
+                  {windowInfo.status === 'never_received'
+                    ? 'O contato ainda não respondeu. Envie um template para iniciar a conversa.'
+                    : `Janela de 24h expirada (última msg do contato há ${windowInfo.hoursRemaining}h). Apenas templates aprovados.`}
                 </p>
-                <Button size="sm" variant="outline" className="text-[10px] h-6 px-2 ml-auto border-warning/30 text-warning"
+                <Button size="sm" variant="outline" className={cn('text-[10px] h-6 px-2 ml-auto',
+                  windowInfo.status === 'never_received'
+                    ? 'border-blue-500/30 text-blue-400'
+                    : 'border-warning/30 text-warning'
+                )}
                   onClick={openTemplatePicker}>
                   <LayoutTemplate className="w-3 h-3 mr-1" /> Enviar template
                 </Button>
@@ -1943,7 +1998,7 @@ export default function InboxPage() {
                         <span className="text-[10px] opacity-50 mr-0.5">{userNameCache[msg.sent_by_user_id]}</span>
                       )}
                       <span className="text-[10px] opacity-70">{formatTime(msg.timestamp)}</span>
-                      {msg.from_me && <MsgStatusIcon status={msg.status} />}
+                      {msg.from_me && <MsgStatusIcon status={msg.status} sentAt={msg.sent_at || msg.timestamp} />}
                     </div>
                   </div>
                 </div>
@@ -2016,7 +2071,7 @@ export default function InboxPage() {
                       setMacroFilter('');
                     }
                   }}
-                  placeholder={recording ? '🔴 Gravando áudio...' : within24h ? 'Escreva uma mensagem... (/ para macro)' : 'Fora da janela 24h — use template'}
+                  placeholder={recording ? '🔴 Gravando áudio...' : within24h ? 'Escreva uma mensagem... (/ para macro)' : windowInfo.status === 'never_received' ? 'Aguardando resposta do contato — envie template' : 'Janela 24h expirada — envie template'}
                   className={cn('h-9 text-sm bg-muted/40 border-border w-full', recording && 'border-destructive/50')}
                   disabled={!within24h || sending || recording}
                   onPaste={handlePaste}

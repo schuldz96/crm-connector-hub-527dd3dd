@@ -112,6 +112,24 @@ export function isWithin24hWindow(lastInboundTs: string | null): boolean {
   return diff < 24 * 60 * 60 * 1000; // 24 hours in ms
 }
 
+export type WindowStatus = 'active' | 'expired' | 'never_received';
+export interface Window24hInfo {
+  status: WindowStatus;
+  canSendFreeText: boolean;
+  /** Hours remaining (if active) or hours since expiry (if expired). null if never received. */
+  hoursRemaining: number | null;
+  lastInboundTs: string | null;
+}
+export function get24hWindowInfo(lastInboundTs: string | null): Window24hInfo {
+  if (!lastInboundTs) return { status: 'never_received', canSendFreeText: false, hoursRemaining: null, lastInboundTs: null };
+  const diffMs = Date.now() - new Date(lastInboundTs).getTime();
+  const windowMs = 24 * 60 * 60 * 1000;
+  if (diffMs < windowMs) {
+    return { status: 'active', canSendFreeText: true, hoursRemaining: +((windowMs - diffMs) / 3600000).toFixed(1), lastInboundTs };
+  }
+  return { status: 'expired', canSendFreeText: false, hoursRemaining: +(diffMs / 3600000).toFixed(1), lastInboundTs };
+}
+
 // ─── Send text message ──────────────────────────────────────────────────────
 export async function sendTextMessage(
   account: MetaInboxAccount,
