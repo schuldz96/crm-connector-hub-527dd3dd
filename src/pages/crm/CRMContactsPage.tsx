@@ -74,13 +74,26 @@ const CONTACT_FILTERS: FilterDef[] = [
   { key: 'cargo', label: 'Cargo', type: 'text' },
 ];
 
-const TABS = [
-  { id: 'all', label: 'Todos os contatos' },
-  { id: 'lead', label: '1. Lead' },
-  { id: 'qualified', label: '2. Qualificado' },
-  { id: 'customer', label: '3. Cliente' },
-  { id: 'churned', label: '4. Churned' },
-];
+interface SavedView {
+  id: string;
+  label: string;
+  filters: Record<string, string>;
+}
+
+const DEFAULT_VIEW: SavedView = { id: 'all', label: 'Todos os contatos', filters: {} };
+const VIEWS_STORAGE_KEY = 'ltx_crm_contact_views';
+
+function loadSavedViews(): SavedView[] {
+  try {
+    const raw = localStorage.getItem(VIEWS_STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return [];
+}
+
+function persistViews(views: SavedView[]) {
+  localStorage.setItem(VIEWS_STORAGE_KEY, JSON.stringify(views));
+}
 
 function formatCount(n: number) {
   if (n >= 1000000) return `${(n / 1000000).toFixed(1)} mi`;
@@ -95,6 +108,7 @@ export default function CRMContactsPage() {
   const [activeTab, setActiveTab] = useState('all');
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(25);
+  const [savedViews, setSavedViews] = useState<SavedView[]>(loadSavedViews);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Dynamic form fields — can be customized per org via CRM properties
@@ -185,7 +199,7 @@ export default function CRMContactsPage() {
 
   const { data: result, isLoading } = useCrmContacts({
     search: search || undefined,
-    status: activeTab !== 'all' ? activeTab : undefined,
+    status: activeFilters.status || undefined,
     page,
     perPage,
     orderBy: 'criado_em',
@@ -273,27 +287,72 @@ export default function CRMContactsPage() {
             <Contact className="w-3.5 h-3.5 text-muted-foreground" />
             <span className="text-sm font-medium text-foreground">Contatos</span>
           </div>
-          {TABS.map((tab, idx) => (
+          {/* Default view */}
+          <button
+            onClick={() => { setActiveTab('all'); setActiveFilters({}); setPage(1); }}
+            className={cn(
+              'px-3 py-2.5 text-sm transition-colors border-b-2 -mb-px',
+              activeTab === 'all'
+                ? 'border-foreground text-foreground font-medium'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            )}
+          >
+            Todos os contatos
+            {total > 0 && (
+              <Badge variant="outline" className="ml-1.5 text-[10px] h-5 px-1.5 rounded-sm font-semibold">
+                {formatCount(total)}
+              </Badge>
+            )}
+          </button>
+
+          {/* Saved views */}
+          {savedViews.map(view => (
             <button
-              key={tab.id}
-              onClick={() => { setActiveTab(tab.id); setPage(1); }}
+              key={view.id}
+              onClick={() => { setActiveTab(view.id); setActiveFilters(view.filters); setPage(1); }}
               className={cn(
-                'px-3 py-2.5 text-sm transition-colors border-b-2 -mb-px',
-                activeTab === tab.id
+                'flex items-center gap-1 px-3 py-2.5 text-sm transition-colors border-b-2 -mb-px',
+                activeTab === view.id
                   ? 'border-foreground text-foreground font-medium'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
               )}
             >
-              {tab.label}
-              {idx === 0 && total > 0 && (
-                <Badge variant="outline" className="ml-1.5 text-[10px] h-5 px-1.5 rounded-sm font-semibold">
-                  {formatCount(total)}
-                </Badge>
-              )}
-              {idx === 0 && <span className="ml-1 text-muted-foreground/50 cursor-pointer">×</span>}
+              {view.label}
+              <span
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const next = savedViews.filter(v => v.id !== view.id);
+                  setSavedViews(next);
+                  persistViews(next);
+                  if (activeTab === view.id) { setActiveTab('all'); setActiveFilters({}); }
+                  toast({ title: `Visualização "${view.label}" removida` });
+                }}
+                className="ml-0.5 text-muted-foreground/50 hover:text-destructive cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+              </span>
             </button>
           ))}
-          <button className="px-3 py-2.5 text-muted-foreground hover:text-foreground">
+
+          {/* Add new view */}
+          <button
+            className="px-3 py-2.5 text-muted-foreground hover:text-foreground"
+            title="Salvar visualização com filtros atuais"
+            onClick={() => {
+              const name = prompt('Nome da visualização:');
+              if (!name?.trim()) return;
+              const newView: SavedView = {
+                id: `view_${Date.now()}`,
+                label: name.trim(),
+                filters: { ...activeFilters },
+              };
+              const next = [...savedViews, newView];
+              setSavedViews(next);
+              persistViews(next);
+              setActiveTab(newView.id);
+              toast({ title: `Visualização "${name.trim()}" salva` });
+            }}
+          >
             <Plus className="w-4 h-4" />
           </button>
         </div>
