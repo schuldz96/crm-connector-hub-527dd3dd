@@ -36,7 +36,7 @@ curl -s -X PATCH "${SUPABASE_URL}/rest/v1/backlog_tasks?id=eq.${TASK_ID}" \
 ```
 
 Status válidos (em ordem do kanban):
-`backlog` → `analyzing` → `planning` → `developing` → `reviewing` → `testing` → `deploying` → `done`
+`backlog` → `analyzing` → `planning` → `developing` → `reviewing` → `testing` → `security-review` → `deploying` → `done`
 
 ## Execução
 
@@ -160,7 +160,7 @@ Para CADA componente modificado, verificar via Read:
 - [ ] Nenhuma regressão óbvia
 
 #### Veredito
-- **PASS** (todos os checks OK) → Avançar para PASSO 4
+- **PASS** (todos os checks OK) → Avançar para PASSO 4 (Security Review)
 - **FAIL** (qualquer blocker/major) → Listar issues específicas (arquivo:linha:problema)
   → Atualizar banco → status='developing' (MOVER PARA TRÁS no kanban)
   → Voltar para PASSO 2 com a lista de issues
@@ -168,7 +168,57 @@ Para CADA componente modificado, verificar via Read:
 
 **Atualizar banco:** agente_historico += {agente: 'qa', status: 'testing', timestamp, nota: 'PASS' ou 'FAIL: {issues}'}
 
-### PASSO 4 — Deploy (status: deploying)
+### PASSO 4 — Security Review (status: security-review)
+
+**Agente:** @security | **ID no banco:** security
+
+**PRIMEIRO:** Atualizar banco → status='security-review', agente_atual='security'
+
+**Depois executar TODOS os checks obrigatórios:**
+
+#### 4.1 Credenciais expostas (BLOQUEANTE)
+Nos arquivos modificados, buscar via Grep:
+- `password`, `secret`, `token`, `api_key`, `private_key`, `apikey`
+- Verificar se são valores hardcoded (não variáveis de ambiente)
+- Se encontrar credencial hardcoded: FAIL imediato
+
+#### 4.2 Vulnerabilidades OWASP (BLOQUEANTE)
+Nos arquivos modificados, buscar via Grep:
+- `dangerouslySetInnerHTML` ou `innerHTML` → XSS
+- Concatenação de strings em queries SQL → SQL Injection
+- `eval(` ou `new Function(` → Code Injection
+- `window.location` sem sanitização → Open Redirect
+- Se encontrar sem sanitização: FAIL
+
+#### 4.3 Isolamento multi-tenant (BLOQUEANTE)
+Nos arquivos modificados que fazem queries ao Supabase:
+- Verificar que TODA query tem filtro `.eq('org', ...)` ou `.eq('empresa_id', ...)`
+- Verificar que INSERTs incluem campos `org` e/ou `empresa_id`
+- Se query sem filtro de org: FAIL
+
+#### 4.4 RLS em migrations
+Se migration SQL foi criada/modificada:
+- Verificar que contém `ALTER TABLE ... ENABLE ROW LEVEL SECURITY`
+- Verificar que policies filtram por org ou empresa_id
+- Se RLS ausente em nova tabela: FAIL
+
+#### 4.5 Dependências
+Se package.json foi modificado:
+```bash
+npm audit --production 2>&1 | tail -5
+```
+- Se vulnerabilidade critical/high em nova dependência: FAIL
+
+#### Veredito
+- **PASS** (todos os checks OK) → Avançar para PASSO 5 (Deploy)
+- **FAIL** (qualquer blocker) → Listar issues (arquivo:linha:problema)
+  → Atualizar banco → status='developing' (MOVER PARA TRÁS no kanban)
+  → Voltar para PASSO 2 com a lista de issues
+  → Máximo 2 loops Security↔Dev. Se exceder: PARAR e escalar para o usuário.
+
+**Atualizar banco:** agente_historico += {agente: 'security', status: 'security-review', timestamp, nota: 'PASS' ou 'FAIL: {issues}'}
+
+### PASSO 5 — Deploy (status: deploying)
 
 **Agente:** @devops | **ID no banco:** devops
 
@@ -194,7 +244,7 @@ EOF
 
 **Atualizar banco:** agente_historico += {agente: 'devops', status: 'deploying', timestamp, nota: 'Commit {hash} pushado para main'}
 
-### PASSO 5 — Concluir (status: done)
+### PASSO 6 — Concluir (status: done)
 
 **PRIMEIRO:** Atualizar banco → status='done', agente_atual=null
 
@@ -218,6 +268,7 @@ EOF
 🔍 Analyst → {nota}
 💻 Dev → {nota}
 ✅ QA → {nota}
+🛡️ Security → {nota}
 🚀 DevOps → {nota}
 ✨ Concluído
 ```
@@ -231,11 +282,12 @@ EOF
 1. **SEMPRE atualizar o banco ANTES de iniciar cada fase** — o kanban deve refletir o estado real
 2. **NUNCA pular fases** — mesmo que pareça simples, seguir o pipeline completo
 3. **NUNCA dizer "deve funcionar"** — verificar de fato com build, queries, leitura de código
-4. **Se QA falhar, MOVER A TASK PARA TRÁS** no kanban (developing) — não apenas informar
+4. **Se QA ou Security falhar, MOVER A TASK PARA TRÁS** no kanban (developing) — não apenas informar
 5. **Máximo 3 loops QA↔Dev** — depois escalar para o usuário
-6. **Máximo 2 loops Analyze↔Dev** — depois pedir clarificação ao usuário
-7. **NUNCA commitar .env ou credenciais**
-8. **Uma task por vez** — finalizar antes de pegar a próxima
+6. **Máximo 2 loops Security↔Dev** — depois escalar para o usuário
+7. **Máximo 2 loops Analyze↔Dev** — depois pedir clarificação ao usuário
+8. **NUNCA commitar .env ou credenciais**
+9. **Uma task por vez** — finalizar antes de pegar a próxima
 
 ## Se o usuário passar argumentos
 

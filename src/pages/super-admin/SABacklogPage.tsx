@@ -31,6 +31,7 @@ const COLUMNS = [
   { id: 'developing',  label: 'Desenvolvendo',     emoji: '💻', color: 'border-purple-500/30' },
   { id: 'reviewing',   label: 'Revisando',         emoji: '👀', color: 'border-orange-500/30' },
   { id: 'testing',     label: 'Testando',          emoji: '✅', color: 'border-cyan-500/30' },
+  { id: 'security-review', label: 'Segurança',     emoji: '🛡️', color: 'border-red-500/30' },
   { id: 'deploying',   label: 'Deployando',        emoji: '🚀', color: 'border-pink-500/30' },
   { id: 'done',        label: 'Concluído',         emoji: '✨', color: 'border-green-500/30' },
 ];
@@ -43,6 +44,7 @@ const AGENTS = [
   { id: 'po',         label: 'PO',          emoji: '🎯' },
   { id: 'analyst',    label: 'Analyst',     emoji: '📈' },
   { id: 'devops',     label: 'DevOps',      emoji: '⚙️' },
+  { id: 'security',   label: 'Security',    emoji: '🛡️' },
   { id: 'ux',         label: 'UX Design',   emoji: '🎨' },
   { id: 'data-eng',   label: 'Data Eng',    emoji: '🗄️' },
 ];
