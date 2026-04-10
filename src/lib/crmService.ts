@@ -291,6 +291,29 @@ export async function createPipeline(input: { nome: string; tipo: 'deal' | 'tick
   return pipeline;
 }
 
+export async function ensureDefaultPipelines(tipo: 'deal' | 'ticket'): Promise<void> {
+  const existing = await listPipelines(tipo);
+  if (existing.length > 0) return;
+
+  const defaults = tipo === 'deal'
+    ? { nome: 'Pipeline de Vendas', estagios: [
+        { nome: 'Prospecção', cor: '#6366f1', probabilidade: 10 },
+        { nome: 'Qualificação', cor: '#8b5cf6', probabilidade: 30 },
+        { nome: 'Proposta', cor: '#a855f7', probabilidade: 50 },
+        { nome: 'Negociação', cor: '#d946ef', probabilidade: 70 },
+        { nome: 'Fechamento', cor: '#22c55e', probabilidade: 90 },
+      ]}
+    : { nome: 'Pipeline de Suporte', estagios: [
+        { nome: 'Novo', cor: '#6366f1', probabilidade: 0 },
+        { nome: 'Triagem', cor: '#f59e0b', probabilidade: 20 },
+        { nome: 'Em Andamento', cor: '#3b82f6', probabilidade: 50 },
+        { nome: 'Aguardando', cor: '#f97316', probabilidade: 70 },
+        { nome: 'Resolvido', cor: '#22c55e', probabilidade: 100 },
+      ]};
+
+  await createPipeline({ nome: defaults.nome, tipo, estagios: defaults.estagios });
+}
+
 // ========================
 // ASSOCIAÇÕES
 // ========================

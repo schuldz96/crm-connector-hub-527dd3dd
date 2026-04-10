@@ -217,7 +217,10 @@ export function useDeleteTicket() {
 export function useCrmPipelines(tipo: 'deal' | 'ticket') {
   return useQuery({
     queryKey: ['crm.pipelines', tipo],
-    queryFn: () => crm.listPipelines(tipo),
+    queryFn: async () => {
+      await crm.ensureDefaultPipelines(tipo);
+      return crm.listPipelines(tipo);
+    },
     staleTime: 5 * 60_000,
   });
 }
