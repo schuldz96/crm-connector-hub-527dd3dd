@@ -13,7 +13,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Loader2, AlertCircle, Plus, Pencil, Package } from 'lucide-react';
+import { Loader2, AlertCircle, Plus, Pencil, Package, UserPlus } from 'lucide-react';
 
 const emptyPlan: Partial<Plan> = {
   nome: '',
@@ -21,10 +21,13 @@ const emptyPlan: Partial<Plan> = {
   descricao: '',
   preco_mensal: 0,
   preco_anual: 0,
+  preco_por_usuario: 0,
+  min_usuarios: 1,
   max_usuarios: 10,
   max_instancias_whatsapp: 1,
   max_avaliacoes_ia_mes: 100,
   storage_mb: 1024,
+  permite_venda_modulo: false,
   ativo: true,
 };
 
@@ -95,6 +98,10 @@ export default function SAPlansPage() {
     setEditingPlan((prev) => ({ ...prev, [field]: value }));
   }
 
+  function formatBRL(value: number) {
+    return `R$ ${value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -131,11 +138,13 @@ export default function SAPlansPage() {
             <TableRow>
               <TableHead>Nome</TableHead>
               <TableHead>Codigo</TableHead>
-              <TableHead>Preco Mensal</TableHead>
-              <TableHead>Max Usuarios</TableHead>
-              <TableHead>Max WhatsApp</TableHead>
-              <TableHead>Max IA/mes</TableHead>
-              <TableHead>Storage (MB)</TableHead>
+              <TableHead>Plataforma</TableHead>
+              <TableHead>Por Usuario</TableHead>
+              <TableHead>Min / Max Users</TableHead>
+              <TableHead>WhatsApp</TableHead>
+              <TableHead>IA/mes</TableHead>
+              <TableHead>Storage</TableHead>
+              <TableHead>Venda Modulo</TableHead>
               <TableHead>Ativo</TableHead>
               <TableHead className="w-12"></TableHead>
             </TableRow>
@@ -143,7 +152,7 @@ export default function SAPlansPage() {
           <TableBody>
             {plans.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
                   Nenhum plano cadastrado.
                 </TableCell>
               </TableRow>
@@ -152,21 +161,34 @@ export default function SAPlansPage() {
                 <TableRow key={plan.id}>
                   <TableCell className="font-medium">{plan.nome}</TableCell>
                   <TableCell className="font-mono text-xs">{plan.codigo}</TableCell>
+                  <TableCell>{formatBRL(plan.preco_mensal)}</TableCell>
                   <TableCell>
-                    R$ {plan.preco_mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    <span className="flex items-center gap-1">
+                      <UserPlus className="w-3 h-3 text-muted-foreground" />
+                      {formatBRL(plan.preco_por_usuario ?? 0)}
+                    </span>
                   </TableCell>
-                  <TableCell>{plan.max_usuarios}</TableCell>
+                  <TableCell>
+                    <span className="text-xs">{plan.min_usuarios ?? 1} / {plan.max_usuarios}</span>
+                  </TableCell>
                   <TableCell>{plan.max_instancias_whatsapp}</TableCell>
                   <TableCell>{plan.max_avaliacoes_ia_mes.toLocaleString('pt-BR')}</TableCell>
-                  <TableCell>{plan.storage_mb.toLocaleString('pt-BR')}</TableCell>
+                  <TableCell>{plan.storage_mb.toLocaleString('pt-BR')} MB</TableCell>
                   <TableCell>
-                    <Badge
-                      className={
-                        plan.ativo
-                          ? 'bg-green-500/10 text-green-400 border-green-500/20'
-                          : 'bg-red-500/10 text-red-400 border-red-500/20'
-                      }
-                    >
+                    <Badge className={
+                      plan.permite_venda_modulo
+                        ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                        : 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20'
+                    }>
+                      {plan.permite_venda_modulo ? 'Sim' : 'Nao'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={
+                      plan.ativo
+                        ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                        : 'bg-red-500/10 text-red-400 border-red-500/20'
+                    }>
                       {plan.ativo ? 'Sim' : 'Nao'}
                     </Badge>
                   </TableCell>
@@ -189,109 +211,86 @@ export default function SAPlansPage() {
             <DialogTitle>{isEditing ? 'Editar Plano' : 'Novo Plano'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+            {/* Nome + Codigo */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label className="text-sm mb-1.5 block">Nome</Label>
-                <Input
-                  value={editingPlan.nome ?? ''}
-                  onChange={(e) => updateField('nome', e.target.value)}
-                  className="bg-input border-border"
-                />
+                <Input value={editingPlan.nome ?? ''} onChange={(e) => updateField('nome', e.target.value)} className="bg-input border-border" />
               </div>
               <div>
                 <Label className="text-sm mb-1.5 block">Codigo</Label>
-                <Input
-                  value={editingPlan.codigo ?? ''}
-                  onChange={(e) => updateField('codigo', e.target.value)}
-                  className="bg-input border-border"
-                />
+                <Input value={editingPlan.codigo ?? ''} onChange={(e) => updateField('codigo', e.target.value)} className="bg-input border-border" />
+              </div>
+            </div>
+
+            {/* Descricao */}
+            <div>
+              <Label className="text-sm mb-1.5 block">Descricao</Label>
+              <Input value={editingPlan.descricao ?? ''} onChange={(e) => updateField('descricao', e.target.value)} className="bg-input border-border" />
+            </div>
+
+            {/* Pricing */}
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground pt-2">Precificacao</p>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label className="text-sm mb-1.5 block">Plataforma/mes (R$)</Label>
+                <Input type="number" value={editingPlan.preco_mensal ?? 0} onChange={(e) => updateField('preco_mensal', Number(e.target.value))} className="bg-input border-border" />
+              </div>
+              <div>
+                <Label className="text-sm mb-1.5 block">Plataforma/ano (R$)</Label>
+                <Input type="number" value={editingPlan.preco_anual ?? 0} onChange={(e) => updateField('preco_anual', Number(e.target.value))} className="bg-input border-border" />
+              </div>
+              <div>
+                <Label className="text-sm mb-1.5 block">Por usuario/mes (R$)</Label>
+                <Input type="number" value={editingPlan.preco_por_usuario ?? 0} onChange={(e) => updateField('preco_por_usuario', Number(e.target.value))} className="bg-input border-border" />
+              </div>
+            </div>
+
+            {/* Limites */}
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground pt-2">Limites</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm mb-1.5 block">Min Usuarios</Label>
+                <Input type="number" value={editingPlan.min_usuarios ?? 1} onChange={(e) => updateField('min_usuarios', Number(e.target.value))} className="bg-input border-border" />
+              </div>
+              <div>
+                <Label className="text-sm mb-1.5 block">Max Usuarios</Label>
+                <Input type="number" value={editingPlan.max_usuarios ?? 0} onChange={(e) => updateField('max_usuarios', Number(e.target.value))} className="bg-input border-border" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-sm mb-1.5 block">Max WhatsApp</Label>
+                <Input type="number" value={editingPlan.max_instancias_whatsapp ?? 0} onChange={(e) => updateField('max_instancias_whatsapp', Number(e.target.value))} className="bg-input border-border" />
+              </div>
+              <div>
+                <Label className="text-sm mb-1.5 block">Max Avaliacoes IA/mes</Label>
+                <Input type="number" value={editingPlan.max_avaliacoes_ia_mes ?? 0} onChange={(e) => updateField('max_avaliacoes_ia_mes', Number(e.target.value))} className="bg-input border-border" />
               </div>
             </div>
             <div>
-              <Label className="text-sm mb-1.5 block">Descricao</Label>
-              <Input
-                value={editingPlan.descricao ?? ''}
-                onChange={(e) => updateField('descricao', e.target.value)}
-                className="bg-input border-border"
-              />
+              <Label className="text-sm mb-1.5 block">Storage (MB)</Label>
+              <Input type="number" value={editingPlan.storage_mb ?? 0} onChange={(e) => updateField('storage_mb', Number(e.target.value))} className="bg-input border-border" />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-sm mb-1.5 block">Preco Mensal (R$)</Label>
-                <Input
-                  type="number"
-                  value={editingPlan.preco_mensal ?? 0}
-                  onChange={(e) => updateField('preco_mensal', Number(e.target.value))}
-                  className="bg-input border-border"
-                />
+
+            {/* Toggles */}
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground pt-2">Opcoes</p>
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Switch checked={editingPlan.permite_venda_modulo ?? false} onCheckedChange={(val) => updateField('permite_venda_modulo', val)} />
+                <Label className="text-sm">Permite venda por modulo individual</Label>
               </div>
-              <div>
-                <Label className="text-sm mb-1.5 block">Preco Anual (R$)</Label>
-                <Input
-                  type="number"
-                  value={editingPlan.preco_anual ?? 0}
-                  onChange={(e) => updateField('preco_anual', Number(e.target.value))}
-                  className="bg-input border-border"
-                />
+              <div className="flex items-center gap-2">
+                <Switch checked={editingPlan.ativo ?? true} onCheckedChange={(val) => updateField('ativo', val)} />
+                <Label className="text-sm">Ativo</Label>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-sm mb-1.5 block">Max Usuarios</Label>
-                <Input
-                  type="number"
-                  value={editingPlan.max_usuarios ?? 0}
-                  onChange={(e) => updateField('max_usuarios', Number(e.target.value))}
-                  className="bg-input border-border"
-                />
-              </div>
-              <div>
-                <Label className="text-sm mb-1.5 block">Max WhatsApp</Label>
-                <Input
-                  type="number"
-                  value={editingPlan.max_instancias_whatsapp ?? 0}
-                  onChange={(e) => updateField('max_instancias_whatsapp', Number(e.target.value))}
-                  className="bg-input border-border"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-sm mb-1.5 block">Max Avaliacoes IA/mes</Label>
-                <Input
-                  type="number"
-                  value={editingPlan.max_avaliacoes_ia_mes ?? 0}
-                  onChange={(e) => updateField('max_avaliacoes_ia_mes', Number(e.target.value))}
-                  className="bg-input border-border"
-                />
-              </div>
-              <div>
-                <Label className="text-sm mb-1.5 block">Storage (MB)</Label>
-                <Input
-                  type="number"
-                  value={editingPlan.storage_mb ?? 0}
-                  onChange={(e) => updateField('storage_mb', Number(e.target.value))}
-                  className="bg-input border-border"
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={editingPlan.ativo ?? true}
-                onCheckedChange={(val) => updateField('ativo', val)}
-              />
-              <Label className="text-sm">Ativo</Label>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={saving}>
               Cancelar
             </Button>
-            <Button
-              onClick={handleSave}
-              disabled={saving}
-              className="bg-red-600 hover:bg-red-700 text-white"
-            >
+            <Button onClick={handleSave} disabled={saving} className="bg-red-600 hover:bg-red-700 text-white">
               {saving ? 'Salvando...' : isEditing ? 'Salvar' : 'Criar'}
             </Button>
           </DialogFooter>

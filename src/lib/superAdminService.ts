@@ -26,10 +26,13 @@ export interface Plan {
   descricao?: string;
   preco_mensal: number;
   preco_anual: number;
+  preco_por_usuario: number;
+  min_usuarios: number;
   max_usuarios: number;
   max_instancias_whatsapp: number;
   max_avaliacoes_ia_mes: number;
   storage_mb: number;
+  permite_venda_modulo: boolean;
   ativo: boolean;
 }
 

@@ -9,8 +9,10 @@ import { AppConfigProvider } from "@/contexts/AppConfigContext";
 import { RolePermissionsProvider } from "@/contexts/RolePermissionsContext";
 import { AuditLogProvider } from "@/contexts/AuditLogContext";
 import { NotificationsProvider } from "@/contexts/NotificationsContext";
+import { LicenseProvider } from "@/contexts/LicenseContext";
 import AppLayout from "@/components/AppLayout";
 import RequireRole from "@/components/RequireRole";
+import RequireLicense from "@/components/RequireLicense";
 import { SuperAdminAuthProvider } from "@/contexts/SuperAdminAuthContext";
 import SuperAdminLoginPage from "@/pages/super-admin/SuperAdminLoginPage";
 import SuperAdminProtectedRoutes from "@/components/super-admin/SuperAdminProtectedRoutes";
@@ -54,13 +56,15 @@ export const GOOGLE_CLIENT_ID = CONFIG.GOOGLE_CLIENT_ID;
 const queryClient = new QueryClient();
 
 /**
- * R() — atalho para envolver páginas com RequireRole.
- * resource: verifica se o cargo do usuário tem acesso ao recurso (tabela permissoes_papeis)
- * minRole: exige cargo mínimo na hierarquia
+ * R() — atalho para envolver páginas com RequireRole + RequireLicense.
+ * resource: verifica cargo (permissoes_papeis)
+ * module: verifica licença/plano (plano_features)
  */
-const R = (el: React.ReactNode, opts: { resource?: string; minRole?: string }) => (
+const R = (el: React.ReactNode, opts: { resource?: string; minRole?: string; module?: string }) => (
   <RequireRole resource={opts.resource} minRole={opts.minRole as any}>
-    {el}
+    <RequireLicense module={opts.module ?? opts.resource}>
+      {el}
+    </RequireLicense>
   </RequireRole>
 );
 
@@ -160,6 +164,7 @@ const App = () => (
             <RolePermissionsProvider>
               <AppConfigProvider>
                 <AuthProvider>
+                  <LicenseProvider>
                   <NotificationsProvider>
                     <Routes>
                       {/* Super Admin — independent auth */}
@@ -181,6 +186,7 @@ const App = () => (
                       <Route path="/*" element={<ProtectedRoutes />} />
                     </Routes>
                   </NotificationsProvider>
+                  </LicenseProvider>
                 </AuthProvider>
               </AppConfigProvider>
             </RolePermissionsProvider>

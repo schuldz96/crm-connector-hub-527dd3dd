@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useRolePermissions } from '@/contexts/RolePermissionsContext';
+import { useLicense } from '@/contexts/LicenseContext';
 import { ROLE_LABELS } from '@/types';
 import BrandLogo from '@/components/BrandLogo';
 import {
@@ -165,6 +166,7 @@ export default function AppSidebar() {
   const { user, logout, canAccess } = useAuth();
   const { isModuleEnabledForUser, configLoaded } = useAppConfig();
   const { getPermission } = useRolePermissions();
+  const { canAccessModule, loaded: licenseLoaded } = useLicense();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -210,10 +212,12 @@ export default function AppSidebar() {
     const moduleId = item.path.split('?')[0].replace(/^\//, '').replace(/\//g, '-') as any;
     const resourceOk = !item.resource || canAccess(item.resource);
     const moduleOk = isModuleEnabledForUser(moduleId, normalizedUserId, user?.teamId);
-    return resourceOk && moduleOk;
+    // License check: module must be enabled in the org's plan
+    const licenseOk = !item.resource || canAccessModule(item.resource);
+    return resourceOk && moduleOk && licenseOk;
   };
 
-  const visibleSections = configLoaded ? NAV_SECTIONS.map(section => ({
+  const visibleSections = (configLoaded && licenseLoaded) ? NAV_SECTIONS.map(section => ({
     ...section,
     items: section.items.filter(item => {
       if (item.children) return item.children.some(child => isItemVisible(child));
