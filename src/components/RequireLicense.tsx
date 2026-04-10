@@ -33,16 +33,9 @@ export default function RequireLicense({ children, module }: RequireLicenseProps
     );
   }
 
-  // No subscription at all
+  // No subscription at all → allow access (no license enforcement yet)
   if (!license.subscription) {
-    return (
-      <UpgradeScreen
-        icon={<AlertTriangle className="w-8 h-8 text-warning" />}
-        title="Sem assinatura ativa"
-        description="Sua organização não possui uma assinatura. Entre em contato com o administrador para ativar um plano."
-        userRole={user?.role}
-      />
-    );
+    return <>{children}</>;
   }
 
   // Subscription expired or cancelled

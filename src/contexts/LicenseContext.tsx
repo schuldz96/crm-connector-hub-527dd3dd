@@ -246,8 +246,11 @@ export function LicenseProvider({ children }: { children: React.ReactNode }) {
   // ── Access checks ─────────────────────────────────────────────────────────────
 
   const canAccessModule = useCallback((moduleCode: string): boolean => {
-    // No subscription or expired/suspended → block everything except dashboard
-    if (!subscription || isExpired || isSuspended) {
+    // No subscription at all → allow everything (no license enforcement yet)
+    if (!subscription) return true;
+
+    // Subscription exists but expired/suspended → block everything except dashboard
+    if (isExpired || isSuspended) {
       return moduleCode === 'dashboard';
     }
 
