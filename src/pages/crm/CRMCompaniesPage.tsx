@@ -5,8 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
   Search, Plus, Filter, MoreHorizontal, X, ChevronDown,
-  ChevronLeft, ChevronRight, Download, Factory,
+  ChevronLeft, ChevronRight, Download, Factory, Trash2,
   ArrowUpDown, BarChart3, Copy, SlidersHorizontal, Loader2,
+  PlusCircle, CheckCircle2,
 } from 'lucide-react';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -152,10 +153,34 @@ export default function CRMCompaniesPage() {
   const [chipSearch, setChipSearch] = useState('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState<{property: string; operator: string; value: string}[]>([]);
-  const [newNome, setNewNome] = useState('');
-  const [newDominio, setNewDominio] = useState('');
-  const [newCnpj, setNewCnpj] = useState('');
-  const [newTelefone, setNewTelefone] = useState('');
+  // Create company form — dynamic fields
+  type FormField = { key: string; label: string; required?: boolean; type?: string; placeholder?: string; dbField?: string };
+  const defaultCompanyFields: FormField[] = [
+    { key: 'nome', label: 'Nome da empresa', required: true, placeholder: 'Nome da empresa', dbField: 'nome' },
+    { key: 'dominio', label: 'Domínio', placeholder: 'exemplo.com.br', dbField: 'dominio' },
+    { key: 'cnpj', label: 'CNPJ', placeholder: '00.000.000/0000-00', dbField: 'cnpj' },
+    { key: 'telefone', label: 'Telefone', type: 'tel', placeholder: '+55 11 99999-0000', dbField: 'telefone' },
+  ];
+  const [formFields, setFormFields] = useState<FormField[]>(defaultCompanyFields);
+  const [formData, setFormData] = useState<Record<string, string>>({});
+  const [addingField, setAddingField] = useState(false);
+  const [newFieldName, setNewFieldName] = useState('');
+  const updateFormField = (key: string, value: string) => {
+    setFormData(prev => ({ ...prev, [key]: value }));
+  };
+  const removeField = (key: string) => {
+    setFormFields(prev => prev.filter(f => f.key !== key));
+    setFormData(prev => { const next = { ...prev }; delete next[key]; return next; });
+  };
+  const confirmAddField = () => {
+    if (!newFieldName.trim()) { setAddingField(false); return; }
+    const key = newFieldName.trim().toLowerCase().replace(/\s+/g, '_');
+    if (!formFields.some(f => f.key === key)) {
+      setFormFields(prev => [...prev, { key, label: newFieldName.trim(), placeholder: newFieldName.trim() }]);
+    }
+    setAddingField(false);
+    setNewFieldName('');
+  };
   const createCompany = useCreateCompany();
 
   // Column editor state
@@ -168,16 +193,24 @@ export default function CRMCompaniesPage() {
   useEffect(() => { localStorage.setItem(COMPANIES_COLUMNS_KEY, JSON.stringify(visibleColumns)); }, [visibleColumns]);
 
   const handleCreateCompany = async () => {
-    if (!newNome.trim()) return;
+    const nome = (formData.nome || '').trim();
+    if (!nome) return;
     try {
-      await createCompany.mutateAsync({
-        nome: newNome,
-        dominio: newDominio || null,
-        cnpj: newCnpj || null,
-        telefone: newTelefone || null,
-      } as any);
+      const dbPayload: Record<string, any> = { nome };
+      // Map known fields
+      for (const field of formFields) {
+        const val = (formData[field.key] || '').trim();
+        if (!val || field.key === 'nome') continue;
+        if (field.dbField) {
+          dbPayload[field.dbField] = val;
+        } else {
+          dbPayload.dados_custom = { ...(dbPayload.dados_custom || {}), [field.key]: val };
+        }
+      }
+      await createCompany.mutateAsync(dbPayload as any);
       setShowCreateModal(false);
-      setNewNome(''); setNewDominio(''); setNewCnpj(''); setNewTelefone('');
+      setFormData({});
+      setFormFields(defaultCompanyFields);
       toast({ title: 'Empresa criada com sucesso' });
     } catch {
       toast({ title: 'Erro ao criar empresa', variant: 'destructive' });
@@ -546,25 +579,55 @@ export default function CRMCompaniesPage() {
               <button onClick={() => setShowCreateModal(false)}><X className="w-5 h-5 text-muted-foreground" /></button>
             </div>
             <div className="px-6 py-4 space-y-4">
-              <div>
-                <label className="text-sm font-medium">Nome da empresa *</label>
-                <Input value={newNome} onChange={e => setNewNome(e.target.value)} placeholder="Nome da empresa" className="mt-1" />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Domínio</label>
-                <Input value={newDominio} onChange={e => setNewDominio(e.target.value)} placeholder="empresa.com.br" className="mt-1" />
-              </div>
-              <div>
-                <label className="text-sm font-medium">CNPJ</label>
-                <Input value={newCnpj} onChange={e => setNewCnpj(e.target.value)} placeholder="00.000.000/0000-00" className="mt-1" />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Telefone</label>
-                <Input value={newTelefone} onChange={e => setNewTelefone(e.target.value)} placeholder="+55 11 99999-0000" className="mt-1" />
-              </div>
+              {formFields.map(field => (
+                <div key={field.key}>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-sm font-medium">
+                      {field.label}{field.required ? ' *' : ''}
+                    </label>
+                    {!field.required && (
+                      <button
+                        onClick={() => removeField(field.key)}
+                        className="text-muted-foreground hover:text-destructive transition-colors p-0.5"
+                        title={`Remover ${field.label}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <Input
+                    value={formData[field.key] || ''}
+                    onChange={e => updateFormField(field.key, e.target.value)}
+                    placeholder={field.placeholder || field.label}
+                    type={field.type || 'text'}
+                    className="mt-0.5"
+                  />
+                </div>
+              ))}
+              {addingField ? (
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    autoFocus
+                    value={newFieldName}
+                    onChange={e => setNewFieldName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') confirmAddField(); if (e.key === 'Escape') setAddingField(false); }}
+                    placeholder="Nome da propriedade"
+                    className="h-8 text-xs w-40"
+                  />
+                  <button onClick={confirmAddField} className="text-primary"><CheckCircle2 className="w-4 h-4" /></button>
+                  <button onClick={() => setAddingField(false)} className="text-muted-foreground hover:text-destructive"><X className="w-4 h-4" /></button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => { setAddingField(true); setNewFieldName(''); }}
+                  className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors py-1"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" /> Adicionar propriedade
+                </button>
+              )}
             </div>
             <div className="px-6 py-4 border-t border-border flex gap-2">
-              <Button onClick={handleCreateCompany} disabled={!newNome.trim() || createCompany.isPending}>
+              <Button onClick={handleCreateCompany} disabled={!(formData.nome || '').trim() || createCompany.isPending}>
                 {createCompany.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
                 Criar
               </Button>

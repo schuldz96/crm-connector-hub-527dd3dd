@@ -8,8 +8,9 @@ import {
 } from '@/components/ui/select';
 import {
   Search, Plus, Filter, ChevronDown, ChevronRight, MoreHorizontal, X,
-  User, Ticket, Download, Table2,
+  User, Ticket, Download, Table2, Trash2,
   ArrowUpDown, BarChart3, Copy, Settings2, SlidersHorizontal, Kanban, Bot, Loader2,
+  PlusCircle, CheckCircle2,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -137,10 +138,35 @@ export default function CRMTicketsPage() {
   const [sortField, setSortField] = useState<'criado_em' | 'atualizado_em'>('criado_em');
   const [sortDirection, setSortDirection] = useState<'desc' | 'asc'>('desc');
 
-  // Create ticket form
-  const [newTitle, setNewTitle] = useState('');
-  const [newPriority, setNewPriority] = useState<TicketPriority>('medium');
-  const [newStage, setNewStage] = useState('');
+  // Create ticket form — dynamic fields
+  type FormField = { key: string; label: string; required?: boolean; type?: string; placeholder?: string; dbField?: string };
+  const defaultTicketFields: FormField[] = [
+    { key: 'titulo', label: 'Título', required: true, placeholder: 'Título do ticket', dbField: 'titulo' },
+    { key: 'descricao', label: 'Descrição', type: 'textarea', placeholder: 'Descrição do ticket', dbField: 'descricao' },
+    { key: 'prioridade', label: 'Prioridade', type: 'select', dbField: 'prioridade' },
+    { key: 'pipeline', label: 'Pipeline', type: 'readonly' },
+    { key: 'estagio', label: 'Etapa', type: 'select', dbField: 'estagio_id' },
+  ];
+  const [formFields, setFormFields] = useState<FormField[]>(defaultTicketFields);
+  const [formData, setFormData] = useState<Record<string, string>>({ prioridade: 'medium' });
+  const [addingField, setAddingField] = useState(false);
+  const [newFieldName, setNewFieldName] = useState('');
+  const updateFormField = (key: string, value: string) => {
+    setFormData(prev => ({ ...prev, [key]: value }));
+  };
+  const removeField = (key: string) => {
+    setFormFields(prev => prev.filter(f => f.key !== key));
+    setFormData(prev => { const next = { ...prev }; delete next[key]; return next; });
+  };
+  const confirmAddField = () => {
+    if (!newFieldName.trim()) { setAddingField(false); return; }
+    const key = newFieldName.trim().toLowerCase().replace(/\s+/g, '_');
+    if (!formFields.some(f => f.key === key)) {
+      setFormFields(prev => [...prev, { key, label: newFieldName.trim(), placeholder: newFieldName.trim() }]);
+    }
+    setAddingField(false);
+    setNewFieldName('');
+  };
   const createTicket = useCreateTicket();
   const updateTicket = useUpdateTicket();
 
@@ -279,20 +305,31 @@ export default function CRMTicketsPage() {
   }, [pipelineId]);
 
   const handleCreateTicket = async () => {
-    if (!newTitle.trim()) return;
+    const titulo = (formData.titulo || '').trim();
+    if (!titulo) return;
     try {
-      const stageId = newStage || stages[0]?.id;
-      const created = await createTicket.mutateAsync({
-        titulo: newTitle,
-        prioridade: newPriority,
+      const stageId = formData.estagio || stages[0]?.id;
+      const dbPayload: Record<string, any> = {
+        titulo,
+        prioridade: formData.prioridade || 'medium',
         pipeline_id: pipelineId,
         estagio_id: stageId,
         status: 'aberto',
-      } as any);
+      };
+      // Map known fields
+      for (const field of formFields) {
+        const val = (formData[field.key] || '').trim();
+        if (!val || field.key === 'titulo' || field.key === 'prioridade' || field.key === 'pipeline' || field.key === 'estagio') continue;
+        if (field.dbField) {
+          dbPayload[field.dbField] = val;
+        } else {
+          dbPayload.dados_custom = { ...(dbPayload.dados_custom || {}), [field.key]: val };
+        }
+      }
+      const created = await createTicket.mutateAsync(dbPayload as any);
       setShowCreateModal(false);
-      setNewTitle('');
-      setNewPriority('medium');
-      setNewStage('');
+      setFormData({ prioridade: 'medium' });
+      setFormFields(defaultTicketFields);
       toast({ title: 'Ticket criado com sucesso' });
       if (created?.id && stageId) {
         getOrg().then(eid => triggerCrmAI('ticket', created.id, stageId, eid, 'create')).catch(() => {});
@@ -721,38 +758,83 @@ export default function CRMTicketsPage() {
               <button onClick={() => setShowCreateModal(false)}><X className="w-5 h-5 text-muted-foreground" /></button>
             </div>
             <div className="px-6 py-4 space-y-4">
-              <div>
-                <label className="text-sm font-medium">Título *</label>
-                <Input value={newTitle} onChange={e => setNewTitle(e.target.value)} placeholder="Título do ticket" className="mt-1" />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Prioridade</label>
-                <Select value={newPriority} onValueChange={v => setNewPriority(v as TicketPriority)}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Baixa</SelectItem>
-                    <SelectItem value="medium">Média</SelectItem>
-                    <SelectItem value="high">Alta</SelectItem>
-                    <SelectItem value="urgent">Urgente</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Pipeline</label>
-                <p className="text-sm text-muted-foreground mt-1">{pipeline?.nome}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Etapa</label>
-                <Select value={newStage || stages[0]?.id || ''} onValueChange={setNewStage}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    {stages.map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              {formFields.map(field => (
+                <div key={field.key}>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-sm font-medium">
+                      {field.label}{field.required ? ' *' : ''}
+                    </label>
+                    {!field.required && (
+                      <button
+                        onClick={() => removeField(field.key)}
+                        className="text-muted-foreground hover:text-destructive transition-colors p-0.5"
+                        title={`Remover ${field.label}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  {field.key === 'pipeline' ? (
+                    <p className="text-sm text-muted-foreground mt-0.5">{pipeline?.nome}</p>
+                  ) : field.key === 'estagio' ? (
+                    <Select value={formData.estagio || stages[0]?.id || ''} onValueChange={v => updateFormField('estagio', v)}>
+                      <SelectTrigger className="mt-0.5"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent>
+                        {stages.map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  ) : field.key === 'prioridade' ? (
+                    <Select value={formData.prioridade || 'medium'} onValueChange={v => updateFormField('prioridade', v)}>
+                      <SelectTrigger className="mt-0.5"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Baixa</SelectItem>
+                        <SelectItem value="medium">Média</SelectItem>
+                        <SelectItem value="high">Alta</SelectItem>
+                        <SelectItem value="urgent">Urgente</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : field.type === 'textarea' ? (
+                    <textarea
+                      value={formData[field.key] || ''}
+                      onChange={e => updateFormField(field.key, e.target.value)}
+                      placeholder={field.placeholder || field.label}
+                      className="mt-0.5 flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 min-h-[80px] resize-y"
+                    />
+                  ) : (
+                    <Input
+                      value={formData[field.key] || ''}
+                      onChange={e => updateFormField(field.key, e.target.value)}
+                      placeholder={field.placeholder || field.label}
+                      type={field.type || 'text'}
+                      className="mt-0.5"
+                    />
+                  )}
+                </div>
+              ))}
+              {addingField ? (
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    autoFocus
+                    value={newFieldName}
+                    onChange={e => setNewFieldName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') confirmAddField(); if (e.key === 'Escape') setAddingField(false); }}
+                    placeholder="Nome da propriedade"
+                    className="h-8 text-xs w-40"
+                  />
+                  <button onClick={confirmAddField} className="text-primary"><CheckCircle2 className="w-4 h-4" /></button>
+                  <button onClick={() => setAddingField(false)} className="text-muted-foreground hover:text-destructive"><X className="w-4 h-4" /></button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => { setAddingField(true); setNewFieldName(''); }}
+                  className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors py-1"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" /> Adicionar propriedade
+                </button>
+              )}
             </div>
             <div className="px-6 py-4 border-t border-border flex gap-2">
-              <Button onClick={handleCreateTicket} disabled={!newTitle.trim() || createTicket.isPending}>
+              <Button onClick={handleCreateTicket} disabled={!(formData.titulo || '').trim() || createTicket.isPending}>
                 {createTicket.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
                 Criar
               </Button>

@@ -10,6 +10,7 @@ import {
   Search, Plus, Filter, ChevronDown, ChevronRight, MoreHorizontal, X,
   Briefcase, User, Download, Table2, Trash2, UserPlus, Pencil,
   ArrowUpDown, BarChart3, Copy, Settings2, SlidersHorizontal, Kanban, Bot, Loader2,
+  PlusCircle, CheckCircle2,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -126,10 +127,34 @@ export default function CRMDealsPage() {
   const [sortField, setSortField] = useState<'criado_em' | 'atualizado_em' | 'valor'>('criado_em');
   const [sortDirection, setSortDirection] = useState<'desc' | 'asc'>('desc');
 
-  // Create deal form
-  const [newDealName, setNewDealName] = useState('');
-  const [newDealValue, setNewDealValue] = useState('');
-  const [newDealStage, setNewDealStage] = useState('');
+  // Create deal form — dynamic fields
+  type FormField = { key: string; label: string; required?: boolean; type?: string; placeholder?: string; dbField?: string };
+  const defaultDealFields: FormField[] = [
+    { key: 'nome', label: 'Nome', required: true, placeholder: 'Nome do negócio', dbField: 'nome' },
+    { key: 'valor', label: 'Valor', type: 'number', placeholder: '0.00', dbField: 'valor' },
+    { key: 'pipeline', label: 'Pipeline', type: 'readonly' },
+    { key: 'estagio', label: 'Etapa', type: 'select', dbField: 'estagio_id' },
+  ];
+  const [formFields, setFormFields] = useState<FormField[]>(defaultDealFields);
+  const [formData, setFormData] = useState<Record<string, string>>({});
+  const [addingField, setAddingField] = useState(false);
+  const [newFieldName, setNewFieldName] = useState('');
+  const updateFormField = (key: string, value: string) => {
+    setFormData(prev => ({ ...prev, [key]: value }));
+  };
+  const removeField = (key: string) => {
+    setFormFields(prev => prev.filter(f => f.key !== key));
+    setFormData(prev => { const next = { ...prev }; delete next[key]; return next; });
+  };
+  const confirmAddField = () => {
+    if (!newFieldName.trim()) { setAddingField(false); return; }
+    const key = newFieldName.trim().toLowerCase().replace(/\s+/g, '_');
+    if (!formFields.some(f => f.key === key)) {
+      setFormFields(prev => [...prev, { key, label: newFieldName.trim(), placeholder: newFieldName.trim() }]);
+    }
+    setAddingField(false);
+    setNewFieldName('');
+  };
   const createDeal = useCreateDeal();
   const updateDeal = useUpdateDeal();
 
@@ -307,20 +332,31 @@ export default function CRMDealsPage() {
   };
 
   const handleCreateDeal = async () => {
-    if (!newDealName.trim()) return;
+    const nome = (formData.nome || '').trim();
+    if (!nome) return;
     try {
-      const stageId = newDealStage || stages[0]?.id;
-      const created = await createDeal.mutateAsync({
-        nome: newDealName,
-        valor: parseFloat(newDealValue) || 0,
+      const stageId = formData.estagio || stages[0]?.id;
+      const dbPayload: Record<string, any> = {
+        nome,
+        valor: parseFloat(formData.valor || '') || 0,
         pipeline_id: pipelineId,
         estagio_id: stageId,
         status: 'aberto',
-      } as any);
+      };
+      // Map known fields
+      for (const field of formFields) {
+        const val = (formData[field.key] || '').trim();
+        if (!val || field.key === 'nome' || field.key === 'valor' || field.key === 'pipeline' || field.key === 'estagio') continue;
+        if (field.dbField) {
+          dbPayload[field.dbField] = val;
+        } else {
+          dbPayload.dados_custom = { ...(dbPayload.dados_custom || {}), [field.key]: val };
+        }
+      }
+      const created = await createDeal.mutateAsync(dbPayload as any);
       setShowCreateModal(false);
-      setNewDealName('');
-      setNewDealValue('');
-      setNewDealStage('');
+      setFormData({});
+      setFormFields(defaultDealFields);
       toast({ title: 'Negócio criado com sucesso' });
       // Trigger AI for create
       if (created?.id && stageId) {
@@ -788,30 +824,66 @@ export default function CRMDealsPage() {
               <button onClick={() => setShowCreateModal(false)}><X className="w-5 h-5 text-muted-foreground" /></button>
             </div>
             <div className="px-6 py-4 space-y-4">
-              <div>
-                <label className="text-sm font-medium">Nome *</label>
-                <Input value={newDealName} onChange={e => setNewDealName(e.target.value)} placeholder="Nome do negócio" className="mt-1" />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Valor</label>
-                <Input type="number" value={newDealValue} onChange={e => setNewDealValue(e.target.value)} placeholder="0.00" className="mt-1" />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Pipeline</label>
-                <p className="text-sm text-muted-foreground mt-1">{pipeline?.nome}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Etapa</label>
-                <Select value={newDealStage || stages[0]?.id || ''} onValueChange={setNewDealStage}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    {stages.map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              {formFields.map(field => (
+                <div key={field.key}>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-sm font-medium">
+                      {field.label}{field.required ? ' *' : ''}
+                    </label>
+                    {!field.required && (
+                      <button
+                        onClick={() => removeField(field.key)}
+                        className="text-muted-foreground hover:text-destructive transition-colors p-0.5"
+                        title={`Remover ${field.label}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  {field.key === 'pipeline' ? (
+                    <p className="text-sm text-muted-foreground mt-0.5">{pipeline?.nome}</p>
+                  ) : field.key === 'estagio' ? (
+                    <Select value={formData.estagio || stages[0]?.id || ''} onValueChange={v => updateFormField('estagio', v)}>
+                      <SelectTrigger className="mt-0.5"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent>
+                        {stages.map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      value={formData[field.key] || ''}
+                      onChange={e => updateFormField(field.key, e.target.value)}
+                      placeholder={field.placeholder || field.label}
+                      type={field.type || 'text'}
+                      className="mt-0.5"
+                    />
+                  )}
+                </div>
+              ))}
+              {addingField ? (
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    autoFocus
+                    value={newFieldName}
+                    onChange={e => setNewFieldName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') confirmAddField(); if (e.key === 'Escape') setAddingField(false); }}
+                    placeholder="Nome da propriedade"
+                    className="h-8 text-xs w-40"
+                  />
+                  <button onClick={confirmAddField} className="text-primary"><CheckCircle2 className="w-4 h-4" /></button>
+                  <button onClick={() => setAddingField(false)} className="text-muted-foreground hover:text-destructive"><X className="w-4 h-4" /></button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => { setAddingField(true); setNewFieldName(''); }}
+                  className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors py-1"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" /> Adicionar propriedade
+                </button>
+              )}
             </div>
             <div className="px-6 py-4 border-t border-border flex gap-2">
-              <Button onClick={handleCreateDeal} disabled={!newDealName.trim() || createDeal.isPending}>
+              <Button onClick={handleCreateDeal} disabled={!(formData.nome || '').trim() || createDeal.isPending}>
                 {createDeal.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
                 Criar
               </Button>
