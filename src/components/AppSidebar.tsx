@@ -238,15 +238,6 @@ export default function AppSidebar({ collapsed, onToggle }: { collapsed: boolean
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
         {visibleSections.map((section, sIdx) => (
           <div key={section.label}>
-            {/* Section label */}
-            {!collapsed && (
-              <p className={cn(
-                'text-[10px] font-semibold uppercase tracking-widest text-muted-foreground px-2 mb-1',
-                sIdx > 0 && 'mt-3'
-              )}>
-                {section.label}
-              </p>
-            )}
             {collapsed && sIdx > 0 && (
               <div className="h-px bg-sidebar-border/50 mx-2 my-1.5" />
             )}
