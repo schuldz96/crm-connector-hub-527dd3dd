@@ -7,7 +7,7 @@ import {
   Search, Plus, Filter, MoreHorizontal, X, ChevronDown,
   ChevronLeft, ChevronRight, Download, Factory, Trash2,
   ArrowUpDown, BarChart3, Copy, SlidersHorizontal, Loader2,
-  PlusCircle, CheckCircle2,
+  PlusCircle, CheckCircle2, UserPlus, Pencil,
 } from 'lucide-react';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -18,9 +18,10 @@ import {
 import { cn } from '@/lib/utils';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { useCrmCompanies, useCreateCompany, useSaasUsers } from '@/hooks/useCrm';
+import { useCrmCompanies, useCreateCompany, useUpdateCompany, useSaasUsers } from '@/hooks/useCrm';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 // Column editor — all available company properties
 const COMPANIES_COLUMNS_KEY = 'crm_companies_visible_columns';
@@ -163,6 +164,8 @@ export default function CRMCompaniesPage() {
   ];
   const [formFields, setFormFields] = useState<FormField[]>(defaultCompanyFields);
   const [formData, setFormData] = useState<Record<string, string>>({});
+  const [domainExists, setDomainExists] = useState(false);
+  const [checkingDomain, setCheckingDomain] = useState(false);
   const [addingField, setAddingField] = useState(false);
   const [newFieldName, setNewFieldName] = useState('');
   const updateFormField = (key: string, value: string) => {
@@ -181,7 +184,24 @@ export default function CRMCompaniesPage() {
     setAddingField(false);
     setNewFieldName('');
   };
+  const checkDomainExists = async (domain: string) => {
+    if (!domain || !domain.includes('.')) { setDomainExists(false); return; }
+    setCheckingDomain(true);
+    try {
+      const org = await import('@/lib/saas').then(m => m.getOrg());
+      const { data } = await (supabase as any).schema('crm').from('empresas_crm').select('nome').eq('org', org).ilike('dominio', domain.trim()).is('deletado_em', null).limit(1).maybeSingle();
+      setDomainExists(!!data);
+    } catch { setDomainExists(false); }
+    finally { setCheckingDomain(false); }
+  };
   const createCompany = useCreateCompany();
+  const updateCompany = useUpdateCompany();
+
+  // Bulk selection state
+  const [selectedCompanies, setSelectedCompanies] = useState<Set<string>>(new Set());
+  const [bulkAction, setBulkAction] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assignUserId, setAssignUserId] = useState('');
 
   // Column editor state
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
@@ -195,6 +215,7 @@ export default function CRMCompaniesPage() {
   const handleCreateCompany = async () => {
     const nome = (formData.nome || '').trim();
     if (!nome) return;
+    if (domainExists) { toast({ title: 'Domínio já existe', description: 'Use uma empresa existente ou altere o domínio.', variant: 'destructive' }); return; }
     try {
       const dbPayload: Record<string, any> = { nome };
       // Map known fields
@@ -211,6 +232,7 @@ export default function CRMCompaniesPage() {
       setShowCreateModal(false);
       setFormData({});
       setFormFields(defaultCompanyFields);
+      setDomainExists(false);
       toast({ title: 'Empresa criada com sucesso' });
     } catch {
       toast({ title: 'Erro ao criar empresa', variant: 'destructive' });
@@ -292,6 +314,45 @@ export default function CRMCompaniesPage() {
     a.download = `empresas_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const toggleSelectCompany = (id: string) => {
+    setSelectedCompanies(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
+
+  const selectAllCompanies = () => {
+    if (selectedCompanies.size === companies.length) setSelectedCompanies(new Set());
+    else setSelectedCompanies(new Set(companies.map(c => c.id)));
+  };
+
+  const bulkDelete = async () => {
+    if (selectedCompanies.size === 0) return;
+    setBulkAction(true);
+    try {
+      const ids = Array.from(selectedCompanies);
+      for (const id of ids) {
+        await updateCompany.mutateAsync({ id, deletado_em: new Date().toISOString() } as any);
+      }
+      toast({ title: `${ids.length} empresa(s) excluída(s)` });
+      setSelectedCompanies(new Set());
+    } catch { toast({ title: 'Erro ao excluir', variant: 'destructive' }); }
+    finally { setBulkAction(false); }
+  };
+
+  const bulkAssign = async () => {
+    if (!assignUserId || selectedCompanies.size === 0) return;
+    setBulkAction(true);
+    try {
+      const ids = Array.from(selectedCompanies);
+      for (const id of ids) {
+        await updateCompany.mutateAsync({ id, proprietario_id: assignUserId });
+      }
+      toast({ title: `${ids.length} empresa(s) atribuída(s)` });
+      setSelectedCompanies(new Set());
+      setShowAssignModal(false);
+      setAssignUserId('');
+    } catch { toast({ title: 'Erro ao atribuir', variant: 'destructive' }); }
+    finally { setBulkAction(false); }
   };
 
   const paginationNumbers = useMemo(() => {
@@ -508,7 +569,7 @@ export default function CRMCompaniesPage() {
           <table className="w-full min-w-max text-sm">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-border bg-muted/50">
-                <th className="w-10 px-3 py-2.5"><input type="checkbox" className="rounded border-border" /></th>
+                <th className="w-10 px-3 py-2.5"><input type="checkbox" className="rounded border-border" checked={companies.length > 0 && selectedCompanies.size === companies.length} onChange={selectAllCompanies} /></th>
                 {activeColumns.map(col => (
                   <th key={col.key} className="text-left px-3 py-2.5 font-medium text-muted-foreground text-xs">
                     {col.key === 'criado_em' ? (
@@ -521,7 +582,7 @@ export default function CRMCompaniesPage() {
             <tbody>
               {companies.map(company => (
                 <tr key={company.id} onClick={() => navigate(`/crm/record/0-2/${company.numero_registro}`)} className="border-b border-border hover:bg-muted/20 transition-colors group cursor-pointer">
-                  <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}><input type="checkbox" className="rounded border-border" /></td>
+                  <td className="px-3 py-2.5" onClick={e => e.stopPropagation()}><input type="checkbox" className="rounded border-border" checked={selectedCompanies.has(company.id)} onChange={() => toggleSelectCompany(company.id)} /></td>
                   {activeColumns.map(col => (
                     <td key={col.key} className="px-3 py-2.5">{col.render(company)}</td>
                   ))}
@@ -597,11 +658,15 @@ export default function CRMCompaniesPage() {
                   </div>
                   <Input
                     value={formData[field.key] || ''}
-                    onChange={e => updateFormField(field.key, e.target.value)}
+                    onChange={e => { updateFormField(field.key, e.target.value); if (field.key === 'dominio') setDomainExists(false); }}
+                    onBlur={field.key === 'dominio' ? () => checkDomainExists(formData[field.key] || '') : undefined}
                     placeholder={field.placeholder || field.label}
                     type={field.type || 'text'}
                     className="mt-0.5"
                   />
+                  {field.key === 'dominio' && domainExists && (
+                    <p className="text-xs text-destructive mt-1">Este domínio já existe no sistema.</p>
+                  )}
                 </div>
               ))}
               {addingField ? (
@@ -627,7 +692,7 @@ export default function CRMCompaniesPage() {
               )}
             </div>
             <div className="px-6 py-4 border-t border-border flex gap-2">
-              <Button onClick={handleCreateCompany} disabled={!(formData.nome || '').trim() || createCompany.isPending}>
+              <Button onClick={handleCreateCompany} disabled={!(formData.nome || '').trim() || createCompany.isPending || domainExists}>
                 {createCompany.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
                 Criar
               </Button>
@@ -682,6 +747,64 @@ export default function CRMCompaniesPage() {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Bulk Actions Bar */}
+      {selectedCompanies.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-card border-t border-border shadow-lg px-6 py-2.5 flex items-center gap-3">
+          <span className="text-sm font-medium">{selectedCompanies.size} empresa(s) selecionada(s)</span>
+          <button onClick={selectAllCompanies} className="text-xs text-primary hover:underline">
+            Selecionar todas as {companies.length} empresas
+          </button>
+          <div className="w-px h-5 bg-border" />
+          <button onClick={() => setShowAssignModal(true)} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted">
+            <UserPlus className="w-3.5 h-3.5" /> Atribuir
+          </button>
+          <button onClick={() => { const name = prompt('Editar nome das empresas selecionadas:'); if (name) { Array.from(selectedCompanies).forEach(id => updateCompany.mutate({ id, nome: name })); toast({ title: 'Empresas atualizadas' }); setSelectedCompanies(new Set()); }}}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-muted">
+            <Pencil className="w-3.5 h-3.5" /> Editar
+          </button>
+          <button onClick={bulkDelete} disabled={bulkAction}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive px-2 py-1 rounded hover:bg-destructive/10">
+            <Trash2 className="w-3.5 h-3.5" /> Excluir
+          </button>
+          <div className="flex-1" />
+          <button onClick={() => setSelectedCompanies(new Set())} className="text-xs text-muted-foreground hover:text-foreground">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Assign Modal */}
+      {showAssignModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowAssignModal(false)} />
+          <div className="relative w-[380px] bg-card border border-border rounded-xl shadow-xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="text-base font-semibold">Atribuir proprietário</h2>
+              <p className="text-xs text-muted-foreground mt-1">{selectedCompanies.size} empresa(s) selecionada(s)</p>
+            </div>
+            <div className="px-6 py-4 max-h-72 overflow-y-auto space-y-1">
+              {saasUsers.map(u => (
+                <button key={u.id} onClick={() => setAssignUserId(u.id)}
+                  className={cn('w-full text-left px-3 py-2 rounded-md text-sm flex items-center gap-2 transition-colors',
+                    assignUserId === u.id ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted text-foreground')}>
+                  <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-[10px] font-semibold flex-shrink-0">
+                    {u.nome?.charAt(0)?.toUpperCase()}
+                  </div>
+                  {u.nome}
+                </button>
+              ))}
+            </div>
+            <div className="px-6 py-4 border-t border-border flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowAssignModal(false)}>Cancelar</Button>
+              <Button size="sm" onClick={bulkAssign} disabled={!assignUserId || bulkAction}>
+                {bulkAction ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+                Atribuir
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

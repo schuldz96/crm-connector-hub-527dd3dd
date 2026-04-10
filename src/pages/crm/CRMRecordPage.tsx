@@ -18,6 +18,7 @@ import {
   useCreateActivity, useCreateAssociation, useDeleteAssociation,
   useCrmContacts, useCrmCompanies, useCrmDeals, useCrmTickets,
   useCreateContact, useCreateCompany, useCreateDeal, useCreateTicket,
+  useDeleteContact, useDeleteCompany, useDeleteDeal, useDeleteTicket,
   useCrmPipelines, useSaasUsers,
 } from '@/hooks/useCrm';
 import type { CrmObjectType, ActivityType, CrmActivity } from '@/types/crm';
@@ -168,6 +169,8 @@ export default function CRMRecordPage() {
   const [newTicketForm, setNewTicketForm] = useState({ titulo: '', prioridade: 'medium' });
   const [emailExists, setEmailExists] = useState(false);
   const [checkingEmail, setCheckingEmail] = useState(false);
+  const [domainExists, setDomainExists] = useState(false);
+  const [creatingAssoc, setCreatingAssoc] = useState(false);
 
   // Activity form states
   const [noteContent, setNoteContent] = useState('');
@@ -201,6 +204,10 @@ export default function CRMRecordPage() {
   const createActivity = useCreateActivity();
   const createAssociation = useCreateAssociation();
   const deleteAssociation = useDeleteAssociation();
+  const deleteContactMut = useDeleteContact();
+  const deleteCompanyMut = useDeleteCompany();
+  const deleteDealMut = useDeleteDeal();
+  const deleteTicketMut = useDeleteTicket();
 
   // ---- Derived ----
   const rec = (record || {}) as Record<string, unknown>;
@@ -225,6 +232,29 @@ export default function CRMRecordPage() {
         deal: '/crm/0-3', ticket: '/crm/0-4',
       };
       navigate(paths[objectType]);
+    }
+  };
+
+  const handleDeleteRecord = async () => {
+    if (!recordId) return;
+    const confirmed = window.confirm(`Tem certeza que deseja excluir este ${labels.singular.toLowerCase()}?`);
+    if (!confirmed) return;
+    try {
+      const mutMap = {
+        contact: deleteContactMut,
+        company: deleteCompanyMut,
+        deal: deleteDealMut,
+        ticket: deleteTicketMut,
+      };
+      await mutMap[objectType].mutateAsync(recordId);
+      toast({ title: `${labels.singular} excluído com sucesso` });
+      const paths: Record<CrmObjectType, string> = {
+        contact: '/crm/0-1', company: '/crm/0-2',
+        deal: '/crm/0-3', ticket: '/crm/0-4',
+      };
+      navigate(paths[objectType]);
+    } catch {
+      toast({ title: 'Erro ao excluir', variant: 'destructive' });
     }
   };
 
@@ -403,7 +433,8 @@ export default function CRMRecordPage() {
   };
 
   const handleCreateAndAssociate = async () => {
-    if (!associationDialog) return;
+    if (!associationDialog || creatingAssoc) return;
+    setCreatingAssoc(true);
     try {
       let newId: string | null = null;
       if (associationDialog === 'contact') {
@@ -440,6 +471,7 @@ export default function CRMRecordPage() {
         setNewTicketForm({ titulo: '', prioridade: 'medium' });
       }
     } catch (e) { toast({ title: 'Erro ao criar', description: String(e), variant: 'destructive' }); }
+    finally { setCreatingAssoc(false); }
   };
 
   const handleRemoveAssociation = (assocId: string) => {
@@ -504,7 +536,7 @@ export default function CRMRecordPage() {
   return (
     <div className="flex h-full overflow-hidden bg-background">
       {/* ============ LEFT SIDEBAR ============ */}
-      <div className="w-[320px] flex-shrink-0 border-r border-border overflow-y-auto bg-card">
+      <div className="w-[280px] xl:w-[320px] flex-shrink-0 border-r border-border overflow-y-auto bg-card">
         <div className="p-4 space-y-4">
           {/* Header: Back + Actions */}
           <div className="flex items-center justify-between">
@@ -524,7 +556,7 @@ export default function CRMRecordPage() {
                 <DropdownMenuItem><Sparkles className="w-3.5 h-3.5 mr-2" /> Resumir (AI)</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem><Copy className="w-3.5 h-3.5 mr-2" /> Clonar</DropdownMenuItem>
-                <DropdownMenuItem className="text-destructive"><Trash2 className="w-3.5 h-3.5 mr-2" /> Excluir</DropdownMenuItem>
+                <DropdownMenuItem className="text-destructive" onClick={handleDeleteRecord}><Trash2 className="w-3.5 h-3.5 mr-2" /> Excluir</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -609,9 +641,9 @@ export default function CRMRecordPage() {
 
           {/* Activity buttons — HubSpot style */}
           <div className="pt-3 border-t border-border">
-            <div className="flex items-center justify-center gap-4">
+            <div className="flex items-center justify-center flex-wrap gap-3">
               {[
-                { icon: <StickyNote className="w-4 h-4" />, label: 'Observa...', type: 'nota' as const },
+                { icon: <StickyNote className="w-4 h-4" />, label: 'Observação', type: 'nota' as const },
                 { icon: <Mail className="w-4 h-4" />, label: 'E-mail', type: 'email' as const },
                 { icon: <Phone className="w-4 h-4" />, label: 'Chamada', type: 'chamada' as const },
                 { icon: <CheckSquare className="w-4 h-4" />, label: 'Tarefa', type: 'tarefa' as const },
@@ -621,7 +653,7 @@ export default function CRMRecordPage() {
                   <div className="w-9 h-9 rounded-full border border-border flex items-center justify-center text-muted-foreground group-hover:text-foreground group-hover:border-foreground transition-colors">
                     {a.icon}
                   </div>
-                  <span className="text-[10px] text-muted-foreground group-hover:text-foreground">{a.label}</span>
+                  <span className="text-[10px] text-muted-foreground group-hover:text-foreground whitespace-nowrap">{a.label}</span>
                 </button>
               ))}
               <DropdownMenu open={showMoreActions} onOpenChange={setShowMoreActions}>
@@ -785,7 +817,7 @@ export default function CRMRecordPage() {
               {/* Email form */}
               {activeModal === 'email' && (
                 <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs text-muted-foreground mb-1 block">Para</label>
                       <Input value={emailForm.to} onChange={(e) => setEmailForm(p => ({ ...p, to: e.target.value }))} placeholder="email@exemplo.com" className="h-8" />
@@ -820,7 +852,7 @@ export default function CRMRecordPage() {
               {/* Call form */}
               {activeModal === 'chamada' && (
                 <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs text-muted-foreground mb-1 block">Resultado</label>
                       <select
@@ -873,7 +905,7 @@ export default function CRMRecordPage() {
                       className="h-8"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs text-muted-foreground mb-1 block">Data de vencimento</label>
                       <Input
@@ -924,7 +956,7 @@ export default function CRMRecordPage() {
                       className="h-8"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs text-muted-foreground mb-1 block">Início</label>
                       <Input
@@ -944,7 +976,7 @@ export default function CRMRecordPage() {
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                     <div>
                       <label className="text-xs text-muted-foreground mb-1 block">Tipo</label>
                       <select
@@ -1086,7 +1118,7 @@ export default function CRMRecordPage() {
       </div>
 
       {/* ============ RIGHT SIDEBAR ============ */}
-      <div className="w-[320px] flex-shrink-0 border-l border-border overflow-y-auto bg-card">
+      <div className="w-[280px] xl:w-[320px] flex-shrink-0 border-l border-border overflow-y-auto bg-card">
         <div className="p-4 space-y-4">
           {/* Contacts section (unless current is contact) */}
           {objectType !== 'contact' && (
@@ -1292,7 +1324,16 @@ export default function CRMRecordPage() {
                   </div>
                   <div>
                     <label className="text-xs font-medium">Domínio</label>
-                    <Input value={newCompanyForm.dominio} onChange={e => setNewCompanyForm(p => ({ ...p, dominio: e.target.value }))} placeholder="empresa.com.br" className="mt-1 h-8 text-sm" />
+                    <Input value={newCompanyForm.dominio} onChange={e => setNewCompanyForm(p => ({ ...p, dominio: e.target.value }))} onBlur={async () => {
+                      const d = newCompanyForm.dominio.trim().toLowerCase();
+                      if (!d) { setDomainExists(false); return; }
+                      try {
+                        const org = await import('@/lib/saas').then(m => m.getOrg());
+                        const { data } = await (supabase as any).schema('crm').from('empresas_crm').select('nome').eq('org', org).ilike('dominio', d).is('deletado_em', null).limit(1).maybeSingle();
+                        setDomainExists(!!data);
+                      } catch { setDomainExists(false); }
+                    }} placeholder="empresa.com.br" className="mt-1 h-8 text-sm" />
+                    {domainExists && <p className="text-xs text-destructive mt-1">Este domínio já existe. Use "Adicionar existente".</p>}
                   </div>
                   <div>
                     <label className="text-xs font-medium">CNPJ</label>
@@ -1358,7 +1399,7 @@ export default function CRMRecordPage() {
                 Associar
               </Button>
             ) : (
-              <Button size="sm" onClick={handleCreateAndAssociate} disabled={emailExists}>
+              <Button size="sm" onClick={handleCreateAndAssociate} disabled={emailExists || domainExists || creatingAssoc}>
                 Criar e associar
               </Button>
             )}

@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import {
   Shield, Users, Building2, Key, Mail,
   ChevronRight, CheckCircle2, AlertCircle, Save, Eye, EyeOff,
-  Lock, ToggleLeft, ToggleRight, SlidersHorizontal,
+  Lock, ToggleLeft, ToggleRight, SlidersHorizontal, Pencil,
   Layers, Plus, Trash2, ChevronDown, ChevronUp, GitBranch,
   ScrollText, LogIn, LogOut, MonitorSmartphone, Search, RefreshCw, Trash,
   Filter, Plug, Copy, ExternalLink, Check, ShieldCheck, Network,
@@ -176,6 +176,18 @@ export default function AdminPage() {
   const [adminUserSearch, setAdminUserSearch] = useState('');
   const [areaMembersMap, setAreaMembersMap] = useState<Record<string, { nome: string; email: string; papel: string }[]>>({});
 
+  // Role visibility & custom labels (persisted in localStorage)
+  const [hiddenRoles, setHiddenRoles] = useState<Set<string>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('ltx_hidden_roles') || '[]')); }
+    catch { return new Set(); }
+  });
+  const [customLabels, setCustomLabels] = useState<Record<string, string>>(() => {
+    try { return JSON.parse(localStorage.getItem('ltx_role_labels') || '{}'); }
+    catch { return {}; }
+  });
+  const [editingRoleLabel, setEditingRoleLabel] = useState<string | null>(null);
+  const [editLabelValue, setEditLabelValue] = useState('');
+
   const { tokens, setToken, models, setModuleModel, modules, setModuleEnabled, saveConfig,
           getUserDisabledModules, setUserModuleOverride, companySubtitle, setCompanySubtitle } = useAppConfig();
   const [subtitleDraft, setSubtitleDraft] = useState(companySubtitle);
@@ -215,6 +227,10 @@ export default function AdminPage() {
       loadAllowedUsers().then(setAllowedAccounts).catch(() => {});
     }
   }, [section, getLogs, toast]);
+
+  // Persist hidden roles & custom labels
+  useEffect(() => { localStorage.setItem('ltx_hidden_roles', JSON.stringify([...hiddenRoles])); }, [hiddenRoles]);
+  useEffect(() => { localStorage.setItem('ltx_role_labels', JSON.stringify(customLabels)); }, [customLabels]);
 
   const refreshLogs = () => setLogs(getLogs());
 
@@ -367,11 +383,12 @@ export default function AdminPage() {
     member: 6, support: 7,
   };
 
-  const orgLevels = ROLE_HIERARCHY.map(role => ({
+  const orgLevels = ROLE_HIERARCHY.filter(r => !hiddenRoles.has(r)).map(role => ({
     role,
     depth: ROLE_DEPTH[role] ?? 6,
     perm: permissions.find(p => p.role === role),
     users: MOCK_USERS.filter(u => u.role === role),
+    label: customLabels[role] || ROLE_LABELS[role],
   }));
 
   return (
@@ -481,10 +498,60 @@ export default function AdminPage() {
                           ))}
                           {/* Row */}
                           <div className="flex-1">
+                            {editingRoleLabel === item.role ? (
+                              /* Inline label editor */
+                              <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-primary/40 bg-primary/5">
+                                <Input
+                                  autoFocus
+                                  value={editLabelValue}
+                                  onChange={e => setEditLabelValue(e.target.value)}
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter' && editLabelValue.trim()) {
+                                      setCustomLabels(prev => ({ ...prev, [item.role]: editLabelValue.trim() }));
+                                      setEditingRoleLabel(null);
+                                    }
+                                    if (e.key === 'Escape') setEditingRoleLabel(null);
+                                  }}
+                                  className="h-7 text-sm bg-background border-border max-w-[200px]"
+                                  placeholder={ROLE_LABELS[item.role]}
+                                />
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 px-2"
+                                  onClick={() => {
+                                    if (editLabelValue.trim()) {
+                                      setCustomLabels(prev => ({ ...prev, [item.role]: editLabelValue.trim() }));
+                                    }
+                                    setEditingRoleLabel(null);
+                                  }}
+                                >
+                                  <Check className="w-3 h-3" />
+                                </Button>
+                                {customLabels[item.role] && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2 text-muted-foreground"
+                                    onClick={() => {
+                                      setCustomLabels(prev => {
+                                        const next = { ...prev };
+                                        delete next[item.role];
+                                        return next;
+                                      });
+                                      setEditingRoleLabel(null);
+                                    }}
+                                    title="Restaurar nome original"
+                                  >
+                                    <RefreshCw className="w-3 h-3" />
+                                  </Button>
+                                )}
+                              </div>
+                            ) : (
                             <button
                               onClick={() => setExpandedRole(expandedRole === item.role ? null : item.role)}
                               className={cn(
-                                'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl border transition-all text-left',
+                                'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl border transition-all text-left group',
                                 expandedRole === item.role
                                   ? `${color.bg} ${color.border} border`
                                   : 'border-border/30 hover:bg-muted/30'
@@ -494,11 +561,43 @@ export default function AdminPage() {
                               <div className={cn('w-2.5 h-2.5 rounded-full flex-shrink-0', color.bg, `border ${color.border}`)}>
                                 <div className={cn('w-full h-full rounded-full', color.text.replace('text-', 'bg-'))} />
                               </div>
-                              <span className={cn('text-sm font-semibold', color.text)}>{ROLE_LABELS[item.role]}</span>
+                              <span className={cn('text-sm font-semibold', color.text)}>{item.label}</span>
                               {isAdmin && <Lock className="w-3 h-3 text-muted-foreground" />}
                               <span className="text-[10px] text-muted-foreground ml-1">
                                 {SCOPE_ICONS[item.perm?.scope ?? 'self']} {SCOPE_LABELS[item.perm?.scope ?? 'self']}
                               </span>
+                              {/* Edit & Hide actions (non-admin only) */}
+                              {!isAdmin && (
+                                <span className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-1">
+                                  <span
+                                    role="button"
+                                    tabIndex={0}
+                                    className="p-0.5 rounded hover:bg-muted/60"
+                                    title="Renomear cargo"
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      setEditLabelValue(customLabels[item.role] || ROLE_LABELS[item.role]);
+                                      setEditingRoleLabel(item.role);
+                                    }}
+                                    onKeyDown={e => { if (e.key === 'Enter') { e.stopPropagation(); setEditLabelValue(customLabels[item.role] || ROLE_LABELS[item.role]); setEditingRoleLabel(item.role); } }}
+                                  >
+                                    <Pencil className="w-3 h-3 text-muted-foreground" />
+                                  </span>
+                                  <span
+                                    role="button"
+                                    tabIndex={0}
+                                    className="p-0.5 rounded hover:bg-muted/60"
+                                    title="Ocultar cargo do organograma"
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      setHiddenRoles(prev => new Set([...prev, item.role]));
+                                    }}
+                                    onKeyDown={e => { if (e.key === 'Enter') { e.stopPropagation(); setHiddenRoles(prev => new Set([...prev, item.role])); } }}
+                                  >
+                                    <EyeOff className="w-3 h-3 text-muted-foreground" />
+                                  </span>
+                                </span>
+                              )}
                               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground ml-auto">
                                 {item.users.length} {item.users.length === 1 ? 'usuário' : 'usuários'}
                               </span>
@@ -506,6 +605,7 @@ export default function AdminPage() {
                                 ? <ChevronUp className="w-3 h-3 text-muted-foreground flex-shrink-0" />
                                 : <ChevronDown className="w-3 h-3 text-muted-foreground flex-shrink-0" />}
                             </button>
+                            )}
 
                             {/* Expanded: permission config */}
                             {expandedRole === item.role && (
@@ -593,6 +693,29 @@ export default function AdminPage() {
                     );
                   })}
                 </div>
+
+                {/* Hidden roles restore section */}
+                {hiddenRoles.size > 0 && (
+                  <div className="mt-4 p-3 rounded-xl border border-dashed border-border/50 bg-muted/10">
+                    <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+                      <EyeOff className="w-3 h-3" />
+                      Cargos ocultos ({hiddenRoles.size})
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {[...hiddenRoles].map(role => (
+                        <button
+                          key={role}
+                          onClick={() => setHiddenRoles(prev => { const next = new Set(prev); next.delete(role); return next; })}
+                          className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-border bg-muted/30 hover:bg-muted/60 transition-colors"
+                        >
+                          <Eye className="w-3 h-3 text-muted-foreground" />
+                          <span>{customLabels[role] || ROLE_LABELS[role as keyof typeof ROLE_LABELS]}</span>
+                          <span className="text-muted-foreground/60">— Restaurar</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Areas */}
@@ -1471,8 +1594,65 @@ export default function AdminPage() {
                 </a>
               </div>
 
+              {/* Google Workspace Connection */}
               <div className="glass-card p-5 space-y-4">
-                <h3 className="font-semibold text-sm">Variáveis .env (somente leitura no Admin)</h3>
+                <div className="flex items-center gap-2 mb-1">
+                  <ShieldCheck className="w-4 h-4 text-green-500" />
+                  <h3 className="font-semibold text-sm">Conexão Google Workspace</h3>
+                  <Badge variant={oauthClientId ? 'default' : 'outline'} className={cn('text-[10px] ml-auto', oauthClientId ? 'bg-green-500/10 text-green-500 border-green-500/30' : '')}>
+                    {oauthClientId ? 'Conectado' : 'Não configurado'}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Configure as credenciais OAuth do Google para permitir login SSO e integração com Google Meet e Calendar da sua organização.
+                </p>
+                <div>
+                  <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1.5">Google Client ID</label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={oauthClientId}
+                      onChange={e => setOauthClientId(e.target.value)}
+                      placeholder="000000000000-xxxxxxxxxx.apps.googleusercontent.com"
+                      type={showOauthClientId ? 'text' : 'password'}
+                      className="font-mono text-xs"
+                    />
+                    <Button size="sm" variant="outline" className="h-9 px-3" onClick={() => setShowOauthClientId(!showOauthClientId)}>
+                      {showOauthClientId ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </Button>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide block mb-1.5">Google Client Secret</label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={oauthClientSecret}
+                      onChange={e => setOauthClientSecret(e.target.value)}
+                      placeholder="GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxxxx"
+                      type={showOauthSecret ? 'text' : 'password'}
+                      className="font-mono text-xs"
+                    />
+                    <Button size="sm" variant="outline" className="h-9 px-3" onClick={() => setShowOauthSecret(!showOauthSecret)}>
+                      {showOauthSecret ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <Button size="sm" onClick={handleSaveOAuth} className="gap-1.5">
+                    {oauthSaved ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+                    {oauthSaved ? 'Salvo!' : 'Salvar credenciais'}
+                  </Button>
+                  {oauthClientId && (
+                    <span className="text-xs text-green-500 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" /> Client ID configurado
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Env vars reference */}
+              <div className="glass-card p-5 space-y-4">
+                <h3 className="font-semibold text-sm">Variáveis de ambiente (.env)</h3>
+                <p className="text-xs text-muted-foreground">Variáveis configuradas via <code>.env</code> no servidor (sobrescrevem as credenciais acima quando presentes).</p>
                 <div className="p-4 rounded-xl bg-muted/30 border border-border/50 space-y-2">
                   {[
                     'VITE_GOOGLE_CLIENT_ID',
@@ -1483,11 +1663,6 @@ export default function AdminPage() {
                   ].map(v => (
                     <code key={v} className="block text-[11px] text-muted-foreground">{v}</code>
                   ))}
-                </div>
-                <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
-                  <p className="text-xs text-muted-foreground">
-                    Status Google Client ID: {oauthClientId ? 'configurado' : 'não configurado'}.
-                  </p>
                 </div>
               </div>
             </div>

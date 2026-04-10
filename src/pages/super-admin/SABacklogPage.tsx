@@ -196,7 +196,7 @@ export default function SABacklogPage() {
     // Determine which agent should be assigned based on status
     const agentMap: Record<string, string> = {
       analyzing: 'analyst', planning: 'architect', developing: 'dev',
-      reviewing: 'qa', testing: 'qa', deploying: 'devops',
+      reviewing: 'qa', testing: 'qa', 'security-review': 'security', deploying: 'devops',
     };
     const newAgent = agentMap[newStatus] || task.agente_atual;
 
@@ -393,6 +393,10 @@ export default function SABacklogPage() {
             <div>
               <label className="text-sm font-medium block mb-1.5">Descrição</label>
               <Textarea value={editingTask.descricao ?? ''} onChange={e => updateField('descricao', e.target.value)} placeholder="Detalhes da task, contexto, requisitos..." className="min-h-[80px]" />
+            </div>
+            <div>
+              <label className="text-xs font-medium block mb-1.5">Responsável</label>
+              <Input value={editingTask.criado_por ?? ''} onChange={e => updateField('criado_por', e.target.value)} placeholder="Nome de quem criou a task" />
             </div>
             <div>
               <label className="text-xs font-medium block mb-1.5">Tipo</label>
@@ -626,11 +630,18 @@ function TaskCard({ task, onEdit, onDelete, onDragStart }: {
             </span>
           )}
         </div>
+        <div className="flex items-center gap-1.5">
+          {task.criado_por && task.criado_por !== 'super-admin' && (
+            <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+              <User className="w-2.5 h-2.5" /> {task.criado_por}
+            </span>
+          )}
         {task.estimativa_horas && (
           <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
             <Clock className="w-2.5 h-2.5" /> {task.estimativa_horas}h
           </span>
         )}
+        </div>
       </div>
     </div>
   );
