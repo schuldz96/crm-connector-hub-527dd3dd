@@ -314,7 +314,21 @@ export default function SABacklogPage() {
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg" onPaste={e => {
+          const items = e.clipboardData?.items;
+          if (!items) return;
+          for (const item of Array.from(items)) {
+            if (item.type.startsWith('image/')) {
+              const file = item.getAsFile();
+              if (!file) continue;
+              const reader = new FileReader();
+              reader.onload = () => updateField('imagem_url', reader.result as string);
+              reader.readAsDataURL(file);
+              e.preventDefault();
+              return;
+            }
+          }
+        }}>
           <DialogHeader>
             <DialogTitle>{isEditing ? 'Editar Task' : 'Nova Task'}</DialogTitle>
           </DialogHeader>
