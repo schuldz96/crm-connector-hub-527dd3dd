@@ -62,6 +62,22 @@ const TYPE_CONFIG: Record<string, { label: string; icon: typeof Bug; class: stri
   docs:        { label: 'Docs',        icon: FileText,  class: 'text-green-400' },
 };
 
+// ─── Image helpers (stores single base64 or JSON array in imagem_url) ──────────
+
+function parseImages(url: string | null | undefined): string[] {
+  if (!url) return [];
+  if (url.startsWith('[')) {
+    try { return JSON.parse(url); } catch { return [url]; }
+  }
+  return [url];
+}
+
+function serializeImages(imgs: string[]): string | null {
+  if (imgs.length === 0) return null;
+  if (imgs.length === 1) return imgs[0];
+  return JSON.stringify(imgs);
+}
+
 // ─── Component ──────────────────────────────────────────────────────────────────
 
 const emptyTask: Partial<BacklogTask> = {
@@ -322,7 +338,10 @@ export default function SABacklogPage() {
               const file = item.getAsFile();
               if (!file) continue;
               const reader = new FileReader();
-              reader.onload = () => updateField('imagem_url', reader.result as string);
+              reader.onload = () => {
+                const current = parseImages(editingTask.imagem_url);
+                updateField('imagem_url', serializeImages([...current, reader.result as string]));
+              };
               reader.readAsDataURL(file);
               e.preventDefault();
               return;
@@ -354,69 +373,70 @@ export default function SABacklogPage() {
               </div>
             </div>
 
-            {/* Image reference — paste, drop or upload */}
+            {/* Image references — paste, drop or upload (multi-image) */}
             <div>
-              <label className="text-xs font-medium block mb-1.5">Imagem de referência</label>
-              {!editingTask.imagem_url ? (
-                <div
-                  tabIndex={0}
-                  onPaste={e => {
-                    const items = e.clipboardData?.items;
-                    if (!items) return;
-                    for (const item of Array.from(items)) {
-                      if (item.type.startsWith('image/')) {
-                        const file = item.getAsFile();
-                        if (!file) continue;
-                        const reader = new FileReader();
-                        reader.onload = () => updateField('imagem_url', reader.result as string);
-                        reader.readAsDataURL(file);
+              <label className="text-xs font-medium block mb-1.5">Imagens de referência</label>
+              {(() => {
+                const images = parseImages(editingTask.imagem_url);
+                const addImage = (base64: string) => {
+                  updateField('imagem_url', serializeImages([...images, base64]));
+                };
+                const removeImage = (idx: number) => {
+                  updateField('imagem_url', serializeImages(images.filter((_, i) => i !== idx)));
+                };
+                return (
+                  <>
+                    {images.length > 0 && (
+                      <div className="grid grid-cols-3 gap-2 mb-2">
+                        {images.map((img, idx) => (
+                          <div key={idx} className="relative group">
+                            <img src={img} alt={`Ref ${idx + 1}`} className="h-24 w-full rounded-lg border border-border object-cover bg-black/5" />
+                            <button onClick={() => removeImage(idx)}
+                              className="absolute top-1 right-1 p-1 rounded bg-black/70 text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div
+                      onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('border-primary'); }}
+                      onDragLeave={e => { e.currentTarget.classList.remove('border-primary'); }}
+                      onDrop={e => {
                         e.preventDefault();
-                        return;
-                      }
-                    }
-                  }}
-                  onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('border-primary'); }}
-                  onDragLeave={e => { e.currentTarget.classList.remove('border-primary'); }}
-                  onDrop={e => {
-                    e.preventDefault();
-                    e.currentTarget.classList.remove('border-primary');
-                    const file = e.dataTransfer.files?.[0];
-                    if (!file || !file.type.startsWith('image/')) return;
-                    const reader = new FileReader();
-                    reader.onload = () => updateField('imagem_url', reader.result as string);
-                    reader.readAsDataURL(file);
-                  }}
-                  className="flex flex-col items-center justify-center gap-2 p-6 rounded-lg border-2 border-dashed border-border hover:border-muted-foreground/50 transition-colors cursor-pointer focus:outline-none focus:border-primary"
-                  onClick={() => {
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.accept = 'image/*';
-                    input.onchange = () => {
-                      const file = input.files?.[0];
-                      if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = () => updateField('imagem_url', reader.result as string);
-                      reader.readAsDataURL(file);
-                    };
-                    input.click();
-                  }}
-                >
-                  <span className="text-2xl">📋</span>
-                  <p className="text-xs text-muted-foreground text-center">
-                    <strong className="text-foreground">Ctrl+V</strong> para colar print &middot; arraste imagem &middot; ou clique para selecionar
-                  </p>
-                </div>
-              ) : (
-                <div className="relative group">
-                  <img src={editingTask.imagem_url} alt="Referência" className="max-h-48 w-full rounded-lg border border-border object-contain bg-black/5" />
-                  <button
-                    onClick={() => updateField('imagem_url', null)}
-                    className="absolute top-2 right-2 px-2 py-1 rounded-md bg-black/70 text-white text-[10px] font-medium flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <Trash2 className="w-3 h-3" /> Remover
-                  </button>
-                </div>
-              )}
+                        e.currentTarget.classList.remove('border-primary');
+                        const file = e.dataTransfer.files?.[0];
+                        if (!file || !file.type.startsWith('image/')) return;
+                        const reader = new FileReader();
+                        reader.onload = () => addImage(reader.result as string);
+                        reader.readAsDataURL(file);
+                      }}
+                      className="flex flex-col items-center justify-center gap-1.5 p-4 rounded-lg border-2 border-dashed border-border hover:border-muted-foreground/50 transition-colors cursor-pointer"
+                      onClick={() => {
+                        const input = document.createElement('input');
+                        input.type = 'file';
+                        input.accept = 'image/*';
+                        input.multiple = true;
+                        input.onchange = () => {
+                          const files = input.files;
+                          if (!files) return;
+                          Array.from(files).forEach(file => {
+                            const reader = new FileReader();
+                            reader.onload = () => addImage(reader.result as string);
+                            reader.readAsDataURL(file);
+                          });
+                        };
+                        input.click();
+                      }}
+                    >
+                      <span className="text-lg">{images.length > 0 ? '➕' : '📋'}</span>
+                      <p className="text-[10px] text-muted-foreground text-center">
+                        <strong className="text-foreground">Ctrl+V</strong> &middot; arrastar &middot; clique para {images.length > 0 ? 'adicionar mais' : 'selecionar'}
+                      </p>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             {/* Agent history (edit mode only) */}
@@ -513,9 +533,23 @@ function TaskCard({ task, onEdit, onDelete, onDragStart }: {
         </span>
       </div>
       <p className="text-xs font-semibold text-foreground leading-snug mb-1.5">{task.titulo}</p>
-      {task.imagem_url && (
-        <img src={task.imagem_url} alt="" className="w-full max-h-24 object-cover rounded-md border border-border mb-1.5" />
-      )}
+      {task.imagem_url && (() => {
+        const imgs = parseImages(task.imagem_url);
+        if (imgs.length === 0) return null;
+        if (imgs.length === 1) return <img src={imgs[0]} alt="" className="w-full max-h-24 object-cover rounded-md border border-border mb-1.5" />;
+        return (
+          <div className="grid grid-cols-2 gap-1 mb-1.5">
+            {imgs.slice(0, 4).map((img, i) => (
+              <div key={i} className="relative">
+                <img src={img} alt="" className="w-full h-14 object-cover rounded border border-border" />
+                {i === 3 && imgs.length > 4 && (
+                  <div className="absolute inset-0 bg-black/50 rounded flex items-center justify-center text-white text-xs font-bold">+{imgs.length - 4}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
       {task.descricao && (
         <p className="text-[10px] text-muted-foreground leading-relaxed line-clamp-2 mb-2">{task.descricao}</p>
       )}
