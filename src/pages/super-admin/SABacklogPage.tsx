@@ -340,44 +340,66 @@ export default function SABacklogPage() {
               </div>
             </div>
 
-            {/* Image reference */}
+            {/* Image reference — paste, drop or upload */}
             <div>
               <label className="text-xs font-medium block mb-1.5">Imagem de referência</label>
-              <div className="flex gap-2">
-                <Input
-                  value={editingTask.imagem_url ?? ''}
-                  onChange={e => updateField('imagem_url', e.target.value || null)}
-                  placeholder="Cole a URL da imagem ou faça upload"
-                  className="h-9 text-xs flex-1"
-                />
-                <label className="flex items-center gap-1 px-3 h-9 rounded-md border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer transition-colors">
-                  <Plus className="w-3.5 h-3.5" /> Upload
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={e => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      if (file.size > 2 * 1024 * 1024) {
-                        toast({ title: 'Imagem muito grande', description: 'Máximo 2MB', variant: 'destructive' });
+              {!editingTask.imagem_url ? (
+                <div
+                  tabIndex={0}
+                  onPaste={e => {
+                    const items = e.clipboardData?.items;
+                    if (!items) return;
+                    for (const item of Array.from(items)) {
+                      if (item.type.startsWith('image/')) {
+                        const file = item.getAsFile();
+                        if (!file) continue;
+                        const reader = new FileReader();
+                        reader.onload = () => updateField('imagem_url', reader.result as string);
+                        reader.readAsDataURL(file);
+                        e.preventDefault();
                         return;
                       }
+                    }
+                  }}
+                  onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('border-primary'); }}
+                  onDragLeave={e => { e.currentTarget.classList.remove('border-primary'); }}
+                  onDrop={e => {
+                    e.preventDefault();
+                    e.currentTarget.classList.remove('border-primary');
+                    const file = e.dataTransfer.files?.[0];
+                    if (!file || !file.type.startsWith('image/')) return;
+                    const reader = new FileReader();
+                    reader.onload = () => updateField('imagem_url', reader.result as string);
+                    reader.readAsDataURL(file);
+                  }}
+                  className="flex flex-col items-center justify-center gap-2 p-6 rounded-lg border-2 border-dashed border-border hover:border-muted-foreground/50 transition-colors cursor-pointer focus:outline-none focus:border-primary"
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.onchange = () => {
+                      const file = input.files?.[0];
+                      if (!file) return;
                       const reader = new FileReader();
                       reader.onload = () => updateField('imagem_url', reader.result as string);
                       reader.readAsDataURL(file);
-                    }}
-                  />
-                </label>
-              </div>
-              {editingTask.imagem_url && (
-                <div className="mt-2 relative group">
-                  <img src={editingTask.imagem_url} alt="Referência" className="max-h-40 rounded-lg border border-border object-contain" />
+                    };
+                    input.click();
+                  }}
+                >
+                  <span className="text-2xl">📋</span>
+                  <p className="text-xs text-muted-foreground text-center">
+                    <strong className="text-foreground">Ctrl+V</strong> para colar print &middot; arraste imagem &middot; ou clique para selecionar
+                  </p>
+                </div>
+              ) : (
+                <div className="relative group">
+                  <img src={editingTask.imagem_url} alt="Referência" className="max-h-48 w-full rounded-lg border border-border object-contain bg-black/5" />
                   <button
                     onClick={() => updateField('imagem_url', null)}
-                    className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute top-2 right-2 px-2 py-1 rounded-md bg-black/70 text-white text-[10px] font-medium flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
                   >
-                    <Trash2 className="w-3 h-3" />
+                    <Trash2 className="w-3 h-3" /> Remover
                   </button>
                 </div>
               )}
