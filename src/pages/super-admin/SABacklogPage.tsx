@@ -409,19 +409,52 @@ export default function SABacklogPage() {
             {isEditing && editingTask.agente_historico && editingTask.agente_historico.length > 0 && (
               <div>
                 <label className="text-xs font-medium block mb-1.5">Histórico de Agentes</label>
-                <div className="space-y-1 max-h-32 overflow-y-auto">
-                  {editingTask.agente_historico.map((h, i) => {
+                <div className="space-y-0 max-h-48 overflow-y-auto">
+                  {editingTask.agente_historico.map((h, i, arr) => {
                     const ag = AGENTS.find(a => a.id === h.agente);
                     const col = COLUMNS.find(c => c.id === h.status);
+                    const ts = new Date(h.timestamp);
+                    const prev = i > 0 ? new Date(arr[i - 1].timestamp) : null;
+                    const diffMs = prev ? ts.getTime() - prev.getTime() : 0;
+                    const diffMin = Math.round(diffMs / 60000);
+                    const durLabel = diffMin < 1 ? '<1min' : diffMin < 60 ? `${diffMin}min` : `${Math.floor(diffMin / 60)}h${diffMin % 60 > 0 ? `${diffMin % 60}m` : ''}`;
                     return (
-                      <div key={i} className="flex items-center gap-2 text-[10px] text-muted-foreground px-2 py-1 rounded bg-muted/30">
-                        <span>{ag?.emoji ?? '🤖'} {ag?.label ?? h.agente}</span>
-                        <ChevronRight className="w-2.5 h-2.5" />
-                        <span>{col?.emoji} {col?.label ?? h.status}</span>
-                        <span className="ml-auto">{new Date(h.timestamp).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                      <div key={i}>
+                        {i > 0 && (
+                          <div className="flex items-center gap-1.5 pl-4 py-0.5">
+                            <div className="w-px h-3 bg-border" />
+                            <span className="text-[9px] text-muted-foreground/60 font-mono">⏱ {durLabel}</span>
+                          </div>
+                        )}
+                        <div className="flex items-start gap-2 text-[11px] text-muted-foreground px-2.5 py-1.5 rounded bg-muted/30">
+                          <div className="flex items-center gap-1.5 shrink-0 min-w-[100px]">
+                            <span>{ag?.emoji ?? '🤖'} {ag?.label ?? h.agente}</span>
+                            <ChevronRight className="w-2.5 h-2.5 shrink-0" />
+                            <span className="whitespace-nowrap">{col?.emoji} {col?.label ?? h.status}</span>
+                          </div>
+                          {h.nota && (
+                            <span className="text-[10px] text-foreground/70 border-l border-border pl-2 ml-1">{h.nota}</span>
+                          )}
+                          <span className="ml-auto text-[10px] text-muted-foreground/50 whitespace-nowrap shrink-0">
+                            {ts.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
                       </div>
                     );
                   })}
+                  {/* Total duration */}
+                  {editingTask.agente_historico.length > 1 && (() => {
+                    const first = new Date(editingTask.agente_historico[0].timestamp).getTime();
+                    const last = new Date(editingTask.agente_historico[editingTask.agente_historico.length - 1].timestamp).getTime();
+                    const totalMin = Math.round((last - first) / 60000);
+                    const totalLabel = totalMin < 60 ? `${totalMin}min` : `${Math.floor(totalMin / 60)}h${totalMin % 60 > 0 ? `${totalMin % 60}m` : ''}`;
+                    return (
+                      <div className="flex items-center justify-end gap-1.5 pt-1.5 mt-1 border-t border-border/50">
+                        <Clock className="w-3 h-3 text-muted-foreground/50" />
+                        <span className="text-[10px] font-medium text-muted-foreground/70">Tempo total: {totalLabel}</span>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             )}
