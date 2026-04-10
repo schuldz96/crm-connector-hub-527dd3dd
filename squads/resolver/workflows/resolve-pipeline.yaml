@@ -1,0 +1,310 @@
+# ============================================================================
+# Resolve Pipeline — Backlog Task Resolution
+# ============================================================================
+# Uso: @resolver *resolve {task_id}
+# Ou via Orion: @aiox-master *resolve-backlog {task_id}
+#
+# Pipeline: Análise → Desenvolvimento → Teste ↔ Dev (loop) → Deploy → Done
+# ============================================================================
+
+name: resolve-pipeline
+version: 1.0.0
+description: "Pipeline completo de resolução de tasks do backlog"
+trigger: "*resolve {task_id}"
+
+config:
+  max_qa_loops: 3
+  fail_strategy: escalate_to_user
+  update_backlog_status: true
+  update_agent_history: true
+
+# ============================================================================
+# FASE 0: Carregar Task
+# ============================================================================
+phases:
+  - id: load
+    name: "Carregar Task do Backlog"
+    agent: orchestrator
+    steps:
+      - "Buscar task por ID no Supabase (admin.backlog_tasks)"
+      - "Validar que task existe e não está em 'done'"
+      - "Extrair: titulo, descricao, tipo, prioridade, imagem_url"
+      - "Se task tem imagem, analisar screenshot para contexto visual"
+      - "Atualizar status para 'analyzing' no banco"
+      - "Registrar no agente_historico: {agente: 'orchestrator', status: 'analyzing', timestamp, nota: 'Pipeline iniciado'}"
+    output: task_context
+    next: analyze
+
+  # ============================================================================
+  # FASE 1: Análise (@analyst)
+  # ============================================================================
+  - id: analyze
+    name: "Analisar Demanda"
+    agent: analyzer
+    aiox_agent: "@analyst"
+    status_update: analyzing
+    steps:
+      - name: "Classificar demanda"
+        action: |
+          Ler titulo + descricao da task e classificar:
+          - bug: Erro, crash, comportamento inesperado
+          - feature: Funcionalidade nova
+          - improvement: Melhoria em algo existente
+          - refactor: Reorganização de código
+
+      - name: "Identificar escopo"
+        action: |
+          Baseado na descrição e tipo:
+          1. Grep/Glob para encontrar arquivos relacionados
+          2. Ler os arquivos principais envolvidos
+          3. Identificar dependências (imports, hooks, services)
+          4. Mapear componentes afetados
+          5. Se tem screenshot/imagem, comparar com o código
+
+      - name: "Avaliar impacto"
+        action: |
+          Determinar:
+          - Arquivos a modificar (lista)
+          - Tabelas do banco afetadas (se houver)
+          - Risco: baixo (1 arquivo) / médio (2-5) / alto (6+)
+          - Estimativa de complexidade
+
+      - name: "Produzir relatório"
+        action: |
+          Gerar relatório estruturado:
+          ```
+          ## Análise da Demanda
+          **Tipo:** {bug|feature|improvement|refactor}
+          **Risco:** {baixo|médio|alto}
+          **Arquivos afetados:** [lista]
+          **Tabelas DB:** [lista ou "nenhuma"]
+          **Causa raiz:** {descrição}  (se bug)
+          **Abordagem sugerida:** {plano de implementação}
+          ```
+
+    output: analysis_report
+    update_history:
+      agente: analyst
+      nota: "{resumo da análise em 1 linha}"
+    next: develop
+
+  # ============================================================================
+  # FASE 2: Desenvolvimento (@dev)
+  # ============================================================================
+  - id: develop
+    name: "Implementar Solução"
+    agent: developer
+    aiox_agent: "@dev"
+    status_update: developing
+    receives: analysis_report
+    steps:
+      - name: "Ler relatório da análise"
+        action: |
+          Consumir analysis_report:
+          - Arquivos a modificar
+          - Abordagem sugerida
+          - Causa raiz (se bug)
+
+      - name: "Implementar"
+        action: |
+          Para cada arquivo identificado:
+          1. Read o arquivo completo
+          2. Entender o contexto
+          3. Aplicar a mudança com Edit (preferir Edit sobre Write)
+          4. Seguir padrões existentes do codebase
+          5. NÃO adicionar features extras além do escopo
+
+      - name: "Verificação rápida"
+        action: |
+          Após implementar:
+          1. npx tsc --noEmit --skipLibCheck (type check)
+          2. Se erros de tipo, corrigir imediatamente
+          3. Revisar as mudanças com git diff
+
+      - name: "Se tiver dúvida"
+        action: |
+          Se o dev encontrar ambiguidade ou precisar de mais contexto:
+          1. Documentar a dúvida
+          2. Voltar para fase 'analyze' com a dúvida específica
+          3. Analyzer investiga e retorna com mais contexto
+        on_doubt:
+          goto: analyze
+          context: "doubt_from_dev"
+
+    output: implementation_diff
+    update_history:
+      agente: dev
+      nota: "{resumo das mudanças em 1 linha}"
+    next: test
+
+  # ============================================================================
+  # FASE 3: Testes (@qa)
+  # ============================================================================
+  - id: test
+    name: "Testar Solução"
+    agent: tester
+    aiox_agent: "@qa"
+    status_update: testing
+    receives: [analysis_report, implementation_diff]
+    max_loops: 3
+    current_loop: 0
+    steps:
+      - name: "Build Check"
+        action: |
+          Executar build completo:
+          ```bash
+          npx tsc --noEmit --skipLibCheck   # Type check
+          npx vite build                      # Build de produção
+          ```
+          CRITÉRIO: Zero erros. Warnings pré-existentes são OK.
+        severity: blocker
+
+      - name: "Verificar Banco de Dados"
+        action: |
+          Se a análise indicou tabelas afetadas:
+          1. Verificar se tabelas existem no Supabase (REST API)
+          2. Verificar se colunas necessárias existem
+          3. Verificar RLS policies estão ativas
+          4. Testar query de exemplo via REST API
+          5. Se migration foi criada, verificar se foi aplicada
+        severity: blocker
+
+      - name: "Verificar Conexões"
+        action: |
+          Validar que serviços estão conectados:
+          1. Grep por imports do supabase client — todos resolvem?
+          2. Hooks usados (useQuery, useMutation) — queryKeys corretos?
+          3. Se usa fetch/API externa — endpoint existe?
+        severity: major
+
+      - name: "Verificar UI/Componentes"
+        action: |
+          Para cada componente modificado:
+          1. Verificar que todos os props tipados estão corretos
+          2. Verificar que useState/useEffect estão em ordem válida (sem temporal dead zone)
+          3. Verificar que event handlers existem e estão wired
+          4. Verificar que imports estão corretos (sem imports mortos)
+          5. Se botão/link foi adicionado — onClick/href definido?
+          6. Se formulário — onSubmit handler existe?
+        severity: major
+
+      - name: "Verificar Integridade"
+        action: |
+          Checklist final:
+          - [ ] Nenhum console.log de debug esquecido
+          - [ ] Nenhum TODO/FIXME novo sem justificativa
+          - [ ] Nenhum .env ou credencial exposta
+          - [ ] Código segue padrões existentes
+          - [ ] Nenhuma regressão óbvia nos arquivos modificados
+        severity: minor
+
+      - name: "Produzir Veredito"
+        action: |
+          Gerar veredito:
+          ```
+          ## QA Report
+          **Build:** ✅ PASS / ❌ FAIL
+          **Banco:** ✅ OK / ⚠️ N/A / ❌ FALHA
+          **Conexões:** ✅ OK / ❌ FALHA
+          **UI/Componentes:** ✅ OK / ❌ FALHA
+          **Integridade:** ✅ OK / ⚠️ MINOR
+
+          **Veredito:** PASS / FAIL
+          **Detalhes:** {lista de issues se FAIL}
+          ```
+
+    output: qa_report
+    update_history:
+      agente: qa
+      nota: "{veredito: PASS ou lista de falhas}"
+
+    on_pass:
+      next: deploy
+    on_fail:
+      action: |
+        Se FAIL:
+        1. Incrementar current_loop
+        2. Se current_loop >= max_loops (3):
+           → Escalar para usuário com relatório completo
+        3. Senão:
+           → Enviar qa_report para @dev com issues específicas
+           → Voltar para fase 'develop'
+      goto: develop
+      context: "fix_from_qa"
+
+  # ============================================================================
+  # FASE 4: Deploy (@devops)
+  # ============================================================================
+  - id: deploy
+    name: "Deploy da Solução"
+    agent: deployer
+    aiox_agent: "@devops"
+    status_update: deploying
+    steps:
+      - name: "Preparar commit"
+        action: |
+          1. git status — verificar arquivos modificados
+          2. git diff --stat — confirmar mudanças
+          3. Adicionar apenas arquivos relevantes (git add específico)
+          4. NÃO adicionar .env ou arquivos sensíveis
+
+      - name: "Commit"
+        action: |
+          Criar commit com conventional commits:
+          ```
+          {tipo}: {descrição concisa da task}
+
+          {detalhes do que foi feito}
+
+          Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+          ```
+          Tipos: feat, fix, chore, refactor, docs
+
+      - name: "Push"
+        action: |
+          git push origin main
+          → Lovable auto-deploy disparado
+
+      - name: "Verificar"
+        action: |
+          Confirmar que push chegou:
+          git log origin/main --oneline -1
+
+    output: deploy_result
+    update_history:
+      agente: devops
+      nota: "Commit {hash} pushado para main"
+    next: done
+
+  # ============================================================================
+  # FASE 5: Concluir
+  # ============================================================================
+  - id: done
+    name: "Marcar como Concluído"
+    agent: orchestrator
+    status_update: done
+    steps:
+      - name: "Atualizar backlog"
+        action: |
+          Via REST API do Supabase:
+          PATCH admin.backlog_tasks SET status='done'
+          WHERE id = {task_id}
+
+      - name: "Relatório final"
+        action: |
+          Apresentar ao usuário:
+          ```
+          ✅ Task "{titulo}" concluída!
+
+          📊 Resumo:
+          - Tipo: {tipo}
+          - Arquivos modificados: {count}
+          - Ciclos QA: {loops}
+          - Tempo total: {duration}
+          - Commit: {hash}
+          - Deploy: Lovable auto-deploy
+          ```
+
+    update_history:
+      agente: orchestrator
+      nota: "Pipeline concluído com sucesso"

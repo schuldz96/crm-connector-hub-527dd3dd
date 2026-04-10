@@ -1,0 +1,79 @@
+name: resolver
+version: 1.0.0
+description: "Squad de resolução automatizada de tasks do Backlog. Orquestra agentes AIOX no pipeline: Análise → Desenvolvimento → Teste → Deploy → Concluído."
+author: Synkra AIOX
+license: MIT
+slashPrefix: resolver
+
+aiox:
+  minVersion: "2.1.0"
+  type: squad
+
+components:
+  agents:
+    - orchestrator.md   # Orquestrador do pipeline (Orion delega para ele)
+    - analyzer.md       # Analisa a demanda, identifica arquivos e impacto
+    - developer.md      # Implementa a solução
+    - tester.md         # Testa build, DB, UI, integração
+    - deployer.md       # Commit + push + verifica deploy
+
+  tasks:
+    - resolve-task.md           # Pipeline completo (entry point)
+    - analyze-demand.md         # Fase 1: Análise
+    - implement-solution.md     # Fase 2: Desenvolvimento
+    - run-tests.md              # Fase 3: Testes
+    - deploy-solution.md        # Fase 4: Deploy
+    - mark-done.md              # Fase 5: Concluir
+
+  workflows:
+    - resolve-pipeline.yaml     # Definição do pipeline completo
+
+  checklists: []
+  templates: []
+  tools: []
+  scripts: []
+
+config:
+  extends: extend
+  max_dev_qa_loops: 3          # Máximo de ciclos dev↔qa antes de escalar
+  auto_deploy: true            # Deploy automático quando testes passam
+  update_backlog: true         # Atualiza status no banco automaticamente
+
+pipeline:
+  stages:
+    - id: analyzing
+      agent: analyzer
+      task: analyze-demand.md
+      next: developing
+    - id: developing
+      agent: developer
+      task: implement-solution.md
+      next: testing
+      on_doubt: analyzing       # Se dev tiver dúvida, volta para análise
+    - id: testing
+      agent: tester
+      task: run-tests.md
+      next: deploying
+      on_fail: developing       # Se teste falhar, volta para dev
+    - id: deploying
+      agent: deployer
+      task: deploy-solution.md
+      next: done
+    - id: done
+      task: mark-done.md
+
+dependencies:
+  node: []
+  squads: []
+  aiox_agents:
+    - "@analyst"    # Mapeado para analyzer
+    - "@dev"        # Mapeado para developer
+    - "@qa"         # Mapeado para tester
+    - "@devops"     # Mapeado para deployer
+
+tags:
+  - backlog
+  - automation
+  - pipeline
+  - resolution
+  - orchestration
