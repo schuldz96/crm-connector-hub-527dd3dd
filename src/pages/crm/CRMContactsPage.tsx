@@ -16,6 +16,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import PhoneInput from '@/components/ui/phone-input';
 import { useCrmContacts, useCreateContact, useSaasUsers } from '@/hooks/useCrm';
 import { useToast } from '@/hooks/use-toast';
 import type { ContactStatus } from '@/types/crm';
@@ -540,13 +541,22 @@ export default function CRMContactsPage() {
                       </button>
                     )}
                   </div>
-                  <Input
-                    value={formData[field.key] || ''}
-                    onChange={e => updateFormField(field.key, e.target.value)}
-                    placeholder={field.placeholder || field.label}
-                    type={field.type || 'text'}
-                    className="mt-0.5"
-                  />
+                  {field.type === 'tel' ? (
+                    <PhoneInput
+                      value={formData[field.key] || ''}
+                      onChange={val => updateFormField(field.key, val)}
+                      placeholder="11 99999-0000"
+                      className="mt-0.5"
+                    />
+                  ) : (
+                    <Input
+                      value={formData[field.key] || ''}
+                      onChange={e => updateFormField(field.key, e.target.value)}
+                      placeholder={field.placeholder || field.label}
+                      type={field.type || 'text'}
+                      className="mt-0.5"
+                    />
+                  )}
                 </div>
               ))}
               <button
