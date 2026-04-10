@@ -327,54 +327,17 @@ export default function SABacklogPage() {
               <label className="text-sm font-medium block mb-1.5">Descrição</label>
               <Textarea value={editingTask.descricao ?? ''} onChange={e => updateField('descricao', e.target.value)} placeholder="Detalhes da task, contexto, requisitos..." className="min-h-[80px]" />
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="text-xs font-medium block mb-1.5">Status</label>
-                <Select value={editingTask.status ?? 'backlog'} onValueChange={v => updateField('status', v)}>
-                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {COLUMNS.map(c => <SelectItem key={c.id} value={c.id}>{c.emoji} {c.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-xs font-medium block mb-1.5">Prioridade</label>
-                <Select value={editingTask.prioridade ?? 'medium'} onValueChange={v => updateField('prioridade', v)}>
-                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(PRIORITY_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-xs font-medium block mb-1.5">Tipo</label>
-                <Select value={editingTask.tipo ?? 'feature'} onValueChange={v => updateField('tipo', v)}>
-                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(TYPE_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium block mb-1.5">Agente Responsável</label>
-                <Select value={editingTask.agente_atual ?? '_none'} onValueChange={v => updateField('agente_atual', v === '_none' ? null : v)}>
-                  <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Nenhum" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_none">Nenhum</SelectItem>
-                    {AGENTS.map(a => <SelectItem key={a.id} value={a.id}>{a.emoji} {a.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label className="text-xs font-medium block mb-1.5">Módulo</label>
-                <Input value={editingTask.modulo ?? ''} onChange={e => updateField('modulo', e.target.value || null)} placeholder="Ex: crm, whatsapp, marketing" className="h-9 text-xs" />
-              </div>
-            </div>
             <div>
-              <label className="text-xs font-medium block mb-1.5">Estimativa (horas)</label>
-              <Input type="number" value={editingTask.estimativa_horas ?? ''} onChange={e => updateField('estimativa_horas', e.target.value ? Number(e.target.value) : null)} placeholder="Ex: 4" className="h-9 text-xs w-32" />
+              <label className="text-xs font-medium block mb-1.5">Tipo</label>
+              <div className="flex gap-2">
+                {Object.entries(TYPE_CONFIG).map(([k, v]) => (
+                  <button key={k} type="button" onClick={() => updateField('tipo', k)}
+                    className={cn('flex items-center gap-1.5 flex-1 px-3 py-2 rounded-lg border text-xs font-medium transition-all',
+                      editingTask.tipo === k ? 'bg-primary/15 border-primary/30 text-primary' : 'border-border text-muted-foreground hover:bg-muted')}>
+                    <v.icon className="w-3.5 h-3.5" /> {v.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Image reference */}
