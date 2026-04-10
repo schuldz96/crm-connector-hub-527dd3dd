@@ -325,7 +325,7 @@ function UserProfileModal({ user, onClose }: { user: User; onClose: () => void }
 
       if (resolvedUser) {
         const { data: access } = await (supabase as any)
-          .schema('channels').from('meta_user_access').select('account_id').eq('usuario_id', resolvedUser.id);
+          .schema('channels').from('meta_user_access').select('account_id').eq('usuario_id', resolvedUser.id).eq('org', org);
         setUserAccountAccess(new Set((access || []).map((a: any) => a.account_id)));
       }
     };
@@ -361,10 +361,10 @@ function UserProfileModal({ user, onClose }: { user: User; onClose: () => void }
 
     if (resolvedUser) {
       // Delete all existing access
-      await (supabase as any).schema('channels').from('meta_user_access').delete().eq('usuario_id', resolvedUser.id);
+      await (supabase as any).schema('channels').from('meta_user_access').delete().eq('usuario_id', resolvedUser.id).eq('org', org);
       // Insert new access
       if (userAccountAccess.size > 0) {
-        const rows = [...userAccountAccess].map(accountId => ({ usuario_id: resolvedUser.id, account_id: accountId }));
+        const rows = [...userAccountAccess].map(accountId => ({ usuario_id: resolvedUser.id, account_id: accountId, org }));
         await (supabase as any).schema('channels').from('meta_user_access').insert(rows);
       }
     }

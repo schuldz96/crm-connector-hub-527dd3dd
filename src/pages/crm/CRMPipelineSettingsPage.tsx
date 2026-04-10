@@ -156,13 +156,18 @@ export default function CRMPipelineSettingsPage() {
     if (!selectedPipeline) return;
     setSaving(true);
     try {
+      const org = await getOrg();
+      // Validate pipeline belongs to current org
+      const { data: ownerCheck } = await crm().from('pipelines').select('id').eq('id', selectedPipeline.id).eq('org', org).maybeSingle();
+      if (!ownerCheck) throw new Error('Pipeline não pertence à organização atual.');
+
       // Delete removed stages
       const existingIds = (selectedPipeline.estagios || []).map(s => s.id);
       const currentIds = stages.filter(s => !s.isNew).map(s => s.id);
       const deletedIds = existingIds.filter(id => !currentIds.includes(id));
 
       if (deletedIds.length > 0) {
-        await crm().from('pipeline_estagios').delete().in('id', deletedIds);
+        await crm().from('pipeline_estagios').delete().in('id', deletedIds).eq('pipeline_id', selectedPipeline.id);
       }
 
       // Upsert stages
@@ -181,7 +186,7 @@ export default function CRMPipelineSettingsPage() {
             cor: stage.cor,
             probabilidade: stage.probabilidade,
             ordem: stage.ordem,
-          }).eq('id', stage.id);
+          }).eq('id', stage.id).eq('pipeline_id', selectedPipeline.id);
         }
       }
 
@@ -228,7 +233,8 @@ export default function CRMPipelineSettingsPage() {
       return;
     }
     try {
-      await crm().from('pipelines').delete().eq('id', selectedPipeline.id);
+      const org = await getOrg();
+      await crm().from('pipelines').delete().eq('id', selectedPipeline.id).eq('org', org);
       setSelectedPipelineId(null);
       await refetch();
       toast({ title: 'Pipeline excluído' });
@@ -242,7 +248,8 @@ export default function CRMPipelineSettingsPage() {
     const newName = prompt('Novo nome do pipeline:', selectedPipeline.nome);
     if (!newName || newName === selectedPipeline.nome) return;
     try {
-      await crm().from('pipelines').update({ nome: newName }).eq('id', selectedPipeline.id);
+      const org = await getOrg();
+      await crm().from('pipelines').update({ nome: newName }).eq('id', selectedPipeline.id).eq('org', org);
       await refetch();
       toast({ title: 'Pipeline renomeado' });
     } catch (err) {
@@ -274,8 +281,9 @@ export default function CRMPipelineSettingsPage() {
   const saveReorder = async () => {
     setSavingReorder(true);
     try {
+      const org = await getOrg();
       for (const p of reorderList) {
-        await crm().from('pipelines').update({ ordem: p.ordem }).eq('id', p.id);
+        await crm().from('pipelines').update({ ordem: p.ordem }).eq('id', p.id).eq('org', org);
       }
       await refetch();
       setReorderMode(false);

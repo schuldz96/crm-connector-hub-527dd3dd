@@ -340,6 +340,7 @@ function NewConversationDialog({
       const { data: existing } = await (supabase as any)
         .schema('channels').from('meta_conversations')
         .select('id')
+        .eq('org', org)
         .eq('account_id', account.id)
         .eq('contact_phone', normalizedPhone)
         .maybeSingle();
@@ -350,6 +351,7 @@ function NewConversationDialog({
         const { data: created, error } = await (supabase as any)
           .schema('channels').from('meta_conversations')
           .insert({
+            org,
             account_id: account.id,
             empresa_id: org,
             contact_phone: normalizedPhone,
@@ -585,8 +587,10 @@ export default function InboxPage() {
   // ── Load owner history for ticket ──
   const loadOwnerHistory = useCallback(async (ticketId: string) => {
     try {
+      const org = await getOrg();
       const { data } = await (supabase as any).schema('crm').from('ticket_owner_history')
         .select('id, usuario_id, usuario_nome, atribuido_por, inicio_em, fim_em')
+        .eq('org', org)
         .eq('ticket_id', ticketId)
         .order('inicio_em', { ascending: true });
       setOwnerHistory(data || []);
@@ -623,8 +627,10 @@ export default function InboxPage() {
     if (!selectedConv) return;
     (async () => {
       try {
+        const org = await getOrg();
         const { data } = await (supabase as any).schema('crm').from('tickets')
           .select('id, numero_registro, titulo, descricao, status, prioridade, categoria, plataforma, tags, pipeline_id, estagio_id, proprietario_id, sla_minutos, primeira_resposta_em, criado_em, resolvido_em, ultima_atividade_em, dados_custom')
+          .eq('org', org)
           .eq('dados_custom->>conversation_id', selectedConv.id)
           .is('deletado_em', null)
           .order('criado_em', { ascending: false })
@@ -898,6 +904,7 @@ export default function InboxPage() {
       const descricao = selectedConv.last_message || '';
 
       const { data, error } = await (supabase as any).schema('crm').from('tickets').insert({
+        org,
         empresa_id: org,
         titulo,
         descricao,
@@ -921,6 +928,7 @@ export default function InboxPage() {
       if (currentUserId) {
         const ownerName = accountUsers.find(u => u.id === currentUserId)?.nome || '';
         await (supabase as any).schema('crm').from('ticket_owner_history').insert({
+          org,
           ticket_id: data.id,
           usuario_id: currentUserId,
           usuario_nome: ownerName,
@@ -942,12 +950,14 @@ export default function InboxPage() {
   const handleUpdateTicket = async (field: string, value: string | null) => {
     if (!convTicket) return;
     try {
+      const org = await getOrg();
       const extra: Record<string, unknown> = {};
       if (field === 'status' && value === 'resolvido') extra.resolvido_em = new Date().toISOString();
       if (field === 'status' && value === 'fechado') extra.resolvido_em = convTicket.resolvido_em || new Date().toISOString();
 
       await (supabase as any).schema('crm').from('tickets')
         .update({ [field]: value || null, ...extra })
+        .eq('org', org)
         .eq('id', convTicket.id);
 
       // Track owner changes in history
@@ -959,6 +969,7 @@ export default function InboxPage() {
         // Close current owner period
         const { error: closeErr } = await (supabase as any).schema('crm').from('ticket_owner_history')
           .update({ fim_em: now })
+          .eq('org', org)
           .eq('ticket_id', convTicket.id)
           .is('fim_em', null);
         if (closeErr) console.warn('[ticket-history] close error:', closeErr);
@@ -967,6 +978,7 @@ export default function InboxPage() {
         if (newOwner) {
           const ownerName = accountUsers.find(u => u.id === newOwner)?.nome || '';
           const { error: insertErr } = await (supabase as any).schema('crm').from('ticket_owner_history').insert({
+            org,
             ticket_id: convTicket.id,
             usuario_id: newOwner,
             usuario_nome: ownerName,
@@ -1153,6 +1165,7 @@ export default function InboxPage() {
     if (!selectedAccount || !selectedConv) return;
     setSending(true);
     try {
+      const org = await getOrg();
       let result: { success: boolean; error?: string };
       if (msg.msg_type === 'template' && msg.template_name) {
         result = await sendTemplateMessage(
@@ -1167,7 +1180,7 @@ export default function InboxPage() {
       }
       if (result.success) {
         // Delete the failed message
-        await (supabase as any).schema('channels').from('meta_messages').delete().eq('id', msg.id);
+        await (supabase as any).schema('channels').from('meta_messages').delete().eq('org', org).eq('id', msg.id);
         const data = await loadMessages(selectedConv.id, selectedAccount?.id);
         setMessages(data);
         toast({ title: 'Mensagem reenviada!' });
@@ -1240,8 +1253,10 @@ export default function InboxPage() {
   const handleArchiveConversation = async (conv: InboxConversation) => {
     const newStatus = conv.status === 'archived' ? 'open' : 'archived';
     try {
+      const org = await getOrg();
       await (supabase as any).schema('channels').from('meta_conversations')
         .update({ status: newStatus })
+        .eq('org', org)
         .eq('id', conv.id);
       setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, status: newStatus } : c));
       if (newStatus === 'archived' && selectedConv?.id === conv.id) {
@@ -1256,9 +1271,10 @@ export default function InboxPage() {
   // ── Delete conversation ─────────────────────────────────
   const handleDeleteConversation = async (conv: InboxConversation) => {
     try {
+      const org = await getOrg();
       // Delete messages first, then conversation
-      await (supabase as any).schema('channels').from('meta_messages').delete().eq('conversation_id', conv.id).eq('account_id', selectedAccount?.id);
-      await (supabase as any).schema('channels').from('meta_conversations').delete().eq('id', conv.id).eq('account_id', selectedAccount?.id);
+      await (supabase as any).schema('channels').from('meta_messages').delete().eq('org', org).eq('conversation_id', conv.id).eq('account_id', selectedAccount?.id);
+      await (supabase as any).schema('channels').from('meta_conversations').delete().eq('org', org).eq('id', conv.id).eq('account_id', selectedAccount?.id);
       if (selectedConv?.id === conv.id) { setSelectedConv(null); setMessages([]); }
       setConfirmDeleteConv(null);
       await loadConvs();
@@ -1271,8 +1287,10 @@ export default function InboxPage() {
   // ── Save contact name ──
   const saveContactName = async (conv: InboxConversation, newName: string) => {
     try {
+      const org = await getOrg();
       await supabase.schema('channels').from('meta_conversations')
         .update({ contact_name: newName || null, updated_at: new Date().toISOString() })
+        .eq('org', org)
         .eq('id', conv.id);
       setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, contact_name: newName || null } : c));
       if (selectedConv?.id === conv.id) setSelectedConv(prev => prev ? { ...prev, contact_name: newName || null } : prev);
@@ -1285,8 +1303,10 @@ export default function InboxPage() {
   // ── Save assigned user ──
   const saveAssignedUser = async (conv: InboxConversation, userId: string | null) => {
     try {
+      const org = await getOrg();
       await supabase.schema('channels').from('meta_conversations')
         .update({ assigned_user_id: userId, updated_at: new Date().toISOString() })
+        .eq('org', org)
         .eq('id', conv.id);
       setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, assigned_user_id: userId } : c));
       if (selectedConv?.id === conv.id) setSelectedConv(prev => prev ? { ...prev, assigned_user_id: userId } : prev);
@@ -1302,8 +1322,10 @@ export default function InboxPage() {
       ? currentTags.filter(t => t !== tagName)
       : [...currentTags, tagName];
     try {
+      const org = await getOrg();
       await supabase.schema('channels').from('meta_conversations')
         .update({ tags: newTags, updated_at: new Date().toISOString() })
+        .eq('org', org)
         .eq('id', conv.id);
       setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, tags: newTags } : c));
       if (selectedConv?.id === conv.id) setSelectedConv(prev => prev ? { ...prev, tags: newTags } : prev);
@@ -1313,7 +1335,8 @@ export default function InboxPage() {
   // ── Context menu actions ──
   const updateConv = async (conv: InboxConversation, patch: Record<string, unknown>) => {
     try {
-      await supabase.schema('channels').from('meta_conversations').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', conv.id);
+      const org = await getOrg();
+      await supabase.schema('channels').from('meta_conversations').update({ ...patch, updated_at: new Date().toISOString() }).eq('org', org).eq('id', conv.id);
       const updated = { ...conv, ...patch } as InboxConversation;
       setConversations(prev => prev.map(c => c.id === conv.id ? updated : c));
       if (selectedConv?.id === conv.id) setSelectedConv(updated);
@@ -1336,8 +1359,10 @@ export default function InboxPage() {
   const toggleFavorite = (conv: InboxConversation) => updateConv(conv, { favorited: !conv.favorited });
 
   const markAsUnread = async (conv: InboxConversation) => {
+    const org = await getOrg();
     await supabase.schema('channels').from('meta_conversations')
       .update({ unread_count: Math.max(conv.unread_count, 1), updated_at: new Date().toISOString() })
+      .eq('org', org)
       .eq('id', conv.id);
     setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, unread_count: Math.max(c.unread_count, 1) } : c));
     toast({ title: 'Marcada como não lida' });
@@ -1345,9 +1370,11 @@ export default function InboxPage() {
 
   const clearConversation = async (conv: InboxConversation) => {
     try {
-      await supabase.schema('channels').from('meta_messages').delete().eq('conversation_id', conv.id);
+      const org = await getOrg();
+      await supabase.schema('channels').from('meta_messages').delete().eq('org', org).eq('conversation_id', conv.id);
       await supabase.schema('channels').from('meta_conversations')
         .update({ last_message: null, last_message_ts: null, unread_count: 0, updated_at: new Date().toISOString() })
+        .eq('org', org)
         .eq('id', conv.id);
       setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, last_message: null, last_message_ts: null, unread_count: 0 } : c));
       if (selectedConv?.id === conv.id) setMessages([]);

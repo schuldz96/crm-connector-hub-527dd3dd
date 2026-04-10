@@ -372,7 +372,8 @@ export default function MeetingsPage() {
   const loadComments = async (meetingId: string) => {
     setLoadingComments(true);
     try {
-      const { data } = await channels().from('comentarios_reuniao').select('*').eq('reuniao_id', meetingId).order('criado_em', { ascending: false });
+      const org = await getOrg();
+      const { data } = await channels().from('comentarios_reuniao').select('*').eq('reuniao_id', meetingId).eq('empresa_id', org).order('criado_em', { ascending: false });
       setComments(data || []);
       setCommentsLoaded(meetingId);
     } catch { setComments([]); }
@@ -393,13 +394,15 @@ export default function MeetingsPage() {
   };
 
   const deleteComment = async (id: string) => {
-    await channels().from('comentarios_reuniao').delete().eq('id', id);
+    const org = await getOrg();
+    await channels().from('comentarios_reuniao').delete().eq('id', id).eq('empresa_id', org);
     if (selectedMeeting) loadComments(selectedMeeting.id);
   };
 
   const saveEditComment = async (id: string) => {
     if (!editCommentText.trim()) return;
-    await channels().from('comentarios_reuniao').update({ conteudo: editCommentText.trim(), atualizado_em: new Date().toISOString() }).eq('id', id);
+    const org = await getOrg();
+    await channels().from('comentarios_reuniao').update({ conteudo: editCommentText.trim(), atualizado_em: new Date().toISOString() }).eq('id', id).eq('empresa_id', org);
     setEditingCommentId(null);
     if (selectedMeeting) loadComments(selectedMeeting.id);
   };

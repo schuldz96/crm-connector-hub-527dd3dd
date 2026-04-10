@@ -93,7 +93,8 @@ export async function listContacts(params: CrmListParams = {}): Promise<CrmListR
 }
 
 export async function getContactByNumero(numero: string): Promise<CrmContact | null> {
-  const { data, error } = await crm().from('contatos').select('*').eq('numero_registro', numero).is('deletado_em', null).maybeSingle();
+  const { empresaId } = await getOrgAndEmpresaId();
+  const { data, error } = await crm().from('contatos').select('*').eq('numero_registro', numero).eq('empresa_id', empresaId).is('deletado_em', null).maybeSingle();
   if (error) throw error;
   return data;
 }
@@ -106,13 +107,15 @@ export async function createContact(input: Partial<CrmContact>): Promise<CrmCont
 }
 
 export async function updateContact(id: string, input: Partial<CrmContact>): Promise<CrmContact> {
-  const { data, error } = await crm().from('contatos').update(input).eq('id', id).select().single();
+  const { empresaId } = await getOrgAndEmpresaId();
+  const { data, error } = await crm().from('contatos').update(input).eq('id', id).eq('empresa_id', empresaId).select().single();
   if (error) throw error;
   return data;
 }
 
 export async function deleteContact(id: string): Promise<void> {
-  const { error } = await crm().from('contatos').update({ deletado_em: new Date().toISOString() }).eq('id', id);
+  const { empresaId } = await getOrgAndEmpresaId();
+  const { error } = await crm().from('contatos').update({ deletado_em: new Date().toISOString() }).eq('id', id).eq('empresa_id', empresaId);
   if (error) throw error;
 }
 
@@ -124,7 +127,8 @@ export async function listCompanies(params: CrmListParams = {}): Promise<CrmList
 }
 
 export async function getCompanyByNumero(numero: string): Promise<CrmCompany | null> {
-  const { data, error } = await crm().from('empresas_crm').select('*').eq('numero_registro', numero).is('deletado_em', null).maybeSingle();
+  const { empresaId } = await getOrgAndEmpresaId();
+  const { data, error } = await crm().from('empresas_crm').select('*').eq('numero_registro', numero).eq('empresa_id', empresaId).is('deletado_em', null).maybeSingle();
   if (error) throw error;
   return data;
 }
@@ -137,13 +141,15 @@ export async function createCompany(input: Partial<CrmCompany>): Promise<CrmComp
 }
 
 export async function updateCompany(id: string, input: Partial<CrmCompany>): Promise<CrmCompany> {
-  const { data, error } = await crm().from('empresas_crm').update(input).eq('id', id).select().single();
+  const { empresaId } = await getOrgAndEmpresaId();
+  const { data, error } = await crm().from('empresas_crm').update(input).eq('id', id).eq('empresa_id', empresaId).select().single();
   if (error) throw error;
   return data;
 }
 
 export async function deleteCompany(id: string): Promise<void> {
-  const { error } = await crm().from('empresas_crm').update({ deletado_em: new Date().toISOString() }).eq('id', id);
+  const { empresaId } = await getOrgAndEmpresaId();
+  const { error } = await crm().from('empresas_crm').update({ deletado_em: new Date().toISOString() }).eq('id', id).eq('empresa_id', empresaId);
   if (error) throw error;
 }
 
@@ -168,7 +174,8 @@ export async function getDealsByPipeline(pipelineId: string): Promise<CrmDeal[]>
 }
 
 export async function getDealByNumero(numero: string): Promise<CrmDeal | null> {
-  const { data, error } = await crm().from('negocios').select('*').eq('numero_registro', numero).is('deletado_em', null).maybeSingle();
+  const { empresaId } = await getOrgAndEmpresaId();
+  const { data, error } = await crm().from('negocios').select('*').eq('numero_registro', numero).eq('empresa_id', empresaId).is('deletado_em', null).maybeSingle();
   if (error) throw error;
   return data;
 }
@@ -181,13 +188,15 @@ export async function createDeal(input: Partial<CrmDeal>): Promise<CrmDeal> {
 }
 
 export async function updateDeal(id: string, input: Partial<CrmDeal>): Promise<CrmDeal> {
-  const { data, error } = await crm().from('negocios').update(input).eq('id', id).select().single();
+  const { empresaId } = await getOrgAndEmpresaId();
+  const { data, error } = await crm().from('negocios').update(input).eq('id', id).eq('empresa_id', empresaId).select().single();
   if (error) throw error;
   return data;
 }
 
 export async function deleteDeal(id: string): Promise<void> {
-  const { error } = await crm().from('negocios').update({ deletado_em: new Date().toISOString() }).eq('id', id);
+  const { empresaId } = await getOrgAndEmpresaId();
+  const { error } = await crm().from('negocios').update({ deletado_em: new Date().toISOString() }).eq('id', id).eq('empresa_id', empresaId);
   if (error) throw error;
 }
 
@@ -212,7 +221,8 @@ export async function getTicketsByPipeline(pipelineId: string): Promise<CrmTicke
 }
 
 export async function getTicketByNumero(numero: string): Promise<CrmTicket | null> {
-  const { data, error } = await crm().from('tickets').select('*').eq('numero_registro', numero).is('deletado_em', null).maybeSingle();
+  const { empresaId } = await getOrgAndEmpresaId();
+  const { data, error } = await crm().from('tickets').select('*').eq('numero_registro', numero).eq('empresa_id', empresaId).is('deletado_em', null).maybeSingle();
   if (error) throw error;
   return data;
 }
@@ -225,13 +235,15 @@ export async function createTicket(input: Partial<CrmTicket>): Promise<CrmTicket
 }
 
 export async function updateTicket(id: string, input: Partial<CrmTicket>): Promise<CrmTicket> {
-  const { data, error } = await crm().from('tickets').update(input).eq('id', id).select().single();
+  const { empresaId } = await getOrgAndEmpresaId();
+  const { data, error } = await crm().from('tickets').update(input).eq('id', id).eq('empresa_id', empresaId).select().single();
   if (error) throw error;
   return data;
 }
 
 export async function deleteTicket(id: string): Promise<void> {
-  const { error } = await crm().from('tickets').update({ deletado_em: new Date().toISOString() }).eq('id', id);
+  const { empresaId } = await getOrgAndEmpresaId();
+  const { error } = await crm().from('tickets').update({ deletado_em: new Date().toISOString() }).eq('id', id).eq('empresa_id', empresaId);
   if (error) throw error;
 }
 
@@ -311,7 +323,8 @@ export async function createAssociation(input: {
 }
 
 export async function deleteAssociation(id: string): Promise<void> {
-  const { error } = await crm().from('associacoes').delete().eq('id', id);
+  const { empresaId } = await getOrgAndEmpresaId();
+  const { error } = await crm().from('associacoes').delete().eq('id', id).eq('empresa_id', empresaId);
   if (error) throw error;
 }
 
@@ -382,10 +395,12 @@ export async function createActivity(input: Partial<CrmActivity>): Promise<CrmAc
 }
 
 export async function updateActivity(id: string, input: Partial<CrmActivity>): Promise<CrmActivity> {
+  const { empresaId } = await getOrgAndEmpresaId();
   const { data, error } = await crm()
     .from('atividades')
     .update(input)
     .eq('id', id)
+    .eq('empresa_id', empresaId)
     .select()
     .single();
   if (error) throw error;
@@ -393,7 +408,8 @@ export async function updateActivity(id: string, input: Partial<CrmActivity>): P
 }
 
 export async function deleteActivity(id: string): Promise<void> {
-  const { error } = await crm().from('atividades').delete().eq('id', id);
+  const { empresaId } = await getOrgAndEmpresaId();
+  const { error } = await crm().from('atividades').delete().eq('id', id).eq('empresa_id', empresaId);
   if (error) throw error;
 }
 
@@ -401,6 +417,7 @@ export async function deleteActivity(id: string): Promise<void> {
 // FETCH RECORD BY NUMERO (any type)
 // ========================
 export async function getRecordByNumero(objectType: CrmObjectType, numero: string) {
+  const { empresaId } = await getOrgAndEmpresaId();
   const table = objectType === 'contact' ? 'contatos'
     : objectType === 'company' ? 'empresas_crm'
     : objectType === 'deal' ? 'negocios'
@@ -409,6 +426,7 @@ export async function getRecordByNumero(objectType: CrmObjectType, numero: strin
     .from(table)
     .select('*')
     .eq('numero_registro', numero)
+    .eq('empresa_id', empresaId)
     .maybeSingle();
   if (error) throw error;
   return data;
@@ -418,6 +436,7 @@ export async function getRecordByNumero(objectType: CrmObjectType, numero: strin
 // ASSOCIATED RECORDS DETAIL
 // ========================
 export async function getAssociatedRecords(objectType: CrmObjectType, objectId: string) {
+  const { empresaId } = await getOrgAndEmpresaId();
   const associations = await listAssociations(objectType, objectId);
   const grouped: Record<CrmObjectType, { id: string; assocId: string; tipo_associacao: string }[]> = {
     contact: [], company: [], deal: [], ticket: [],
@@ -433,7 +452,7 @@ export async function getAssociatedRecords(objectType: CrmObjectType, objectId: 
 
   const fetchMany = async (table: string, ids: string[]) => {
     if (ids.length === 0) return [];
-    const { data } = await crm().from(table).select('*').in('id', ids);
+    const { data } = await crm().from(table).select('*').in('id', ids).eq('empresa_id', empresaId);
     return data || [];
   };
 
