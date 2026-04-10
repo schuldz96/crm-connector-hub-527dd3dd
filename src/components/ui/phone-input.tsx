@@ -174,22 +174,38 @@ export default function PhoneInput({ value, onChange, placeholder, className }: 
 }
 
 /**
- * Normalize Brazilian phone numbers — aceita ambos os formatos:
- * - Celular: DDD (2) + 9 dígitos (9 XXXX-XXXX) = 11 total
- * - Fixo:    DDD (2) + 8 dígitos (XXXX-XXXX)   = 10 total
- * Não força adicionar 9 — o usuário digita como quiser.
- * Apenas limita o tamanho máximo.
+ * Normalize Brazilian phone numbers — padroniza celular SEMPRE com 9:
+ * - Celular: DDD (2) + 9 + 8 dígitos = 11 total  (ex: 42 9 9822-4190)
+ * - Fixo:    DDD (2) + 8 dígitos = 10 total       (ex: 42 3222-1234)
+ *
+ * Se o usuário digitar 8 dígitos começando com 6-9 → é celular → adiciona 9
+ * Se começar com 2-5 → é fixo → mantém 8 dígitos
  */
 function normalizeBR(digits: string): string {
   if (digits.length <= 2) return digits;
-  // Max: DDD (2) + 9 dígitos = 11
-  return digits.slice(0, 11);
+
+  const ddd = digits.slice(0, 2);
+  let local = digits.slice(2);
+
+  if (local.length === 8) {
+    const first = local[0];
+    // Celular sem o 9: começa com 6,7,8,9 → adiciona 9
+    if ('6789'.includes(first)) {
+      local = '9' + local;
+    }
+    // Fixo: começa com 2,3,4,5 → mantém 8 dígitos
+  }
+
+  // Limitar: celular max 9 dígitos, fixo max 8
+  if (local.length > 9) local = local.slice(0, 9);
+
+  return ddd + local;
 }
 
 /**
  * Format Brazilian number for display:
- * - 8 dígitos local (fixo):   42 3222-1234
- * - 9 dígitos local (celular): 42 9 9822-4190
+ * - Fixo:    42 3222-1234     (DDD + 4-4)
+ * - Celular: 42 9 9822-4190   (DDD + 9 + 4-4)
  */
 function formatBR(digits: string): string {
   if (!digits) return '';
@@ -198,13 +214,10 @@ function formatBR(digits: string): string {
   const ddd = digits.slice(0, 2);
   const local = digits.slice(2);
 
-  // Digitando ainda
   if (local.length <= 4) return `${ddd} ${local}`;
-
-  // Fixo: 8 dígitos → 4-4
   if (local.length <= 8) return `${ddd} ${local.slice(0, 4)}-${local.slice(4)}`;
 
-  // Celular: 9 dígitos → 9 + 4-4
+  // Celular: 9 dígitos → "9 XXXX-XXXX"
   return `${ddd} ${local[0]} ${local.slice(1, 5)}-${local.slice(5)}`;
 }
 
