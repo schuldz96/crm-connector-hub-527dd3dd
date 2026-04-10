@@ -7,7 +7,7 @@ import {
   Search, Plus, Filter, ExternalLink, MoreHorizontal, X,
   ChevronLeft, ChevronRight, ChevronDown, Download, Contact, Settings2,
   ArrowUpDown, BarChart3, Copy, Table2, SlidersHorizontal, Loader2,
-  Trash2, PlusCircle,
+  Trash2, PlusCircle, Save,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -109,6 +109,70 @@ export default function CRMContactsPage() {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(25);
   const [savedViews, setSavedViews] = useState<SavedView[]>(loadSavedViews);
+  const [showViewMenu, setShowViewMenu] = useState(false);
+  const [showViewList, setShowViewList] = useState(false);
+  const [editingViewId, setEditingViewId] = useState<string | null>(null);
+  const [editingViewName, setEditingViewName] = useState('');
+  const viewMenuRef = useRef<HTMLDivElement>(null);
+
+  // Track if active view has unsaved filter changes
+  const activeView = savedViews.find(v => v.id === activeTab);
+  const hasUnsavedFilters = activeView
+    ? JSON.stringify(activeView.filters) !== JSON.stringify(activeFilters)
+    : false;
+
+  // Close view menu on outside click
+  useEffect(() => {
+    if (!showViewMenu && !showViewList) return;
+    const handler = (e: MouseEvent) => {
+      if (viewMenuRef.current && !viewMenuRef.current.contains(e.target as Node)) {
+        setShowViewMenu(false);
+        setShowViewList(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showViewMenu, showViewList]);
+
+  const handleSaveFiltersToView = () => {
+    if (!activeView) return;
+    const next = savedViews.map(v => v.id === activeView.id ? { ...v, filters: { ...activeFilters } } : v);
+    setSavedViews(next);
+    persistViews(next);
+    toast({ title: 'Filtros salvos na visualização' });
+  };
+
+  const handleCreateView = () => {
+    const name = prompt('Nome da nova visualização:');
+    if (!name?.trim()) return;
+    const newView: SavedView = {
+      id: `view_${Date.now()}`,
+      label: name.trim(),
+      filters: { ...activeFilters },
+    };
+    const next = [...savedViews, newView];
+    setSavedViews(next);
+    persistViews(next);
+    setActiveTab(newView.id);
+    setShowViewMenu(false);
+    toast({ title: `Visualização "${name.trim()}" criada` });
+  };
+
+  const handleRenameView = (id: string) => {
+    if (!editingViewName.trim()) { setEditingViewId(null); return; }
+    const next = savedViews.map(v => v.id === id ? { ...v, label: editingViewName.trim() } : v);
+    setSavedViews(next);
+    persistViews(next);
+    setEditingViewId(null);
+  };
+
+  const handleDeleteView = (id: string) => {
+    const next = savedViews.filter(v => v.id !== id);
+    setSavedViews(next);
+    persistViews(next);
+    if (activeTab === id) { setActiveTab('all'); setActiveFilters({}); }
+    toast({ title: 'Visualização removida' });
+  };
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Dynamic form fields — can be customized per org via CRM properties
@@ -305,56 +369,120 @@ export default function CRMContactsPage() {
             )}
           </button>
 
-          {/* Saved views */}
+          {/* Saved views as tabs */}
           {savedViews.map(view => (
-            <button
-              key={view.id}
-              onClick={() => { setActiveTab(view.id); setActiveFilters(view.filters); setPage(1); }}
-              className={cn(
-                'flex items-center gap-1 px-3 py-2.5 text-sm transition-colors border-b-2 -mb-px',
-                activeTab === view.id
-                  ? 'border-foreground text-foreground font-medium'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
+            <div key={view.id} className="relative flex items-center">
+              {editingViewId === view.id ? (
+                <div className="flex items-center gap-1 px-2 py-1.5">
+                  <input
+                    autoFocus
+                    value={editingViewName}
+                    onChange={e => setEditingViewName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleRenameView(view.id); if (e.key === 'Escape') setEditingViewId(null); }}
+                    onBlur={() => handleRenameView(view.id)}
+                    className="text-sm font-medium bg-transparent border-b border-primary outline-none w-[120px] text-foreground"
+                  />
+                </div>
+              ) : (
+                <button
+                  onClick={() => { setActiveTab(view.id); setActiveFilters(view.filters); setPage(1); }}
+                  onDoubleClick={() => { setEditingViewId(view.id); setEditingViewName(view.label); }}
+                  className={cn(
+                    'flex items-center gap-1 px-3 py-2.5 text-sm transition-colors border-b-2 -mb-px',
+                    activeTab === view.id
+                      ? 'border-foreground text-foreground font-medium'
+                      : 'border-transparent text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  {view.label}
+                  <span
+                    onClick={(e) => { e.stopPropagation(); handleDeleteView(view.id); }}
+                    className="ml-0.5 text-muted-foreground/50 hover:text-destructive cursor-pointer"
+                  >
+                    <X className="w-3 h-3" />
+                  </span>
+                </button>
               )}
-            >
-              {view.label}
-              <span
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const next = savedViews.filter(v => v.id !== view.id);
-                  setSavedViews(next);
-                  persistViews(next);
-                  if (activeTab === view.id) { setActiveTab('all'); setActiveFilters({}); }
-                  toast({ title: `Visualização "${view.label}" removida` });
-                }}
-                className="ml-0.5 text-muted-foreground/50 hover:text-destructive cursor-pointer"
-              >
-                <X className="w-3 h-3" />
-              </span>
-            </button>
+              {/* Save filters indicator */}
+              {activeTab === view.id && hasUnsavedFilters && (
+                <button
+                  onClick={handleSaveFiltersToView}
+                  className="ml-0.5 text-primary hover:text-primary/80 transition-colors"
+                  title="Salvar filtros nesta visualização"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           ))}
 
-          {/* Add new view */}
-          <button
-            className="px-3 py-2.5 text-muted-foreground hover:text-foreground"
-            title="Salvar visualização com filtros atuais"
-            onClick={() => {
-              const name = prompt('Nome da visualização:');
-              if (!name?.trim()) return;
-              const newView: SavedView = {
-                id: `view_${Date.now()}`,
-                label: name.trim(),
-                filters: { ...activeFilters },
-              };
-              const next = [...savedViews, newView];
-              setSavedViews(next);
-              persistViews(next);
-              setActiveTab(newView.id);
-              toast({ title: `Visualização "${name.trim()}" salva` });
-            }}
-          >
-            <Plus className="w-4 h-4" />
-          </button>
+          {/* + Button with dropdown */}
+          <div ref={viewMenuRef} className="relative">
+            <button
+              className="flex items-center justify-center w-8 h-8 rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors ml-1"
+              onClick={() => { setShowViewMenu(v => !v); setShowViewList(false); }}
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+
+            {showViewMenu && !showViewList && (
+              <div className="absolute left-0 top-full mt-1 z-40 min-w-[220px] py-1 rounded-lg border border-border bg-card shadow-xl">
+                <button
+                  onClick={handleCreateView}
+                  className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
+                >
+                  <Plus className="w-4 h-4 text-muted-foreground" />
+                  Criar nova exibição
+                </button>
+                {savedViews.length > 0 && (
+                  <button
+                    onClick={() => setShowViewList(true)}
+                    className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors border-t border-border"
+                  >
+                    <Table2 className="w-4 h-4 text-muted-foreground" />
+                    Adicionar visualização ({savedViews.length})
+                  </button>
+                )}
+              </div>
+            )}
+
+            {showViewList && (
+              <div className="absolute left-0 top-full mt-1 z-40 w-[280px] rounded-lg border border-border bg-card shadow-xl overflow-hidden">
+                <div className="px-3 py-2 border-b border-border">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Visualizações salvas ({savedViews.length})</p>
+                </div>
+                <div className="max-h-[240px] overflow-y-auto">
+                  {savedViews.map(v => (
+                    <button
+                      key={v.id}
+                      onClick={() => {
+                        setActiveTab(v.id);
+                        setActiveFilters(v.filters);
+                        setPage(1);
+                        setShowViewMenu(false);
+                        setShowViewList(false);
+                      }}
+                      className={cn(
+                        'flex items-center gap-2.5 w-full px-4 py-2.5 text-sm transition-colors',
+                        activeTab === v.id ? 'bg-primary/10 text-primary font-medium' : 'text-foreground hover:bg-muted'
+                      )}
+                    >
+                      <Table2 className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                      <span className="truncate">{v.label}</span>
+                      {Object.keys(v.filters).length > 0 && (
+                        <span className="ml-auto text-[10px] text-muted-foreground">{Object.keys(v.filters).length} filtros</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                <div className="px-3 py-2 border-t border-border">
+                  <button onClick={handleCreateView} className="text-xs text-primary hover:underline">
+                    + Criar nova exibição
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-1">
           <DropdownMenu>
