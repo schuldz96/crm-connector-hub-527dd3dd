@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import PhoneInput from '@/components/ui/phone-input';
 import { useCrmContacts, useCreateContact, useSaasUsers } from '@/hooks/useCrm';
 import { supabaseSaas } from '@/integrations/supabase/client';
@@ -123,6 +124,20 @@ const CONTACT_FILTERS: FilterDef[] = [
   { key: 'cargo', label: 'Cargo', type: 'text' },
 ];
 
+const CONTACT_ADV_PROPERTIES = [
+  { key: 'nome', label: 'Nome' },
+  { key: 'email', label: 'E-mail' },
+  { key: 'telefone', label: 'Telefone' },
+  { key: 'cargo', label: 'Cargo' },
+  { key: 'status', label: 'Status' },
+  { key: 'fonte', label: 'Fonte' },
+  { key: 'score', label: 'Score' },
+  { key: 'tags', label: 'Tags' },
+  { key: 'proprietario_nome', label: 'Proprietário' },
+  { key: 'criado_em', label: 'Data de criação' },
+  { key: 'atualizado_em', label: 'Atualizado em' },
+];
+
 interface SavedView {
   id: string;
   label: string;
@@ -183,6 +198,8 @@ export default function CRMContactsPage() {
   const [openChip, setOpenChip] = useState<string | null>(null);
   const [chipSearch, setChipSearch] = useState('');
   const chipAreaRef = useRef<HTMLDivElement>(null);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [advancedFilters, setAdvancedFilters] = useState<{property: string; operator: string; value: string}[]>([]);
 
   // Column editor state
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
@@ -367,6 +384,14 @@ export default function CRMContactsPage() {
         list = list.filter(c => { const t = new Date(c.criado_em).getTime(); return t >= start.getTime() && t < end.getTime(); });
       }
     }
+    // Apply advanced filters
+    for (const af of advancedFilters) {
+      if (!af.property) continue;
+      if (af.operator === 'is_known') list = list.filter(c => (c as any)[af.property] != null && (c as any)[af.property] !== '');
+      else if (af.operator === 'is_unknown') list = list.filter(c => (c as any)[af.property] == null || (c as any)[af.property] === '');
+      else if (af.operator === 'is_any' && af.value) list = list.filter(c => String((c as any)[af.property] ?? '').toLowerCase().includes(af.value.toLowerCase()));
+      else if (af.operator === 'is_none' && af.value) list = list.filter(c => !String((c as any)[af.property] ?? '').toLowerCase().includes(af.value.toLowerCase()));
+    }
     list.sort((a: any, b: any) => {
       const aVal = sortField === 'nome' ? (a.nome || '').toLowerCase() : new Date(a[sortField]).getTime();
       const bVal = sortField === 'nome' ? (b.nome || '').toLowerCase() : new Date(b[sortField]).getTime();
@@ -375,7 +400,7 @@ export default function CRMContactsPage() {
       return 0;
     });
     return list;
-  }, [result?.data, activeFilters, sortField, sortDirection]);
+  }, [result?.data, activeFilters, advancedFilters, sortField, sortDirection]);
   const total = result?.total || 0;
   const totalPages = result?.totalPages || 1;
 
@@ -766,9 +791,7 @@ export default function CRMContactsPage() {
               </div>
             );
           })}
-          <button className="text-muted-foreground hover:text-foreground font-medium px-2 py-1">+ Mais</button>
-          <div className="w-px h-4 bg-border" />
-          <button className="flex items-center gap-1 text-muted-foreground hover:text-foreground font-medium px-2 py-1">
+          <button onClick={() => setShowAdvancedFilters(true)} className="flex items-center gap-1 text-muted-foreground hover:text-foreground font-medium px-2 py-1">
             <SlidersHorizontal className="w-3 h-3" /> Filtros avançados
           </button>
           {Object.keys(activeFilters).length > 0 && (
@@ -979,6 +1002,54 @@ export default function CRMContactsPage() {
           </div>
         </div>
       )}
+
+      {/* Advanced Filters Sheet */}
+      <Sheet open={showAdvancedFilters} onOpenChange={setShowAdvancedFilters}>
+        <SheetContent side="right" className="w-[420px] sm:max-w-[420px] p-0 flex flex-col">
+          <SheetHeader className="px-6 py-4 border-b border-border">
+            <SheetTitle className="text-base">Todos os filtros</SheetTitle>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            <p className="text-sm font-semibold mb-4">Filtros avançados</p>
+            {advancedFilters.length === 0 && (
+              <div className="text-center py-6">
+                <p className="text-sm text-muted-foreground mb-3">Esta exibição não tem filtros avançados.</p>
+              </div>
+            )}
+            {advancedFilters.map((af, idx) => (
+              <div key={idx} className="border border-border rounded-lg p-3 mb-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <select className="w-full text-xs border border-border rounded px-2 py-1.5 bg-background" value={af.property}
+                      onChange={e => { const nf = [...advancedFilters]; nf[idx] = { ...af, property: e.target.value }; setAdvancedFilters(nf); }}>
+                      <option value="">Selecionar propriedade</option>
+                      {CONTACT_ADV_PROPERTIES.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+                    </select>
+                  </div>
+                  <button onClick={() => setAdvancedFilters(f => f.filter((_, i) => i !== idx))}><X className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" /></button>
+                </div>
+                <select className="w-full text-xs border border-border rounded px-2 py-1.5 bg-background" value={af.operator}
+                  onChange={e => { const nf = [...advancedFilters]; nf[idx] = { ...af, operator: e.target.value }; setAdvancedFilters(nf); }}>
+                  <option value="is_any">é qualquer um de</option>
+                  <option value="is_none">não é nenhum de</option>
+                  <option value="is_known">é conhecido</option>
+                  <option value="is_unknown">é desconhecido</option>
+                </select>
+                {(af.operator === 'is_any' || af.operator === 'is_none') && (
+                  <Input className="text-xs h-8" placeholder="Pesquisar..." value={af.value}
+                    onChange={e => { const nf = [...advancedFilters]; nf[idx] = { ...af, value: e.target.value }; setAdvancedFilters(nf); }} />
+                )}
+              </div>
+            ))}
+            <Button variant="outline" size="sm" className="text-xs" onClick={() => setAdvancedFilters(f => [...f, { property: '', operator: 'is_any', value: '' }])}>
+              <Plus className="w-3 h-3 mr-1" /> Adicionar filtro
+            </Button>
+          </div>
+          <div className="px-6 py-4 border-t border-border">
+            <Button className="w-full" onClick={() => setShowAdvancedFilters(false)}>Aplicar filtros</Button>
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

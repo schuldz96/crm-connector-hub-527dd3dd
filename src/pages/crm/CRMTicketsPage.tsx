@@ -15,6 +15,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import StageAIConfigModal, { type StageAIConfig } from '@/components/crm/StageAIConfigModal';
 import { useCrmPipelines, useCrmTicketsByPipeline, useCreateTicket, useUpdateTicket, useSaasUsers } from '@/hooks/useCrm';
 import { useAuth } from '@/contexts/AuthContext';
@@ -72,6 +73,17 @@ const TICKET_FILTERS: FilterDef[] = [
   { key: 'plataforma', label: 'Plataforma', type: 'text' },
 ];
 
+const TICKET_ADV_PROPERTIES = [
+  { key: 'titulo', label: 'Título' },
+  { key: 'prioridade', label: 'Prioridade' },
+  { key: 'status', label: 'Status' },
+  { key: 'categoria', label: 'Categoria' },
+  { key: 'plataforma', label: 'Plataforma' },
+  { key: 'tags', label: 'Tags' },
+  { key: 'criado_em', label: 'Data de criação' },
+  { key: 'atualizado_em', label: 'Atualizado em' },
+];
+
 const TABS = [
   { id: 'all', label: 'Todos os tickets' },
   { id: 'mine', label: 'Meus tickets abertos' },
@@ -121,9 +133,7 @@ export default function CRMTicketsPage() {
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const [openChip, setOpenChip] = useState<string | null>(null);
   const [chipSearch, setChipSearch] = useState('');
-  const [advFilterSearch, setAdvFilterSearch] = useState('');
-  const [advFilterAdding, setAdvFilterAdding] = useState(false);
-  const [advFilterGroups, setAdvFilterGroups] = useState<{ property: string; operator: string; value: string }[][]>([]);
+  const [advancedFilters, setAdvancedFilters] = useState<{property: string; operator: string; value: string}[]>([]);
   const [sortField, setSortField] = useState<'criado_em' | 'atualizado_em'>('criado_em');
   const [sortDirection, setSortDirection] = useState<'desc' | 'asc'>('desc');
 
@@ -191,13 +201,21 @@ export default function CRMTicketsPage() {
         list = list.filter(t => { const time = new Date(t.criado_em).getTime(); return time >= start.getTime() && time < end.getTime(); });
       }
     }
+    // Apply advanced filters
+    for (const af of advancedFilters) {
+      if (!af.property) continue;
+      if (af.operator === 'is_known') list = list.filter(t => (t as any)[af.property] != null && (t as any)[af.property] !== '');
+      else if (af.operator === 'is_unknown') list = list.filter(t => (t as any)[af.property] == null || (t as any)[af.property] === '');
+      else if (af.operator === 'is_any' && af.value) list = list.filter(t => String((t as any)[af.property] ?? '').toLowerCase().includes(af.value.toLowerCase()));
+      else if (af.operator === 'is_none' && af.value) list = list.filter(t => !String((t as any)[af.property] ?? '').toLowerCase().includes(af.value.toLowerCase()));
+    }
     list = [...list].sort((a, b) => {
       const aVal = new Date(a[sortField]).getTime();
       const bVal = new Date(b[sortField]).getTime();
       return sortDirection === 'desc' ? bVal - aVal : aVal - bVal;
     });
     return list;
-  }, [allTickets, search, activeTab, myUserId, sortField, sortDirection, activeFilters]);
+  }, [allTickets, search, activeTab, myUserId, sortField, sortDirection, activeFilters, advancedFilters]);
 
   const handleExport = () => {
     const headers = ['Título', 'Prioridade', 'Status', 'Categoria', 'Pipeline', 'Estágio', 'Proprietário', 'Data de criação'];
@@ -465,8 +483,6 @@ export default function CRMTicketsPage() {
               </div>
             );
           })}
-          <button className="text-muted-foreground hover:text-foreground font-medium px-2 py-1">+ Mais</button>
-          <div className="w-px h-4 bg-border" />
           <button onClick={() => setShowAdvancedFilters(true)} className="flex items-center gap-1 text-muted-foreground hover:text-foreground font-medium px-2 py-1">
             <SlidersHorizontal className="w-3 h-3" /> Filtros avançados
           </button>
@@ -649,89 +665,51 @@ export default function CRMTicketsPage() {
         )}
       </div>
 
-      {/* Advanced Filters Panel */}
-      {showAdvancedFilters && (
-        <div className="fixed inset-0 z-50 flex items-start justify-end">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setShowAdvancedFilters(false)} />
-          <div className="relative w-[420px] h-full bg-card border-l border-border shadow-xl overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-              <h2 className="text-base font-semibold">Todos os filtros</h2>
-              <button onClick={() => setShowAdvancedFilters(false)}><X className="w-5 h-5 text-muted-foreground" /></button>
-            </div>
-            <div className="px-6 py-4">
-              <p className="text-sm font-semibold mb-4">Filtros avançados</p>
-              {advFilterGroups.length === 0 && !advFilterAdding && (
-                <div className="text-center py-6">
-                  <p className="text-sm text-muted-foreground mb-3">Esta exibição não tem filtros avançados.</p>
-                  <Button variant="outline" size="sm" onClick={() => setAdvFilterAdding(true)}>
-                    <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar filtro
-                  </Button>
+      {/* Advanced Filters Sheet */}
+      <Sheet open={showAdvancedFilters} onOpenChange={setShowAdvancedFilters}>
+        <SheetContent side="right" className="w-[420px] sm:max-w-[420px] p-0 flex flex-col">
+          <SheetHeader className="px-6 py-4 border-b border-border">
+            <SheetTitle className="text-base">Todos os filtros</SheetTitle>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            <p className="text-sm font-semibold mb-4">Filtros avançados</p>
+            {advancedFilters.length === 0 && (
+              <div className="text-center py-6">
+                <p className="text-sm text-muted-foreground mb-3">Esta exibição não tem filtros avançados.</p>
+              </div>
+            )}
+            {advancedFilters.map((af, idx) => (
+              <div key={idx} className="border border-border rounded-lg p-3 mb-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <select className="flex-1 text-xs border border-border rounded px-2 py-1.5 bg-background" value={af.property}
+                    onChange={e => { const nf = [...advancedFilters]; nf[idx] = { ...af, property: e.target.value }; setAdvancedFilters(nf); }}>
+                    <option value="">Selecionar propriedade</option>
+                    {TICKET_ADV_PROPERTIES.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+                  </select>
+                  <button onClick={() => setAdvancedFilters(f => f.filter((_, i) => i !== idx))}><X className="w-3.5 h-3.5 text-muted-foreground hover:text-destructive" /></button>
                 </div>
-              )}
-              {advFilterGroups.map((group, gi) => (
-                <div key={gi} className="border border-border rounded-lg p-3 mb-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold">Agrupar {gi + 1}</span>
-                    <button onClick={() => setAdvFilterGroups(g => g.filter((_, i) => i !== gi))} className="text-muted-foreground hover:text-destructive"><X className="w-3.5 h-3.5" /></button>
-                  </div>
-                  {group.map((filter, fi) => (
-                    <div key={fi} className="space-y-2 mb-2">
-                      <div className="flex items-center gap-2">
-                        <select className="flex-1 text-xs border border-border rounded px-2 py-1.5 bg-background" value={filter.property}
-                          onChange={e => { const ng = [...advFilterGroups]; ng[gi] = [...ng[gi]]; ng[gi][fi] = { ...filter, property: e.target.value }; setAdvFilterGroups(ng); }}>
-                          {TICKET_FILTERS.map(p => <option key={p.key} value={p.label}>{p.label}</option>)}
-                        </select>
-                        <button onClick={() => { const ng = [...advFilterGroups]; ng[gi] = ng[gi].filter((_, i) => i !== fi); if (ng[gi].length === 0) ng.splice(gi, 1); setAdvFilterGroups(ng); }}><X className="w-3.5 h-3.5 text-muted-foreground" /></button>
-                      </div>
-                      <select className="w-full text-xs border border-border rounded px-2 py-1.5 bg-background" value={filter.operator}
-                        onChange={e => { const ng = [...advFilterGroups]; ng[gi] = [...ng[gi]]; ng[gi][fi] = { ...filter, operator: e.target.value }; setAdvFilterGroups(ng); }}>
-                        <option value="any">é qualquer um de</option>
-                        <option value="none">não é nenhum de</option>
-                        <option value="known">é conhecido</option>
-                        <option value="unknown">é desconhecido</option>
-                      </select>
-                      {(filter.operator === 'any' || filter.operator === 'none') && (
-                        <Input className="text-xs h-8" placeholder="Pesquisar..." value={filter.value}
-                          onChange={e => { const ng = [...advFilterGroups]; ng[gi] = [...ng[gi]]; ng[gi][fi] = { ...filter, value: e.target.value }; setAdvFilterGroups(ng); }} />
-                      )}
-                      {fi < group.length - 1 && <p className="text-[10px] text-muted-foreground font-medium">e</p>}
-                    </div>
-                  ))}
-                  <Button variant="outline" size="sm" className="text-xs mt-1" onClick={() => { const ng = [...advFilterGroups]; ng[gi] = [...ng[gi], { property: TICKET_FILTERS[0]?.label ?? '', operator: 'any', value: '' }]; setAdvFilterGroups(ng); }}>
-                    <Plus className="w-3 h-3 mr-1" /> Adicionar filtro
-                  </Button>
-                </div>
-              ))}
-              {advFilterAdding && (
-                <div className="border border-border rounded-lg p-3 mb-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold">Adicionar filtro</span>
-                    <button onClick={() => { setAdvFilterAdding(false); setAdvFilterSearch(''); }} className="text-xs text-muted-foreground hover:text-foreground">Cancelar</button>
-                  </div>
-                  <div className="relative mb-2">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                    <Input className="pl-8 text-xs h-8" placeholder="Pesquisar em Ticket propriedades" value={advFilterSearch} onChange={e => setAdvFilterSearch(e.target.value)} autoFocus />
-                  </div>
-                  <div className="max-h-48 overflow-y-auto space-y-0.5">
-                    {TICKET_FILTERS.map(p => p.label).filter(p => !advFilterSearch || p.toLowerCase().includes(advFilterSearch.toLowerCase())).map(p => (
-                      <button key={p} onClick={() => { setAdvFilterGroups(g => [...g, [{ property: p, operator: 'any', value: '' }]]); setAdvFilterAdding(false); setAdvFilterSearch(''); }}
-                        className="w-full text-left text-xs px-2 py-1.5 rounded hover:bg-muted transition-colors text-foreground">{p}</button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {advFilterGroups.length > 0 && !advFilterAdding && (
-                <div className="flex items-center gap-2 mt-2">
-                  <Badge variant="outline" className="text-[10px]">ou</Badge>
-                  <Button variant="outline" size="sm" className="text-xs" onClick={() => setAdvFilterAdding(true)}>
-                    <Plus className="w-3 h-3 mr-1" /> Adicionar grupo de filtros
-                  </Button>
-                </div>
-              )}
-            </div>
+                <select className="w-full text-xs border border-border rounded px-2 py-1.5 bg-background" value={af.operator}
+                  onChange={e => { const nf = [...advancedFilters]; nf[idx] = { ...af, operator: e.target.value }; setAdvancedFilters(nf); }}>
+                  <option value="is_any">é qualquer um de</option>
+                  <option value="is_none">não é nenhum de</option>
+                  <option value="is_known">é conhecido</option>
+                  <option value="is_unknown">é desconhecido</option>
+                </select>
+                {(af.operator === 'is_any' || af.operator === 'is_none') && (
+                  <Input className="text-xs h-8" placeholder="Pesquisar..." value={af.value}
+                    onChange={e => { const nf = [...advancedFilters]; nf[idx] = { ...af, value: e.target.value }; setAdvancedFilters(nf); }} />
+                )}
+              </div>
+            ))}
+            <Button variant="outline" size="sm" className="text-xs" onClick={() => setAdvancedFilters(f => [...f, { property: '', operator: 'is_any', value: '' }])}>
+              <Plus className="w-3 h-3 mr-1" /> Adicionar filtro
+            </Button>
           </div>
-        </div>
-      )}
+          <div className="px-6 py-4 border-t border-border">
+            <Button className="w-full" onClick={() => setShowAdvancedFilters(false)}>Aplicar filtros</Button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Create Ticket Modal */}
       {showCreateModal && (
