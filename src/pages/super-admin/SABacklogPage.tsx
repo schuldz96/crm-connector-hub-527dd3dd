@@ -4,6 +4,7 @@ import {
   type BacklogTask,
 } from '@/lib/superAdminService';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -121,6 +122,7 @@ const emptyTask: Partial<BacklogTask> = {
 
 export default function SABacklogPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [tasks, setTasks] = useState<BacklogTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'kanban' | 'list'>('kanban');
@@ -167,7 +169,7 @@ export default function SABacklogPage() {
         await updateBacklogTask(id, updates);
         toast({ title: 'Task atualizada' });
       } else {
-        await createBacklogTask(editingTask);
+        await createBacklogTask({ ...editingTask, criado_por: user?.name || 'Desconhecido' });
         toast({ title: 'Task criada' });
       }
       setDialogOpen(false);
@@ -393,10 +395,6 @@ export default function SABacklogPage() {
             <div>
               <label className="text-sm font-medium block mb-1.5">Descrição</label>
               <Textarea value={editingTask.descricao ?? ''} onChange={e => updateField('descricao', e.target.value)} placeholder="Detalhes da task, contexto, requisitos..." className="min-h-[80px]" />
-            </div>
-            <div>
-              <label className="text-xs font-medium block mb-1.5">Responsável</label>
-              <Input value={editingTask.criado_por ?? ''} onChange={e => updateField('criado_por', e.target.value)} placeholder="Nome de quem criou a task" />
             </div>
             <div>
               <label className="text-xs font-medium block mb-1.5">Tipo</label>
