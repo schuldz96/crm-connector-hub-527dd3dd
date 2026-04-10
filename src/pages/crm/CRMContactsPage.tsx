@@ -7,7 +7,7 @@ import {
   Search, Plus, Filter, ExternalLink, MoreHorizontal, X,
   ChevronLeft, ChevronRight, ChevronDown, Download, Contact, Settings2,
   ArrowUpDown, BarChart3, Copy, Table2, SlidersHorizontal, Loader2,
-  Trash2, PlusCircle, Save,
+  Trash2, PlusCircle, Save, CheckCircle2,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -113,6 +113,8 @@ export default function CRMContactsPage() {
   const [showViewList, setShowViewList] = useState(false);
   const [editingViewId, setEditingViewId] = useState<string | null>(null);
   const [editingViewName, setEditingViewName] = useState('');
+  const [creatingView, setCreatingView] = useState(false);
+  const [newViewName, setNewViewName] = useState('');
   const viewMenuRef = useRef<HTMLDivElement>(null);
 
   // Track if active view has unsaved filter changes
@@ -143,19 +145,26 @@ export default function CRMContactsPage() {
   };
 
   const handleCreateView = () => {
-    const name = prompt('Nome da nova visualização:');
-    if (!name?.trim()) return;
+    setShowViewMenu(false);
+    setShowViewList(false);
+    setCreatingView(true);
+    setNewViewName('');
+  };
+
+  const confirmCreateView = () => {
+    if (!newViewName.trim()) { setCreatingView(false); return; }
     const newView: SavedView = {
       id: `view_${Date.now()}`,
-      label: name.trim(),
+      label: newViewName.trim(),
       filters: { ...activeFilters },
     };
     const next = [...savedViews, newView];
     setSavedViews(next);
     persistViews(next);
     setActiveTab(newView.id);
-    setShowViewMenu(false);
-    toast({ title: `Visualização "${name.trim()}" criada` });
+    setCreatingView(false);
+    setNewViewName('');
+    toast({ title: `Visualização "${newView.label}" criada` });
   };
 
   const handleRenameView = (id: string) => {
@@ -415,6 +424,26 @@ export default function CRMContactsPage() {
               )}
             </div>
           ))}
+
+          {/* Inline new view input */}
+          {creatingView && (
+            <div className="flex items-center gap-1 px-2 py-1.5 border-b-2 border-primary -mb-px">
+              <input
+                autoFocus
+                value={newViewName}
+                onChange={e => setNewViewName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') confirmCreateView(); if (e.key === 'Escape') setCreatingView(false); }}
+                placeholder="Nome da visualização"
+                className="text-sm font-medium bg-transparent border-b border-primary/50 outline-none w-[160px] text-foreground placeholder:text-muted-foreground"
+              />
+              <button onClick={confirmCreateView} className="text-primary hover:text-primary/80 p-0.5" title="Confirmar">
+                <CheckCircle2 className="w-4 h-4" />
+              </button>
+              <button onClick={() => setCreatingView(false)} className="text-muted-foreground hover:text-destructive p-0.5" title="Cancelar">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
 
           {/* + Button with dropdown */}
           <div ref={viewMenuRef} className="relative">
