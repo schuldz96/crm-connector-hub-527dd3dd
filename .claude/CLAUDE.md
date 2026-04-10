@@ -233,6 +233,17 @@ try {
 
 ## Git & GitHub Integration
 
+### Branch Strategy
+- **NUNCA commitar direto na main** — main é protegida, só recebe merges via PR
+- Sempre criar uma branch antes de começar qualquer trabalho:
+  - `feat/nome-da-feature` — para features novas
+  - `fix/descricao-do-bug` — para correções
+  - `chore/descricao` — para manutenção (configs, deps, CI)
+  - `refactor/descricao` — para refatorações
+- Cada dev trabalha na sua branch isolada
+- Quando pronto, abrir **Pull Request** para main
+- Fazer merge somente após revisão
+
 ### Commit Conventions
 - Use conventional commits: `feat:`, `fix:`, `docs:`, `chore:`, etc.
 - Reference story ID: `feat: implement IDE detection [Story 2.1]`
