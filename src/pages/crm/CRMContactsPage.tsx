@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,8 @@ import {
 import { cn } from '@/lib/utils';
 import PhoneInput from '@/components/ui/phone-input';
 import { useCrmContacts, useCreateContact, useSaasUsers } from '@/hooks/useCrm';
+import { supabaseSaas } from '@/integrations/supabase/client';
+import { getOrg } from '@/lib/saas';
 import { useToast } from '@/hooks/use-toast';
 import type { ContactStatus } from '@/types/crm';
 
@@ -106,7 +108,48 @@ export default function CRMContactsPage() {
   const [formFields, setFormFields] = useState<FormField[]>(defaultFields);
   const [formData, setFormData] = useState<Record<string, string>>({});
 
-  const updateFormField = (key: string, value: string) => setFormData(prev => ({ ...prev, [key]: value }));
+  // Email duplicate check (debounced)
+  const [emailStatus, setEmailStatus] = useState<'idle' | 'checking' | 'exists' | 'available'>('idle');
+  const [existingContactName, setExistingContactName] = useState('');
+  const emailCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const checkEmailDuplicate = (email: string) => {
+    if (emailCheckTimer.current) clearTimeout(emailCheckTimer.current);
+    const trimmed = email.trim().toLowerCase();
+    if (!trimmed || !trimmed.includes('@')) {
+      setEmailStatus('idle');
+      setExistingContactName('');
+      return;
+    }
+    setEmailStatus('checking');
+    emailCheckTimer.current = setTimeout(async () => {
+      try {
+        const org = await getOrg();
+        const { data } = await (supabaseSaas as any).schema('crm')
+          .from('contatos')
+          .select('nome')
+          .eq('org', org)
+          .ilike('email', trimmed)
+          .is('deletado_em', null)
+          .limit(1)
+          .maybeSingle();
+        if (data) {
+          setEmailStatus('exists');
+          setExistingContactName(data.nome || 'Contato existente');
+        } else {
+          setEmailStatus('available');
+          setExistingContactName('');
+        }
+      } catch {
+        setEmailStatus('idle');
+      }
+    }, 400);
+  };
+
+  const updateFormField = (key: string, value: string) => {
+    setFormData(prev => ({ ...prev, [key]: value }));
+    if (key === 'email') checkEmailDuplicate(value);
+  };
   const removeField = (key: string) => {
     setFormFields(prev => prev.filter(f => f.key !== key));
     setFormData(prev => { const next = { ...prev }; delete next[key]; return next; });
@@ -250,7 +293,7 @@ export default function CRMContactsPage() {
               <DropdownMenuItem onClick={() => navigate('/crm/restore?type=0-1')}>Restaurar registros</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button size="sm" className="gap-1.5 h-8" onClick={() => setShowCreateModal(true)}>
+          <Button size="sm" className="gap-1.5 h-8" onClick={() => { setShowCreateModal(true); setFormData({}); setEmailStatus('idle'); setExistingContactName(''); setFormFields([...defaultFields]); }}>
             Adicionar contatos <ChevronRight className="w-3 h-3" />
           </Button>
         </div>
@@ -554,8 +597,34 @@ export default function CRMContactsPage() {
                       onChange={e => updateFormField(field.key, e.target.value)}
                       placeholder={field.placeholder || field.label}
                       type={field.type || 'text'}
-                      className="mt-0.5"
+                      className={cn('mt-0.5', field.key === 'email' && emailStatus === 'exists' && 'border-destructive focus:border-destructive')}
                     />
+                  )}
+                  {/* Email duplicate warning */}
+                  {field.key === 'email' && emailStatus === 'exists' && (
+                    <div className="flex items-center gap-1.5 mt-1.5 px-2.5 py-1.5 rounded-md bg-destructive/10 border border-destructive/20">
+                      <span className="text-xs text-destructive">
+                        Já existe um contato com este e-mail: <strong>{existingContactName}</strong>
+                      </span>
+                      <button
+                        className="ml-auto text-[10px] text-primary hover:underline whitespace-nowrap"
+                        onClick={() => {
+                          const contacts = result?.data || [];
+                          const match = contacts.find(c => c.email?.toLowerCase() === (formData.email || '').trim().toLowerCase());
+                          if (match) {
+                            setShowCreateModal(false);
+                            navigate(`/crm/record/0-1/${match.numero_registro}`);
+                          }
+                        }}
+                      >
+                        Ver contato
+                      </button>
+                    </div>
+                  )}
+                  {field.key === 'email' && emailStatus === 'checking' && (
+                    <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" /> Verificando...
+                    </p>
                   )}
                 </div>
               ))}
@@ -567,7 +636,7 @@ export default function CRMContactsPage() {
               </button>
             </div>
             <div className="px-6 py-4 border-t border-border flex gap-2">
-              <Button onClick={handleCreateContact} disabled={!(formData.email || '').trim() || !(formData.nome || '').trim() || createContact.isPending}>
+              <Button onClick={handleCreateContact} disabled={!(formData.email || '').trim() || !(formData.nome || '').trim() || createContact.isPending || emailStatus === 'exists'}>
                 {createContact.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
                 Criar
               </Button>
