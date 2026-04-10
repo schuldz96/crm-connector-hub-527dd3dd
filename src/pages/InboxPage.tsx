@@ -1897,13 +1897,16 @@ export default function InboxPage() {
                   <MessageSquare className="w-8 h-8 opacity-20 mb-2" />
                   <p className="text-xs">Nenhuma mensagem nesta conversa</p>
                 </div>
-              ) : messages.map(msg => {
+              ) : messages.filter(m => m.msg_type !== 'reaction').map(msg => {
                 // Parse template components if available
                 let tplComps: any[] = [];
                 try { tplComps = msg.template_components ? (typeof msg.template_components === 'string' ? JSON.parse(msg.template_components) : msg.template_components) : []; } catch { /* */ }
+                // Parse reactions
+                const reactions: { emoji: string; from: string }[] = Array.isArray(msg.reactions) ? msg.reactions : [];
 
                 return (
                 <div key={msg.id} className={cn('flex', msg.from_me ? 'justify-end' : 'justify-start')}>
+                  <div className="relative">
                   <div className={cn(
                     'max-w-[70%] rounded-2xl text-sm shadow-sm overflow-hidden',
                     msg.from_me
@@ -2000,6 +2003,21 @@ export default function InboxPage() {
                       <span className="text-[10px] opacity-70">{formatTime(msg.timestamp)}</span>
                       {msg.from_me && <MsgStatusIcon status={msg.status} sentAt={msg.sent_at || msg.timestamp} />}
                     </div>
+                  </div>
+                  {/* Reaction badge — WhatsApp style */}
+                  {reactions.length > 0 && (
+                    <div className={cn('flex gap-0.5 -mt-2 mb-1', msg.from_me ? 'justify-end mr-1' : 'justify-start ml-1')}>
+                      {Object.entries(reactions.reduce((acc: Record<string, number>, r) => {
+                        acc[r.emoji] = (acc[r.emoji] || 0) + 1;
+                        return acc;
+                      }, {})).map(([emoji, count]) => (
+                        <span key={emoji} className="inline-flex items-center gap-0.5 bg-card border border-border rounded-full px-1.5 py-0.5 text-xs shadow-sm">
+                          <span>{emoji}</span>
+                          {(count as number) > 1 && <span className="text-[9px] text-muted-foreground">{count as number}</span>}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   </div>
                 </div>
                 );

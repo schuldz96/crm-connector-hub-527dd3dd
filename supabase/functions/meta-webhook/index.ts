@@ -234,6 +234,31 @@ async function handleMessages(value: any) {
     const contactName = contactInfo?.profile?.name || null;
     const ts = msg.timestamp ? new Date(parseInt(msg.timestamp) * 1000) : new Date();
 
+    // Handle reactions: update the original message instead of creating a new row
+    if (msg.type === 'reaction' && msg.reaction) {
+      const targetWamid = msg.reaction.message_id;
+      const emoji = msg.reaction.emoji || '';
+      if (targetWamid) {
+        const { data: target } = await sb.from('meta_inbox_messages')
+          .select('id, reactions').eq('wamid', targetWamid).eq('account_id', account.id).maybeSingle();
+        if (target) {
+          const existing: any[] = target.reactions || [];
+          if (emoji) {
+            // Add or replace reaction from this sender
+            const filtered = existing.filter((r: any) => r.from !== contactPhone);
+            filtered.push({ emoji, from: contactPhone, ts: ts.toISOString() });
+            await sb.from('meta_inbox_messages').update({ reactions: filtered }).eq('id', target.id);
+          } else {
+            // Empty emoji = remove reaction
+            const filtered = existing.filter((r: any) => r.from !== contactPhone);
+            await sb.from('meta_inbox_messages').update({ reactions: filtered.length > 0 ? filtered : null }).eq('id', target.id);
+          }
+          log(`Reaction: ${contactPhone} ${emoji || '(removed)'} on ${targetWamid.slice(0, 20)}...`);
+        }
+      }
+      continue; // Skip normal message insertion for reactions
+    }
+
     const convId = await upsertConversation(account.id, account.empresa_id, contactPhone, contactName, '', false, ts);
     if (convId) {
       const lastMsg = await insertInboundMessage(convId, account.id, account.empresa_id, msg, contactPhone);
