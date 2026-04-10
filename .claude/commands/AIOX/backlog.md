@@ -42,6 +42,22 @@ curl -s -X PATCH "${SUPABASE_URL}/rest/v1/backlog_tasks?id=eq.${TASK_ID}" \
 Status válidos (em ordem do kanban):
 `backlog` → `analyzing` → `planning` → `developing` → `reviewing` → `testing` → `security-review` → `deploying` → `done`
 
+**REGRA DE HISTÓRICO COMPLETO:** O campo `agente_historico` DEVE conter EXATAMENTE 7 entries ao final do pipeline, uma por fase, com TODOS estes agentes:
+
+| # | Agente | Status | Obrigatório |
+|---|--------|--------|-------------|
+| 1 | `analyst` | `analyzing` | SIM |
+| 2 | `architect` | `planning` | SIM |
+| 3 | `dev` | `developing` | SIM |
+| 4 | `qa` | `reviewing` | SIM |
+| 5 | `qa` | `testing` | SIM |
+| 6 | `security` | `security-review` | SIM |
+| 7 | `devops` | `deploying` | SIM |
+
+Cada entry DEVE ter: `agente`, `status`, `timestamp` (ISO 8601), `nota` (resumo de 1 frase do que foi feito).
+**NUNCA marcar uma task como `done` sem ter as 7 entries completas no `agente_historico`.**
+**NUNCA batch-processar tasks pulando agentes** — cada task DEVE passar individualmente por cada fase e ter o histórico atualizado a cada transição.
+
 ## Execução
 
 ### PASSO 0 — Verificar Pipeline e Buscar Tasks
