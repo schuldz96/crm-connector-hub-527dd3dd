@@ -563,6 +563,33 @@ export async function deleteTask(id: string): Promise<void> {
 }
 
 // ========================
+// CONVERSAS IA (para exibir chat no record)
+// ========================
+
+export interface AIConversation {
+  id: string;
+  status: string;
+  mensagens: { role: string; content: string; timestamp: string }[];
+  total_mensagens: number;
+  contato_telefone: string;
+  criado_em: string;
+  ultima_mensagem_em: string;
+}
+
+export async function getAIConversation(entidadeTipo: 'deal' | 'ticket', entidadeId: string): Promise<AIConversation | null> {
+  const { empresaId } = await getOrgAndEmpresaId();
+  const { data } = await crm().from('ai_conversations')
+    .select('id, status, mensagens, total_mensagens, contato_telefone, criado_em, ultima_mensagem_em')
+    .eq('empresa_id', empresaId)
+    .eq('entidade_tipo', entidadeTipo)
+    .eq('entidade_id', entidadeId)
+    .order('criado_em', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data;
+}
+
+// ========================
 // HISTÓRICO DE PROPRIEDADES
 // ========================
 

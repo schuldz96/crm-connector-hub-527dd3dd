@@ -23,7 +23,7 @@ import {
   useCrmPipelines, useSaasUsers,
 } from '@/hooks/useCrm';
 import type { CrmObjectType, ActivityType, CrmActivity } from '@/types/crm';
-import { getPropertyHistory, logPropertyChange, type PropertyHistoryEntry } from '@/lib/crmService';
+import { getPropertyHistory, logPropertyChange, getAIConversation, type PropertyHistoryEntry, type AIConversation } from '@/lib/crmService';
 import { useAuth } from '@/contexts/AuthContext';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
@@ -197,6 +197,13 @@ export default function CRMRecordPage() {
   const filterType = activeActivityTab === 'all' ? undefined : activeActivityTab;
   const { data: activities = [], isLoading: loadingActivities } = useCrmActivities(objectType, recordId, filterType);
   const { data: associated, isLoading: loadingAssociated } = useCrmAssociatedRecords(objectType, recordId);
+
+  // Conversa IA (para deals e tickets)
+  const [aiConversation, setAiConversation] = useState<AIConversation | null>(null);
+  useEffect(() => {
+    if (!recordId || (objectType !== 'deal' && objectType !== 'ticket')) return;
+    getAIConversation(objectType, recordId).then(setAiConversation).catch(() => setAiConversation(null));
+  }, [recordId, objectType]);
 
   // For association search
   const { data: searchContacts } = useCrmContacts({ search: associationSearch, perPage: 10 });
@@ -1168,6 +1175,40 @@ export default function CRMRecordPage() {
       {/* ============ RIGHT SIDEBAR ============ */}
       <div className="w-[280px] xl:w-[320px] flex-shrink-0 border-l border-border overflow-y-auto bg-card">
         <div className="p-4 space-y-4">
+          {/* AI Conversation (for deals and tickets) */}
+          {aiConversation && aiConversation.mensagens?.length > 0 && (
+            <div className="border border-border rounded-lg">
+              <div className="flex items-center justify-between p-3 border-b border-border">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium">Conversa IA</span>
+                  <Badge variant="outline" className={cn('text-[10px] h-4 px-1',
+                    aiConversation.status === 'active' ? 'bg-green-500/10 text-green-500 border-green-500/30' :
+                    aiConversation.status === 'paused' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30' :
+                    'bg-gray-500/10 text-gray-500 border-gray-500/30'
+                  )}>{aiConversation.status === 'active' ? 'Ativa' : aiConversation.status === 'paused' ? 'Pausada' : 'Encerrada'}</Badge>
+                </div>
+                <span className="text-[10px] text-muted-foreground">{aiConversation.total_mensagens} msgs</span>
+              </div>
+              <div className="max-h-[300px] overflow-y-auto p-2 space-y-1.5">
+                {aiConversation.mensagens.slice(-10).map((msg, i) => (
+                  <div key={i} className={cn('text-xs p-2 rounded-lg max-w-[85%]',
+                    msg.role === 'assistant' ? 'bg-primary/10 text-foreground mr-auto' : 'bg-muted text-foreground ml-auto')}>
+                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                    <span className="text-[9px] text-muted-foreground mt-0.5 block">
+                      {new Date(msg.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {aiConversation.contato_telefone && (
+                <div className="px-3 py-2 border-t border-border">
+                  <span className="text-[10px] text-muted-foreground">📱 {aiConversation.contato_telefone}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Contacts section (unless current is contact) */}
           {objectType !== 'contact' && (
             <AssociationSection
