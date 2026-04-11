@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   Plus, X, FileText, Copy, Loader2, Trash2, ExternalLink, ToggleLeft, ToggleRight,
   GripVertical, Eye,
@@ -189,79 +190,81 @@ export default function CRMFormsPage() {
         {forms.length === 0 && <p className="text-center text-muted-foreground py-8">Nenhum formulário criado ainda</p>}
       </div>
 
-      {/* Create/Edit modal */}
-      {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-start justify-end">
-          <div className="absolute inset-0 bg-black/40" onClick={() => { setShowCreate(false); setEditingForm(null); }} />
-          <div className="relative w-[480px] h-full bg-card border-l border-border shadow-xl overflow-y-auto">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-              <h2 className="text-base font-semibold">{editingForm ? 'Editar' : 'Novo'} Formulário</h2>
-              <button onClick={() => { setShowCreate(false); setEditingForm(null); }}><X className="w-5 h-5 text-muted-foreground" /></button>
+      {/* Create/Edit Dialog (centralizado) */}
+      <Dialog open={showCreate} onOpenChange={open => { if (!open) { setShowCreate(false); setEditingForm(null); } }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingForm ? 'Editar' : 'Novo'} Formulário</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <label className="text-sm font-medium">Nome *</label>
+              <Input value={formName} onChange={e => { setFormName(e.target.value); if (!editingForm) setFormSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '-')); }} placeholder="Formulário de contato" className="mt-1" />
             </div>
-            <div className="px-5 py-4 space-y-4">
-              <div>
-                <label className="text-sm font-medium">Nome *</label>
-                <Input value={formName} onChange={e => { setFormName(e.target.value); if (!editingForm) setFormSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '-')); }} placeholder="Formulário de contato" className="mt-1" />
+            <div>
+              <label className="text-sm font-medium">Slug (URL) *</label>
+              <div className="flex items-center gap-1 mt-1">
+                <code className="text-xs text-muted-foreground bg-muted px-1.5 py-1 rounded">{window.location.origin}/f/</code>
+                <Input value={formSlug} onChange={e => setFormSlug(e.target.value)} placeholder="contato-vendas" className="flex-1" />
               </div>
-              <div>
-                <label className="text-sm font-medium">Slug (URL) *</label>
-                <div className="flex items-center gap-1 mt-1">
-                  <span className="text-xs text-muted-foreground">/f/</span>
-                  <Input value={formSlug} onChange={e => setFormSlug(e.target.value)} placeholder="contato-vendas" className="flex-1" />
+              {formSlug && (
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <code className="text-xs text-primary bg-primary/10 px-2 py-1 rounded flex-1 truncate">{formUrl(formSlug)}</code>
+                  <button onClick={() => { navigator.clipboard.writeText(formUrl(formSlug)); toast({ title: 'URL copiada!' }); }}
+                    className="text-muted-foreground hover:text-primary shrink-0"><Copy className="w-3.5 h-3.5" /></button>
                 </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Criar ao submeter</label>
-                <Select value={formType} onValueChange={setFormType}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="contact">Contato</SelectItem>
-                    <SelectItem value="company">Empresa</SelectItem>
-                    <SelectItem value="deal">Negócio</SelectItem>
-                    <SelectItem value="ticket">Ticket</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              )}
+            </div>
+            <div>
+              <label className="text-sm font-medium">Criar ao submeter</label>
+              <Select value={formType} onValueChange={setFormType}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="contact">Contato</SelectItem>
+                  <SelectItem value="company">Empresa</SelectItem>
+                  <SelectItem value="deal">Negócio</SelectItem>
+                  <SelectItem value="ticket">Ticket</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-              <div className="border-t border-border pt-3">
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-medium">Campos</label>
-                  <Button variant="outline" size="sm" onClick={addField} className="h-7 text-xs"><Plus className="w-3 h-3 mr-1" /> Campo</Button>
-                </div>
-                <div className="space-y-2">
-                  {formFields.map((field, idx) => (
-                    <div key={field.id} className="flex items-center gap-2 p-2 border border-border rounded-md bg-muted/20">
-                      <GripVertical className="w-3 h-3 text-muted-foreground shrink-0" />
-                      <Input value={field.label} onChange={e => updateField(field.id, 'label', e.target.value)} placeholder="Label" className="h-7 text-xs flex-1" />
-                      <select value={field.type} onChange={e => updateField(field.id, 'type', e.target.value)}
-                        className="h-7 text-xs border border-border rounded px-1 bg-background w-20">
-                        <option value="text">Texto</option>
-                        <option value="email">E-mail</option>
-                        <option value="phone">Telefone</option>
-                        <option value="number">Número</option>
-                        <option value="textarea">Área texto</option>
-                        <option value="select">Seleção</option>
-                      </select>
-                      <button onClick={() => updateField(field.id, 'required', !field.required)}
-                        className={cn('text-[10px] px-1.5 py-0.5 rounded border', field.required ? 'bg-primary/10 text-primary border-primary/30' : 'text-muted-foreground border-border')}>
-                        {field.required ? 'Obrigatório' : 'Opcional'}
-                      </button>
-                      <button onClick={() => removeField(field.id)} className="text-muted-foreground hover:text-destructive">
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
+            <div className="border-t border-border pt-3">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium">Campos</label>
+                <Button variant="outline" size="sm" onClick={addField} className="h-7 text-xs"><Plus className="w-3 h-3 mr-1" /> Campo</Button>
+              </div>
+              <div className="space-y-2">
+                {formFields.map((field) => (
+                  <div key={field.id} className="flex items-center gap-2 p-2 border border-border rounded-md bg-muted/20">
+                    <GripVertical className="w-3 h-3 text-muted-foreground shrink-0" />
+                    <Input value={field.label} onChange={e => updateField(field.id, 'label', e.target.value)} placeholder="Label" className="h-7 text-xs flex-1" />
+                    <select value={field.type} onChange={e => updateField(field.id, 'type', e.target.value)}
+                      className="h-7 text-xs border border-border rounded px-1 bg-background w-20">
+                      <option value="text">Texto</option>
+                      <option value="email">E-mail</option>
+                      <option value="phone">Telefone</option>
+                      <option value="number">Número</option>
+                      <option value="textarea">Área texto</option>
+                      <option value="select">Seleção</option>
+                    </select>
+                    <button onClick={() => updateField(field.id, 'required', !field.required)}
+                      className={cn('text-[10px] px-1.5 py-0.5 rounded border whitespace-nowrap', field.required ? 'bg-primary/10 text-primary border-primary/30' : 'text-muted-foreground border-border')}>
+                      {field.required ? 'Obrig.' : 'Opcional'}
+                    </button>
+                    <button onClick={() => removeField(field.id)} className="text-muted-foreground hover:text-destructive">
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
-            <div className="px-5 py-4 border-t border-border">
-              <Button onClick={handleSave} className="w-full">
-                {editingForm ? 'Salvar' : 'Criar Formulário'}
-              </Button>
-            </div>
+
+            <Button onClick={handleSave} className="w-full">
+              {editingForm ? 'Salvar' : 'Criar Formulário'}
+            </Button>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

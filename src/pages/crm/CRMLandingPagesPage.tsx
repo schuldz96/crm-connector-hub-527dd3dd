@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   Plus, X, Globe, Copy, Loader2, Trash2, ExternalLink, Eye, Palette,
 } from 'lucide-react';
@@ -205,82 +206,84 @@ export default function CRMLandingPagesPage() {
         )}
       </div>
 
-      {/* Editor */}
-      {showEditor && (
-        <div className="fixed inset-0 z-50 flex">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setShowEditor(false)} />
-          <div className="relative ml-auto w-[480px] h-full bg-card border-l border-border shadow-xl overflow-y-auto">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-              <h2 className="text-base font-semibold flex items-center gap-2"><Palette className="w-4 h-4" /> {editing ? 'Editar' : 'Nova'} Landing Page</h2>
-              <button onClick={() => setShowEditor(false)}><X className="w-5 h-5 text-muted-foreground" /></button>
+      {/* Editor Dialog (centralizado) */}
+      <Dialog open={showEditor} onOpenChange={open => { if (!open) setShowEditor(false); }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Palette className="w-4 h-4" /> {editing ? 'Editar' : 'Nova'} Landing Page</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <label className="text-sm font-medium">Nome *</label>
+              <Input value={name} onChange={e => { setName(e.target.value); if (!editing) setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '-')); }} className="mt-1" placeholder="Minha Landing Page" />
             </div>
-            <div className="px-5 py-4 space-y-4">
-              <div>
-                <label className="text-sm font-medium">Nome *</label>
-                <Input value={name} onChange={e => { setName(e.target.value); if (!editing) setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '-')); }} className="mt-1" placeholder="Minha Landing Page" />
+            <div>
+              <label className="text-sm font-medium">Slug (URL) *</label>
+              <div className="flex items-center gap-1 mt-1">
+                <code className="text-xs text-muted-foreground bg-muted px-1.5 py-1 rounded">{window.location.origin}/lp/</code>
+                <Input value={slug} onChange={e => setSlug(e.target.value)} className="flex-1" />
               </div>
-              <div>
-                <label className="text-sm font-medium">Slug (URL) *</label>
-                <div className="flex items-center gap-1 mt-1">
-                  <span className="text-xs text-muted-foreground">/lp/</span>
-                  <Input value={slug} onChange={e => setSlug(e.target.value)} className="flex-1" />
+              {slug && (
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <code className="text-xs text-primary bg-primary/10 px-2 py-1 rounded flex-1 truncate">{lpUrl(slug)}</code>
+                  <button onClick={() => { navigator.clipboard.writeText(lpUrl(slug)); toast({ title: 'URL copiada!' }); }}
+                    className="text-muted-foreground hover:text-primary shrink-0"><Copy className="w-3.5 h-3.5" /></button>
                 </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Formulário vinculado</label>
-                <Select value={formId} onValueChange={setFormId}>
-                  <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione um formulário" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Nenhum</SelectItem>
-                    {forms.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              )}
+            </div>
+            <div>
+              <label className="text-sm font-medium">Formulário vinculado</label>
+              <Select value={formId} onValueChange={setFormId}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione um formulário" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Nenhum</SelectItem>
+                  {forms.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
 
-              <div className="border-t border-border pt-3">
-                <label className="text-sm font-medium mb-2 block">Conteúdo</label>
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-xs text-muted-foreground">Título principal</label>
-                    <Input value={headline} onChange={e => setHeadline(e.target.value)} placeholder="Transforme seus resultados" className="mt-1" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground">Subtítulo</label>
-                    <Textarea value={subheadline} onChange={e => setSubheadline(e.target.value)} placeholder="Descubra como nossa solução..." className="mt-1 h-16" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground">Texto do botão CTA</label>
-                    <Input value={ctaText} onChange={e => setCtaText(e.target.value)} className="mt-1" />
-                  </div>
+            <div className="border-t border-border pt-3">
+              <label className="text-sm font-medium mb-2 block">Conteúdo</label>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-muted-foreground">Título principal</label>
+                  <Input value={headline} onChange={e => setHeadline(e.target.value)} placeholder="Transforme seus resultados" className="mt-1" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Subtítulo</label>
+                  <Textarea value={subheadline} onChange={e => setSubheadline(e.target.value)} placeholder="Descubra como nossa solução..." className="mt-1 h-16" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Texto do botão CTA</label>
+                  <Input value={ctaText} onChange={e => setCtaText(e.target.value)} className="mt-1" />
                 </div>
               </div>
+            </div>
 
-              <div className="border-t border-border pt-3">
-                <label className="text-sm font-medium mb-2 block">Identidade visual</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-muted-foreground">Cor de fundo</label>
-                    <div className="flex gap-2 mt-1">
-                      <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} className="w-8 h-8 rounded border" />
-                      <Input value={bgColor} onChange={e => setBgColor(e.target.value)} className="flex-1 h-8 text-xs" />
-                    </div>
+            <div className="border-t border-border pt-3">
+              <label className="text-sm font-medium mb-2 block">Identidade visual</label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-muted-foreground">Cor de fundo</label>
+                  <div className="flex gap-2 mt-1">
+                    <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} className="w-8 h-8 rounded border" />
+                    <Input value={bgColor} onChange={e => setBgColor(e.target.value)} className="flex-1 h-8 text-xs" />
                   </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground">Cor de destaque</label>
-                    <div className="flex gap-2 mt-1">
-                      <input type="color" value={accentColor} onChange={e => setAccentColor(e.target.value)} className="w-8 h-8 rounded border" />
-                      <Input value={accentColor} onChange={e => setAccentColor(e.target.value)} className="flex-1 h-8 text-xs" />
-                    </div>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Cor de destaque</label>
+                  <div className="flex gap-2 mt-1">
+                    <input type="color" value={accentColor} onChange={e => setAccentColor(e.target.value)} className="w-8 h-8 rounded border" />
+                    <Input value={accentColor} onChange={e => setAccentColor(e.target.value)} className="flex-1 h-8 text-xs" />
                   </div>
                 </div>
               </div>
             </div>
-            <div className="px-5 py-4 border-t border-border">
-              <Button onClick={handleSave} className="w-full">{editing ? 'Salvar' : 'Criar LP'}</Button>
-            </div>
+
+            <Button onClick={handleSave} className="w-full">{editing ? 'Salvar' : 'Criar LP'}</Button>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
