@@ -366,11 +366,13 @@ export default function CRMDealsPage() {
     if (!nome) return;
     submittingRef.current = true;
     try {
-      const stageId = formData.estagio || stages[0]?.id;
+      const selectedPipelineId = formData.pipeline || pipelineId;
+      const selPip = dealPipelines.find((p: any) => p.id === selectedPipelineId);
+      const stageId = formData.estagio || selPip?.estagios?.[0]?.id || stages[0]?.id;
       const dbPayload: Record<string, any> = {
         nome,
         valor: parseFloat(formData.valor || '') || 0,
-        pipeline_id: pipelineId,
+        pipeline_id: selectedPipelineId,
         estagio_id: stageId,
         status: 'aberto',
       };
@@ -872,12 +874,17 @@ export default function CRMDealsPage() {
                     )}
                   </div>
                   {field.key === 'pipeline' ? (
-                    <p className="text-sm text-muted-foreground mt-0.5">{pipeline?.nome}</p>
+                    <Select value={formData.pipeline || pipelineId} onValueChange={v => { updateFormField('pipeline', v); updateFormField('estagio', ''); }}>
+                      <SelectTrigger className="mt-0.5"><SelectValue placeholder="Selecione pipeline" /></SelectTrigger>
+                      <SelectContent>
+                        {dealPipelines.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   ) : field.key === 'estagio' ? (
-                    <Select value={formData.estagio || stages[0]?.id || ''} onValueChange={v => updateFormField('estagio', v)}>
+                    <Select value={formData.estagio || (dealPipelines.find((p: any) => p.id === (formData.pipeline || pipelineId)) as any)?.estagios?.[0]?.id || stages[0]?.id || ''} onValueChange={v => updateFormField('estagio', v)}>
                       <SelectTrigger className="mt-0.5"><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
-                        {stages.map(s => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
+                        {((dealPipelines.find((p: any) => p.id === (formData.pipeline || pipelineId)) as any)?.estagios || stages).map((s: any) => <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   ) : (
