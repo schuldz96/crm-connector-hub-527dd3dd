@@ -184,13 +184,18 @@ export default function SAPlansPage() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge className={
-                      plan.ativo
-                        ? 'bg-green-500/10 text-green-400 border-green-500/20'
-                        : 'bg-red-500/10 text-red-400 border-red-500/20'
-                    }>
-                      {plan.ativo ? 'Sim' : 'Nao'}
-                    </Badge>
+                    <Switch
+                      checked={plan.ativo}
+                      onCheckedChange={async (val) => {
+                        try {
+                          await updatePlan(plan.id, { ativo: val });
+                          toast({ title: val ? 'Plano reativado' : 'Plano desativado' });
+                          await loadPlans();
+                        } catch (err: any) {
+                          toast({ title: 'Erro', description: err?.message, variant: 'destructive' });
+                        }
+                      }}
+                    />
                   </TableCell>
                   <TableCell>
                     <Button variant="ghost" size="sm" onClick={() => openEdit(plan)}>

@@ -409,6 +409,18 @@ export async function getAllowedUserByEmail(email: string): Promise<AllowedUser 
   const org = await getOrg();
   const normalized = norm(email);
 
+  // Verify org is still active before allowing login
+  const { data: empresa } = await (supabaseSaas as any)
+    .schema('core')
+    .from('empresas')
+    .select('ativo')
+    .eq('org', org)
+    .maybeSingle();
+
+  if (empresa && empresa.ativo === false) {
+    throw new Error('Organizacao inativa. Entre em contato com o administrador.');
+  }
+
   const { data, error } = await (supabaseSaas as any)
     .schema('core')
     .from('usuarios')

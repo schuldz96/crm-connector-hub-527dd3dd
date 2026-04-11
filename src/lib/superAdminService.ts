@@ -120,6 +120,38 @@ export async function authenticateSuperAdmin(
 
 // ─── Organizations ──────────────────────────────────────────────────────────────
 
+export async function createOrganization(org: {
+  nome: string;
+  dominio?: string;
+  ativo?: boolean;
+}): Promise<Organization> {
+  // Format: [A-Z][0-9]{10}[A-Z] — ex: A1234567890Z
+  const letter = () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 26)];
+  const digits = Array.from({ length: 10 }, () => Math.floor(Math.random() * 10)).join('');
+  const orgKey = `${letter()}${digits}${letter()}`;
+
+  const { data, error } = await core()
+    .from('empresas')
+    .insert({ ...org, org: orgKey })
+    .select()
+    .single();
+
+  if (error) throw new Error(`Erro ao criar organizacao: ${error.message}`);
+  return data as Organization;
+}
+
+export async function updateOrganization(id: string, updates: Partial<Organization>): Promise<Organization> {
+  const { data, error } = await core()
+    .from('empresas')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw new Error(`Erro ao atualizar organizacao: ${error.message}`);
+  return data as Organization;
+}
+
 export async function getAllOrganizations(): Promise<Organization[]> {
   const { data, error } = await core()
     .from('empresas')
@@ -210,6 +242,37 @@ export async function updatePlan(id: string, updates: Partial<Plan>): Promise<Pl
 
 // ─── Subscriptions ──────────────────────────────────────────────────────────────
 
+export async function createSubscription(sub: {
+  org: string;
+  plano_id: string;
+  ciclo?: string;
+  status?: string;
+  trial_ate?: string;
+}): Promise<Subscription> {
+  const { data, error } = await admin()
+    .from('assinaturas')
+    .insert({
+      ...sub,
+      ciclo: sub.ciclo ?? 'mensal',
+      status: sub.status ?? 'ativa',
+      inicio_em: new Date().toISOString(),
+    })
+    .select('*,planos(nome)')
+    .single();
+
+  if (error) throw new Error(`Erro ao criar assinatura: ${error.message}`);
+  return {
+    id: data.id,
+    org: data.org,
+    plano_id: data.plano_id,
+    status: data.status,
+    ciclo: data.ciclo,
+    trial_ate: data.trial_ate ?? undefined,
+    inicio_em: data.inicio_em,
+    plano_nome: (data as any).planos?.nome ?? undefined,
+  };
+}
+
 export async function getAllSubscriptions(): Promise<Subscription[]> {
   const { data, error } = await admin()
     .from('assinaturas')
@@ -299,6 +362,14 @@ export async function createFeatureFlag(flag: Partial<FeatureFlag>): Promise<Fea
 
   if (error) throw new Error(`Erro ao criar feature flag: ${error.message}`);
   return data as FeatureFlag;
+}
+
+export async function deleteFeatureFlag(id: string): Promise<void> {
+  const { error } = await admin()
+    .from('feature_flags')
+    .delete()
+    .eq('id', id);
+  if (error) throw new Error(`Erro ao excluir feature flag: ${error.message}`);
 }
 
 // ─── Resource Usage ─────────────────────────────────────────────────────────────

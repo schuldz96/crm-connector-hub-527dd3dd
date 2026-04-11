@@ -56,3 +56,6 @@ supabase/.temp/
 mempalace.yaml
 entities.json
 .mempalace/
+
+# ─── Local documentation (not committed) ────────────────────────────────────
+_local-docs/
