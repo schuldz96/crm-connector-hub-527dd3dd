@@ -749,7 +749,8 @@ export default function CRMRecordPage() {
             {/* All properties (readonly) */}
             <div className="space-y-1.5 text-xs">
               <PropertyRow label="Número" value={rec.numero_registro as string} />
-              <PropertyRow label="Proprietário" value={rec.proprietario_nome as string} />
+              <PropertyRow label="Proprietário" value={rec.proprietario_nome as string || '-'} editable fieldKey="proprietario_id" onSave={handleSaveField}
+                selectOptions={saasUsers.map(u => ({ value: u.id, label: u.nome }))} />
               <PropertyRow label="Criado em" value={formatDateTime(rec.criado_em as string)} />
               <PropertyRow label="Atualizado em" value={formatDateTime(rec.atualizado_em as string)} />
               <PropertyRow label="Última atividade" value={formatDateTime(rec.ultima_atividade_em as string)} />
@@ -1491,7 +1492,7 @@ export default function CRMRecordPage() {
 // ========================
 
 function PropertyRow({
-  label, value, copyable, onCopy, onDetails, editable, fieldKey, onSave,
+  label, value, copyable, onCopy, onDetails, editable, fieldKey, onSave, selectOptions,
 }: {
   label: string;
   value?: string | number | null | React.ReactNode;
@@ -1501,6 +1502,7 @@ function PropertyRow({
   editable?: boolean;
   fieldKey?: string;
   onSave?: (key: string, value: string) => void;
+  selectOptions?: { value: string; label: string }[];
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -1509,6 +1511,7 @@ function PropertyRow({
 
   const startEdit = () => {
     if (!editable || !fieldKey || !onSave) return;
+    if (selectOptions) { setEditing(true); return; }
     setDraft(typeof value === 'string' ? value : typeof value === 'number' ? String(value) : '');
     setEditing(true);
   };
@@ -1518,8 +1521,13 @@ function PropertyRow({
     if (fieldKey && onSave) onSave(fieldKey, draft.trim());
   };
 
+  const selectOption = (val: string) => {
+    setEditing(false);
+    if (fieldKey && onSave) onSave(fieldKey, val);
+  };
+
   return (
-    <div className="flex items-start justify-between gap-2 group/prop">
+    <div className="flex items-start justify-between gap-2 group/prop relative">
       <div className="flex items-center gap-1 shrink-0">
         <span className="text-muted-foreground">{label}</span>
         {onDetails && (
@@ -1529,7 +1537,16 @@ function PropertyRow({
         )}
       </div>
       <div className="flex items-center gap-1 text-right min-w-0">
-        {editing ? (
+        {editing && selectOptions ? (
+          <div className="absolute right-0 top-6 z-50 bg-card border border-border rounded-lg shadow-xl max-h-48 overflow-y-auto w-48">
+            {selectOptions.map(opt => (
+              <button key={opt.value} onClick={() => selectOption(opt.value)}
+                className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted truncate">
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        ) : editing ? (
           <input
             autoFocus
             value={draft}
@@ -1554,6 +1571,9 @@ function PropertyRow({
           </button>
         )}
       </div>
+      {editing && selectOptions && (
+        <div className="fixed inset-0 z-40" onClick={() => setEditing(false)} />
+      )}
     </div>
   );
 }
