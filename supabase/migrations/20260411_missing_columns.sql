@@ -15,3 +15,6 @@ ALTER TABLE ai.configuracoes ADD COLUMN IF NOT EXISTS palavras_proibidas jsonb D
 -- Guardrails
 ALTER TABLE crm.estagio_ia_config ADD COLUMN IF NOT EXISTS max_mensagens integer DEFAULT 50;
 ALTER TABLE crm.estagio_ia_config ADD COLUMN IF NOT EXISTS max_duracao_horas integer DEFAULT 72;
+ALTER TABLE crm.estagio_ia_config ADD COLUMN IF NOT EXISTS horario_inicio time DEFAULT '08:00';
+ALTER TABLE crm.estagio_ia_config ADD COLUMN IF NOT EXISTS horario_fim time DEFAULT '18:00';
+ALTER TABLE crm.estagio_ia_config ADD COLUMN IF NOT EXISTS dias_semana jsonb DEFAULT '[1,2,3,4,5]'::jsonb;

@@ -202,6 +202,22 @@ serve(async (req) => {
 
     log(`Welcome text: "${welcomeText.slice(0, 100)}..."`);
 
+    // Guardrail: horário comercial
+    if (config.horario_inicio && config.horario_fim) {
+      const now = new Date();
+      const brHour = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+      const hhmm = brHour.getHours() * 100 + brHour.getMinutes();
+      const start = parseInt((config.horario_inicio as string).replace(':', ''));
+      const end = parseInt((config.horario_fim as string).replace(':', ''));
+      const dow = brHour.getDay();
+      const allowedDays: number[] = config.dias_semana || [1,2,3,4,5];
+      if (!allowedDays.includes(dow) || hhmm < start || hhmm > end) {
+        log(`Fora do horário comercial (${hhmm} / dia ${dow}). Registra conversa sem enviar.`);
+        await ensureConversation(empresa_id, entidade_tipo, entidade_id, estagio_id, config, contato, log);
+        return jsonRes({ success: true, skipped: true, reason: 'outside_business_hours', logs });
+      }
+    }
+
     // Guardrail: verificar palavras proibidas
     if (await checkForbiddenWords(empresa_id, welcomeText, log)) {
       await ensureConversation(empresa_id, entidade_tipo, entidade_id, estagio_id, config, contato, log);

@@ -81,7 +81,7 @@ serve(async (req) => {
       try {
         // 2. Get stage AI config (followups + transições)
         const { data: config } = await sb.from('crm_estagio_ia_config')
-          .select('followups, transicoes, perguntas, provider, instancia_id, prompt_sistema, auto_complemento, max_mensagens, max_duracao_horas')
+          .select('followups, transicoes, perguntas, provider, instancia_id, prompt_sistema, auto_complemento, max_mensagens, max_duracao_horas, horario_inicio, horario_fim, dias_semana')
           .eq('estagio_id', conv.estagio_id)
           .eq('empresa_id', conv.empresa_id)
           .maybeSingle();
@@ -135,6 +135,21 @@ serve(async (req) => {
           log(`Conv ${conv.id}: duração máxima de ${maxHours}h excedida (${Math.round(convAge)}h). Encerrando.`);
           await sb.from('crm_ai_conversations').update({ status: 'completed' }).eq('id', conv.id);
           continue;
+        }
+
+        // Guardrail: horário comercial
+        if (config.horario_inicio && config.horario_fim) {
+          const now = new Date();
+          const brHour = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+          const hhmm = brHour.getHours() * 100 + brHour.getMinutes();
+          const start = parseInt((config.horario_inicio as string).replace(':', ''));
+          const end = parseInt((config.horario_fim as string).replace(':', ''));
+          const dow = brHour.getDay(); // 0=Sun, 1=Mon, ...
+          const allowedDays: number[] = config.dias_semana || [1,2,3,4,5];
+          if (!allowedDays.includes(dow) || hhmm < start || hhmm > end) {
+            log(`Conv ${conv.id}: fora do horário comercial (${hhmm} / dia ${dow}). Pulando.`);
+            continue;
+          }
         }
 
         // 2b. Avaliar transições automáticas
