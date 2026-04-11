@@ -22,6 +22,25 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+// Cache de palavras proibidas por empresa
+const forbiddenCache: Record<string, string[]> = {};
+async function getForbiddenWords(empresaId: string): Promise<string[]> {
+  if (forbiddenCache[empresaId]) return forbiddenCache[empresaId];
+  const { data } = await sb.from('configuracoes_ia').select('palavras_proibidas').eq('empresa_id', empresaId).eq('modulo_codigo', 'whatsapp').maybeSingle();
+  const words: string[] = Array.isArray(data?.palavras_proibidas) ? data.palavras_proibidas : [];
+  forbiddenCache[empresaId] = words;
+  return words;
+}
+
+function containsForbiddenWord(text: string, words: string[]): string | null {
+  if (!words.length || !text) return null;
+  const lower = text.toLowerCase();
+  for (const w of words) {
+    if (w && lower.includes(w.toLowerCase())) return w;
+  }
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -156,8 +175,15 @@ serve(async (req) => {
             // AI generates the message using system prompt + conversation memory
             const aiText = await generateAIMessage(conv.empresa_id, conv.estagio_id, msgs, content.text, log);
             if (aiText) {
-              finalText = aiText;
-              msgSent = await sendText(conv.empresa_id, config.provider, config.instancia_id, phone, aiText, log);
+              // Guardrail: verificar palavras proibidas
+              const forbidden = await getForbiddenWords(conv.empresa_id);
+              const found = containsForbiddenWord(aiText, forbidden);
+              if (found) {
+                log(`GUARDRAIL: Mensagem bloqueada — contém palavra proibida "${found}". Texto: "${aiText.substring(0, 100)}..."`);
+              } else {
+                finalText = aiText;
+                msgSent = await sendText(conv.empresa_id, config.provider, config.instancia_id, phone, aiText, log);
+              }
             }
           } else if (content.type === 'text' && content.text) {
             finalText = content.text;

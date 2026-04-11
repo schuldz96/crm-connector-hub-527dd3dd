@@ -26,6 +26,23 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+// Guardrail: palavras proibidas
+async function checkForbiddenWords(empresaId: string, text: string, log: (m: string) => void): Promise<boolean> {
+  try {
+    const { data } = await sb.from('configuracoes_ia').select('palavras_proibidas').eq('empresa_id', empresaId).eq('modulo_codigo', 'whatsapp').maybeSingle();
+    const words: string[] = Array.isArray(data?.palavras_proibidas) ? data.palavras_proibidas : [];
+    if (!words.length) return false;
+    const lower = text.toLowerCase();
+    for (const w of words) {
+      if (w && lower.includes(w.toLowerCase())) {
+        log(`GUARDRAIL: Mensagem bloqueada — contém palavra proibida "${w}"`);
+        return true;
+      }
+    }
+  } catch { /* silent */ }
+  return false;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -184,6 +201,12 @@ serve(async (req) => {
     }
 
     log(`Welcome text: "${welcomeText.slice(0, 100)}..."`);
+
+    // Guardrail: verificar palavras proibidas
+    if (await checkForbiddenWords(empresa_id, welcomeText, log)) {
+      await ensureConversation(empresa_id, entidade_tipo, entidade_id, estagio_id, config, contato, log);
+      return jsonRes({ success: true, skipped: true, reason: 'forbidden_word_detected', logs });
+    }
 
     // 5. Enviar mensagem via provider
     let sent = false;
