@@ -510,3 +510,54 @@ export async function listSaasUsers(): Promise<SaasUser[]> {
   if (error) throw error;
   return data || [];
 }
+
+// ========================
+// HISTÓRICO DE PROPRIEDADES
+// ========================
+
+const OBJECT_TABLE_MAP: Record<CrmObjectType, string> = {
+  contact: 'contatos', company: 'empresas_crm', deal: 'negocios', ticket: 'tickets_crm',
+};
+
+export interface PropertyHistoryEntry {
+  prop: string;
+  from: string | null;
+  to: string | null;
+  source: string;
+  user: string;
+  at: string;
+}
+
+export async function logPropertyChange(
+  objectType: CrmObjectType,
+  objectId: string,
+  prop: string,
+  oldValue: string | null,
+  newValue: string | null,
+  source: string = 'manual',
+  userName: string = 'Sistema',
+): Promise<void> {
+  try {
+    const { empresaId } = await getOrgAndEmpresaId();
+    const table = OBJECT_TABLE_MAP[objectType];
+    const { data } = await crm().from(table).select('dados_custom').eq('id', objectId).eq('empresa_id', empresaId).single();
+    const custom = data?.dados_custom || {};
+    const history: PropertyHistoryEntry[] = custom._prop_history || [];
+    history.push({ prop, from: oldValue, to: newValue, source, user: userName, at: new Date().toISOString() });
+    const trimmed = history.slice(-100);
+    await crm().from(table).update({ dados_custom: { ...custom, _prop_history: trimmed } }).eq('id', objectId).eq('empresa_id', empresaId);
+  } catch { /* silent — history is best-effort */ }
+}
+
+export async function getPropertyHistory(
+  objectType: CrmObjectType,
+  objectId: string,
+  prop?: string,
+): Promise<PropertyHistoryEntry[]> {
+  const { empresaId } = await getOrgAndEmpresaId();
+  const table = OBJECT_TABLE_MAP[objectType];
+  const { data } = await crm().from(table).select('dados_custom').eq('id', objectId).eq('empresa_id', empresaId).single();
+  const history: PropertyHistoryEntry[] = data?.dados_custom?._prop_history || [];
+  if (prop) return history.filter(h => h.prop === prop).reverse();
+  return history.reverse();
+}

@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,8 @@ import {
   useCrmPipelines, useSaasUsers,
 } from '@/hooks/useCrm';
 import type { CrmObjectType, ActivityType, CrmActivity } from '@/types/crm';
+import { getPropertyHistory, type PropertyHistoryEntry } from '@/lib/crmService';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
   ArrowLeft, Pencil, StickyNote, Mail, Phone, CalendarDays, CheckSquare,
   MoreHorizontal, Plus, Settings, ChevronDown, Copy, Building2, User,
@@ -172,6 +174,22 @@ export default function CRMRecordPage() {
   const [domainExists, setDomainExists] = useState(false);
   const [creatingAssoc, setCreatingAssoc] = useState(false);
   const submittingRef = useRef(false);
+
+  // Property history states
+  const [historyProp, setHistoryProp] = useState<string | null>(null);
+  const [historyEntries, setHistoryEntries] = useState<PropertyHistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  const openPropertyHistory = useCallback(async (propKey: string) => {
+    if (!recordId) return;
+    setHistoryProp(propKey);
+    setHistoryLoading(true);
+    try {
+      const entries = await getPropertyHistory(objectType, recordId, propKey);
+      setHistoryEntries(entries);
+    } catch { setHistoryEntries([]); }
+    finally { setHistoryLoading(false); }
+  }, [objectType, recordId]);
 
   // Activity form states
   const [noteContent, setNoteContent] = useState('');
@@ -605,20 +623,20 @@ export default function CRMRecordPage() {
             )}
             {objectType === 'contact' && (
               <>
-                <PropertyRow label="Email" value={rec.email as string} copyable onCopy={() => handleCopyText(rec.email as string || '')} />
-                <PropertyRow label="Telefone" value={rec.telefone as string} />
-                <PropertyRow label="Cargo" value={rec.cargo as string} />
+                <PropertyRow label="Email" value={rec.email as string} copyable onCopy={() => handleCopyText(rec.email as string || '')} onDetails={() => openPropertyHistory('email')} />
+                <PropertyRow label="Telefone" value={rec.telefone as string} onDetails={() => openPropertyHistory('telefone')} />
+                <PropertyRow label="Cargo" value={rec.cargo as string} onDetails={() => openPropertyHistory('cargo')} />
                 <PropertyRow label="Status" value={
                   <Badge variant="outline">{String(rec.status || '-')}</Badge>
-                } />
+                } onDetails={() => openPropertyHistory('status')} />
               </>
             )}
             {objectType === 'company' && (
               <>
-                <PropertyRow label="Domínio" value={rec.dominio as string} />
-                <PropertyRow label="CNPJ" value={rec.cnpj as string} />
-                <PropertyRow label="Telefone" value={rec.telefone as string} />
-                <PropertyRow label="Setor" value={rec.setor as string} />
+                <PropertyRow label="Domínio" value={rec.dominio as string} onDetails={() => openPropertyHistory('dominio')} />
+                <PropertyRow label="CNPJ" value={rec.cnpj as string} onDetails={() => openPropertyHistory('cnpj')} />
+                <PropertyRow label="Telefone" value={rec.telefone as string} onDetails={() => openPropertyHistory('telefone')} />
+                <PropertyRow label="Setor" value={rec.setor as string} onDetails={() => openPropertyHistory('setor')} />
               </>
             )}
             {objectType === 'ticket' && (
@@ -1408,6 +1426,38 @@ export default function CRMRecordPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Property History Sheet */}
+      <Sheet open={!!historyProp} onOpenChange={open => { if (!open) setHistoryProp(null); }}>
+        <SheetContent side="right" className="w-[380px] sm:max-w-[380px] p-0 flex flex-col">
+          <SheetHeader className="px-5 py-4 border-b border-border">
+            <SheetTitle className="text-sm">Histórico — {historyProp}</SheetTitle>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {historyLoading && <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>}
+            {!historyLoading && historyEntries.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-8">Nenhuma alteração registrada para esta propriedade.</p>
+            )}
+            {historyEntries.map((entry, i) => (
+              <div key={i} className="border border-border rounded-lg p-3 space-y-1.5">
+                <div className="flex items-start justify-between">
+                  <span className="text-sm font-medium text-foreground">{entry.to || '(vazio)'}</span>
+                  <span className="text-[10px] text-muted-foreground whitespace-nowrap ml-2">
+                    {new Date(entry.at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </span>
+                </div>
+                {entry.from && (
+                  <p className="text-xs text-muted-foreground">Anterior: {entry.from}</p>
+                )}
+                <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                  <Badge variant="outline" className="text-[9px] h-4 px-1.5">{entry.source}</Badge>
+                  {entry.user && <span>por {entry.user}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
@@ -1417,17 +1467,25 @@ export default function CRMRecordPage() {
 // ========================
 
 function PropertyRow({
-  label, value, copyable, onCopy,
+  label, value, copyable, onCopy, onDetails,
 }: {
   label: string;
   value?: string | number | null | React.ReactNode;
   copyable?: boolean;
   onCopy?: () => void;
+  onDetails?: () => void;
 }) {
   const display = value == null || value === '' ? '-' : value;
   return (
-    <div className="flex items-start justify-between gap-2">
-      <span className="text-muted-foreground shrink-0">{label}</span>
+    <div className="flex items-start justify-between gap-2 group/prop">
+      <div className="flex items-center gap-1 shrink-0">
+        <span className="text-muted-foreground">{label}</span>
+        {onDetails && (
+          <button onClick={onDetails} className="text-primary text-[10px] opacity-0 group-hover/prop:opacity-100 transition-opacity hover:underline">
+            Detalhes
+          </button>
+        )}
+      </div>
       <div className="flex items-center gap-1 text-right">
         {typeof display === 'string' || typeof display === 'number' ? (
           <span className="text-foreground truncate max-w-[140px]">{display}</span>
