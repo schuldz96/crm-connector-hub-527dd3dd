@@ -1,6 +1,7 @@
 import { useDraggable } from '@dnd-kit/core';
 import {
   Layout,
+  PanelTop,
   Type,
   Image,
   MousePointerClick,
@@ -16,6 +17,7 @@ import { BLOCK_CATALOG, LPBlockType } from '@/components/lp-editor/lp-editor-typ
 
 const ICON_MAP: Record<string, LucideIcon> = {
   Layout,
+  PanelTop,
   Type,
   Image,
   MousePointerClick,

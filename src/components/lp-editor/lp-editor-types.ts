@@ -1,13 +1,16 @@
 // Block types supported by the editor
-export type LPBlockType = 'hero' | 'text' | 'image' | 'button' | 'form' | 'spacer' | 'columns';
+export type LPBlockType = 'hero' | 'text' | 'image' | 'button' | 'form' | 'spacer' | 'columns' | 'section';
 
 // Props for each block type
 export interface HeroBlockProps {
   headline: string;
   subheadline: string;
   bgColor: string;
+  bgImage: string;
+  bgOverlay: number; // 0-100 opacity of dark overlay
   textColor: string;
   alignment: 'left' | 'center' | 'right';
+  height: 'small' | 'medium' | 'large' | 'fullscreen';
 }
 
 export interface TextBlockProps {
@@ -21,6 +24,7 @@ export interface ImageBlockProps {
   alt: string;
   width: 'small' | 'medium' | 'full';
   alignment: 'left' | 'center' | 'right';
+  borderRadius: number;
 }
 
 export interface ButtonBlockProps {
@@ -29,6 +33,7 @@ export interface ButtonBlockProps {
   color: string;
   variant: 'filled' | 'outline';
   alignment: 'left' | 'center' | 'right';
+  size: 'sm' | 'md' | 'lg';
 }
 
 export interface FormBlockProps {
@@ -39,10 +44,32 @@ export interface SpacerBlockProps {
   height: number; // in px
 }
 
+export interface ColumnContent {
+  title: string;
+  text: string;
+  imageUrl: string;
+  iconEmoji: string;
+}
+
 export interface ColumnsBlockProps {
   columnCount: 1 | 2 | 3;
-  gap: number; // in px
-  contents: string[]; // placeholder text per column
+  gap: number;
+  bgColor: string;
+  padding: number;
+  columns: ColumnContent[];
+}
+
+export interface SectionBlockProps {
+  bgColor: string;
+  bgImage: string;
+  bgOverlay: number;
+  paddingY: number;
+  paddingX: number;
+  title: string;
+  subtitle: string;
+  textColor: string;
+  alignment: 'left' | 'center' | 'right';
+  maxWidth: 'sm' | 'md' | 'lg' | 'xl' | 'full';
 }
 
 // Union type for all block props
@@ -53,7 +80,8 @@ export type LPBlockProps =
   | ButtonBlockProps
   | FormBlockProps
   | SpacerBlockProps
-  | ColumnsBlockProps;
+  | ColumnsBlockProps
+  | SectionBlockProps;
 
 // A single block in the editor
 export interface LPBlock {
@@ -71,18 +99,21 @@ export interface LPEditorConfig {
 export interface BlockCatalogItem {
   type: LPBlockType;
   label: string;
-  icon: string; // lucide icon name
+  icon: string;
   defaultProps: LPBlockProps;
 }
 
 // Default props for each block type
 export const DEFAULT_BLOCK_PROPS: Record<LPBlockType, LPBlockProps> = {
   hero: {
-    headline: 'Titulo principal',
-    subheadline: 'Subtitulo da sua landing page',
+    headline: 'Seu título impactante aqui',
+    subheadline: 'Uma descrição envolvente para capturar a atenção do visitante',
     bgColor: '#0f172a',
+    bgImage: '',
+    bgOverlay: 50,
     textColor: '#ffffff',
     alignment: 'center',
+    height: 'medium',
   } as HeroBlockProps,
   text: {
     content: 'Digite seu texto aqui...',
@@ -94,13 +125,15 @@ export const DEFAULT_BLOCK_PROPS: Record<LPBlockType, LPBlockProps> = {
     alt: 'Imagem',
     width: 'medium',
     alignment: 'center',
+    borderRadius: 8,
   } as ImageBlockProps,
   button: {
-    text: 'Clique aqui',
+    text: 'Saiba mais',
     url: '#',
     color: '#6366f1',
     variant: 'filled',
     alignment: 'center',
+    size: 'lg',
   } as ButtonBlockProps,
   form: {
     formId: '',
@@ -109,19 +142,38 @@ export const DEFAULT_BLOCK_PROPS: Record<LPBlockType, LPBlockProps> = {
     height: 40,
   } as SpacerBlockProps,
   columns: {
-    columnCount: 2,
-    gap: 16,
-    contents: ['Coluna 1', 'Coluna 2'],
+    columnCount: 3,
+    gap: 24,
+    bgColor: '#ffffff',
+    padding: 32,
+    columns: [
+      { title: 'Recurso 1', text: 'Descrição do primeiro recurso ou benefício.', imageUrl: '', iconEmoji: '🚀' },
+      { title: 'Recurso 2', text: 'Descrição do segundo recurso ou benefício.', imageUrl: '', iconEmoji: '⚡' },
+      { title: 'Recurso 3', text: 'Descrição do terceiro recurso ou benefício.', imageUrl: '', iconEmoji: '🎯' },
+    ],
   } as ColumnsBlockProps,
+  section: {
+    bgColor: '#f8fafc',
+    bgImage: '',
+    bgOverlay: 0,
+    paddingY: 64,
+    paddingX: 24,
+    title: 'Título da Seção',
+    subtitle: 'Uma breve descrição para esta seção.',
+    textColor: '#0f172a',
+    alignment: 'center',
+    maxWidth: 'lg',
+  } as SectionBlockProps,
 };
 
 // Block catalog for the sidebar
 export const BLOCK_CATALOG: BlockCatalogItem[] = [
   { type: 'hero', label: 'Hero / Banner', icon: 'Layout', defaultProps: DEFAULT_BLOCK_PROPS.hero },
+  { type: 'section', label: 'Seção', icon: 'PanelTop', defaultProps: DEFAULT_BLOCK_PROPS.section },
+  { type: 'columns', label: 'Colunas (1/2/3)', icon: 'Columns3', defaultProps: DEFAULT_BLOCK_PROPS.columns },
   { type: 'text', label: 'Texto', icon: 'Type', defaultProps: DEFAULT_BLOCK_PROPS.text },
   { type: 'image', label: 'Imagem', icon: 'Image', defaultProps: DEFAULT_BLOCK_PROPS.image },
-  { type: 'button', label: 'Botao', icon: 'MousePointerClick', defaultProps: DEFAULT_BLOCK_PROPS.button },
-  { type: 'form', label: 'Formulario', icon: 'FileText', defaultProps: DEFAULT_BLOCK_PROPS.form },
-  { type: 'spacer', label: 'Espacador', icon: 'SeparatorHorizontal', defaultProps: DEFAULT_BLOCK_PROPS.spacer },
-  { type: 'columns', label: 'Colunas (1/2/3)', icon: 'Columns3', defaultProps: DEFAULT_BLOCK_PROPS.columns },
+  { type: 'button', label: 'Botão', icon: 'MousePointerClick', defaultProps: DEFAULT_BLOCK_PROPS.button },
+  { type: 'form', label: 'Formulário', icon: 'FileText', defaultProps: DEFAULT_BLOCK_PROPS.form },
+  { type: 'spacer', label: 'Espaçador', icon: 'SeparatorHorizontal', defaultProps: DEFAULT_BLOCK_PROPS.spacer },
 ];
