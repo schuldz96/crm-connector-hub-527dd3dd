@@ -38,7 +38,9 @@ import CRMTicketsPage from "@/pages/crm/CRMTicketsPage";
 import CRMCompaniesPage from "@/pages/crm/CRMCompaniesPage";
 import CRMTasksPage from "@/pages/crm/CRMTasksPage";
 import CRMFormsPage from "@/pages/crm/CRMFormsPage";
+import CRMLandingPagesPage from "@/pages/crm/CRMLandingPagesPage";
 import PublicFormPage from "@/pages/PublicFormPage";
+import PublicLandingPage from "@/pages/PublicLandingPage";
 import CRMPipelineSettingsPage from "@/pages/crm/CRMPipelineSettingsPage";
 import CRMPropertiesPage from "@/pages/crm/CRMPropertiesPage";
 import CRMRecordPage from "@/pages/crm/CRMRecordPage";
@@ -132,6 +134,7 @@ function ProtectedRoutes() {
         <Route path="/crm/0-4"                 element={R(<CRMTicketsPage />,          { resource: 'crm' })} />
         <Route path="/crm/tasks"               element={R(<CRMTasksPage />,            { resource: 'crm' })} />
         <Route path="/crm/forms"               element={R(<CRMFormsPage />,            { resource: 'crm' })} />
+        <Route path="/crm/landing-pages"       element={R(<CRMLandingPagesPage />,     { resource: 'crm' })} />
         <Route path="/crm/0-5"                 element={R(<CRMPropertiesPage />,       { resource: 'crm' })} />
         <Route path="/crm/0-6"                 element={R(<CRMPipelineSettingsPage />, { resource: 'crm' })} />
         <Route path="/crm/restore"                element={R(<CRMRestorePage />,       { resource: 'crm' })} />
@@ -188,6 +191,7 @@ const App = () => (
                       <Route path="/login"                element={<LoginPageWrapper />} />
                       <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
                       <Route path="/f/:slug" element={<PublicFormPage />} />
+                      <Route path="/lp/:slug" element={<PublicLandingPage />} />
                       {/* Protected routes */}
                       <Route path="/*" element={<ProtectedRoutes />} />
                     </Routes>
