@@ -59,7 +59,7 @@ export default function RequireRole({ children, minRole, resource }: RequireRole
           Entre em contato com o administrador se acredita que isso é um erro.
         </p>
         <a
-          href={getDefaultRoute(user.role)}
+          href={`/${user.org}${getDefaultRoute(user.role)}`}
           className="text-sm text-primary hover:underline mt-2"
         >
           Voltar para a página inicial

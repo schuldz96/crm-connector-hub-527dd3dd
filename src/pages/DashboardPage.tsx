@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, type CSSProperties } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useOrgNavigate } from '@/hooks/useOrgNavigate';
 import SearchableSelect from '@/components/ui/searchable-select';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -27,7 +27,7 @@ const colorMap: Record<string, string> = {
 
 export default function DashboardPage() {
   const { user, hasMinRole } = useAuth();
-  const navigate = useNavigate();
+  const navigate = useOrgNavigate();
   const { instances } = useEvolutionInstances();
   const [allMeetings, setAllMeetings] = useState<DbMeeting[]>([]);
   const [loadingMeetings, setLoadingMeetings] = useState(true);

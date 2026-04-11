@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useOrgNavigate } from '@/hooks/useOrgNavigate';
 import { Bell, X, CheckCheck, Video, MessageSquare, Zap, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications, type NotificationType } from '@/contexts/NotificationsContext';
@@ -31,7 +31,7 @@ export default function NotificationBell() {
   const [panelPos, setPanelPos] = useState({ top: 0, right: 0 });
   const bellRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
+  const navigate = useOrgNavigate();
 
   // Calculate panel position based on bell button
   useEffect(() => {

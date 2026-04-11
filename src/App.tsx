@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from "react-router-dom";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { AuthProvider, useAuth, getDefaultRoute } from "@/contexts/AuthContext";
 import { AppConfigProvider } from "@/contexts/AppConfigContext";
@@ -73,13 +73,22 @@ const R = (el: React.ReactNode, opts: { resource?: string; minRole?: string; mod
   </RequireRole>
 );
 
+/** Navigate helper that prepends the current /:org prefix */
+function OrgNav({ to, ...rest }: { to: string } & Omit<React.ComponentProps<typeof Navigate>, 'to'>) {
+  const { org } = useParams();
+  return <Navigate to={`/${org}${to}`} {...rest} />;
+}
+
 function LegacyRecordRedirect() {
-  const { typeId, numero } = useParams();
-  return <Navigate to={`/crm/record/${typeId}/${numero}`} replace />;
+  const { org, typeId, numero } = useParams();
+  return <Navigate to={`/${org}/crm/record/${typeId}/${numero}`} replace />;
 }
 
 function ProtectedRoutes() {
   const { isAuthenticated, isLoading, user } = useAuth();
+  const params = useParams();
+  const location = useLocation();
+  const urlOrg = params.org || '';
 
   if (isLoading) {
     return (
@@ -94,71 +103,96 @@ function ProtectedRoutes() {
 
   if (!isAuthenticated) return <Navigate to="/login" replace />;
 
+  // Redirect old URLs (without org) or wrong org to the correct org-prefixed URL
+  const userOrg = user?.org;
+  if (userOrg && urlOrg !== userOrg) {
+    const rest = params['*'] || '';
+    const newPath = `/${userOrg}/${urlOrg}${rest ? '/' + rest : ''}${location.search}${location.hash}`;
+    return <Navigate to={newPath} replace />;
+  }
+
   return (
     <Routes>
       <Route element={<AppLayout />}>
         {/* Páginas abertas para qualquer usuário autenticado */}
-        <Route path="/dashboard"    element={R(<DashboardPage />,    { resource: 'dashboard' })} />
-        <Route path="/me"           element={<MyProfilePage />} />
+        <Route path="dashboard"    element={R(<DashboardPage />,    { resource: 'dashboard' })} />
+        <Route path="me"           element={<MyProfilePage />} />
 
         {/* Páginas com controle por recurso (respeita permissoes_papeis) */}
-        <Route path="/meetings"     element={R(<MeetingsPage />,     { resource: 'meetings' })} />
-        <Route path="/whatsapp"     element={R(<WhatsAppPage />,     { resource: 'whatsapp' })} />
-        <Route path="/inbox"        element={R(<InboxPage />,        { resource: 'inbox' })} />
-        <Route path="/training"     element={R(<TrainingPage />,     { resource: 'training' })} />
-        <Route path="/performance"  element={R(<PerformancePage />,  { resource: 'performance' })} />
-        <Route path="/reports"      element={R(<ReportsPage />,      { resource: 'reports' })} />
+        <Route path="meetings"     element={R(<MeetingsPage />,     { resource: 'meetings' })} />
+        <Route path="whatsapp"     element={R(<WhatsAppPage />,     { resource: 'whatsapp' })} />
+        <Route path="inbox"        element={R(<InboxPage />,        { resource: 'inbox' })} />
+        <Route path="training"     element={R(<TrainingPage />,     { resource: 'training' })} />
+        <Route path="performance"  element={R(<PerformancePage />,  { resource: 'performance' })} />
+        <Route path="reports"      element={R(<ReportsPage />,      { resource: 'reports' })} />
 
         {/* Páginas restritas — exigem cargo + recurso */}
-        <Route path="/teams"        element={<Navigate to="/admin?s=teams" replace />} />
-        <Route path="/users"        element={<Navigate to="/admin?s=users-full" replace />} />
-        <Route path="/integrations" element={R(<IntegrationsPage />, { resource: 'integrations' })} />
-        <Route path="/automations"  element={R(<AutomationsPage />,  { resource: 'automations' })} />
-        <Route path="/ai-config"    element={R(<AIConfigPage />,     { resource: 'ai-config' })} />
-        <Route path="/admin"        element={R(<AdminPage />,        { resource: 'admin' })} />
+        <Route path="teams"        element={<OrgNav to="/admin?s=teams" replace />} />
+        <Route path="users"        element={<OrgNav to="/admin?s=users-full" replace />} />
+        <Route path="integrations" element={R(<IntegrationsPage />, { resource: 'integrations' })} />
+        <Route path="automations"  element={R(<AutomationsPage />,  { resource: 'automations' })} />
+        <Route path="ai-config"    element={R(<AIConfigPage />,     { resource: 'ai-config' })} />
+        <Route path="admin"        element={R(<AdminPage />,        { resource: 'admin' })} />
 
         {/* Marketing */}
-        <Route path="/marketing/campaigns"      element={R(<CampaignsPage />,      { resource: 'campaigns' })} />
-        <Route path="/marketing/email-marketing" element={R(<EmailMarketingPage />, { resource: 'email-marketing' })} />
-        <Route path="/marketing/forms"          element={<Navigate to="/crm/forms" replace />} />
+        <Route path="marketing/campaigns"      element={R(<CampaignsPage />,      { resource: 'campaigns' })} />
+        <Route path="marketing/email-marketing" element={R(<EmailMarketingPage />, { resource: 'email-marketing' })} />
+        <Route path="marketing/forms"          element={<OrgNav to="/crm/forms" replace />} />
 
         {/* CS — Customer Success */}
-        <Route path="/cs/health-score" element={R(<HealthScorePage />, { resource: 'health-score' })} />
-        <Route path="/cs/onboarding"   element={R(<OnboardingPage />,  { resource: 'onboarding' })} />
-        <Route path="/cs/nps-surveys"  element={R(<NpsSurveysPage />,  { resource: 'nps-surveys' })} />
+        <Route path="cs/health-score" element={R(<HealthScorePage />, { resource: 'health-score' })} />
+        <Route path="cs/onboarding"   element={R(<OnboardingPage />,  { resource: 'onboarding' })} />
+        <Route path="cs/nps-surveys"  element={R(<NpsSurveysPage />,  { resource: 'nps-surveys' })} />
 
-        {/* CRM — URLs primárias: /crm/0-{N}/{view} (padrão HubSpot) */}
-        <Route path="/crm/0-1"                 element={R(<CRMContactsPage />,         { resource: 'crm' })} />
-        <Route path="/crm/0-2"                 element={R(<CRMCompaniesPage />,        { resource: 'crm' })} />
-        <Route path="/crm/0-3"                 element={R(<CRMDealsPage />,            { resource: 'crm' })} />
-        <Route path="/crm/0-4"                 element={R(<CRMTicketsPage />,          { resource: 'crm' })} />
-        <Route path="/crm/tasks"               element={R(<CRMTasksPage />,            { resource: 'crm' })} />
-        <Route path="/crm/forms"               element={R(<CRMFormsPage />,            { resource: 'crm' })} />
-        <Route path="/crm/landing-pages"       element={R(<CRMLandingPagesPage />,     { resource: 'crm' })} />
-        <Route path="/crm/0-5"                 element={R(<CRMPropertiesPage />,       { resource: 'crm' })} />
-        <Route path="/crm/0-6"                 element={R(<CRMPipelineSettingsPage />, { resource: 'crm' })} />
-        <Route path="/crm/restore"                element={R(<CRMRestorePage />,       { resource: 'crm' })} />
-        <Route path="/crm/record/:typeId/:numero" element={R(<CRMRecordPage />,       { resource: 'crm' })} />
+        {/* CRM — URLs primárias: /:org/crm/0-{N} */}
+        <Route path="crm/0-1"                 element={R(<CRMContactsPage />,         { resource: 'crm' })} />
+        <Route path="crm/0-2"                 element={R(<CRMCompaniesPage />,        { resource: 'crm' })} />
+        <Route path="crm/0-3"                 element={R(<CRMDealsPage />,            { resource: 'crm' })} />
+        <Route path="crm/0-4"                 element={R(<CRMTicketsPage />,          { resource: 'crm' })} />
+        <Route path="crm/tasks"               element={R(<CRMTasksPage />,            { resource: 'crm' })} />
+        <Route path="crm/forms"               element={R(<CRMFormsPage />,            { resource: 'crm' })} />
+        <Route path="crm/landing-pages"       element={R(<CRMLandingPagesPage />,     { resource: 'crm' })} />
+        <Route path="crm/0-5"                 element={R(<CRMPropertiesPage />,       { resource: 'crm' })} />
+        <Route path="crm/0-6"                 element={R(<CRMPipelineSettingsPage />, { resource: 'crm' })} />
+        <Route path="crm/restore"                element={R(<CRMRestorePage />,       { resource: 'crm' })} />
+        <Route path="crm/record/:typeId/:numero" element={R(<CRMRecordPage />,       { resource: 'crm' })} />
 
         {/* CRM — redirects legados para manter compatibilidade */}
-        <Route path="/crm/contacts"            element={<Navigate to="/crm/0-1" replace />} />
-        <Route path="/crm/companies"           element={<Navigate to="/crm/0-2" replace />} />
-        <Route path="/crm/deals"               element={<Navigate to="/crm/0-3" replace />} />
-        <Route path="/crm/tickets"             element={<Navigate to="/crm/0-4" replace />} />
-        <Route path="/crm/properties"          element={<Navigate to="/crm/0-5" replace />} />
-        <Route path="/crm/pipeline-settings"   element={<Navigate to="/crm/0-6" replace />} />
-        <Route path="/objects/0-1/views/*"     element={<Navigate to="/crm/0-1" replace />} />
-        <Route path="/objects/0-2/views/*"     element={<Navigate to="/crm/0-2" replace />} />
-        <Route path="/objects/0-3/views/*"     element={<Navigate to="/crm/0-3" replace />} />
-        <Route path="/objects/0-4/views/*"     element={<Navigate to="/crm/0-4" replace />} />
-        <Route path="/record/:typeId/:numero"  element={<LegacyRecordRedirect />} />
+        <Route path="crm/contacts"            element={<OrgNav to="/crm/0-1" replace />} />
+        <Route path="crm/companies"           element={<OrgNav to="/crm/0-2" replace />} />
+        <Route path="crm/deals"               element={<OrgNav to="/crm/0-3" replace />} />
+        <Route path="crm/tickets"             element={<OrgNav to="/crm/0-4" replace />} />
+        <Route path="crm/properties"          element={<OrgNav to="/crm/0-5" replace />} />
+        <Route path="crm/pipeline-settings"   element={<OrgNav to="/crm/0-6" replace />} />
+        <Route path="objects/0-1/views/*"     element={<OrgNav to="/crm/0-1" replace />} />
+        <Route path="objects/0-2/views/*"     element={<OrgNav to="/crm/0-2" replace />} />
+        <Route path="objects/0-3/views/*"     element={<OrgNav to="/crm/0-3" replace />} />
+        <Route path="objects/0-4/views/*"     element={<OrgNav to="/crm/0-4" replace />} />
+        <Route path="record/:typeId/:numero"  element={<LegacyRecordRedirect />} />
 
-        {/* Fallback */}
-        <Route path="/"             element={<Navigate to={getDefaultRoute(user?.role)} replace />} />
-        <Route path="*"             element={<NotFound />} />
+        {/* Default + Fallback */}
+        <Route path=""  element={<OrgNav to={getDefaultRoute(user?.role)} replace />} />
+        <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
   );
+}
+
+/** Redirects root / to /{org}/dashboard (or default route) */
+function RootRedirect() {
+  const { isAuthenticated, isLoading, user } = useAuth();
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <span className="text-lg font-display font-bold text-primary animate-pulse">LTX</span>
+          <p className="text-sm text-muted-foreground">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  return <Navigate to={`/${user?.org}${getDefaultRoute(user?.role)}`} replace />;
 }
 
 const App = () => (
@@ -194,8 +228,12 @@ const App = () => (
                       <Route path="/f/:slug" element={<PublicFormPage />} />
                       <Route path="/lp/:org/:slug" element={<PublicLandingPage />} />
                       <Route path="/lp/:slug" element={<PublicLandingPage />} />
-                      {/* Protected routes */}
-                      <Route path="/*" element={<ProtectedRoutes />} />
+
+                      {/* Root redirect */}
+                      <Route path="/" element={<RootRedirect />} />
+
+                      {/* Protected routes — all URLs contain /:org prefix */}
+                      <Route path="/:org/*" element={<ProtectedRoutes />} />
                     </Routes>
                   </NotificationsProvider>
                   </LicenseProvider>
@@ -211,7 +249,9 @@ const App = () => (
 
 function LoginPageWrapper() {
   const { isAuthenticated, user } = useAuth();
-  if (isAuthenticated) return <Navigate to={getDefaultRoute(user?.role)} replace />;
+  if (isAuthenticated) {
+    return <Navigate to={`/${user?.org}${getDefaultRoute(user?.role)}`} replace />;
+  }
   return <LoginPage />;
 }
 

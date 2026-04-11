@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
+import { useOrgNavigate } from '@/hooks/useOrgNavigate';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -66,7 +67,7 @@ interface EditableStage {
 
 export default function CRMPipelineSettingsPage() {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
+  const navigate = useOrgNavigate();
   const { toast } = useToast();
 
   const objectType = (searchParams.get('type') || 'deal') as 'deal' | 'ticket';

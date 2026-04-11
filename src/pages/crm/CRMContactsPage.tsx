@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useOrgNavigate } from '@/hooks/useOrgNavigate';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -174,7 +174,7 @@ function formatCount(n: number) {
 }
 
 export default function CRMContactsPage() {
-  const navigate = useNavigate();
+  const navigate = useOrgNavigate();
   const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('all');

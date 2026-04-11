@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
+import { useOrgNavigate } from '@/hooks/useOrgNavigate';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -149,7 +150,7 @@ type SortDir = 'asc' | 'desc';
 // ========================
 
 export default function CRMPropertiesPage() {
-  const navigate = useNavigate();
+  const navigate = useOrgNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const [groupFilter, setGroupFilter] = useState<string>('all');

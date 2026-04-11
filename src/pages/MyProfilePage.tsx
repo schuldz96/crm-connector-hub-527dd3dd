@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useOrgNavigate } from '@/hooks/useOrgNavigate';
 import { Camera, RotateCcw, Save, Settings2, Shield, Users } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ROLE_LABELS } from '@/types';
@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 
 export default function MyProfilePage() {
   const { user, canAccess, updateProfile } = useAuth();
-  const navigate = useNavigate();
+  const navigate = useOrgNavigate();
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [name, setName] = useState('');

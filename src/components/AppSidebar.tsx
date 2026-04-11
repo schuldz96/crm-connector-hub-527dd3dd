@@ -1,8 +1,9 @@
 import { useState, useRef, useCallback } from 'react';
 import type { ElementType } from 'react';
 import { createPortal } from 'react-dom';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOrgNavigate, usePathWithoutOrg } from '@/hooks/useOrgNavigate';
 import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useRolePermissions } from '@/contexts/RolePermissionsContext';
 import { useLicense } from '@/contexts/LicenseContext';
@@ -169,7 +170,8 @@ export default function AppSidebar() {
   const { getPermission } = useRolePermissions();
   const { canAccessModule, loaded: licenseLoaded } = useLicense();
   const location = useLocation();
-  const navigate = useNavigate();
+  const navigate = useOrgNavigate();
+  const cleanPath = usePathWithoutOrg();
 
   // Track which parent group the user last clicked (for shared children like /whatsapp)
   const [activeParent, setActiveParent] = useState<string>(() => localStorage.getItem('ltx_active_parent') || '');
@@ -206,9 +208,9 @@ export default function AppSidebar() {
     if (profileTimeout.current) clearTimeout(profileTimeout.current);
   }, []);
 
-  const isActive = (path: string) => location.pathname === path.split('?')[0];
+  const isActive = (path: string) => cleanPath === path.split('?')[0];
   const isChildActive = (item: NavItem) => {
-    const hasMatch = item.children?.some(c => location.pathname.startsWith(c.path)) ?? false;
+    const hasMatch = item.children?.some(c => cleanPath.startsWith(c.path)) ?? false;
     if (!hasMatch) return false;
     // If this parent is explicitly the active one, prioritize it
     if (activeParent === item.path) return true;

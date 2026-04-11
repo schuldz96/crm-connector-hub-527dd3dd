@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useAuth, getDefaultRoute } from '@/contexts/AuthContext';
 import { useGoogleLogin } from '@react-oauth/google';
-import { useNavigate } from 'react-router-dom';
 import { GOOGLE_CLIENT_ID } from '@/App';
 import { CONFIG } from '@/lib/config';
 import BrandLogo from '@/components/BrandLogo';
@@ -13,7 +12,6 @@ import { Eye, EyeOff, Mail, Lock, BarChart3, MessageSquare, Brain, ShieldCheck }
 
 export default function LoginPage() {
   const { login, loginWithGoogle, user } = useAuth();
-  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);

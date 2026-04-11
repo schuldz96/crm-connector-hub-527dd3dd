@@ -10,8 +10,7 @@
  *   </RequireLicense>
  */
 import { useLicense } from '@/contexts/LicenseContext';
-import { getDefaultRoute } from '@/contexts/AuthContext';
-import { useAuth } from '@/contexts/AuthContext';
+import { getDefaultRoute, useAuth } from '@/contexts/AuthContext';
 import { Lock, ArrowUpCircle, AlertTriangle, Clock } from 'lucide-react';
 
 interface RequireLicenseProps {
@@ -46,6 +45,7 @@ export default function RequireLicense({ children, module }: RequireLicenseProps
         title="Assinatura expirada"
         description="Sua assinatura expirou. Renove seu plano para continuar usando a plataforma."
         userRole={user?.role}
+        org={user?.org}
       />
     );
   }
@@ -58,6 +58,7 @@ export default function RequireLicense({ children, module }: RequireLicenseProps
         title="Assinatura suspensa"
         description="Sua assinatura está suspensa. Regularize o pagamento para reativar o acesso."
         userRole={user?.role}
+        org={user?.org}
       />
     );
   }
@@ -93,6 +94,7 @@ export default function RequireLicense({ children, module }: RequireLicenseProps
         description={`O módulo "${module}" não está incluído no seu plano ${license.planName}. Faça upgrade para acessar este recurso.`}
         planName={license.planName}
         userRole={user?.role}
+        org={user?.org}
       />
     );
   }
@@ -114,13 +116,16 @@ function UpgradeScreen({
   description,
   planName,
   userRole,
+  org,
 }: {
   icon: React.ReactNode;
   title: string;
   description: string;
   planName?: string;
   userRole?: string;
+  org?: string;
 }) {
+  const prefix = org ? `/${org}` : '';
   return (
     <div className="flex flex-col items-center justify-center h-full gap-4 p-8 animate-fade-in">
       <div className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center">
@@ -137,13 +142,13 @@ function UpgradeScreen({
       )}
       <div className="flex items-center gap-3 mt-2">
         <a
-          href={getDefaultRoute(userRole as any)}
+          href={`${prefix}${getDefaultRoute(userRole as any)}`}
           className="text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           Voltar ao início
         </a>
         <a
-          href="/admin?s=company"
+          href={`${prefix}/admin?s=company`}
           className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
         >
           <ArrowUpCircle className="w-4 h-4" />

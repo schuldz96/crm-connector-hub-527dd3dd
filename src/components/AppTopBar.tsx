@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOrgNavigate, usePathWithoutOrg } from '@/hooks/useOrgNavigate';
 import { Input } from '@/components/ui/input';
 import { Search, ChevronRight, Home } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
@@ -30,10 +30,10 @@ const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
 
 export default function AppTopBar() {
   const { user, logout, canAccess } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const navigate = useOrgNavigate();
+  const cleanPath = usePathWithoutOrg();
   const [search, setSearch] = useState('');
-  const page = PAGE_TITLES[location.pathname] || { title: 'LTX', subtitle: '' };
+  const page = PAGE_TITLES[cleanPath] || { title: 'LTX', subtitle: '' };
   const routes = useMemo(
     () =>
       Object.entries(PAGE_TITLES).map(([path, meta]) => ({

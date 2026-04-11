@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useOrgNavigate } from '@/hooks/useOrgNavigate';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -136,7 +136,7 @@ function formatCount(n: number) {
 }
 
 export default function CRMCompaniesPage() {
-  const navigate = useNavigate();
+  const navigate = useOrgNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
   const { data: saasUsers = [] } = useSaasUsers();

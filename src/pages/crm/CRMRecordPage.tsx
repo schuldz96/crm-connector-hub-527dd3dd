@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
+import { useOrgNavigate } from '@/hooks/useOrgNavigate';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -148,7 +149,7 @@ function groupByMonth(activities: CrmActivity[]): Record<string, CrmActivity[]> 
 // ========================
 export default function CRMRecordPage() {
   const { typeId = '', numero = '' } = useParams<{ typeId: string; numero: string }>();
-  const navigate = useNavigate();
+  const navigate = useOrgNavigate();
   const { toast } = useToast();
   const objectType = OBJECT_TYPE_MAP[typeId] || 'deal';
   const labels = OBJECT_LABELS[objectType];
