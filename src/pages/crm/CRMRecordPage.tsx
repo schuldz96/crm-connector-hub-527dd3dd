@@ -169,8 +169,8 @@ export default function CRMRecordPage() {
   // Create new in association
   const [newContactForm, setNewContactForm] = useState({ email: '', nome: '', telefone: '', cargo: '' });
   const [newCompanyForm, setNewCompanyForm] = useState({ nome: '', dominio: '', cnpj: '' });
-  const [newDealForm, setNewDealForm] = useState({ nome: '', valor: '' });
-  const [newTicketForm, setNewTicketForm] = useState({ titulo: '', prioridade: 'medium' });
+  const [newDealForm, setNewDealForm] = useState({ nome: '', valor: '', pipelineId: '', estagioId: '' });
+  const [newTicketForm, setNewTicketForm] = useState({ titulo: '', prioridade: 'medium', pipelineId: '', estagioId: '' });
   const [emailExists, setEmailExists] = useState(false);
   const [checkingEmail, setCheckingEmail] = useState(false);
   const [domainExists, setDomainExists] = useState(false);
@@ -491,13 +491,17 @@ export default function CRMRecordPage() {
         newId = created.id;
       } else if (associationDialog === 'deal') {
         if (!newDealForm.nome) { toast({ title: 'Preencha o nome do negócio', variant: 'destructive' }); return; }
-        const pip = dealPipelines[0];
-        const created = await createDealMut.mutateAsync({ nome: newDealForm.nome, valor: parseFloat(newDealForm.valor) || 0, pipeline_id: pip?.id, estagio_id: pip?.estagios?.[0]?.id, status: 'aberto' } as any);
+        const pip = dealPipelines.find(p => p.id === newDealForm.pipelineId) || dealPipelines[0];
+        const stg = pip?.estagios?.find((s: any) => s.id === newDealForm.estagioId) || pip?.estagios?.[0];
+        const myId = saasUsers.find(u => u.email.toLowerCase() === authUser?.email?.toLowerCase())?.id;
+        const created = await createDealMut.mutateAsync({ nome: newDealForm.nome, valor: parseFloat(newDealForm.valor) || 0, pipeline_id: pip?.id, estagio_id: stg?.id, status: 'aberto', proprietario_id: myId || null } as any);
         newId = created.id;
       } else if (associationDialog === 'ticket') {
         if (!newTicketForm.titulo) { toast({ title: 'Preencha o nome do ticket', variant: 'destructive' }); return; }
-        const pip = ticketPipelines[0];
-        const created = await createTicketMut.mutateAsync({ titulo: newTicketForm.titulo, pipeline_id: pip?.id, estagio_id: pip?.estagios?.[0]?.id, prioridade: newTicketForm.prioridade, status: 'aberto' } as any);
+        const pip = ticketPipelines.find(p => p.id === newTicketForm.pipelineId) || ticketPipelines[0];
+        const stg = pip?.estagios?.find((s: any) => s.id === newTicketForm.estagioId) || pip?.estagios?.[0];
+        const myId = saasUsers.find(u => u.email.toLowerCase() === authUser?.email?.toLowerCase())?.id;
+        const created = await createTicketMut.mutateAsync({ titulo: newTicketForm.titulo, pipeline_id: pip?.id, estagio_id: stg?.id, prioridade: newTicketForm.prioridade, status: 'aberto', proprietario_id: myId || null } as any);
         newId = created.id;
       }
       if (newId) {
@@ -1398,11 +1402,21 @@ export default function CRMRecordPage() {
                     <label className="text-xs font-medium">Valor</label>
                     <Input type="number" value={newDealForm.valor} onChange={e => setNewDealForm(p => ({ ...p, valor: e.target.value }))} placeholder="0.00" className="mt-1 h-8 text-sm" />
                   </div>
-                  {dealPipelines[0] && (
-                    <div>
-                      <label className="text-xs font-medium">Pipeline</label>
-                      <p className="text-sm text-muted-foreground mt-1">{dealPipelines[0].nome}</p>
-                    </div>
+                  {dealPipelines.length > 0 && (
+                    <>
+                      <div>
+                        <label className="text-xs font-medium">Pipeline</label>
+                        <select value={newDealForm.pipelineId || dealPipelines[0]?.id} onChange={e => setNewDealForm(p => ({ ...p, pipelineId: e.target.value, estagioId: '' }))} className="mt-1 w-full h-8 text-sm border border-border rounded-md px-2 bg-background">
+                          {dealPipelines.map((p: any) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium">Etapa</label>
+                        <select value={newDealForm.estagioId || (dealPipelines.find((p: any) => p.id === (newDealForm.pipelineId || dealPipelines[0]?.id)) as any)?.estagios?.[0]?.id || ''} onChange={e => setNewDealForm(p => ({ ...p, estagioId: e.target.value }))} className="mt-1 w-full h-8 text-sm border border-border rounded-md px-2 bg-background">
+                          {((dealPipelines.find((p: any) => p.id === (newDealForm.pipelineId || dealPipelines[0]?.id)) as any)?.estagios || []).map((s: any) => <option key={s.id} value={s.id}>{s.nome}</option>)}
+                        </select>
+                      </div>
+                    </>
                   )}
                 </>
               )}
@@ -1423,6 +1437,22 @@ export default function CRMRecordPage() {
                       <option value="urgent">Urgente</option>
                     </select>
                   </div>
+                  {ticketPipelines.length > 0 && (
+                    <>
+                      <div>
+                        <label className="text-xs font-medium">Pipeline</label>
+                        <select value={newTicketForm.pipelineId || ticketPipelines[0]?.id} onChange={e => setNewTicketForm(p => ({ ...p, pipelineId: e.target.value, estagioId: '' }))} className="mt-1 w-full h-8 text-sm border border-border rounded-md px-2 bg-background">
+                          {ticketPipelines.map((p: any) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium">Status do ticket</label>
+                        <select value={newTicketForm.estagioId || (ticketPipelines.find((p: any) => p.id === (newTicketForm.pipelineId || ticketPipelines[0]?.id)) as any)?.estagios?.[0]?.id || ''} onChange={e => setNewTicketForm(p => ({ ...p, estagioId: e.target.value }))} className="mt-1 w-full h-8 text-sm border border-border rounded-md px-2 bg-background">
+                          {((ticketPipelines.find((p: any) => p.id === (newTicketForm.pipelineId || ticketPipelines[0]?.id)) as any)?.estagios || []).map((s: any) => <option key={s.id} value={s.id}>{s.nome}</option>)}
+                        </select>
+                      </div>
+                    </>
+                  )}
                   {ticketPipelines[0] && (
                     <div>
                       <label className="text-xs font-medium">Pipeline</label>
