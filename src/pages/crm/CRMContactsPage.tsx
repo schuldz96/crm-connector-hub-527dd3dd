@@ -221,16 +221,15 @@ export default function CRMContactsPage() {
 
   // Close view menu on outside click
   useEffect(() => {
-    if (!showViewMenu && !showViewList) return;
+    if (!showViewMenu) return;
     const handler = (e: MouseEvent) => {
       if (viewMenuRef.current && !viewMenuRef.current.contains(e.target as Node)) {
         setShowViewMenu(false);
-        setShowViewList(false);
       }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [showViewMenu, showViewList]);
+  }, [showViewMenu]);
 
   const handleSaveFiltersToView = () => {
     if (!activeView) return;
@@ -584,64 +583,52 @@ export default function CRMContactsPage() {
           <div ref={viewMenuRef} className="relative">
             <button
               className="flex items-center justify-center w-8 h-8 rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors ml-1"
-              onClick={() => { setShowViewMenu(v => !v); setShowViewList(false); }}
+              onClick={() => setShowViewMenu(v => !v)}
             >
               <Plus className="w-4 h-4" />
             </button>
 
-            {showViewMenu && !showViewList && (
-              <div className="absolute left-0 top-full mt-1 z-40 min-w-[220px] py-1 rounded-lg border border-border bg-card shadow-xl">
-                <button
-                  onClick={handleCreateView}
-                  className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors"
-                >
-                  <Plus className="w-4 h-4 text-muted-foreground" />
-                  Criar nova exibição
-                </button>
-                {savedViews.length > 0 && (
-                  <button
-                    onClick={() => setShowViewList(true)}
-                    className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors border-t border-border"
-                  >
-                    <Table2 className="w-4 h-4 text-muted-foreground" />
-                    Adicionar visualização ({savedViews.length})
-                  </button>
-                )}
-              </div>
-            )}
-
-            {showViewList && (
+            {showViewMenu && (
               <div className="absolute left-0 top-full mt-1 z-40 w-[280px] rounded-lg border border-border bg-card shadow-xl overflow-hidden">
-                <div className="px-3 py-2 border-b border-border">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Visualizações salvas ({savedViews.length})</p>
-                </div>
-                <div className="max-h-[240px] overflow-y-auto">
-                  {savedViews.map(v => (
-                    <button
-                      key={v.id}
-                      onClick={() => {
-                        setActiveTab(v.id);
-                        setActiveFilters(v.filters || {});
-                        setPage(1);
-                        setShowViewMenu(false);
-                        setShowViewList(false);
-                      }}
-                      className={cn(
-                        'flex items-center gap-2.5 w-full px-4 py-2.5 text-sm transition-colors',
-                        activeTab === v.id ? 'bg-primary/10 text-primary font-medium' : 'text-foreground hover:bg-muted'
-                      )}
-                    >
-                      <Table2 className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                      <span className="truncate">{v.label}</span>
-                      {Object.keys(v.filters).length > 0 && (
-                        <span className="ml-auto text-[10px] text-muted-foreground">{Object.keys(v.filters).length} filtros</span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-                <div className="px-3 py-2 border-t border-border">
-                  <button onClick={handleCreateView} className="text-xs text-primary hover:underline">
-                    + Criar nova exibição
+                {/* Saved views list */}
+                {savedViews.length > 0 && (
+                  <>
+                    <div className="px-3 py-2 border-b border-border">
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Visualizações salvas</p>
+                    </div>
+                    <div className="max-h-[200px] overflow-y-auto">
+                      {savedViews.map(v => (
+                        <button
+                          key={v.id}
+                          onClick={() => {
+                            setActiveTab(v.id);
+                            setActiveFilters(v.filters || {});
+                            setPage(1);
+                            setShowViewMenu(false);
+                          }}
+                          className={cn(
+                            'flex items-center gap-2.5 w-full px-4 py-2 text-sm transition-colors',
+                            activeTab === v.id ? 'bg-primary/10 text-primary font-medium' : 'text-foreground hover:bg-muted'
+                          )}
+                        >
+                          <Table2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                          <span className="truncate">{v.label}</span>
+                          {Object.keys(v.filters).length > 0 && (
+                            <span className="ml-auto text-[10px] text-muted-foreground">{Object.keys(v.filters).length} filtros</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+                {/* Create new */}
+                <div className={cn('px-3 py-2', savedViews.length > 0 && 'border-t border-border')}>
+                  <button
+                    onClick={handleCreateView}
+                    className="flex items-center gap-2 w-full py-1.5 text-sm text-primary hover:text-primary/80 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Criar nova exibição
                   </button>
                 </div>
               </div>
