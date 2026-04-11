@@ -62,7 +62,7 @@ export default function SAAuditPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
+      <div className="sa-page-header">
         <h1 className="text-2xl font-display font-bold flex items-center gap-2">
           <ScrollText className="w-6 h-6 text-red-500" />
           Auditoria
@@ -115,7 +115,7 @@ export default function SAAuditPage() {
               </TableRow>
             ) : (
               filtered.map((log) => (
-                <TableRow key={log.id}>
+                <TableRow key={log.id} className="sa-table-row">
                   <TableCell className="text-sm whitespace-nowrap">
                     {new Date(log.criado_em).toLocaleString('pt-BR')}
                   </TableCell>
@@ -143,9 +143,9 @@ export default function SAAuditPage() {
       </div>
 
       <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">
+        <div className="sa-count-pill">
           Exibindo {filtered.length} registros (carregados: {logs.length})
-        </p>
+        </div>
         <Button
           variant="outline"
           size="sm"

@@ -166,7 +166,7 @@ export default function SASubscriptionsPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="sa-page-header">
           <h1 className="text-2xl font-display font-bold flex items-center gap-2">
             <CreditCard className="w-6 h-6 text-red-500" />
             Assinaturas
@@ -225,7 +225,7 @@ export default function SASubscriptionsPage() {
               </TableRow>
             ) : (
               filtered.map((sub) => (
-                <TableRow key={sub.id}>
+                <TableRow key={sub.id} className="sa-table-row">
                   <TableCell className="font-mono text-sm">{getOrgName(sub.org)}</TableCell>
                   <TableCell className="font-medium">{sub.plano_nome ?? sub.plano_id}</TableCell>
                   <TableCell>
@@ -244,11 +244,11 @@ export default function SASubscriptionsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(sub)}>
+                      <Button variant="ghost" size="sm" className="sa-action-btn" onClick={() => openEdit(sub)}>
                         <Pencil className="w-4 h-4" />
                       </Button>
                       {sub.status !== 'cancelada' && (
-                        <Button variant="ghost" size="sm" onClick={() => setCancelId(sub.id)} className="text-red-400 hover:text-red-300">
+                        <Button variant="ghost" size="sm" className="sa-action-btn text-red-400 hover:text-red-300" onClick={() => setCancelId(sub.id)}>
                           <XCircle className="w-4 h-4" />
                         </Button>
                       )}
@@ -261,9 +261,9 @@ export default function SASubscriptionsPage() {
         </Table>
       </div>
 
-      <p className="text-xs text-muted-foreground">
+      <div className="sa-count-pill">
         Exibindo {filtered.length} de {subscriptions.length} assinaturas
-      </p>
+      </div>
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

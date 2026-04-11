@@ -270,6 +270,82 @@
 .animate-slide-in  { animation: slideInLeft 0.3s ease-out forwards; }
 .animate-glow      { animation: glow-pulse 2s ease-in-out infinite; }
 
+/* ---- Super Admin Visual Enhancements ---- */
+
+/* Stagger fade-in for child elements */
+@keyframes staggerFadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.sa-stagger-container > * {
+  opacity: 0;
+  animation: staggerFadeIn 0.4s ease-out forwards;
+}
+.sa-stagger-container > *:nth-child(1) { animation-delay: 0ms; }
+.sa-stagger-container > *:nth-child(2) { animation-delay: 60ms; }
+.sa-stagger-container > *:nth-child(3) { animation-delay: 120ms; }
+.sa-stagger-container > *:nth-child(4) { animation-delay: 180ms; }
+.sa-stagger-container > *:nth-child(5) { animation-delay: 240ms; }
+.sa-stagger-container > *:nth-child(6) { animation-delay: 300ms; }
+
+/* KPI card hover lift */
+.sa-card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.sa-card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px -5px hsl(var(--foreground) / 0.08),
+              0 4px 10px -4px hsl(var(--foreground) / 0.04);
+}
+
+/* Table row hover glow */
+.sa-table-row {
+  transition: background-color 0.15s ease;
+}
+.sa-table-row:hover {
+  background-color: hsl(var(--muted) / 0.5);
+}
+
+/* Action button micro-interaction */
+.sa-action-btn {
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+.sa-action-btn:hover {
+  transform: scale(1.15);
+}
+.sa-action-btn:active {
+  transform: scale(0.95);
+}
+
+/* Page header bottom line */
+.sa-page-header {
+  position: relative;
+  padding-bottom: 1rem;
+}
+.sa-page-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 48px;
+  height: 2px;
+  background: hsl(var(--destructive));
+  border-radius: 1px;
+}
+
+/* Count pill at bottom of pages */
+.sa-count-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+}
+
 /* Thick scrollbar for kanban board */
 .scrollbar-thick::-webkit-scrollbar { height: 10px; }
 .scrollbar-thick::-webkit-scrollbar-track { background: transparent; border-radius: 8px; }
