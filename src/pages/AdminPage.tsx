@@ -13,10 +13,13 @@ import {
   Layers, Plus, Trash2, ChevronDown, ChevronUp, GitBranch,
   ScrollText, LogIn, LogOut, MonitorSmartphone, Search, RefreshCw, Trash,
   Filter, Plug, Copy, ExternalLink, Check, ShieldCheck, Network,
-  CreditCard, Gauge, ArrowUpCircle,
+  CreditCard, Gauge, ArrowUpCircle, Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { lazy, Suspense } from 'react';
 import { useAppConfig, DEFAULT_MODULES, type ModuleId, AI_MODELS, type ModuleAIKey } from '@/contexts/AppConfigContext';
+const LazyUsersPage = lazy(() => import('@/pages/UsersPage'));
+const LazyTeamsPage = lazy(() => import('@/pages/TeamsPage'));
 import SearchableSelect from '@/components/ui/searchable-select';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -59,6 +62,8 @@ const ADMIN_SECTIONS = [
   { id: 'modules',      label: 'Módulos Visíveis',     icon: ToggleRight },
   { id: 'security',     label: 'Segurança & RLS',      icon: Lock },
   { id: 'logs',         label: 'Logs de Acesso',       icon: ScrollText },
+  { id: 'users-full',   label: 'Gerenciar Usuários',   icon: Users },
+  { id: 'teams',        label: 'Times',                icon: Users },
   { id: 'agents',       label: 'Agentes & Projeto',    icon: Network },
   { id: 'meu-plano',    label: 'Meu Plano',             icon: CreditCard },
 ];
@@ -1895,6 +1900,20 @@ export default function AdminPage() {
 
           {/* ── Meu Plano ── */}
           {section === 'meu-plano' && <MeuPlanoSection />}
+
+          {/* ── Gerenciar Usuários (full page embedded) ── */}
+          {section === 'users-full' && (
+            <Suspense fallback={<div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>}>
+              <LazyUsersPage />
+            </Suspense>
+          )}
+
+          {/* ── Times (full page embedded) ── */}
+          {section === 'teams' && (
+            <Suspense fallback={<div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>}>
+              <LazyTeamsPage />
+            </Suspense>
+          )}
 
         </div>
       </div>

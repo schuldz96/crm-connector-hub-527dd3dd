@@ -105,8 +105,8 @@ function ProtectedRoutes() {
         <Route path="/reports"      element={R(<ReportsPage />,      { resource: 'reports' })} />
 
         {/* Páginas restritas — exigem cargo + recurso */}
-        <Route path="/teams"        element={R(<TeamsPage />,        { resource: 'teams' })} />
-        <Route path="/users"        element={R(<UsersPage />,        { resource: 'users' })} />
+        <Route path="/teams"        element={<Navigate to="/admin?s=teams" replace />} />
+        <Route path="/users"        element={<Navigate to="/admin?s=users-full" replace />} />
         <Route path="/integrations" element={R(<IntegrationsPage />, { resource: 'integrations' })} />
         <Route path="/automations"  element={R(<AutomationsPage />,  { resource: 'automations' })} />
         <Route path="/ai-config"    element={R(<AIConfigPage />,     { resource: 'ai-config' })} />

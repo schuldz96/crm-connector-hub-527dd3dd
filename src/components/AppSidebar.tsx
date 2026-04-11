@@ -127,7 +127,6 @@ const NAV_SECTIONS: NavSection[] = [
         icon: ShoppingCart,
         resource: 'meetings',
         children: [
-          { path: '/teams',    label: 'Times',         icon: Target,        resource: 'teams' },
           { path: '/training', label: 'Treinamentos',  icon: GraduationCap, resource: 'training' },
         ],
       },
@@ -152,7 +151,6 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Sistema',
     items: [
-      { path: '/users',           label: 'Usuários', icon: Users,  resource: 'users' },
       { path: '/admin?s=company', label: 'Admin',    icon: Shield, resource: 'admin' },
     ],
   },
