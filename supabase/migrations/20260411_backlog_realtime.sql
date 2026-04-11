@@ -15,7 +15,7 @@ END $$;
 ALTER TABLE crm.negocios REPLICA IDENTITY FULL;
 
 DO $$ BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE crm.tickets_crm;
+  ALTER PUBLICATION supabase_realtime ADD TABLE crm.tickets;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
-ALTER TABLE crm.tickets_crm REPLICA IDENTITY FULL;
+ALTER TABLE crm.tickets REPLICA IDENTITY FULL;

@@ -207,7 +207,7 @@ export default function CRMTicketsPage() {
     let realtimeActive = false;
     const channel = supabase
       .channel('tickets-realtime')
-      .on('postgres_changes', { event: '*', schema: 'crm', table: 'tickets_crm' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'crm', table: 'tickets' }, () => {
         realtimeActive = true;
         queryClient.invalidateQueries({ queryKey: ['crm.tickets.pipeline'] });
       })
