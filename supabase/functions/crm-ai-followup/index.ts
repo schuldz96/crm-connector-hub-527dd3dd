@@ -41,6 +41,21 @@ function containsForbiddenWord(text: string, words: string[]): string | null {
   return null;
 }
 
+// Guardrail: moderação de conteúdo — padrões perigosos na resposta IA
+const DANGEROUS_PATTERNS = [
+  { pattern: /\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/, name: 'CPF' },
+  { pattern: /\b\d{4}[\s.-]?\d{4}[\s.-]?\d{4}[\s.-]?\d{4}\b/, name: 'cartão de crédito' },
+  { pattern: /\bgarant(?:o|imos|ia)\b/i, name: 'promessa/garantia' },
+  { pattern: /\bsem risco\b/i, name: 'promessa sem risco' },
+];
+
+function checkContentModeration(text: string): string | null {
+  for (const p of DANGEROUS_PATTERNS) {
+    if (p.pattern.test(text)) return p.name;
+  }
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -100,6 +115,14 @@ serve(async (req) => {
           const msgLower = (lastUserMsg.content || '').toLowerCase().trim();
           if (optOutKeywords.some(kw => msgLower === kw || msgLower.startsWith(kw + ' '))) {
             log(`Conv ${conv.id}: OPT-OUT detectado ("${msgLower}"). Pausando conversa.`);
+            await sb.from('crm_ai_conversations').update({ status: 'paused' }).eq('id', conv.id);
+            continue;
+          }
+
+          // Guardrail: handoff para humano
+          const handoffKeywords = ['humano', 'atendente', 'pessoa real', 'falar com alguém', 'falar com alguem', 'quero falar com', 'atendimento humano', 'transferir'];
+          if (handoffKeywords.some(kw => msgLower.includes(kw))) {
+            log(`Conv ${conv.id}: HANDOFF solicitado ("${msgLower}"). Pausando conversa para atendimento humano.`);
             await sb.from('crm_ai_conversations').update({ status: 'paused' }).eq('id', conv.id);
             continue;
           }
@@ -206,9 +229,13 @@ serve(async (req) => {
             if (aiText) {
               // Guardrail: verificar palavras proibidas
               const forbidden = await getForbiddenWords(conv.empresa_id);
-              const found = containsForbiddenWord(aiText, forbidden);
-              if (found) {
-                log(`GUARDRAIL: Mensagem bloqueada — contém palavra proibida "${found}". Texto: "${aiText.substring(0, 100)}..."`);
+              const foundWord = containsForbiddenWord(aiText, forbidden);
+              // Guardrail: moderação de conteúdo
+              const dangerousContent = checkContentModeration(aiText);
+              if (foundWord) {
+                log(`GUARDRAIL: Mensagem bloqueada — palavra proibida "${foundWord}". Texto: "${aiText.substring(0, 100)}..."`);
+              } else if (dangerousContent) {
+                log(`GUARDRAIL: Mensagem bloqueada — conteúdo perigoso detectado: "${dangerousContent}". Texto: "${aiText.substring(0, 100)}..."`);
               } else {
                 finalText = aiText;
                 msgSent = await sendText(conv.empresa_id, config.provider, config.instancia_id, phone, aiText, log);
