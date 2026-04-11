@@ -598,6 +598,33 @@ export async function getAdminAuditLogs(limit: number = 100): Promise<AdminAudit
   return (data ?? []) as AdminAuditEntry[];
 }
 
+export interface AuditFilters {
+  acao?: string;
+  entidade_tipo?: string;
+  de?: string;
+  ate?: string;
+}
+
+export async function getFilteredAuditLogs(
+  filters: AuditFilters = {},
+  limit: number = 200,
+): Promise<AdminAuditEntry[]> {
+  let query = admin()
+    .from('audit_admin')
+    .select('*')
+    .order('criado_em', { ascending: false })
+    .limit(limit);
+
+  if (filters.acao) query = query.eq('acao', filters.acao);
+  if (filters.entidade_tipo) query = query.eq('entidade_tipo', filters.entidade_tipo);
+  if (filters.de) query = query.gte('criado_em', `${filters.de}T00:00:00`);
+  if (filters.ate) query = query.lte('criado_em', `${filters.ate}T23:59:59`);
+
+  const { data, error } = await query;
+  if (error) throw new Error(`Erro ao buscar logs filtrados: ${error.message}`);
+  return (data ?? []) as AdminAuditEntry[];
+}
+
 export async function logAdminAction(
   adminId: string,
   acao: string,
