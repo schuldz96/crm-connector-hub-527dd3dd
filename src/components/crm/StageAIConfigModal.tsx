@@ -77,6 +77,12 @@ export interface StageAIConfig {
   ragEnabled: boolean;
   ragSource: string;
   ragMaxTurns: number;
+  // Guardrails tab
+  maxMessages: number;
+  maxDurationHours: number;
+  businessHoursStart: string;
+  businessHoursEnd: string;
+  businessDays: number[];
   // Transições tab
   transitions: {
     stageId: string;
@@ -104,6 +110,11 @@ const DEFAULT_CONFIG: StageAIConfig = {
   ragEnabled: false,
   ragSource: '',
   ragMaxTurns: 10,
+  maxMessages: 50,
+  maxDurationHours: 72,
+  businessHoursStart: '08:00',
+  businessHoursEnd: '18:00',
+  businessDays: [1, 2, 3, 4, 5],
   transitions: [],
 };
 
@@ -114,6 +125,7 @@ const TABS = [
   { id: 'questions', label: 'Perguntas' },
   { id: 'followups', label: 'Follow-ups' },
   { id: 'rag', label: 'RAG' },
+  { id: 'guardrails', label: 'Guardrails' },
   { id: 'transitions', label: 'Transições' },
 ];
 
@@ -928,6 +940,69 @@ export default function StageAIConfigModal({
                   </div>
                 </div>
               )}
+            </>
+          )}
+
+          {/* ═══ Guardrails Tab ═══ */}
+          {activeTab === 'guardrails' && (
+            <>
+              <p className="text-xs text-muted-foreground mb-4">Limites de segurança para a conversa IA neste estágio.</p>
+
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium block mb-1">Máx. mensagens</label>
+                    <input type="number" value={config.maxMessages} onChange={e => update('maxMessages', parseInt(e.target.value) || 50)}
+                      className="w-full h-8 text-sm border border-border rounded-md px-2 bg-background" min={5} max={500} />
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Encerra conversa após atingir</p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium block mb-1">Duração máx. (horas)</label>
+                    <input type="number" value={config.maxDurationHours} onChange={e => update('maxDurationHours', parseInt(e.target.value) || 72)}
+                      className="w-full h-8 text-sm border border-border rounded-md px-2 bg-background" min={1} max={720} />
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Encerra após X horas</p>
+                  </div>
+                </div>
+
+                <div className="border-t border-border pt-3">
+                  <label className="text-xs font-medium block mb-2">Horário comercial</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-muted-foreground">Início</label>
+                      <input type="time" value={config.businessHoursStart} onChange={e => update('businessHoursStart', e.target.value)}
+                        className="w-full h-8 text-sm border border-border rounded-md px-2 bg-background" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-muted-foreground">Fim</label>
+                      <input type="time" value={config.businessHoursEnd} onChange={e => update('businessHoursEnd', e.target.value)}
+                        className="w-full h-8 text-sm border border-border rounded-md px-2 bg-background" />
+                    </div>
+                  </div>
+                  <div className="flex gap-1 mt-2">
+                    {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((d, i) => (
+                      <button key={i} type="button"
+                        onClick={() => {
+                          const days = config.businessDays.includes(i) ? config.businessDays.filter(x => x !== i) : [...config.businessDays, i];
+                          update('businessDays', days);
+                        }}
+                        className={`flex-1 text-[10px] py-1 rounded border ${config.businessDays.includes(i) ? 'bg-primary/15 border-primary/30 text-primary font-medium' : 'border-border text-muted-foreground'}`}>
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1">IA só envia mensagens dentro do horário e dias selecionados</p>
+                </div>
+
+                <div className="border-t border-border pt-3">
+                  <p className="text-xs text-muted-foreground">
+                    <strong>Proteções automáticas (sempre ativas):</strong><br />
+                    • Palavras proibidas — configuradas em Configuração IA → WhatsApp<br />
+                    • Opt-out do contato — detecta "SAIR", "PARAR", "CANCELAR"<br />
+                    • Handoff humano — detecta pedidos de atendente humano<br />
+                    • Moderação de conteúdo — bloqueia CPF, cartão, promessas
+                  </p>
+                </div>
+              </div>
             </>
           )}
 

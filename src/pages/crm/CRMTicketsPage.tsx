@@ -321,7 +321,11 @@ export default function CRMTicketsPage() {
             responseDelay: row.delay_resposta ?? 0, autoEvaluation: false,
             questions: row.perguntas || [], followUps: row.followups || [],
             ragEnabled: row.rag_ativo ?? false, ragSource: row.rag_fonte || '',
-            ragMaxTurns: row.rag_max_turnos ?? 5, transitions: row.transicoes || [],
+            ragMaxTurns: row.rag_max_turnos ?? 5,
+            maxMessages: row.max_mensagens ?? 50, maxDurationHours: row.max_duracao_horas ?? 72,
+            businessHoursStart: row.horario_inicio || '08:00', businessHoursEnd: row.horario_fim || '18:00',
+            businessDays: row.dias_semana || [1,2,3,4,5],
+            transitions: row.transicoes || [],
           };
         }
         setStageAIConfigs(map);
@@ -893,6 +897,8 @@ export default function CRMTicketsPage() {
                 modo_inicio: cfg.startMode, delay_digitacao: cfg.typingDelay, delay_resposta: cfg.responseDelay,
                 perguntas: cfg.questions, followups: cfg.followUps,
                 rag_ativo: cfg.ragEnabled, rag_fonte: cfg.ragSource, rag_max_turnos: cfg.ragMaxTurns,
+                max_mensagens: cfg.maxMessages, max_duracao_horas: cfg.maxDurationHours,
+                horario_inicio: cfg.businessHoursStart, horario_fim: cfg.businessHoursEnd, dias_semana: cfg.businessDays,
                 transicoes: cfg.transitions, atualizado_em: new Date().toISOString(),
               }, { onConflict: 'estagio_id' });
               toast({ title: 'Configuração de IA salva' });
