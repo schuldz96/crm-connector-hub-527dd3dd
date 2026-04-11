@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  getOrgDetail, getOrgUsers, getOrgSubscription, getResourceUsage, getOrgStats,
-  getAllPlans, createSubscription, updateSubscription, updateUser, countActiveAdmins,
+  getOrgDetail, getOrgUsers, getOrgSubscription, getOrgSubscriptionHistory,
+  hasActiveSubscription, getResourceUsage, getOrgStats,
+  getAllPlans, createSubscription, updateSubscription, updateOrganization,
+  updateUser, countActiveAdmins,
 } from '@/lib/superAdminService';
 import type { Organization, Subscription, ResourceUsage, Plan } from '@/lib/superAdminService';
 import { useToast } from '@/hooks/use-toast';
@@ -22,7 +24,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import {
-  ArrowLeft, Loader2, AlertCircle, Users, CreditCard, BarChart3, Pencil, XCircle,
+  ArrowLeft, Loader2, AlertCircle, Users, CreditCard, BarChart3, Pencil, XCircle, Calendar, Hash,
 } from 'lucide-react';
 
 const statusColors: Record<string, string> = {
@@ -63,6 +65,14 @@ export default function SAOrgDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Subscription history
+  const [subscriptionHistory, setSubscriptionHistory] = useState<Subscription[]>([]);
+
+  // Edit org state
+  const [editOrgDialogOpen, setEditOrgDialogOpen] = useState(false);
+  const [editOrgNome, setEditOrgNome] = useState('');
+  const [editOrgDominio, setEditOrgDominio] = useState('');
+
   // Subscription CRUD state
   const [saving, setSaving] = useState(false);
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -82,8 +92,38 @@ export default function SAOrgDetailPage() {
     setPlansLoaded(true);
   };
 
+  const handleEditOrg = async () => {
+    if (!orgDetail) return;
+    if (!editOrgNome.trim()) {
+      toast({ title: 'Erro', description: 'Nome e obrigatorio', variant: 'destructive' });
+      return;
+    }
+    setSaving(true);
+    try {
+      const updated = await updateOrganization(orgDetail.id, {
+        nome: editOrgNome.trim(),
+        dominio: editOrgDominio.trim() || undefined,
+      } as any);
+      setOrgDetail(updated);
+      toast({ title: 'Organizacao atualizada com sucesso' });
+      setEditOrgDialogOpen(false);
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err?.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleCreateSubscription = async () => {
     if (!orgKey || !formPlanoId) return;
+    // Validar assinatura unica ativa
+    if (formStatus === 'ativa') {
+      const hasActive = await hasActiveSubscription(orgKey);
+      if (hasActive) {
+        toast({ title: 'Erro', description: 'Esta organizacao ja possui uma assinatura ativa. Cancele a atual antes de criar outra.', variant: 'destructive' });
+        return;
+      }
+    }
     if (formStatus === 'trial' && !formTrialAte) {
       toast({ title: 'Erro', description: 'Informe a data de fim do trial', variant: 'destructive' });
       return;
@@ -233,16 +273,18 @@ export default function SAOrgDetailPage() {
       setLoading(true);
       setError('');
       try {
-        const [detail, usersList, sub, usageData, stats] = await Promise.all([
+        const [detail, usersList, sub, subHistory, usageData, stats] = await Promise.all([
           getOrgDetail(orgKey!),
           getOrgUsers(orgKey!),
           getOrgSubscription(orgKey!),
+          getOrgSubscriptionHistory(orgKey!),
           getResourceUsage(orgKey!),
           getOrgStats(orgKey!),
         ]);
         setOrgDetail(detail);
         setUsers(usersList);
         setSubscription(sub);
+        setSubscriptionHistory(subHistory);
         setUsage(usageData);
         setOrgStats(stats);
       } catch (err: any) {
@@ -284,7 +326,7 @@ export default function SAOrgDetailPage() {
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-display font-bold">{orgDetail.nome}</h1>
             <Badge variant="outline" className="text-xs font-mono">
-              {orgDetail.org}
+              <Hash className="w-3 h-3 mr-1" />{orgDetail.org}
             </Badge>
             <Badge
               className={
@@ -295,10 +337,24 @@ export default function SAOrgDetailPage() {
             >
               {orgDetail.ativo ? 'Ativo' : 'Inativo'}
             </Badge>
+            <Button variant="outline" size="sm" onClick={() => {
+              setEditOrgNome(orgDetail.nome);
+              setEditOrgDominio(orgDetail.dominio || '');
+              setEditOrgDialogOpen(true);
+            }}>
+              <Pencil className="w-3.5 h-3.5 mr-1.5" /> Editar
+            </Button>
           </div>
-          <p className="text-sm text-muted-foreground mt-1">
-            Plano: {subscription?.plano_nome || 'N/A'} | Dominio: {orgDetail.dominio || '—'}
-          </p>
+          <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
+            <span>Plano: {subscription?.plano_nome || 'N/A'}</span>
+            <span>|</span>
+            <span>Dominio: {orgDetail.dominio || '—'}</span>
+            <span>|</span>
+            <span className="flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5" />
+              Criado em: {new Date(orgDetail.criado_em).toLocaleDateString('pt-BR')}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -599,6 +655,49 @@ export default function SAOrgDetailPage() {
             )}
           </div>
 
+          {/* Subscription History */}
+          {subscriptionHistory.length > 1 && (
+            <div className="glass-card border border-border rounded-lg bg-card overflow-hidden mt-4">
+              <div className="p-4 border-b border-border">
+                <h3 className="text-sm font-semibold">Historico de Assinaturas</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">{subscriptionHistory.length} registros</p>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Plano</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Ciclo</TableHead>
+                    <TableHead>Inicio</TableHead>
+                    <TableHead>Vencimento</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {subscriptionHistory.map((sub, idx) => (
+                    <TableRow key={sub.id} className={idx === 0 ? 'bg-muted/30' : ''}>
+                      <TableCell className="font-medium text-sm">
+                        {sub.plano_nome ?? sub.plano_id}
+                        {idx === 0 && <Badge className="ml-2 text-[10px] bg-blue-500/10 text-blue-400 border-blue-500/20">atual</Badge>}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={statusColors[getEffectiveStatus(sub)] ?? statusColors.suspensa}>
+                          {getEffectiveStatus(sub)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{sub.ciclo}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {new Date(sub.inicio_em).toLocaleDateString('pt-BR')}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {sub.proximo_pagamento ? new Date(sub.proximo_pagamento).toLocaleDateString('pt-BR') : '—'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+
           {/* Cancel Confirmation Dialog */}
           <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
             <DialogContent className="max-w-sm">
@@ -658,6 +757,43 @@ export default function SAOrgDetailPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Edit Organization Dialog */}
+      <Dialog open={editOrgDialogOpen} onOpenChange={setEditOrgDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Editar Organizacao</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-sm mb-1.5 block">Nome *</Label>
+              <Input
+                value={editOrgNome}
+                onChange={(e) => setEditOrgNome(e.target.value)}
+                placeholder="Nome da organizacao"
+                className="bg-input border-border"
+              />
+            </div>
+            <div>
+              <Label className="text-sm mb-1.5 block">Dominio</Label>
+              <Input
+                value={editOrgDominio}
+                onChange={(e) => setEditOrgDominio(e.target.value)}
+                placeholder="exemplo.com.br"
+                className="bg-input border-border"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOrgDialogOpen(false)} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button onClick={handleEditOrg} disabled={saving} className="bg-red-600 hover:bg-red-700 text-white">
+              {saving ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit User Role Dialog */}
       <Dialog open={editUserDialogOpen} onOpenChange={setEditUserDialogOpen}>

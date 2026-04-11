@@ -428,6 +428,40 @@ export async function getAllSubscriptions(): Promise<Subscription[]> {
   }));
 }
 
+export async function getOrgSubscriptionHistory(org: string): Promise<Subscription[]> {
+  const { data, error } = await admin()
+    .from('assinaturas')
+    .select('*,planos(nome)')
+    .eq('org', org)
+    .order('inicio_em', { ascending: false });
+
+  if (error) throw new Error(`Erro ao buscar historico de assinaturas: ${error.message}`);
+
+  return (data ?? []).map((s: any) => ({
+    id: s.id,
+    org: s.org,
+    plano_id: s.plano_id,
+    status: s.status,
+    ciclo: s.ciclo,
+    trial_ate: s.trial_ate ?? undefined,
+    inicio_em: s.inicio_em,
+    plano_nome: s.planos?.nome ?? undefined,
+    proximo_pagamento: s.proximo_pagamento ?? undefined,
+    cancelado_em: s.cancelado_em ?? undefined,
+  }));
+}
+
+export async function hasActiveSubscription(org: string): Promise<boolean> {
+  const { count, error } = await admin()
+    .from('assinaturas')
+    .select('id', { count: 'exact', head: true })
+    .eq('org', org)
+    .eq('status', 'ativa');
+
+  if (error) throw new Error(`Erro ao verificar assinatura ativa: ${error.message}`);
+  return (count ?? 0) > 0;
+}
+
 export async function getOrgSubscription(org: string): Promise<Subscription | null> {
   const { data, error } = await admin()
     .from('assinaturas')
