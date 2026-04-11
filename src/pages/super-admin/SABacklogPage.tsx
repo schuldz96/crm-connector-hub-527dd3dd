@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   getBacklogTasks, createBacklogTask, updateBacklogTask, deleteBacklogTask,
   type BacklogTask,
 } from '@/lib/superAdminService';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -132,9 +133,7 @@ export default function SABacklogPage() {
   const [saving, setSaving] = useState(false);
   const [dragTask, setDragTask] = useState<string | null>(null);
 
-  useEffect(() => { loadTasks(); }, []);
-
-  async function loadTasks() {
+  const loadTasks = useCallback(async () => {
     setLoading(true);
     try {
       setTasks(await getBacklogTasks());
@@ -143,7 +142,43 @@ export default function SABacklogPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [toast]);
+
+  useEffect(() => { loadTasks(); }, [loadTasks]);
+
+  // Realtime + polling fallback: atualiza kanban automaticamente
+  useEffect(() => {
+    let realtimeActive = false;
+
+    // 1. Supabase Realtime (instant, needs publication enabled)
+    const channel = supabase
+      .channel('backlog-realtime')
+      .on('postgres_changes', { event: '*', schema: 'admin', table: 'backlog_tasks' }, (payload) => {
+        realtimeActive = true;
+        if (payload.eventType === 'INSERT') {
+          setTasks(prev => [payload.new as BacklogTask, ...prev]);
+        } else if (payload.eventType === 'UPDATE') {
+          setTasks(prev => prev.map(t => t.id === (payload.new as BacklogTask).id ? (payload.new as BacklogTask) : t));
+        } else if (payload.eventType === 'DELETE') {
+          setTasks(prev => prev.filter(t => t.id !== (payload.old as { id: string }).id));
+        }
+      })
+      .subscribe();
+
+    // 2. Polling fallback (every 8s, stops if realtime is active)
+    const poll = setInterval(async () => {
+      if (realtimeActive) return;
+      try {
+        const fresh = await getBacklogTasks();
+        setTasks(fresh);
+      } catch { /* silent */ }
+    }, 8000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(poll);
+    };
+  }, []);
 
   function openCreate(status = 'backlog') {
     setEditingTask({ ...emptyTask, status });
