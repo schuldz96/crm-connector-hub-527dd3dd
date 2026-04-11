@@ -217,7 +217,7 @@ export default function CRMFormsPage() {
               )}
             </div>
             <div>
-              <label className="text-sm font-medium">Criar ao submeter</label>
+              <label className="text-sm font-medium">Criar ou atualizar ao submeter</label>
               <Select value={formType} onValueChange={setFormType}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>

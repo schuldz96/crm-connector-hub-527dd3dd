@@ -79,7 +79,31 @@ export default function PublicFormPage() {
         if (form.tipo_criacao === 'contact') payload.status = payload.status || 'lead';
         if (form.tipo_criacao === 'deal') { payload.status = 'aberto'; payload.nome = payload.nome || values[form.campos[0]?.id] || 'Novo negócio'; }
         if (form.tipo_criacao === 'ticket') { payload.status = 'aberto'; payload.titulo = payload.titulo || values[form.campos[0]?.id] || 'Novo ticket'; }
-        const { data: created } = await crm().from(table).insert(payload).select('id').single();
+
+        let created: { id: string } | null = null;
+
+        // Upsert: check if record already exists (by email for contacts, by dominio for companies)
+        if (form.tipo_criacao === 'contact' && payload.email) {
+          const { data: existing } = await crm().from(table).select('id').eq('empresa_id', form.empresa_id).ilike('email', payload.email).is('deletado_em', null).maybeSingle();
+          if (existing) {
+            const { email: _e, empresa_id: _eid, org: _o, status: _s, ...updateFields } = payload;
+            await crm().from(table).update(updateFields).eq('id', existing.id);
+            created = existing;
+          }
+        } else if (form.tipo_criacao === 'company' && payload.dominio) {
+          const { data: existing } = await crm().from(table).select('id').eq('empresa_id', form.empresa_id).ilike('dominio', payload.dominio).is('deletado_em', null).maybeSingle();
+          if (existing) {
+            const { empresa_id: _eid, org: _o, ...updateFields } = payload;
+            await crm().from(table).update(updateFields).eq('id', existing.id);
+            created = existing;
+          }
+        }
+
+        // If no existing found, create new
+        if (!created) {
+          const { data } = await crm().from(table).insert(payload).select('id').single();
+          created = data;
+        }
 
         // Log submission
         await crm().from('formulario_submissoes').insert({
