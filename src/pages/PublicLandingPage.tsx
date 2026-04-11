@@ -22,15 +22,17 @@ interface LPData {
 }
 
 export default function PublicLandingPage() {
-  const { slug } = useParams<{ slug: string }>();
+  const { slug, org } = useParams<{ slug: string; org?: string }>();
   const [lp, setLp] = useState<LPData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
 
   useEffect(() => {
     if (!slug) return;
-    crm().from('landing_pages').select('id, nome, config, formulario_id, status')
-      .eq('slug', slug).eq('status', 'publicada').maybeSingle()
+    let query = crm().from('landing_pages').select('id, nome, config, formulario_id, status')
+      .eq('slug', slug).eq('status', 'publicada');
+    if (org) query = query.eq('org', org);
+    query.maybeSingle()
       .then(async ({ data }: any) => {
         if (data?.formulario_id) {
           const { data: form } = await crm().from('formularios').select('slug').eq('id', data.formulario_id).maybeSingle();

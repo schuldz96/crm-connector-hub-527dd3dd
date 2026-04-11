@@ -28,7 +28,7 @@ interface FormData {
 }
 
 export default function PublicFormPage() {
-  const { slug } = useParams<{ slug: string }>();
+  const { slug, org } = useParams<{ slug: string; org?: string }>();
   const [form, setForm] = useState<FormData | null>(null);
   const [loading, setLoading] = useState(true);
   const [values, setValues] = useState<Record<string, string>>({});
@@ -38,11 +38,13 @@ export default function PublicFormPage() {
 
   useEffect(() => {
     if (!slug) return;
-    crm().from('formularios').select('id, nome, descricao, tipo_criacao, campos, empresa_id, org')
-      .eq('slug', slug).eq('ativo', true).maybeSingle()
+    let query = crm().from('formularios').select('id, nome, descricao, tipo_criacao, campos, empresa_id, org')
+      .eq('slug', slug).eq('ativo', true);
+    if (org) query = query.eq('org', org);
+    query.maybeSingle()
       .then(({ data }: any) => { setForm(data); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [slug]);
+  }, [slug, org]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

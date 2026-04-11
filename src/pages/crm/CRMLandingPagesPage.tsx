@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
-import { getOrgAndEmpresaId } from '@/lib/saas';
+import { getOrg, getOrgAndEmpresaId } from '@/lib/saas';
 import { useToast } from '@/hooks/use-toast';
 
 interface LandingPage {
@@ -57,6 +57,7 @@ export default function CRMLandingPagesPage() {
   const [showEditor, setShowEditor] = useState(false);
   const [editing, setEditing] = useState<LandingPage | null>(null);
   const submittingRef = useRef(false);
+  const [currentOrg, setCurrentOrg] = useState('');
 
   // Editor state
   const [name, setName] = useState('');
@@ -70,7 +71,7 @@ export default function CRMLandingPagesPage() {
 
   const [error, setError] = useState('');
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); getOrg().then(setCurrentOrg).catch(() => {}); }, []);
 
   async function loadData() {
     setLoading(true);
@@ -139,7 +140,7 @@ export default function CRMLandingPagesPage() {
     toast({ title: 'LP excluída' });
   }
 
-  const lpUrl = (s: string) => `${window.location.origin}/lp/${s}`;
+  const lpUrl = (s: string) => `${window.location.origin}/lp/${currentOrg}/${s}`;
 
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
   if (error) return (
@@ -177,7 +178,7 @@ export default function CRMLandingPagesPage() {
                   <div>
                     <h3 className="font-medium">{lp.nome}</h3>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <code className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">/lp/{lp.slug}</code>
+                      <code className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">/lp/{currentOrg}/{lp.slug}</code>
                       <button onClick={() => { navigator.clipboard.writeText(lpUrl(lp.slug)); toast({ title: 'URL copiada!' }); }}
                         className="text-muted-foreground hover:text-foreground"><Copy className="w-3 h-3" /></button>
                       <Badge variant="outline" className={cn('text-[10px]', st.color)}>{st.label}</Badge>
@@ -220,7 +221,7 @@ export default function CRMLandingPagesPage() {
             <div>
               <label className="text-sm font-medium">Slug (URL) *</label>
               <div className="flex items-center gap-1 mt-1">
-                <code className="text-xs text-muted-foreground bg-muted px-1.5 py-1 rounded">{window.location.origin}/lp/</code>
+                <code className="text-xs text-muted-foreground bg-muted px-1.5 py-1 rounded">/lp/{currentOrg}/</code>
                 <Input value={slug} onChange={e => setSlug(e.target.value)} className="flex-1" />
               </div>
               {slug && (

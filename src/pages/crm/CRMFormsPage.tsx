@@ -55,8 +55,9 @@ export default function CRMFormsPage() {
   const [formType, setFormType] = useState('contact');
   const [formFields, setFormFields] = useState<FormField[]>(DEFAULT_CONTACT_FIELDS);
   const submittingRef = useRef(false);
+  const [currentOrg, setCurrentOrg] = useState('');
 
-  useEffect(() => { loadForms(); }, []);
+  useEffect(() => { loadForms(); getOrg().then(setCurrentOrg).catch(() => {}); }, []);
 
   async function loadForms() {
     setLoading(true);
@@ -135,7 +136,7 @@ export default function CRMFormsPage() {
     setFormFields(f => f.map(x => x.id === id ? { ...x, [key]: value } : x));
   }
 
-  const formUrl = (slug: string) => `${window.location.origin}/f/${slug}`;
+  const formUrl = (slug: string) => `${window.location.origin}/f/${currentOrg}/${slug}`;
 
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
 
@@ -164,7 +165,7 @@ export default function CRMFormsPage() {
                 <div>
                   <h3 className="font-medium">{form.nome}</h3>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <code className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">/f/{form.slug}</code>
+                    <code className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">/f/{currentOrg}/{form.slug}</code>
                     <button onClick={() => { navigator.clipboard.writeText(formUrl(form.slug)); toast({ title: 'URL copiada!' }); }}
                       className="text-muted-foreground hover:text-foreground"><Copy className="w-3 h-3" /></button>
                     <Badge variant="outline" className="text-[10px]">{form.tipo_criacao}</Badge>
@@ -204,7 +205,7 @@ export default function CRMFormsPage() {
             <div>
               <label className="text-sm font-medium">Slug (URL) *</label>
               <div className="flex items-center gap-1 mt-1">
-                <code className="text-xs text-muted-foreground bg-muted px-1.5 py-1 rounded">{window.location.origin}/f/</code>
+                <code className="text-xs text-muted-foreground bg-muted px-1.5 py-1 rounded">/f/{currentOrg}/</code>
                 <Input value={formSlug} onChange={e => setFormSlug(e.target.value)} placeholder="contato-vendas" className="flex-1" />
               </div>
               {formSlug && (

@@ -190,7 +190,9 @@ const App = () => (
                       {/* Public routes */}
                       <Route path="/login"                element={<LoginPageWrapper />} />
                       <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
+                      <Route path="/f/:org/:slug" element={<PublicFormPage />} />
                       <Route path="/f/:slug" element={<PublicFormPage />} />
+                      <Route path="/lp/:org/:slug" element={<PublicLandingPage />} />
                       <Route path="/lp/:slug" element={<PublicLandingPage />} />
                       {/* Protected routes */}
                       <Route path="/*" element={<ProtectedRoutes />} />
