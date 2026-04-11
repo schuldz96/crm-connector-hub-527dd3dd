@@ -93,6 +93,7 @@ serve(async (req) => {
         if (conv.total_mensagens >= maxMsgs) {
           log(`Conv ${conv.id}: limite de ${maxMsgs} mensagens atingido. Encerrando conversa.`);
           await sb.from('crm_ai_conversations').update({ status: 'completed' }).eq('id', conv.id);
+          await autoEvaluateConversation(conv, log);
           continue;
         }
 
@@ -134,6 +135,7 @@ serve(async (req) => {
         if (convAge > maxHours) {
           log(`Conv ${conv.id}: duração máxima de ${maxHours}h excedida (${Math.round(convAge)}h). Encerrando.`);
           await sb.from('crm_ai_conversations').update({ status: 'completed' }).eq('id', conv.id);
+          await autoEvaluateConversation(conv, log);
           continue;
         }
 
@@ -340,8 +342,26 @@ async function sendText(
       return true;
     } catch (e: any) { log(`Evolution error: ${e.message}`); return false; }
   }
-  // Meta — TODO when needed
-  log(`Provider ${provider} não suportado para follow-ups (ainda)`);
+  if (provider === 'meta') {
+    try {
+      const sbPublic = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+      const { data: account } = await sbPublic.from('meta_inbox_accounts')
+        .select('phone_number_id, access_token')
+        .eq('id', instance).maybeSingle();
+      if (!account) { log('Meta account não encontrada'); return false; }
+      const accessToken = await decryptToken(account.access_token);
+      let normalizedPhone = phone.replace(/\D/g, '');
+      if (normalizedPhone.length <= 11 && !normalizedPhone.startsWith('55')) normalizedPhone = '55' + normalizedPhone;
+      const res = await fetch(`https://graph.facebook.com/v19.0/${account.phone_number_id}/messages`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messaging_product: 'whatsapp', to: normalizedPhone, type: 'text', text: { body: text } }),
+      });
+      if (!res.ok) { const err = await res.text().catch(() => ''); log(`Meta API ${res.status}: ${err.slice(0, 150)}`); return false; }
+      return true;
+    } catch (e: any) { log(`Meta error: ${e.message}`); return false; }
+  }
+  log(`Provider ${provider} desconhecido`);
   return false;
 }
 
@@ -601,6 +621,7 @@ async function evaluateTransitions(
       await sb.from('crm_ai_conversations')
         .update({ status: 'completed', estagio_id: t.stageId })
         .eq('id', conv.id);
+      await autoEvaluateConversation(conv, log);
 
       log(`✓ ${conv.entidade_tipo} movido para estágio ${t.stageId} (trigger: ${t.trigger})`);
       return true;
@@ -608,6 +629,27 @@ async function evaluateTransitions(
   }
 
   return false;
+}
+
+/** Auto-avaliar conversa IA ao encerrar */
+async function autoEvaluateConversation(conv: any, log: (msg: string) => void) {
+  try {
+    const msgs = (conv.mensagens || []) as any[];
+    if (msgs.length < 3) return; // Muito curta para avaliar
+    const userMsgs = msgs.filter((m: any) => m.role === 'user').length;
+    const aiMsgs = msgs.filter((m: any) => m.role === 'assistant').length;
+    const engagementScore = Math.min(100, Math.round((userMsgs / Math.max(aiMsgs, 1)) * 80));
+    const tipoContexto = conv.entidade_tipo === 'deal' ? 'crm_deal' : 'crm_ticket';
+    await sb.from('analises_ia').upsert({
+      empresa_id: conv.empresa_id,
+      tipo_contexto: tipoContexto,
+      entidade_id: conv.entidade_id,
+      score: engagementScore,
+      resumo: `Conversa IA com ${msgs.length} mensagens (${userMsgs} do lead, ${aiMsgs} da IA). Engajamento: ${engagementScore}%`,
+      criterios: { total_mensagens: msgs.length, mensagens_lead: userMsgs, mensagens_ia: aiMsgs, engagement: engagementScore },
+    }, { onConflict: 'tipo_contexto,entidade_id' });
+    log(`Auto-avaliação salva para ${tipoContexto}/${conv.entidade_id}: score ${engagementScore}`);
+  } catch (e: any) { log(`Erro ao auto-avaliar: ${e.message}`); }
 }
 
 async function evaluateWithAI(
