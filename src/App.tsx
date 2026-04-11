@@ -39,6 +39,7 @@ import CRMCompaniesPage from "@/pages/crm/CRMCompaniesPage";
 import CRMTasksPage from "@/pages/crm/CRMTasksPage";
 import CRMFormsPage from "@/pages/crm/CRMFormsPage";
 import CRMLandingPagesPage from "@/pages/crm/CRMLandingPagesPage";
+import CRMLandingPageEditorPage from "@/pages/crm/CRMLandingPageEditorPage";
 import PublicFormPage from "@/pages/PublicFormPage";
 import PublicLandingPage from "@/pages/PublicLandingPage";
 import CRMPipelineSettingsPage from "@/pages/crm/CRMPipelineSettingsPage";
@@ -113,6 +114,9 @@ function ProtectedRoutes() {
 
   return (
     <Routes>
+      {/* LP Editor — full-screen, no AppLayout */}
+      <Route path="crm/landing-pages/editor/:id" element={<CRMLandingPageEditorPage />} />
+
       <Route element={<AppLayout />}>
         {/* Páginas abertas para qualquer usuário autenticado */}
         <Route path="dashboard"    element={R(<DashboardPage />,    { resource: 'dashboard' })} />

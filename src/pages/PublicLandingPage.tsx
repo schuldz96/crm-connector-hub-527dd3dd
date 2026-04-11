@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import PublicFormPage from './PublicFormPage';
+import { LPBlockRenderer } from '@/components/lp-editor/LPBlockRenderer';
+import type { LPBlock } from '@/components/lp-editor/lp-editor-types';
 
 const crm = () => (supabase as any).schema('crm');
 
@@ -11,6 +13,7 @@ interface LPData {
   id: string;
   nome: string;
   config: {
+    blocks?: LPBlock[];
     headline?: string;
     subheadline?: string;
     ctaText?: string;
@@ -69,9 +72,23 @@ export default function PublicLandingPage() {
     return <PublicFormPage />;
   }
 
+  // New block-based rendering
+  if (cfg.blocks && cfg.blocks.length > 0) {
+    return (
+      <div className="min-h-screen bg-white">
+        {cfg.blocks.map((block) => (
+          <LPBlockRenderer key={block.id} block={block} />
+        ))}
+        <div className="text-center py-8 text-gray-300 text-sm">
+          Powered by LTX
+        </div>
+      </div>
+    );
+  }
+
+  // Legacy rendering (backward compat for LPs without blocks)
   return (
     <div className="min-h-screen" style={{ background: cfg.bgColor || '#0f172a', color: '#fff' }}>
-      {/* Hero Section */}
       <div className="max-w-4xl mx-auto px-6 py-24 text-center">
         <h1 className="text-4xl md:text-6xl font-display font-bold leading-tight mb-6">
           {cfg.headline || lp.nome}
@@ -93,8 +110,6 @@ export default function PublicLandingPage() {
           </Button>
         )}
       </div>
-
-      {/* Footer */}
       <div className="text-center py-8 opacity-40 text-sm">
         Powered by LTX
       </div>

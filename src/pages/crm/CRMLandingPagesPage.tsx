@@ -1,17 +1,14 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
-  Plus, X, Globe, Copy, Loader2, Trash2, ExternalLink, Eye, Palette,
+  Plus, Globe, Copy, Loader2, Trash2, ExternalLink,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { getOrg, getOrgAndEmpresaId } from '@/lib/saas';
 import { useToast } from '@/hooks/use-toast';
+import { useOrgNavigate } from '@/hooks/useOrgNavigate';
 
 interface LandingPage {
   id: string;
@@ -35,12 +32,6 @@ interface LandingPage {
   criado_em: string;
 }
 
-interface FormOption {
-  id: string;
-  nome: string;
-  slug: string;
-}
-
 const crm = () => (supabase as any).schema('crm');
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
@@ -51,24 +42,10 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 
 export default function CRMLandingPagesPage() {
   const { toast } = useToast();
+  const navigate = useOrgNavigate();
   const [pages, setPages] = useState<LandingPage[]>([]);
-  const [forms, setForms] = useState<FormOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showEditor, setShowEditor] = useState(false);
-  const [editing, setEditing] = useState<LandingPage | null>(null);
-  const submittingRef = useRef(false);
   const [currentOrg, setCurrentOrg] = useState('');
-
-  // Editor state
-  const [name, setName] = useState('');
-  const [slug, setSlug] = useState('');
-  const [formId, setFormId] = useState('');
-  const [headline, setHeadline] = useState('');
-  const [subheadline, setSubheadline] = useState('');
-  const [ctaText, setCtaText] = useState('Quero saber mais');
-  const [bgColor, setBgColor] = useState('#0f172a');
-  const [accentColor, setAccentColor] = useState('#6366f1');
-
   const [error, setError] = useState('');
 
   useEffect(() => { loadData(); getOrg().then(setCurrentOrg).catch(() => {}); }, []);
@@ -78,12 +55,12 @@ export default function CRMLandingPagesPage() {
     setError('');
     try {
       const { empresaId } = await getOrgAndEmpresaId();
-      const [lpRes, formRes] = await Promise.all([
-        crm().from('landing_pages').select('*').eq('empresa_id', empresaId).order('criado_em', { ascending: false }),
-        crm().from('formularios').select('id, nome, slug').eq('empresa_id', empresaId).eq('ativo', true),
-      ]);
-      setPages(lpRes.data || []);
-      setForms(formRes.data || []);
+      const { data } = await crm()
+        .from('landing_pages')
+        .select('*')
+        .eq('empresa_id', empresaId)
+        .order('criado_em', { ascending: false });
+      setPages(data || []);
     } catch (e: any) {
       console.error('LP loadData error:', e);
       setError(e?.message || 'Erro ao carregar landing pages');
@@ -92,41 +69,11 @@ export default function CRMLandingPagesPage() {
   }
 
   function openNew() {
-    setEditing(null);
-    setName(''); setSlug(''); setFormId('none'); setHeadline(''); setSubheadline('');
-    setCtaText('Quero saber mais'); setBgColor('#0f172a'); setAccentColor('#6366f1');
-    setShowEditor(true);
+    navigate('/crm/landing-pages/editor/new');
   }
 
   function openEdit(lp: LandingPage) {
-    setEditing(lp);
-    setName(lp.nome); setSlug(lp.slug); setFormId(lp.formulario_id || 'none');
-    setHeadline(lp.config?.headline || ''); setSubheadline(lp.config?.subheadline || '');
-    setCtaText(lp.config?.ctaText || 'Quero saber mais');
-    setBgColor(lp.config?.bgColor || '#0f172a'); setAccentColor(lp.config?.accentColor || '#6366f1');
-    setShowEditor(true);
-  }
-
-  async function handleSave() {
-    if (submittingRef.current || !name.trim() || !slug.trim()) return;
-    submittingRef.current = true;
-    try {
-      const { org, empresaId } = await getOrgAndEmpresaId();
-      const s = slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
-      const config = { headline, subheadline, ctaText, bgColor, accentColor };
-      const linkedFormId = formId === 'none' ? null : (formId || null);
-      if (editing) {
-        await crm().from('landing_pages').update({ nome: name, slug: s, formulario_id: linkedFormId, config, atualizado_em: new Date().toISOString() }).eq('id', editing.id);
-      } else {
-        await crm().from('landing_pages').insert({ empresa_id: empresaId, org, nome: name, slug: s, formulario_id: linkedFormId, config });
-      }
-      setShowEditor(false);
-      loadData();
-      toast({ title: editing ? 'LP atualizada' : 'LP criada' });
-    } catch (e: any) {
-      toast({ title: 'Erro', description: e?.message?.includes('idx_crm_lp_slug') ? 'Slug já existe' : e?.message, variant: 'destructive' });
-    }
-    finally { submittingRef.current = false; }
+    navigate(`/crm/landing-pages/editor/${lp.id}`);
   }
 
   async function updateStatus(lp: LandingPage, status: string) {
@@ -208,84 +155,6 @@ export default function CRMLandingPagesPage() {
         )}
       </div>
 
-      {/* Editor Dialog (centralizado) */}
-      <Dialog open={showEditor} onOpenChange={open => { if (!open) setShowEditor(false); }}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Palette className="w-4 h-4" /> {editing ? 'Editar' : 'Nova'} Landing Page</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
-            <div>
-              <label className="text-sm font-medium">Nome *</label>
-              <Input value={name} onChange={e => { setName(e.target.value); if (!editing) setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '-')); }} className="mt-1" placeholder="Minha Landing Page" />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Slug (URL) *</label>
-              <div className="flex items-center gap-1 mt-1">
-                <code className="text-xs text-muted-foreground bg-muted px-1.5 py-1 rounded">/lp/{currentOrg}/</code>
-                <Input value={slug} onChange={e => setSlug(e.target.value)} className="flex-1" />
-              </div>
-              {slug && (
-                <div className="flex items-center gap-1.5 mt-1.5">
-                  <code className="text-xs text-primary bg-primary/10 px-2 py-1 rounded flex-1 truncate">{lpUrl(slug)}</code>
-                  <button onClick={() => { navigator.clipboard.writeText(lpUrl(slug)); toast({ title: 'URL copiada!' }); }}
-                    className="text-muted-foreground hover:text-primary shrink-0"><Copy className="w-3.5 h-3.5" /></button>
-                </div>
-              )}
-            </div>
-            <div>
-              <label className="text-sm font-medium">Formulário vinculado</label>
-              <Select value={formId} onValueChange={setFormId}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione um formulário" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Nenhum</SelectItem>
-                  {forms.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="border-t border-border pt-3">
-              <label className="text-sm font-medium mb-2 block">Conteúdo</label>
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs text-muted-foreground">Título principal</label>
-                  <Input value={headline} onChange={e => setHeadline(e.target.value)} placeholder="Transforme seus resultados" className="mt-1" />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Subtítulo</label>
-                  <Textarea value={subheadline} onChange={e => setSubheadline(e.target.value)} placeholder="Descubra como nossa solução..." className="mt-1 h-16" />
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Texto do botão CTA</label>
-                  <Input value={ctaText} onChange={e => setCtaText(e.target.value)} className="mt-1" />
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t border-border pt-3">
-              <label className="text-sm font-medium mb-2 block">Identidade visual</label>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-muted-foreground">Cor de fundo</label>
-                  <div className="flex gap-2 mt-1">
-                    <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} className="w-8 h-8 rounded border" />
-                    <Input value={bgColor} onChange={e => setBgColor(e.target.value)} className="flex-1 h-8 text-xs" />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground">Cor de destaque</label>
-                  <div className="flex gap-2 mt-1">
-                    <input type="color" value={accentColor} onChange={e => setAccentColor(e.target.value)} className="w-8 h-8 rounded border" />
-                    <Input value={accentColor} onChange={e => setAccentColor(e.target.value)} className="flex-1 h-8 text-xs" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <Button onClick={handleSave} className="w-full">{editing ? 'Salvar' : 'Criar LP'}</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
