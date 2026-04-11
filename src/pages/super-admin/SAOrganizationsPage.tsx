@@ -89,7 +89,7 @@ export default function SAOrganizationsPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="sa-page-header">
           <h1 className="text-2xl font-display font-bold flex items-center gap-2">
             <Building2 className="w-6 h-6 text-red-500" />
             Organizacoes
@@ -145,7 +145,7 @@ export default function SAOrganizationsPage() {
               filtered.map((org) => (
                 <TableRow
                   key={org.id}
-                  className="cursor-pointer"
+                  className="cursor-pointer sa-table-row"
                   onClick={() => navigate(`/super-admin/organizations/${org.org}`)}
                 >
                   <TableCell className="font-mono text-sm">{org.org}</TableCell>

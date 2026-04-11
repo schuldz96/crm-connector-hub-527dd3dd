@@ -48,25 +48,25 @@ export default function SuperAdminSidebar() {
       )}
     >
       {/* Header */}
-      <div className="p-3 border-b border-border min-h-[60px] flex items-center">
-        <div className="flex items-center gap-2 min-w-0">
-          <Shield className="w-6 h-6 text-red-500 flex-shrink-0" />
-          <div
-            className={cn(
-              'transition-all duration-300 overflow-hidden whitespace-nowrap',
-              expanded ? 'opacity-100 w-auto' : 'opacity-0 w-0'
-            )}
-          >
-            <span className="font-display font-bold text-lg">LTX Admin</span>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
-              Super Admin Panel
-            </p>
-          </div>
+      <div className="border-b border-border min-h-[60px] flex items-center px-0">
+        <div className="w-16 flex items-center justify-center flex-shrink-0">
+          <Shield className="w-6 h-6 text-red-500" />
+        </div>
+        <div
+          className={cn(
+            'overflow-hidden whitespace-nowrap transition-all duration-300',
+            expanded ? 'opacity-100 max-w-[180px]' : 'opacity-0 max-w-0'
+          )}
+        >
+          <span className="font-display font-bold text-lg">LTX Admin</span>
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider">
+            Super Admin Panel
+          </p>
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-2 space-y-1 overflow-y-auto overflow-x-hidden">
+      <nav className="flex-1 py-2 space-y-1 overflow-y-auto overflow-x-hidden">
         {NAV_ITEMS.map((item) => {
           const isActive =
             location.pathname === item.path ||
@@ -79,18 +79,19 @@ export default function SuperAdminSidebar() {
               onClick={() => navigate(item.path)}
               title={!expanded ? item.label : undefined}
               className={cn(
-                'w-full flex items-center gap-3 rounded-lg text-sm transition-colors',
-                expanded ? 'px-3 py-2' : 'px-0 py-2 justify-center',
+                'w-full flex items-center rounded-none text-sm transition-colors',
                 isActive
                   ? 'bg-red-500/10 text-red-500 font-medium'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
               )}
             >
-              <item.icon className="w-4 h-4 flex-shrink-0" />
+              <div className="w-16 h-9 flex items-center justify-center flex-shrink-0">
+                <item.icon className="w-4 h-4" />
+              </div>
               <span
                 className={cn(
-                  'truncate transition-all duration-300 overflow-hidden whitespace-nowrap',
-                  expanded ? 'opacity-100 w-auto' : 'opacity-0 w-0'
+                  'whitespace-nowrap overflow-hidden transition-all duration-300',
+                  expanded ? 'opacity-100 max-w-[180px]' : 'opacity-0 max-w-0'
                 )}
               >
                 {item.label}
@@ -101,15 +102,17 @@ export default function SuperAdminSidebar() {
       </nav>
 
       {/* Footer — Admin info + Logout */}
-      <div className="p-2 border-t border-border">
-        <div className={cn('flex items-center gap-2 mb-2', !expanded && 'justify-center')}>
-          <div className="w-7 h-7 rounded-full bg-red-500/10 flex items-center justify-center flex-shrink-0">
-            <Shield className="w-3.5 h-3.5 text-red-500" />
+      <div className="border-t border-border py-2">
+        <div className="flex items-center">
+          <div className="w-16 flex items-center justify-center flex-shrink-0">
+            <div className="w-7 h-7 rounded-full bg-red-500/10 flex items-center justify-center">
+              <Shield className="w-3.5 h-3.5 text-red-500" />
+            </div>
           </div>
           <div
             className={cn(
-              'min-w-0 flex-1 transition-all duration-300 overflow-hidden',
-              expanded ? 'opacity-100 w-auto' : 'opacity-0 w-0'
+              'min-w-0 overflow-hidden transition-all duration-300',
+              expanded ? 'opacity-100 max-w-[180px]' : 'opacity-0 max-w-0'
             )}
           >
             <p className="text-xs font-medium text-foreground truncate">
@@ -126,16 +129,15 @@ export default function SuperAdminSidebar() {
             navigate('/super-admin/login');
           }}
           title={!expanded ? 'Sair' : undefined}
-          className={cn(
-            'flex items-center gap-2 text-xs text-red-500 hover:underline transition-all duration-300',
-            !expanded && 'justify-center w-full'
-          )}
+          className="w-full flex items-center text-xs text-red-500 hover:underline mt-1"
         >
-          <LogOut className="w-3.5 h-3.5 flex-shrink-0" />
+          <div className="w-16 flex items-center justify-center flex-shrink-0">
+            <LogOut className="w-3.5 h-3.5" />
+          </div>
           <span
             className={cn(
-              'transition-all duration-300 overflow-hidden whitespace-nowrap',
-              expanded ? 'opacity-100 w-auto' : 'opacity-0 w-0'
+              'whitespace-nowrap overflow-hidden transition-all duration-300',
+              expanded ? 'opacity-100 max-w-[180px]' : 'opacity-0 max-w-0'
             )}
           >
             Sair

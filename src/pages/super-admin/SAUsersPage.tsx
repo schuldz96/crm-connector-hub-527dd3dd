@@ -106,7 +106,7 @@ export default function SAUsersPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
+      <div className="sa-page-header">
         <h1 className="text-2xl font-display font-bold flex items-center gap-2">
           <Users className="w-6 h-6 text-red-500" />
           Usuarios
@@ -196,7 +196,7 @@ export default function SAUsersPage() {
               </TableRow>
             ) : (
               filtered.map((u) => (
-                <TableRow key={u.id}>
+                <TableRow key={u.id} className="sa-table-row">
                   <TableCell className="font-medium">{u.nome || '—'}</TableCell>
                   <TableCell className="text-muted-foreground">{u.email}</TableCell>
                   <TableCell className="font-mono text-xs">{u.org}</TableCell>
@@ -228,9 +228,9 @@ export default function SAUsersPage() {
         </Table>
       </div>
 
-      <p className="text-xs text-muted-foreground">
+      <div className="sa-count-pill">
         Exibindo {filtered.length} de {users.length} usuarios
-      </p>
+      </div>
     </div>
   );
 }

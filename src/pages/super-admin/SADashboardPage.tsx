@@ -75,7 +75,7 @@ export default function SADashboardPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
+      <div className="sa-page-header">
         <h1 className="text-2xl font-display font-bold">Dashboard</h1>
         <p className="text-muted-foreground text-sm mt-1">
           Bem-vindo, {superAdmin?.nome ?? 'Admin'}. Visao geral da plataforma.
@@ -90,11 +90,11 @@ export default function SADashboardPage() {
       )}
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sa-stagger-container">
         {kpiCards.map((kpi) => (
           <div
             key={kpi.label}
-            className="glass-card p-5 border border-border rounded-lg bg-card"
+            className="glass-card p-5 border border-border rounded-lg bg-card sa-card-hover cursor-default"
           >
             <div className="flex items-center justify-between mb-3">
               <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${kpi.bg}`}>
@@ -125,7 +125,7 @@ export default function SADashboardPage() {
             {recentLogs.map((log) => (
               <div
                 key={log.id}
-                className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors"
+                className="flex items-start gap-3 p-3 rounded-lg sa-table-row cursor-default"
               >
                 <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center flex-shrink-0 mt-0.5">
                   <Clock className="w-4 h-4 text-muted-foreground" />

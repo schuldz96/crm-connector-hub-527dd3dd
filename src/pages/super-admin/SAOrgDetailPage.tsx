@@ -112,8 +112,8 @@ export default function SAOrgDetailPage() {
       )}
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="glass-card p-4 border border-border rounded-lg bg-card">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sa-stagger-container">
+        <div className="glass-card p-4 border border-border rounded-lg bg-card sa-card-hover cursor-default">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center">
               <Users className="w-4 h-4 text-blue-400" />
@@ -126,7 +126,7 @@ export default function SAOrgDetailPage() {
             </div>
           </div>
         </div>
-        <div className="glass-card p-4 border border-border rounded-lg bg-card">
+        <div className="glass-card p-4 border border-border rounded-lg bg-card sa-card-hover cursor-default">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-purple-500/10 flex items-center justify-center">
               <CreditCard className="w-4 h-4 text-purple-400" />
@@ -139,7 +139,7 @@ export default function SAOrgDetailPage() {
             </div>
           </div>
         </div>
-        <div className="glass-card p-4 border border-border rounded-lg bg-card">
+        <div className="glass-card p-4 border border-border rounded-lg bg-card sa-card-hover cursor-default">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-green-500/10 flex items-center justify-center">
               <BarChart3 className="w-4 h-4 text-green-400" />

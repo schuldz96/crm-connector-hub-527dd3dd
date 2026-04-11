@@ -152,7 +152,7 @@ export default function SAFeatureFlagsPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="sa-page-header">
           <h1 className="text-2xl font-display font-bold flex items-center gap-2">
             <Flag className="w-6 h-6 text-red-500" />
             Feature Flags
@@ -193,7 +193,7 @@ export default function SAFeatureFlagsPage() {
               </TableRow>
             ) : (
               flags.map((flag) => (
-                <TableRow key={flag.id}>
+                <TableRow key={flag.id} className="sa-table-row">
                   <TableCell className="font-mono text-xs">{flag.codigo}</TableCell>
                   <TableCell className="font-medium">{flag.nome}</TableCell>
                   <TableCell className="text-muted-foreground text-sm max-w-[200px] truncate">
@@ -225,10 +225,10 @@ export default function SAFeatureFlagsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(flag)}>
+                      <Button variant="ghost" size="sm" className="sa-action-btn" onClick={() => openEdit(flag)}>
                         <Pencil className="w-4 h-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setDeleteId(flag.id)} className="text-red-400 hover:text-red-300">
+                      <Button variant="ghost" size="sm" className="sa-action-btn text-red-400 hover:text-red-300" onClick={() => setDeleteId(flag.id)}>
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
