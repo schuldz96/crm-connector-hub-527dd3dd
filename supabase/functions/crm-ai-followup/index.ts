@@ -387,7 +387,28 @@ async function sendMedia(
       return true;
     } catch (e: any) { log(`Evolution media error: ${e.message}`); return false; }
   }
-  log(`Provider ${provider} não suportado para media follow-ups (ainda)`);
+  if (provider === 'meta') {
+    try {
+      const sbPublic = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+      const { data: account } = await sbPublic.from('meta_inbox_accounts')
+        .select('phone_number_id, access_token')
+        .eq('id', instance).maybeSingle();
+      if (!account) { log('Meta account não encontrada para media'); return false; }
+      const accessToken = await decryptToken(account.access_token);
+      let normalizedPhone = phone.replace(/\D/g, '');
+      if (normalizedPhone.length <= 11 && !normalizedPhone.startsWith('55')) normalizedPhone = '55' + normalizedPhone;
+      const typeMap: Record<string, string> = { image: 'image', video: 'video', audio: 'audio' };
+      const metaType = typeMap[mediaType] || 'document';
+      const res = await fetch(`https://graph.facebook.com/v19.0/${account.phone_number_id}/messages`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messaging_product: 'whatsapp', to: normalizedPhone, type: metaType, [metaType]: { link: mediaUrl, caption: caption || '' } }),
+      });
+      if (!res.ok) { const err = await res.text().catch(() => ''); log(`Meta media ${res.status}: ${err.slice(0, 150)}`); return false; }
+      return true;
+    } catch (e: any) { log(`Meta media error: ${e.message}`); return false; }
+  }
+  log(`Provider ${provider} desconhecido para media`);
   return false;
 }
 
