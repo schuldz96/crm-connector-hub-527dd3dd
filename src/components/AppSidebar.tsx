@@ -115,7 +115,7 @@ const NAV_SECTIONS: NavSection[] = [
         children: [
           { path: '/marketing/campaigns',      label: 'Campanhas',        icon: Megaphone, resource: 'campaigns' },
           { path: '/marketing/email-marketing', label: 'E-mail Marketing', icon: Mail,      resource: 'email-marketing' },
-          { path: '/marketing/forms',          label: 'Formulários',      icon: FileText,  resource: 'forms' },
+          { path: '/crm/forms',                label: 'Formulários',      icon: FileText,  resource: 'crm' },
           { path: '/crm/landing-pages',        label: 'Landing Pages',    icon: Globe,     resource: 'crm' },
         ],
       },

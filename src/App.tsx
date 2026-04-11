@@ -120,7 +120,7 @@ function ProtectedRoutes() {
         {/* Marketing */}
         <Route path="/marketing/campaigns"      element={R(<CampaignsPage />,      { resource: 'campaigns' })} />
         <Route path="/marketing/email-marketing" element={R(<EmailMarketingPage />, { resource: 'email-marketing' })} />
-        <Route path="/marketing/forms"          element={R(<FormsPage />,          { resource: 'forms' })} />
+        <Route path="/marketing/forms"          element={<Navigate to="/crm/forms" replace />} />
 
         {/* CS — Customer Success */}
         <Route path="/cs/health-score" element={R(<HealthScorePage />, { resource: 'health-score' })} />

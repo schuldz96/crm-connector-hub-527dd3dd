@@ -67,10 +67,13 @@ export default function CRMLandingPagesPage() {
   const [bgColor, setBgColor] = useState('#0f172a');
   const [accentColor, setAccentColor] = useState('#6366f1');
 
+  const [error, setError] = useState('');
+
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
     setLoading(true);
+    setError('');
     try {
       const { empresaId } = await getOrgAndEmpresaId();
       const [lpRes, formRes] = await Promise.all([
@@ -79,7 +82,10 @@ export default function CRMLandingPagesPage() {
       ]);
       setPages(lpRes.data || []);
       setForms(formRes.data || []);
-    } catch { /* silent */ }
+    } catch (e: any) {
+      console.error('LP loadData error:', e);
+      setError(e?.message || 'Erro ao carregar landing pages');
+    }
     finally { setLoading(false); }
   }
 
@@ -135,6 +141,12 @@ export default function CRMLandingPagesPage() {
   const lpUrl = (s: string) => `${window.location.origin}/lp/${s}`;
 
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
+  if (error) return (
+    <div className="flex flex-col items-center justify-center py-12 gap-3">
+      <p className="text-destructive text-sm">{error}</p>
+      <Button variant="outline" onClick={loadData}>Tentar novamente</Button>
+    </div>
+  );
 
   return (
     <div className="space-y-4 animate-fade-in">
