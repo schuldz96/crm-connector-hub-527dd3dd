@@ -556,8 +556,25 @@ export async function getPropertyHistory(
 ): Promise<PropertyHistoryEntry[]> {
   const { empresaId } = await getOrgAndEmpresaId();
   const table = OBJECT_TABLE_MAP[objectType];
-  const { data } = await crm().from(table).select('dados_custom').eq('id', objectId).eq('empresa_id', empresaId).single();
-  const history: PropertyHistoryEntry[] = data?.dados_custom?._prop_history || [];
-  if (prop) return history.filter(h => h.prop === prop).reverse();
-  return history.reverse();
+  const { data } = await crm().from(table).select('*').eq('id', objectId).eq('empresa_id', empresaId).single();
+  if (!data) return [];
+  const history: PropertyHistoryEntry[] = data.dados_custom?._prop_history || [];
+  let filtered = prop ? history.filter(h => h.prop === prop) : history;
+
+  // Se não há histórico para esta propriedade, gerar entry com valor atual
+  if (prop && filtered.length === 0) {
+    const currentValue = String(data[prop] ?? '');
+    if (currentValue) {
+      filtered = [{
+        prop,
+        from: null,
+        to: currentValue,
+        source: 'valor inicial',
+        user: 'Sistema',
+        at: data.criado_em || new Date().toISOString(),
+      }];
+    }
+  }
+
+  return filtered.reverse();
 }
