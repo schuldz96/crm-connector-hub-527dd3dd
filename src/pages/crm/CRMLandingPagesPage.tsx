@@ -93,14 +93,14 @@ export default function CRMLandingPagesPage() {
 
   function openNew() {
     setEditing(null);
-    setName(''); setSlug(''); setFormId(''); setHeadline(''); setSubheadline('');
+    setName(''); setSlug(''); setFormId('none'); setHeadline(''); setSubheadline('');
     setCtaText('Quero saber mais'); setBgColor('#0f172a'); setAccentColor('#6366f1');
     setShowEditor(true);
   }
 
   function openEdit(lp: LandingPage) {
     setEditing(lp);
-    setName(lp.nome); setSlug(lp.slug); setFormId(lp.formulario_id || '');
+    setName(lp.nome); setSlug(lp.slug); setFormId(lp.formulario_id || 'none');
     setHeadline(lp.config?.headline || ''); setSubheadline(lp.config?.subheadline || '');
     setCtaText(lp.config?.ctaText || 'Quero saber mais');
     setBgColor(lp.config?.bgColor || '#0f172a'); setAccentColor(lp.config?.accentColor || '#6366f1');
@@ -114,10 +114,11 @@ export default function CRMLandingPagesPage() {
       const { org, empresaId } = await getOrgAndEmpresaId();
       const s = slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-');
       const config = { headline, subheadline, ctaText, bgColor, accentColor };
+      const linkedFormId = formId === 'none' ? null : (formId || null);
       if (editing) {
-        await crm().from('landing_pages').update({ nome: name, slug: s, formulario_id: formId || null, config, atualizado_em: new Date().toISOString() }).eq('id', editing.id);
+        await crm().from('landing_pages').update({ nome: name, slug: s, formulario_id: linkedFormId, config, atualizado_em: new Date().toISOString() }).eq('id', editing.id);
       } else {
-        await crm().from('landing_pages').insert({ empresa_id: empresaId, org, nome: name, slug: s, formulario_id: formId || null, config });
+        await crm().from('landing_pages').insert({ empresa_id: empresaId, org, nome: name, slug: s, formulario_id: linkedFormId, config });
       }
       setShowEditor(false);
       loadData();
@@ -237,7 +238,7 @@ export default function CRMLandingPagesPage() {
               <Select value={formId} onValueChange={setFormId}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione um formulário" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Nenhum</SelectItem>
+                  <SelectItem value="none">Nenhum</SelectItem>
                   {forms.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
                 </SelectContent>
               </Select>
