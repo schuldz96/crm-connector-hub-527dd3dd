@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import StageAIConfigModal, { type StageAIConfig } from '@/components/crm/StageAIConfigModal';
 import { useCrmPipelines, useCrmTicketsByPipeline, useCreateTicket, useUpdateTicket, useSaasUsers } from '@/hooks/useCrm';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { getOrg } from '@/lib/saas';
@@ -199,6 +200,26 @@ export default function CRMTicketsPage() {
   };
 
   const { data: allTickets = [], isLoading: loadingTickets } = useCrmTicketsByPipeline(pipelineId);
+  const queryClient = useQueryClient();
+
+  // Realtime: atualiza kanban quando tickets mudam no banco
+  useEffect(() => {
+    let realtimeActive = false;
+    const channel = supabase
+      .channel('tickets-realtime')
+      .on('postgres_changes', { event: '*', schema: 'crm', table: 'tickets_crm' }, () => {
+        realtimeActive = true;
+        queryClient.invalidateQueries({ queryKey: ['crm.tickets.pipeline'] });
+      })
+      .subscribe();
+
+    const poll = setInterval(() => {
+      if (realtimeActive) return;
+      queryClient.invalidateQueries({ queryKey: ['crm.tickets.pipeline'] });
+    }, 8000);
+
+    return () => { supabase.removeChannel(channel); clearInterval(poll); };
+  }, [queryClient]);
 
   // Find current user's saas ID for "Meus tickets" filter
   const myUserId = useMemo(() => {

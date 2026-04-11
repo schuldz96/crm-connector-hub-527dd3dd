@@ -1,6 +1,13 @@
--- Enable Realtime for backlog_tasks
--- Required for live kanban updates
-ALTER PUBLICATION supabase_realtime ADD TABLE admin.backlog_tasks;
+-- Enable Realtime for kanban boards
+-- Required for live updates without page refresh
 
--- Ensure full row data is sent on updates (needed for realtime payload)
+-- Backlog Board (Super Admin)
+ALTER PUBLICATION supabase_realtime ADD TABLE admin.backlog_tasks;
 ALTER TABLE admin.backlog_tasks REPLICA IDENTITY FULL;
+
+-- CRM Kanbans (Deals & Tickets)
+ALTER PUBLICATION supabase_realtime ADD TABLE crm.negocios;
+ALTER TABLE crm.negocios REPLICA IDENTITY FULL;
+
+ALTER PUBLICATION supabase_realtime ADD TABLE crm.tickets_crm;
+ALTER TABLE crm.tickets_crm REPLICA IDENTITY FULL;

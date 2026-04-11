@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import StageAIConfigModal, { type StageAIConfig } from '@/components/crm/StageAIConfigModal';
 import { useCrmPipelines, useCrmDealsByPipeline, useCreateDeal, useUpdateDeal, useSaasUsers } from '@/hooks/useCrm';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { getOrg } from '@/lib/saas';
@@ -188,6 +189,26 @@ export default function CRMDealsPage() {
   };
 
   const { data: allDeals = [], isLoading: loadingDeals } = useCrmDealsByPipeline(pipelineId);
+  const queryClient = useQueryClient();
+
+  // Realtime: atualiza kanban quando deals mudam no banco
+  useEffect(() => {
+    let realtimeActive = false;
+    const channel = supabase
+      .channel('deals-realtime')
+      .on('postgres_changes', { event: '*', schema: 'crm', table: 'negocios' }, () => {
+        realtimeActive = true;
+        queryClient.invalidateQueries({ queryKey: ['crm.deals.pipeline'] });
+      })
+      .subscribe();
+
+    const poll = setInterval(() => {
+      if (realtimeActive) return;
+      queryClient.invalidateQueries({ queryKey: ['crm.deals.pipeline'] });
+    }, 8000);
+
+    return () => { supabase.removeChannel(channel); clearInterval(poll); };
+  }, [queryClient]);
 
   // Find current user's saas ID for "Meus negócios" filter
   const myUserId = useMemo(() => {
