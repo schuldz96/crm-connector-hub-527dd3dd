@@ -991,3 +991,111 @@ export async function deleteBacklogTask(id: string): Promise<void> {
   const { error } = await admin().from('backlog_tasks').delete().eq('id', id);
   if (error) throw error;
 }
+
+// ─── Invoices (Faturas) ────────────────────────────────────────────────────────
+
+export interface Invoice {
+  id: string;
+  org: string;
+  valor: number;
+  status: string;
+  descricao?: string;
+  vencimento_em: string;
+  pago_em?: string;
+  criado_em: string;
+}
+
+let useLocalStorageInvoices = false;
+const INVOICE_STORAGE = 'ltx_sa_invoices';
+
+function loadLocalInvoices(): Invoice[] {
+  try { return JSON.parse(localStorage.getItem(INVOICE_STORAGE) || '[]'); } catch { return []; }
+}
+function saveLocalInvoices(invoices: Invoice[]) {
+  localStorage.setItem(INVOICE_STORAGE, JSON.stringify(invoices));
+}
+
+export async function getAllInvoices(): Promise<Invoice[]> {
+  try {
+    const { data, error } = await admin()
+      .from('faturas')
+      .select('*')
+      .order('criado_em', { ascending: false });
+    if (error) throw error;
+    useLocalStorageInvoices = false;
+    return (data ?? []) as Invoice[];
+  } catch {
+    useLocalStorageInvoices = true;
+    return loadLocalInvoices();
+  }
+}
+
+export async function getOrgInvoices(org: string): Promise<Invoice[]> {
+  try {
+    const { data, error } = await admin()
+      .from('faturas')
+      .select('*')
+      .eq('org', org)
+      .order('criado_em', { ascending: false });
+    if (error) throw error;
+    useLocalStorageInvoices = false;
+    return (data ?? []) as Invoice[];
+  } catch {
+    useLocalStorageInvoices = true;
+    return loadLocalInvoices().filter(i => i.org === org);
+  }
+}
+
+export async function createInvoice(invoice: {
+  org: string;
+  valor: number;
+  descricao?: string;
+  vencimento_em: string;
+  status?: string;
+}): Promise<Invoice> {
+  const now = new Date().toISOString();
+  if (useLocalStorageInvoices) {
+    const newInvoice: Invoice = {
+      id: crypto.randomUUID(),
+      org: invoice.org,
+      valor: invoice.valor,
+      status: invoice.status ?? 'pendente',
+      descricao: invoice.descricao,
+      vencimento_em: invoice.vencimento_em,
+      criado_em: now,
+    };
+    const invoices = loadLocalInvoices();
+    invoices.unshift(newInvoice);
+    saveLocalInvoices(invoices);
+    return newInvoice;
+  }
+  const { data, error } = await admin()
+    .from('faturas')
+    .insert({
+      ...invoice,
+      status: invoice.status ?? 'pendente',
+    })
+    .select()
+    .single();
+  if (error) throw new Error(`Erro ao criar fatura: ${error.message}`);
+  return data as Invoice;
+}
+
+export async function updateInvoice(id: string, updates: Partial<Invoice>): Promise<Invoice> {
+  if (useLocalStorageInvoices) {
+    const invoices = loadLocalInvoices();
+    const idx = invoices.findIndex(i => i.id === id);
+    if (idx === -1) throw new Error('Fatura nao encontrada');
+    invoices[idx] = { ...invoices[idx], ...updates };
+    saveLocalInvoices(invoices);
+    return invoices[idx];
+  }
+  const { data, error } = await admin()
+    .from('faturas')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw new Error(`Erro ao atualizar fatura: ${error.message}`);
+  return data as Invoice;
+}

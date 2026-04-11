@@ -4,9 +4,9 @@ import {
   getOrgDetail, getOrgUsers, getOrgSubscription, getOrgSubscriptionHistory,
   hasActiveSubscription, getResourceUsage, getOrgStats,
   getAllPlans, createSubscription, updateSubscription, updateOrganization,
-  updateUser, countActiveAdmins,
+  updateUser, countActiveAdmins, getOrgInvoices,
 } from '@/lib/superAdminService';
-import type { Organization, Subscription, ResourceUsage, Plan } from '@/lib/superAdminService';
+import type { Organization, Subscription, ResourceUsage, Plan, Invoice } from '@/lib/superAdminService';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -67,6 +67,7 @@ export default function SAOrgDetailPage() {
 
   // Subscription history
   const [subscriptionHistory, setSubscriptionHistory] = useState<Subscription[]>([]);
+  const [orgInvoices, setOrgInvoices] = useState<Invoice[]>([]);
 
   // Edit org state
   const [editOrgDialogOpen, setEditOrgDialogOpen] = useState(false);
@@ -273,13 +274,14 @@ export default function SAOrgDetailPage() {
       setLoading(true);
       setError('');
       try {
-        const [detail, usersList, sub, subHistory, usageData, stats] = await Promise.all([
+        const [detail, usersList, sub, subHistory, usageData, stats, invoices] = await Promise.all([
           getOrgDetail(orgKey!),
           getOrgUsers(orgKey!),
           getOrgSubscription(orgKey!),
           getOrgSubscriptionHistory(orgKey!),
           getResourceUsage(orgKey!),
           getOrgStats(orgKey!),
+          getOrgInvoices(orgKey!),
         ]);
         setOrgDetail(detail);
         setUsers(usersList);
@@ -287,6 +289,7 @@ export default function SAOrgDetailPage() {
         setSubscriptionHistory(subHistory);
         setUsage(usageData);
         setOrgStats(stats);
+        setOrgInvoices(invoices);
       } catch (err: any) {
         setError(err?.message ?? 'Erro ao carregar detalhes da organizacao');
       } finally {
@@ -412,6 +415,7 @@ export default function SAOrgDetailPage() {
           <TabsTrigger value="users">Usuarios</TabsTrigger>
           <TabsTrigger value="subscription">Assinatura</TabsTrigger>
           <TabsTrigger value="usage">Uso</TabsTrigger>
+          <TabsTrigger value="invoices">Faturas</TabsTrigger>
         </TabsList>
 
         {/* Users Tab */}
@@ -751,6 +755,65 @@ export default function SAOrgDetailPage() {
                       <TableCell>{u.mensagens_enviadas.toLocaleString('pt-BR')}</TableCell>
                     </TableRow>
                   ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </TabsContent>
+
+        {/* Invoices Tab */}
+        <TabsContent value="invoices">
+          <div className="glass-card border border-border rounded-lg bg-card overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Descricao</TableHead>
+                  <TableHead>Valor</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Vencimento</TableHead>
+                  <TableHead>Pago em</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {orgInvoices.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                      Nenhuma fatura para esta organizacao.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  orgInvoices.map((inv) => {
+                    let effStatus = inv.status;
+                    if (effStatus === 'pendente' && inv.vencimento_em) {
+                      const venc = new Date(inv.vencimento_em);
+                      venc.setHours(23, 59, 59, 999);
+                      if (venc < new Date()) effStatus = 'atrasada';
+                    }
+                    const invStatusColors: Record<string, string> = {
+                      paga: 'bg-green-500/10 text-green-400 border-green-500/20',
+                      pendente: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+                      atrasada: 'bg-red-500/10 text-red-400 border-red-500/20',
+                    };
+                    return (
+                      <TableRow key={inv.id}>
+                        <TableCell className="text-sm">{inv.descricao || '—'}</TableCell>
+                        <TableCell className="font-mono text-sm">
+                          R$ {inv.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={invStatusColors[effStatus] ?? invStatusColors.pendente}>
+                            {effStatus}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {new Date(inv.vencimento_em).toLocaleDateString('pt-BR')}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {inv.pago_em ? new Date(inv.pago_em).toLocaleDateString('pt-BR') : '—'}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
