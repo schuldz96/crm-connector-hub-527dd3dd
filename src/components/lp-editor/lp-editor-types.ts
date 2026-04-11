@@ -1,7 +1,75 @@
-// Block types supported by the editor
-export type LPBlockType = 'hero' | 'text' | 'image' | 'button' | 'form' | 'spacer' | 'columns' | 'section';
+// ─────────────────────────────────────────────────────────────
+// LP Editor Types — Foundation for the entire LP editor system
+// ─────────────────────────────────────────────────────────────
 
-// Props for each block type
+// ── Block Types ──────────────────────────────────────────────
+
+export type LPBlockType =
+  | 'hero'
+  | 'text'
+  | 'image'
+  | 'button'
+  | 'form'
+  | 'spacer'
+  | 'columns'
+  | 'section'
+  | 'video'
+  | 'countdown'
+  | 'divider';
+
+// ── Universal Block Styles ───────────────────────────────────
+
+export interface BlockStyles {
+  // Background
+  bgColor: string;
+  bgImage: string;
+  bgOverlay: number; // 0-100
+  // Borders
+  borderColor: string;
+  borderWidth: number;
+  borderStyle: 'none' | 'solid' | 'dashed' | 'dotted';
+  borderRadius: number;
+  // Spacing
+  marginTop: number;
+  marginBottom: number;
+  paddingTop: number;
+  paddingRight: number;
+  paddingBottom: number;
+  paddingLeft: number;
+  // Shadow
+  shadowColor: string;
+  shadowBlur: number;
+  shadowX: number;
+  shadowY: number;
+  // Visibility
+  hideOnMobile: boolean;
+  hideOnDesktop: boolean;
+}
+
+export const DEFAULT_BLOCK_STYLES: BlockStyles = {
+  bgColor: '',
+  bgImage: '',
+  bgOverlay: 0,
+  borderColor: '#e2e8f0',
+  borderWidth: 0,
+  borderStyle: 'none',
+  borderRadius: 0,
+  marginTop: 0,
+  marginBottom: 0,
+  paddingTop: 0,
+  paddingRight: 0,
+  paddingBottom: 0,
+  paddingLeft: 0,
+  shadowColor: 'rgba(0,0,0,0.1)',
+  shadowBlur: 0,
+  shadowX: 0,
+  shadowY: 0,
+  hideOnMobile: false,
+  hideOnDesktop: false,
+};
+
+// ── Block Prop Interfaces ────────────────────────────────────
+
 export interface HeroBlockProps {
   headline: string;
   subheadline: string;
@@ -51,8 +119,19 @@ export interface ColumnContent {
   iconEmoji: string;
 }
 
+export type ColumnLayout =
+  | '100'
+  | '50-50'
+  | '33-66'
+  | '66-33'
+  | '33-33-33'
+  | '25-50-25'
+  | '25-25-25-25';
+
 export interface ColumnsBlockProps {
-  columnCount: 1 | 2 | 3;
+  layout: ColumnLayout;
+  /** @deprecated Use `layout` instead. Kept for backward compat with saved data. */
+  columnCount?: 1 | 2 | 3 | 4;
   gap: number;
   bgColor: string;
   padding: number;
@@ -72,7 +151,33 @@ export interface SectionBlockProps {
   maxWidth: 'sm' | 'md' | 'lg' | 'xl' | 'full';
 }
 
-// Union type for all block props
+export interface VideoBlockProps {
+  url: string; // YouTube, Vimeo, or direct MP4
+  aspectRatio: '16:9' | '4:3' | '1:1';
+  autoplay: boolean;
+  alignment: 'left' | 'center' | 'right';
+}
+
+export interface CountdownBlockProps {
+  endDate: string; // ISO date string
+  title: string;
+  bgColor: string;
+  textColor: string;
+  showDays: boolean;
+  showHours: boolean;
+  showMinutes: boolean;
+  showSeconds: boolean;
+}
+
+export interface DividerBlockProps {
+  style: 'solid' | 'dashed' | 'dotted';
+  color: string;
+  thickness: number;
+  width: number; // percentage 1-100
+}
+
+// ── Union type for all block props ───────────────────────────
+
 export type LPBlockProps =
   | HeroBlockProps
   | TextBlockProps
@@ -81,29 +186,28 @@ export type LPBlockProps =
   | FormBlockProps
   | SpacerBlockProps
   | ColumnsBlockProps
-  | SectionBlockProps;
+  | SectionBlockProps
+  | VideoBlockProps
+  | CountdownBlockProps
+  | DividerBlockProps;
 
-// A single block in the editor
+// ── LPBlock — a single block in the editor ───────────────────
+
 export interface LPBlock {
   id: string;
   type: LPBlockType;
   props: LPBlockProps;
+  styles: BlockStyles;
 }
 
-// The full LP config stored in the database config JSON field
+// ── Full LP config stored in the database config JSON field ──
+
 export interface LPEditorConfig {
   blocks: LPBlock[];
 }
 
-// Block catalog item (for the sidebar)
-export interface BlockCatalogItem {
-  type: LPBlockType;
-  label: string;
-  icon: string;
-  defaultProps: LPBlockProps;
-}
+// ── Default Props ────────────────────────────────────────────
 
-// Default props for each block type
 export const DEFAULT_BLOCK_PROPS: Record<LPBlockType, LPBlockProps> = {
   hero: {
     headline: 'Seu título impactante aqui',
@@ -142,7 +246,7 @@ export const DEFAULT_BLOCK_PROPS: Record<LPBlockType, LPBlockProps> = {
     height: 40,
   } as SpacerBlockProps,
   columns: {
-    columnCount: 3,
+    layout: '33-33-33',
     gap: 24,
     bgColor: '#ffffff',
     padding: 32,
@@ -164,16 +268,102 @@ export const DEFAULT_BLOCK_PROPS: Record<LPBlockType, LPBlockProps> = {
     alignment: 'center',
     maxWidth: 'lg',
   } as SectionBlockProps,
+  video: {
+    url: '',
+    aspectRatio: '16:9',
+    autoplay: false,
+    alignment: 'center',
+  } as VideoBlockProps,
+  countdown: {
+    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    title: 'Oferta termina em',
+    bgColor: '#0f172a',
+    textColor: '#ffffff',
+    showDays: true,
+    showHours: true,
+    showMinutes: true,
+    showSeconds: true,
+  } as CountdownBlockProps,
+  divider: {
+    style: 'solid',
+    color: '#e2e8f0',
+    thickness: 1,
+    width: 100,
+  } as DividerBlockProps,
 };
 
-// Block catalog for the sidebar
-export const BLOCK_CATALOG: BlockCatalogItem[] = [
-  { type: 'hero', label: 'Hero / Banner', icon: 'Layout', defaultProps: DEFAULT_BLOCK_PROPS.hero },
-  { type: 'section', label: 'Seção', icon: 'PanelTop', defaultProps: DEFAULT_BLOCK_PROPS.section },
-  { type: 'columns', label: 'Colunas (1/2/3)', icon: 'Columns3', defaultProps: DEFAULT_BLOCK_PROPS.columns },
-  { type: 'text', label: 'Texto', icon: 'Type', defaultProps: DEFAULT_BLOCK_PROPS.text },
-  { type: 'image', label: 'Imagem', icon: 'Image', defaultProps: DEFAULT_BLOCK_PROPS.image },
-  { type: 'button', label: 'Botão', icon: 'MousePointerClick', defaultProps: DEFAULT_BLOCK_PROPS.button },
-  { type: 'form', label: 'Formulário', icon: 'FileText', defaultProps: DEFAULT_BLOCK_PROPS.form },
-  { type: 'spacer', label: 'Espaçador', icon: 'SeparatorHorizontal', defaultProps: DEFAULT_BLOCK_PROPS.spacer },
+// ── Block Catalog (categorized) ──────────────────────────────
+
+export interface BlockCatalogItem {
+  type: LPBlockType;
+  label: string;
+  icon: string;
+}
+
+export interface BlockCatalogCategory {
+  label: string;
+  items: BlockCatalogItem[];
+}
+
+export const BLOCK_CATALOG: BlockCatalogCategory[] = [
+  {
+    label: 'Elementos Básicos',
+    items: [
+      { type: 'hero', label: 'Hero / Banner', icon: 'Layout' },
+      { type: 'section', label: 'Seção', icon: 'PanelTop' },
+      { type: 'text', label: 'Texto', icon: 'Type' },
+      { type: 'image', label: 'Imagem', icon: 'Image' },
+      { type: 'button', label: 'Botão', icon: 'MousePointerClick' },
+    ],
+  },
+  {
+    label: 'Elementos Avançados',
+    items: [
+      { type: 'columns', label: 'Colunas', icon: 'Columns3' },
+      { type: 'form', label: 'Formulário', icon: 'FileText' },
+    ],
+  },
+  {
+    label: 'Addons',
+    items: [
+      { type: 'video', label: 'Vídeo', icon: 'Play' },
+      { type: 'countdown', label: 'Countdown', icon: 'Timer' },
+      { type: 'divider', label: 'Divisor', icon: 'Minus' },
+      { type: 'spacer', label: 'Espaçador', icon: 'SeparatorHorizontal' },
+    ],
+  },
 ];
+
+/**
+ * Flat list of all catalog items across all categories.
+ * Useful for lookups (e.g. finding label by type).
+ */
+export const BLOCK_CATALOG_FLAT: BlockCatalogItem[] = BLOCK_CATALOG.flatMap(
+  (category) => category.items,
+);
+
+// ── Column Layout Helpers ────────────────────────────────────
+
+/**
+ * Returns the number of columns from a layout string.
+ */
+export function getColumnsFromLayout(layout: ColumnLayout): number {
+  const parts = layout.split('-');
+  return parts.length;
+}
+
+/**
+ * Returns CSS-ready width strings for each column in a layout.
+ */
+export function getColumnWidths(layout: ColumnLayout): string[] {
+  const map: Record<ColumnLayout, string[]> = {
+    '100': ['100%'],
+    '50-50': ['50%', '50%'],
+    '33-66': ['33.33%', '66.66%'],
+    '66-33': ['66.66%', '33.33%'],
+    '33-33-33': ['33.33%', '33.33%', '33.33%'],
+    '25-50-25': ['25%', '50%', '25%'],
+    '25-25-25-25': ['25%', '25%', '25%', '25%'],
+  };
+  return map[layout] || ['100%'];
+}

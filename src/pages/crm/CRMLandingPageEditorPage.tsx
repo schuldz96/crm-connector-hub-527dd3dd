@@ -2,15 +2,16 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { DndContext, DragEndEvent, DragStartEvent, DragOverlay } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import { ArrowLeft, Save, Globe, Loader2 } from 'lucide-react';
+import { ArrowLeft, Save, Globe, Loader2, Monitor, Tablet, Smartphone, Undo2, Redo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import { LPEditorSidebar } from '@/components/lp-editor/LPEditorSidebar';
 import LPEditorCanvas, { CANVAS_DROPPABLE_ID } from '@/components/lp-editor/LPEditorCanvas';
 import { LPEditorProperties } from '@/components/lp-editor/LPEditorProperties';
-import { DEFAULT_BLOCK_PROPS, BLOCK_CATALOG } from '@/components/lp-editor/lp-editor-types';
-import type { LPBlock, LPBlockType } from '@/components/lp-editor/lp-editor-types';
+import { DEFAULT_BLOCK_PROPS, DEFAULT_BLOCK_STYLES, BLOCK_CATALOG_FLAT } from '@/components/lp-editor/lp-editor-types';
+import type { LPBlock, LPBlockType, BlockStyles } from '@/components/lp-editor/lp-editor-types';
 import { useOrgNavigate } from '@/hooks/useOrgNavigate';
 import { supabase } from '@/integrations/supabase/client';
 import { getOrgAndEmpresaId } from '@/lib/saas';
@@ -40,6 +41,36 @@ export default function CRMLandingPageEditorPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeDragLabel, setActiveDragLabel] = useState<string | null>(null);
+
+  // Responsive preview
+  type PreviewMode = 'desktop' | 'tablet' | 'mobile';
+  const [previewMode, setPreviewMode] = useState<PreviewMode>('desktop');
+
+  // Undo / Redo
+  const [history, setHistory] = useState<LPBlock[][]>([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+
+  function pushHistory(newBlocks: LPBlock[]) {
+    setHistory(prev => {
+      const trimmed = prev.slice(0, historyIndex + 1);
+      return [...trimmed, newBlocks];
+    });
+    setHistoryIndex(prev => prev + 1);
+  }
+
+  function handleUndo() {
+    if (historyIndex > 0) {
+      setHistoryIndex(prev => prev - 1);
+      setBlocks(history[historyIndex - 1]);
+    }
+  }
+
+  function handleRedo() {
+    if (historyIndex < history.length - 1) {
+      setHistoryIndex(prev => prev + 1);
+      setBlocks(history[historyIndex + 1]);
+    }
+  }
 
   useEffect(() => {
     loadData();
@@ -80,7 +111,13 @@ export default function CRMLandingPageEditorPage() {
         // Load blocks from config — with backward compatibility
         const config = lp.config || {};
         if (config.blocks && Array.isArray(config.blocks)) {
-          setBlocks(config.blocks);
+          // Normalize: ensure all blocks have styles (backward compat with old data)
+          const normalizedBlocks: LPBlock[] = config.blocks.map((b: any) => ({
+            ...b,
+            styles: b.styles || { ...DEFAULT_BLOCK_STYLES },
+          }));
+          setBlocks(normalizedBlocks);
+          pushHistory(normalizedBlocks);
         } else {
           // Legacy LP: auto-create blocks from old config fields
           const legacyBlocks: LPBlock[] = [];
@@ -95,6 +132,7 @@ export default function CRMLandingPageEditorPage() {
                 textColor: '#ffffff',
                 alignment: 'center',
               },
+              styles: { ...DEFAULT_BLOCK_STYLES },
             });
           }
           if (config.ctaText) {
@@ -108,9 +146,11 @@ export default function CRMLandingPageEditorPage() {
                 variant: 'filled',
                 alignment: 'center',
               },
+              styles: { ...DEFAULT_BLOCK_STYLES },
             });
           }
           setBlocks(legacyBlocks);
+          if (legacyBlocks.length > 0) pushHistory(legacyBlocks);
         }
       }
     } catch (e: any) {
@@ -128,9 +168,12 @@ export default function CRMLandingPageEditorPage() {
       id: crypto.randomUUID(),
       type,
       props: { ...DEFAULT_BLOCK_PROPS[type] },
+      styles: { ...DEFAULT_BLOCK_STYLES },
     };
-    setBlocks((prev) => [...prev, newBlock]);
+    const newBlocks = [...blocks, newBlock];
+    setBlocks(newBlocks);
     setSelectedBlockId(newBlock.id);
+    pushHistory(newBlocks);
   }
 
   function handleUpdateBlock(blockId: string, partialProps: Partial<any>) {
@@ -141,13 +184,32 @@ export default function CRMLandingPageEditorPage() {
     );
   }
 
+  function handleUpdateStyles(blockId: string, partialStyles: Partial<BlockStyles>) {
+    setBlocks(prev => prev.map(b =>
+      b.id === blockId ? { ...b, styles: { ...b.styles, ...partialStyles } } : b
+    ));
+  }
+
   function handleDeleteBlock(blockId: string) {
-    setBlocks((prev) => prev.filter((b) => b.id !== blockId));
+    const newBlocks = blocks.filter((b) => b.id !== blockId);
+    setBlocks(newBlocks);
     if (selectedBlockId === blockId) setSelectedBlockId(null);
+    pushHistory(newBlocks);
   }
 
   function handleReorderBlocks(newBlocks: LPBlock[]) {
     setBlocks(newBlocks);
+    pushHistory(newBlocks);
+  }
+
+  function handleMoveBlock(blockId: string, direction: 'up' | 'down') {
+    const idx = blocks.findIndex(b => b.id === blockId);
+    if (idx === -1) return;
+    const newIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (newIdx < 0 || newIdx >= blocks.length) return;
+    const newBlocks = arrayMove(blocks, idx, newIdx);
+    setBlocks(newBlocks);
+    pushHistory(newBlocks);
   }
 
   // --- DnD ---
@@ -156,7 +218,7 @@ export default function CRMLandingPageEditorPage() {
     const fromCatalog = event.active.data.current?.fromCatalog;
     if (fromCatalog) {
       const type = event.active.data.current?.type as LPBlockType;
-      const catalogItem = BLOCK_CATALOG.find((c) => c.type === type);
+      const catalogItem = BLOCK_CATALOG_FLAT.find((c) => c.type === type);
       setActiveDragLabel(catalogItem?.label || type);
     } else {
       const block = blocks.find((b) => b.id === event.active.id);
@@ -181,23 +243,25 @@ export default function CRMLandingPageEditorPage() {
           id: crypto.randomUUID(),
           type,
           props: { ...DEFAULT_BLOCK_PROPS[type] },
+          styles: { ...DEFAULT_BLOCK_STYLES },
         };
         // If dropped over an existing block, insert after it
         if (over && over.id !== CANVAS_DROPPABLE_ID) {
           const overIndex = blocks.findIndex((b) => b.id === over.id);
           if (overIndex !== -1) {
-            setBlocks((prev) => {
-              const copy = [...prev];
-              copy.splice(overIndex + 1, 0, newBlock);
-              return copy;
-            });
+            const copy = [...blocks];
+            copy.splice(overIndex + 1, 0, newBlock);
+            setBlocks(copy);
             setSelectedBlockId(newBlock.id);
+            pushHistory(copy);
             return;
           }
         }
         // Otherwise add at the end
-        setBlocks((prev) => [...prev, newBlock]);
+        const newBlocks = [...blocks, newBlock];
+        setBlocks(newBlocks);
         setSelectedBlockId(newBlock.id);
+        pushHistory(newBlocks);
       }
     } else {
       // Reorder within canvas
@@ -205,7 +269,9 @@ export default function CRMLandingPageEditorPage() {
       const oldIndex = blocks.findIndex((b) => b.id === active.id);
       const newIndex = blocks.findIndex((b) => b.id === over.id);
       if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
-        setBlocks((prev) => arrayMove(prev, oldIndex, newIndex));
+        const newBlocks = arrayMove(blocks, oldIndex, newIndex);
+        setBlocks(newBlocks);
+        pushHistory(newBlocks);
       }
     }
   }
@@ -345,6 +411,29 @@ export default function CRMLandingPageEditorPage() {
           </div>
         </div>
 
+        {/* Responsive preview */}
+        <div className="flex items-center gap-1 border rounded-lg p-0.5">
+          <button onClick={() => setPreviewMode('desktop')} className={cn('p-1.5 rounded', previewMode === 'desktop' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            <Monitor className="w-4 h-4" />
+          </button>
+          <button onClick={() => setPreviewMode('tablet')} className={cn('p-1.5 rounded', previewMode === 'tablet' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            <Tablet className="w-4 h-4" />
+          </button>
+          <button onClick={() => setPreviewMode('mobile')} className={cn('p-1.5 rounded', previewMode === 'mobile' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
+            <Smartphone className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Undo/Redo */}
+        <div className="flex items-center gap-1">
+          <button onClick={handleUndo} disabled={historyIndex <= 0} className="p-1.5 rounded text-muted-foreground hover:text-foreground disabled:opacity-30">
+            <Undo2 className="w-4 h-4" />
+          </button>
+          <button onClick={handleRedo} disabled={historyIndex >= history.length - 1} className="p-1.5 rounded text-muted-foreground hover:text-foreground disabled:opacity-30">
+            <Redo2 className="w-4 h-4" />
+          </button>
+        </div>
+
         {/* Right: Status + Save + Publish */}
         <Badge variant="outline" className={`text-[10px] ${statusCfg.color}`}>
           {statusCfg.label}
@@ -382,12 +471,16 @@ export default function CRMLandingPageEditorPage() {
             selectedBlockId={selectedBlockId}
             onSelectBlock={setSelectedBlockId}
             onReorderBlocks={handleReorderBlocks}
+            previewMode={previewMode}
+            onMoveBlock={handleMoveBlock}
+            onDeleteBlock={handleDeleteBlock}
           />
 
           <LPEditorProperties
             block={selectedBlock}
             forms={forms}
             onUpdate={handleUpdateBlock}
+            onUpdateStyles={handleUpdateStyles}
             onDelete={handleDeleteBlock}
           />
         </div>

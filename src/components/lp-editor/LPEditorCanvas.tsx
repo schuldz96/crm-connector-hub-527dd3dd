@@ -1,7 +1,7 @@
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, LayoutTemplate } from 'lucide-react';
+import { GripVertical, LayoutTemplate, ChevronUp, ChevronDown, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LPBlockRenderer } from './LPBlockRenderer';
 import type { LPBlock } from './lp-editor-types';
@@ -13,16 +13,25 @@ interface LPEditorCanvasProps {
   selectedBlockId: string | null;
   onSelectBlock: (id: string | null) => void;
   onReorderBlocks: (blocks: LPBlock[]) => void;
+  previewMode: 'desktop' | 'tablet' | 'mobile';
+  onMoveBlock: (blockId: string, direction: 'up' | 'down') => void;
+  onDeleteBlock: (blockId: string) => void;
 }
 
 function SortableBlock({
   block,
   selected,
   onSelect,
+  onMoveUp,
+  onMoveDown,
+  onDelete,
 }: {
   block: LPBlock;
   selected: boolean;
   onSelect: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onDelete: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: block.id,
@@ -43,6 +52,18 @@ function SortableBlock({
       >
         <GripVertical className="w-4 h-4 text-muted-foreground" />
       </div>
+      {/* Block controls — visible on hover */}
+      <div className="absolute -right-10 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-1 z-10">
+        <button onClick={(e) => { e.stopPropagation(); onMoveUp(); }} className="w-7 h-7 rounded bg-card border flex items-center justify-center text-muted-foreground hover:text-foreground">
+          <ChevronUp className="w-3.5 h-3.5" />
+        </button>
+        <button onClick={(e) => { e.stopPropagation(); onMoveDown(); }} className="w-7 h-7 rounded bg-card border flex items-center justify-center text-muted-foreground hover:text-foreground">
+          <ChevronDown className="w-3.5 h-3.5" />
+        </button>
+        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="w-7 h-7 rounded bg-card border flex items-center justify-center text-muted-foreground hover:text-destructive">
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
       <LPBlockRenderer block={block} selected={selected} onClick={onSelect} />
     </div>
   );
@@ -52,6 +73,9 @@ export default function LPEditorCanvas({
   blocks,
   selectedBlockId,
   onSelectBlock,
+  previewMode,
+  onMoveBlock,
+  onDeleteBlock,
 }: LPEditorCanvasProps) {
   const blockIds = blocks.map((b) => b.id);
 
@@ -63,6 +87,12 @@ export default function LPEditorCanvas({
     }
   };
 
+  const canvasWidthClass = {
+    desktop: 'max-w-3xl',
+    tablet: 'max-w-md',
+    mobile: 'max-w-xs',
+  }[previewMode];
+
   return (
     <div
       className="flex-1 bg-muted/30 overflow-y-auto p-8"
@@ -71,7 +101,8 @@ export default function LPEditorCanvas({
       <div
         ref={setNodeRef}
         className={cn(
-          'max-w-3xl mx-auto bg-white min-h-[600px] rounded-lg shadow relative transition-all',
+          canvasWidthClass,
+          'mx-auto bg-white min-h-[600px] rounded-lg shadow relative transition-all',
           isOver && 'ring-2 ring-primary ring-dashed',
         )}
         onClick={handleCanvasClick}
@@ -97,6 +128,9 @@ export default function LPEditorCanvas({
                   block={block}
                   selected={block.id === selectedBlockId}
                   onSelect={() => onSelectBlock(block.id)}
+                  onMoveUp={() => onMoveBlock(block.id, 'up')}
+                  onMoveDown={() => onMoveBlock(block.id, 'down')}
+                  onDelete={() => onDeleteBlock(block.id)}
                 />
               ))}
               {/* Drop indicator at bottom when dragging over */}

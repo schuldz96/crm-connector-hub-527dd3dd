@@ -1,4 +1,5 @@
-import { Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -6,26 +7,36 @@ import { Label } from '@/components/ui/label';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 import type {
-  LPBlock, LPBlockType, HeroBlockProps, TextBlockProps, ImageBlockProps,
-  ButtonBlockProps, FormBlockProps, SpacerBlockProps, ColumnsBlockProps,
-  SectionBlockProps, ColumnContent,
+  LPBlock, LPBlockType, BlockStyles, HeroBlockProps, TextBlockProps, ImageBlockProps,
+  ButtonBlockProps, FormBlockProps, SpacerBlockProps, ColumnsBlockProps, SectionBlockProps,
+  VideoBlockProps, CountdownBlockProps, DividerBlockProps, ColumnContent, ColumnLayout,
 } from '@/components/lp-editor/lp-editor-types';
+import { getColumnsFromLayout } from '@/components/lp-editor/lp-editor-types';
+
+/* ── Props ── */
 
 interface LPEditorPropertiesProps {
   block: LPBlock | null;
   forms: { id: string; nome: string }[];
   onUpdate: (blockId: string, props: Partial<any>) => void;
+  onUpdateStyles: (blockId: string, styles: Partial<BlockStyles>) => void;
   onDelete: (blockId: string) => void;
 }
+
+/* ── Block type labels ── */
 
 const BLOCK_TYPE_LABELS: Record<LPBlockType, string> = {
   hero: 'Hero / Banner', section: 'Seção', columns: 'Colunas',
   text: 'Texto', image: 'Imagem', button: 'Botão',
   form: 'Formulário', spacer: 'Espaçador',
+  video: 'Vídeo', countdown: 'Countdown', divider: 'Divisor',
 };
 
-/* ── Reusable field components ── */
+/* ══════════════════════════════════════════════════════════════
+   Reusable field helpers
+   ══════════════════════════════════════════════════════════════ */
 
 function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
@@ -84,14 +95,43 @@ function Divider({ label }: { label: string }) {
   return <div className="pt-2 border-t"><Label className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</Label></div>;
 }
 
+function CheckboxField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="flex items-center gap-2 cursor-pointer">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="rounded" />
+      <span className="text-xs">{label}</span>
+    </label>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Accordion Section (collapsible)
+   ══════════════════════════════════════════════════════════════ */
+
+function AccordionSection({ label, expanded, onToggle, children }: { label: string; expanded: boolean; onToggle: () => void; children: React.ReactNode }) {
+  return (
+    <div className="border-b last:border-b-0">
+      <button type="button" onClick={onToggle} className="flex items-center gap-1.5 w-full py-2 text-xs font-medium text-left hover:text-primary transition-colors">
+        {expanded ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
+        {label}
+      </button>
+      {expanded && <div className="pb-3 space-y-3">{children}</div>}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Configurações Tab — Block-specific property editors
+   ══════════════════════════════════════════════════════════════ */
+
 /* ── Hero Properties ── */
 function HeroProperties({ block, onUpdate }: { block: LPBlock; onUpdate: LPEditorPropertiesProps['onUpdate'] }) {
   const p = block.props as HeroBlockProps;
   const u = (k: string, v: any) => onUpdate(block.id, { [k]: v });
   return (
     <div className="space-y-3">
-      <TextField label="Título" value={p.headline} onChange={(v) => u('headline', v)} />
-      <TextField label="Subtítulo" value={p.subheadline} onChange={(v) => u('subheadline', v)} multiline />
+      <TextField label="Titulo" value={p.headline} onChange={(v) => u('headline', v)} />
+      <TextField label="Subtitulo" value={p.subheadline} onChange={(v) => u('subheadline', v)} multiline />
       <AlignmentSelect value={p.alignment} onChange={(v) => u('alignment', v)} />
       <div className="space-y-1.5">
         <Label className="text-xs">Altura</Label>
@@ -99,7 +139,7 @@ function HeroProperties({ block, onUpdate }: { block: LPBlock; onUpdate: LPEdito
           <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="small">Pequena</SelectItem>
-            <SelectItem value="medium">Média</SelectItem>
+            <SelectItem value="medium">Media</SelectItem>
             <SelectItem value="large">Grande</SelectItem>
             <SelectItem value="fullscreen">Tela inteira</SelectItem>
           </SelectContent>
@@ -121,16 +161,16 @@ function SectionProperties({ block, onUpdate }: { block: LPBlock; onUpdate: LPEd
   const u = (k: string, v: any) => onUpdate(block.id, { [k]: v });
   return (
     <div className="space-y-3">
-      <TextField label="Título" value={p.title} onChange={(v) => u('title', v)} />
-      <TextField label="Subtítulo" value={p.subtitle} onChange={(v) => u('subtitle', v)} multiline />
+      <TextField label="Titulo" value={p.title} onChange={(v) => u('title', v)} />
+      <TextField label="Subtitulo" value={p.subtitle} onChange={(v) => u('subtitle', v)} multiline />
       <AlignmentSelect value={p.alignment} onChange={(v) => u('alignment', v)} />
       <div className="space-y-1.5">
-        <Label className="text-xs">Largura máxima</Label>
+        <Label className="text-xs">Largura maxima</Label>
         <Select value={p.maxWidth || 'lg'} onValueChange={(v) => u('maxWidth', v)}>
           <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="sm">Estreita</SelectItem>
-            <SelectItem value="md">Média</SelectItem>
+            <SelectItem value="md">Media</SelectItem>
             <SelectItem value="lg">Larga</SelectItem>
             <SelectItem value="xl">Extra larga</SelectItem>
             <SelectItem value="full">Largura total</SelectItem>
@@ -142,7 +182,7 @@ function SectionProperties({ block, onUpdate }: { block: LPBlock; onUpdate: LPEd
       <TextField label="Imagem de fundo (URL)" value={p.bgImage || ''} onChange={(v) => u('bgImage', v)} placeholder="https://..." />
       {p.bgImage && <RangeField label="Opacidade do overlay" value={p.bgOverlay ?? 0} min={0} max={100} step={5} unit="%" onChange={(v) => u('bgOverlay', v)} />}
       <ColorField label="Cor do texto" value={p.textColor} onChange={(v) => u('textColor', v)} />
-      <Divider label="Espaçamento" />
+      <Divider label="Espacamento" />
       <RangeField label="Padding vertical" value={p.paddingY ?? 64} min={0} max={200} step={8} onChange={(v) => u('paddingY', v)} />
       <RangeField label="Padding horizontal" value={p.paddingX ?? 24} min={0} max={100} step={8} onChange={(v) => u('paddingX', v)} />
     </div>
@@ -160,36 +200,46 @@ function ColumnsProperties({ block, onUpdate }: { block: LPBlock; onUpdate: LPEd
     u('columns', cols);
   };
 
-  const changeCount = (count: 1 | 2 | 3) => {
-    const cols = Array.from({ length: count }, (_, i) => p.columns?.[i] || { title: `Coluna ${i + 1}`, text: 'Descrição aqui.', imageUrl: '', iconEmoji: ['🚀', '⚡', '🎯'][i] || '✨' });
-    onUpdate(block.id, { columnCount: count, columns: cols });
+  const changeLayout = (layout: ColumnLayout) => {
+    const newCount = getColumnsFromLayout(layout);
+    const cols = Array.from({ length: newCount }, (_, i) =>
+      p.columns?.[i] || { title: `Coluna ${i + 1}`, text: 'Descricao aqui.', imageUrl: '', iconEmoji: ['🚀', '⚡', '🎯', '✨'][i] || '✨' },
+    );
+    onUpdate(block.id, { layout, columns: cols });
   };
+
+  const currentLayout = p.layout || '33-33-33';
+  const colCount = getColumnsFromLayout(currentLayout);
 
   return (
     <div className="space-y-3">
       <div className="space-y-1.5">
-        <Label className="text-xs">Número de colunas</Label>
-        <Select value={String(p.columnCount)} onValueChange={(v) => changeCount(Number(v) as 1 | 2 | 3)}>
+        <Label className="text-xs">Layout das colunas</Label>
+        <Select value={currentLayout} onValueChange={(v) => changeLayout(v as ColumnLayout)}>
           <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="1">1 coluna</SelectItem>
-            <SelectItem value="2">2 colunas</SelectItem>
-            <SelectItem value="3">3 colunas</SelectItem>
+            <SelectItem value="100">1 coluna (100%)</SelectItem>
+            <SelectItem value="50-50">2 colunas (50/50)</SelectItem>
+            <SelectItem value="33-66">2 colunas (33/66)</SelectItem>
+            <SelectItem value="66-33">2 colunas (66/33)</SelectItem>
+            <SelectItem value="33-33-33">3 colunas (33/33/33)</SelectItem>
+            <SelectItem value="25-50-25">3 colunas (25/50/25)</SelectItem>
+            <SelectItem value="25-25-25-25">4 colunas (25/25/25/25)</SelectItem>
           </SelectContent>
         </Select>
       </div>
-      <RangeField label="Espaçamento" value={p.gap ?? 24} min={0} max={48} step={4} onChange={(v) => u('gap', v)} />
+      <RangeField label="Espacamento" value={p.gap ?? 24} min={0} max={48} step={4} onChange={(v) => u('gap', v)} />
       <ColorField label="Cor de fundo" value={p.bgColor || '#ffffff'} onChange={(v) => u('bgColor', v)} />
       <RangeField label="Padding" value={p.padding ?? 32} min={0} max={80} step={8} onChange={(v) => u('padding', v)} />
 
-      {Array.from({ length: p.columnCount || 2 }, (_, i) => {
+      {Array.from({ length: colCount }, (_, i) => {
         const col = p.columns?.[i] || { title: '', text: '', imageUrl: '', iconEmoji: '' };
         return (
           <div key={i} className="space-y-2">
             <Divider label={`Coluna ${i + 1}`} />
-            <TextField label="Emoji / ícone" value={col.iconEmoji} onChange={(v) => updateColumn(i, 'iconEmoji', v)} placeholder="🚀" />
+            <TextField label="Emoji / icone" value={col.iconEmoji} onChange={(v) => updateColumn(i, 'iconEmoji', v)} placeholder="🚀" />
             <TextField label="Imagem (URL)" value={col.imageUrl} onChange={(v) => updateColumn(i, 'imageUrl', v)} placeholder="https://..." />
-            <TextField label="Título" value={col.title} onChange={(v) => updateColumn(i, 'title', v)} />
+            <TextField label="Titulo" value={col.title} onChange={(v) => updateColumn(i, 'title', v)} />
             <TextField label="Texto" value={col.text} onChange={(v) => updateColumn(i, 'text', v)} multiline />
           </div>
         );
@@ -204,7 +254,7 @@ function TextProperties({ block, onUpdate }: { block: LPBlock; onUpdate: LPEdito
   const u = (k: string, v: any) => onUpdate(block.id, { [k]: v });
   return (
     <div className="space-y-3">
-      <TextField label="Conteúdo" value={p.content} onChange={(v) => u('content', v)} multiline />
+      <TextField label="Conteudo" value={p.content} onChange={(v) => u('content', v)} multiline />
       <div className="space-y-1.5">
         <Label className="text-xs">Tamanho da fonte</Label>
         <Select value={p.fontSize} onValueChange={(v) => u('fontSize', v)}>
@@ -237,7 +287,7 @@ function ImageProperties({ block, onUpdate }: { block: LPBlock; onUpdate: LPEdit
           <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="small">Pequena</SelectItem>
-            <SelectItem value="medium">Média</SelectItem>
+            <SelectItem value="medium">Media</SelectItem>
             <SelectItem value="full">Largura total</SelectItem>
           </SelectContent>
         </Select>
@@ -273,7 +323,7 @@ function ButtonProperties({ block, onUpdate }: { block: LPBlock; onUpdate: LPEdi
           <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="sm">Pequeno</SelectItem>
-            <SelectItem value="md">Médio</SelectItem>
+            <SelectItem value="md">Medio</SelectItem>
             <SelectItem value="lg">Grande</SelectItem>
           </SelectContent>
         </Select>
@@ -289,7 +339,7 @@ function FormProperties({ block, forms, onUpdate }: { block: LPBlock; forms: LPE
   return (
     <div className="space-y-3">
       <div className="space-y-1.5">
-        <Label className="text-xs">Formulário vinculado</Label>
+        <Label className="text-xs">Formulario vinculado</Label>
         <Select value={p.formId || 'none'} onValueChange={(v) => onUpdate(block.id, { formId: v === 'none' ? '' : v })}>
           <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
           <SelectContent>
@@ -312,8 +362,170 @@ function SpacerProperties({ block, onUpdate }: { block: LPBlock; onUpdate: LPEdi
   );
 }
 
-/* ── Main Properties Panel ── */
-export function LPEditorProperties({ block, forms, onUpdate, onDelete }: LPEditorPropertiesProps) {
+/* ── Video Properties ── */
+function VideoProperties({ block, onUpdate }: { block: LPBlock; onUpdate: LPEditorPropertiesProps['onUpdate'] }) {
+  const p = block.props as VideoBlockProps;
+  const u = (k: string, v: any) => onUpdate(block.id, { [k]: v });
+  return (
+    <div className="space-y-3">
+      <TextField label="URL do video" value={p.url} onChange={(v) => u('url', v)} placeholder="https://youtube.com/watch?v=..." />
+      <div className="space-y-1.5">
+        <Label className="text-xs">Proporcao</Label>
+        <Select value={p.aspectRatio || '16:9'} onValueChange={(v) => u('aspectRatio', v)}>
+          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="16:9">16:9 (Widescreen)</SelectItem>
+            <SelectItem value="4:3">4:3 (Classico)</SelectItem>
+            <SelectItem value="1:1">1:1 (Quadrado)</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <CheckboxField label="Autoplay" checked={p.autoplay} onChange={(v) => u('autoplay', v)} />
+      <AlignmentSelect value={p.alignment} onChange={(v) => u('alignment', v)} />
+    </div>
+  );
+}
+
+/* ── Countdown Properties ── */
+function CountdownProperties({ block, onUpdate }: { block: LPBlock; onUpdate: LPEditorPropertiesProps['onUpdate'] }) {
+  const p = block.props as CountdownBlockProps;
+  const u = (k: string, v: any) => onUpdate(block.id, { [k]: v });
+
+  // Convert ISO string to datetime-local format
+  const toLocalDatetime = (iso: string) => {
+    try {
+      return new Date(iso).toISOString().slice(0, 16);
+    } catch {
+      return '';
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <Label className="text-xs">Data de termino</Label>
+        <Input
+          type="datetime-local"
+          value={toLocalDatetime(p.endDate)}
+          onChange={(e) => u('endDate', new Date(e.target.value).toISOString())}
+          className="h-8 text-xs"
+        />
+      </div>
+      <TextField label="Titulo" value={p.title} onChange={(v) => u('title', v)} />
+      <ColorField label="Cor de fundo" value={p.bgColor} onChange={(v) => u('bgColor', v)} />
+      <ColorField label="Cor do texto" value={p.textColor} onChange={(v) => u('textColor', v)} />
+      <Divider label="Exibir" />
+      <CheckboxField label="Dias" checked={p.showDays} onChange={(v) => u('showDays', v)} />
+      <CheckboxField label="Horas" checked={p.showHours} onChange={(v) => u('showHours', v)} />
+      <CheckboxField label="Minutos" checked={p.showMinutes} onChange={(v) => u('showMinutes', v)} />
+      <CheckboxField label="Segundos" checked={p.showSeconds} onChange={(v) => u('showSeconds', v)} />
+    </div>
+  );
+}
+
+/* ── Divider Properties ── */
+function DividerProperties({ block, onUpdate }: { block: LPBlock; onUpdate: LPEditorPropertiesProps['onUpdate'] }) {
+  const p = block.props as DividerBlockProps;
+  const u = (k: string, v: any) => onUpdate(block.id, { [k]: v });
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <Label className="text-xs">Estilo</Label>
+        <Select value={p.style || 'solid'} onValueChange={(v) => u('style', v)}>
+          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="solid">Solido</SelectItem>
+            <SelectItem value="dashed">Tracejado</SelectItem>
+            <SelectItem value="dotted">Pontilhado</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <ColorField label="Cor" value={p.color} onChange={(v) => u('color', v)} />
+      <RangeField label="Espessura" value={p.thickness ?? 1} min={1} max={10} step={1} onChange={(v) => u('thickness', v)} />
+      <RangeField label="Largura" value={p.width ?? 100} min={10} max={100} step={5} unit="%" onChange={(v) => u('width', v)} />
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Estilos Tab — Universal BlockStyles editor (accordion)
+   ══════════════════════════════════════════════════════════════ */
+
+function StylesEditor({ block, onUpdateStyles }: { block: LPBlock; onUpdateStyles: LPEditorPropertiesProps['onUpdateStyles'] }) {
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({ background: true });
+  const s = block.styles;
+  const u = (partial: Partial<BlockStyles>) => onUpdateStyles(block.id, partial);
+
+  const toggle = (key: string) => setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  return (
+    <div className="space-y-0">
+      {/* 1. Fundo do Elemento */}
+      <AccordionSection label="Fundo do Elemento" expanded={!!expanded.background} onToggle={() => toggle('background')}>
+        <ColorField label="Cor de fundo" value={s.bgColor} onChange={(v) => u({ bgColor: v })} />
+        <TextField label="Imagem de fundo (URL)" value={s.bgImage} onChange={(v) => u({ bgImage: v })} placeholder="https://..." />
+        {s.bgImage && (
+          <RangeField label="Opacidade do overlay" value={s.bgOverlay} min={0} max={100} step={5} unit="%" onChange={(v) => u({ bgOverlay: v })} />
+        )}
+      </AccordionSection>
+
+      {/* 2. Bordas */}
+      <AccordionSection label="Bordas" expanded={!!expanded.borders} onToggle={() => toggle('borders')}>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Estilo da borda</Label>
+          <Select value={s.borderStyle} onValueChange={(v) => u({ borderStyle: v as BlockStyles['borderStyle'] })}>
+            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Nenhuma</SelectItem>
+              <SelectItem value="solid">Solida</SelectItem>
+              <SelectItem value="dashed">Tracejada</SelectItem>
+              <SelectItem value="dotted">Pontilhada</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <RangeField label="Espessura" value={s.borderWidth} min={0} max={10} step={1} onChange={(v) => u({ borderWidth: v })} />
+        {s.borderStyle !== 'none' && (
+          <ColorField label="Cor da borda" value={s.borderColor} onChange={(v) => u({ borderColor: v })} />
+        )}
+        <RangeField label="Borda arredondada" value={s.borderRadius} min={0} max={32} step={1} onChange={(v) => u({ borderRadius: v })} />
+      </AccordionSection>
+
+      {/* 3. Espacos */}
+      <AccordionSection label="Espacos" expanded={!!expanded.spacing} onToggle={() => toggle('spacing')}>
+        <Divider label="Margem" />
+        <RangeField label="Margem superior" value={s.marginTop} min={0} max={100} step={4} onChange={(v) => u({ marginTop: v })} />
+        <RangeField label="Margem inferior" value={s.marginBottom} min={0} max={100} step={4} onChange={(v) => u({ marginBottom: v })} />
+        <Divider label="Padding" />
+        <RangeField label="Padding superior" value={s.paddingTop} min={0} max={100} step={4} onChange={(v) => u({ paddingTop: v })} />
+        <RangeField label="Padding direito" value={s.paddingRight} min={0} max={100} step={4} onChange={(v) => u({ paddingRight: v })} />
+        <RangeField label="Padding inferior" value={s.paddingBottom} min={0} max={100} step={4} onChange={(v) => u({ paddingBottom: v })} />
+        <RangeField label="Padding esquerdo" value={s.paddingLeft} min={0} max={100} step={4} onChange={(v) => u({ paddingLeft: v })} />
+      </AccordionSection>
+
+      {/* 4. Sombra */}
+      <AccordionSection label="Sombra" expanded={!!expanded.shadow} onToggle={() => toggle('shadow')}>
+        <RangeField label="Desfoque" value={s.shadowBlur} min={0} max={50} step={1} onChange={(v) => u({ shadowBlur: v })} />
+        <RangeField label="Deslocamento X" value={s.shadowX} min={-20} max={20} step={1} onChange={(v) => u({ shadowX: v })} />
+        <RangeField label="Deslocamento Y" value={s.shadowY} min={-20} max={20} step={1} onChange={(v) => u({ shadowY: v })} />
+        <ColorField label="Cor da sombra" value={s.shadowColor} onChange={(v) => u({ shadowColor: v })} />
+      </AccordionSection>
+
+      {/* 5. Visibilidade */}
+      <AccordionSection label="Visibilidade" expanded={!!expanded.visibility} onToggle={() => toggle('visibility')}>
+        <CheckboxField label="Ocultar no celular" checked={s.hideOnMobile} onChange={(v) => u({ hideOnMobile: v })} />
+        <CheckboxField label="Ocultar no desktop" checked={s.hideOnDesktop} onChange={(v) => u({ hideOnDesktop: v })} />
+      </AccordionSection>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Main Properties Panel
+   ══════════════════════════════════════════════════════════════ */
+
+export function LPEditorProperties({ block, forms, onUpdate, onUpdateStyles, onDelete }: LPEditorPropertiesProps) {
+  const [activeTab, setActiveTab] = useState<'config' | 'styles'>('config');
+
   if (!block) {
     return (
       <div className="w-[280px] shrink-0 border-l bg-card h-full overflow-y-auto">
@@ -334,20 +546,48 @@ export function LPEditorProperties({ block, forms, onUpdate, onDelete }: LPEdito
       case 'button': return <ButtonProperties block={block} onUpdate={onUpdate} />;
       case 'form': return <FormProperties block={block} forms={forms} onUpdate={onUpdate} />;
       case 'spacer': return <SpacerProperties block={block} onUpdate={onUpdate} />;
+      case 'video': return <VideoProperties block={block} onUpdate={onUpdate} />;
+      case 'countdown': return <CountdownProperties block={block} onUpdate={onUpdate} />;
+      case 'divider': return <DividerProperties block={block} onUpdate={onUpdate} />;
       default: return null;
     }
   };
 
   return (
-    <div className="w-[280px] shrink-0 border-l bg-card h-full overflow-y-auto">
-      <div className="p-4 space-y-4">
+    <div className="w-[280px] shrink-0 border-l bg-card h-full overflow-y-auto flex flex-col">
+      {/* Header */}
+      <div className="px-4 pt-4 pb-2">
         <h3 className="font-semibold text-sm">{BLOCK_TYPE_LABELS[block.type]}</h3>
-        {renderProperties()}
-        <div className="pt-3 border-t">
-          <Button variant="destructive" size="sm" className="w-full" onClick={() => onDelete(block.id)}>
-            <Trash2 className="h-4 w-4 mr-2" /> Excluir bloco
-          </Button>
-        </div>
+      </div>
+
+      {/* Tab Buttons */}
+      <div className="flex border-b">
+        <button
+          type="button"
+          className={cn('flex-1 py-2 text-xs font-medium', activeTab === 'config' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground')}
+          onClick={() => setActiveTab('config')}
+        >
+          Configuracoes
+        </button>
+        <button
+          type="button"
+          className={cn('flex-1 py-2 text-xs font-medium', activeTab === 'styles' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground')}
+          onClick={() => setActiveTab('styles')}
+        >
+          Estilos
+        </button>
+      </div>
+
+      {/* Tab Content */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {activeTab === 'config' ? renderProperties() : <StylesEditor block={block} onUpdateStyles={onUpdateStyles} />}
+      </div>
+
+      {/* Delete Button */}
+      <div className="p-4 border-t">
+        <Button variant="destructive" size="sm" className="w-full" onClick={() => onDelete(block.id)}>
+          <Trash2 className="h-4 w-4 mr-2" /> Excluir bloco
+        </Button>
       </div>
     </div>
   );
