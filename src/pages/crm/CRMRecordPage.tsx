@@ -182,17 +182,6 @@ export default function CRMRecordPage() {
   const [historyEntries, setHistoryEntries] = useState<PropertyHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
-  const openPropertyHistory = useCallback(async (propKey: string) => {
-    if (!recordId) return;
-    setHistoryProp(propKey);
-    setHistoryLoading(true);
-    try {
-      const entries = await getPropertyHistory(objectType, recordId, propKey);
-      setHistoryEntries(entries);
-    } catch { setHistoryEntries([]); }
-    finally { setHistoryLoading(false); }
-  }, [objectType, recordId]);
-
   // Activity form states
   const [noteContent, setNoteContent] = useState('');
   const [emailForm, setEmailForm] = useState({ to: '', from: '', subject: '', body: '' });
@@ -235,6 +224,22 @@ export default function CRMRecordPage() {
   const updateTicketMut = useUpdateTicket();
   const { user: authUser } = useAuth();
 
+  // ---- Derived ----
+  const rec = (record || {}) as Record<string, unknown>;
+  const recordName = getRecordName(rec, objectType);
+
+  // Callbacks (must be after recordId and rec are defined)
+  const openPropertyHistory = useCallback(async (propKey: string) => {
+    if (!recordId) return;
+    setHistoryProp(propKey);
+    setHistoryLoading(true);
+    try {
+      const entries = await getPropertyHistory(objectType, recordId, propKey);
+      setHistoryEntries(entries);
+    } catch { setHistoryEntries([]); }
+    finally { setHistoryLoading(false); }
+  }, [objectType, recordId]);
+
   const handleSaveField = useCallback(async (fieldKey: string, rawValue: string) => {
     if (!recordId) return;
     const newValue = fieldKey === 'dominio' ? normalizeDomain(rawValue) : rawValue;
@@ -249,10 +254,6 @@ export default function CRMRecordPage() {
       toast({ title: 'Erro ao salvar', variant: 'destructive' });
     }
   }, [recordId, objectType, rec, authUser, toast, updateContactMut, updateCompanyMut, updateDealMut, updateTicketMut]);
-
-  // ---- Derived ----
-  const rec = (record || {}) as Record<string, unknown>;
-  const recordName = getRecordName(rec, objectType);
 
   const associatedContacts = associated?.contacts || [];
   const associatedCompanies = associated?.companies || [];
