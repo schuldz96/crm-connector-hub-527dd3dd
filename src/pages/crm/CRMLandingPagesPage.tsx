@@ -183,7 +183,14 @@ export default function CRMLandingPagesPage() {
             </div>
           );
         })}
-        {pages.length === 0 && <p className="text-center text-muted-foreground py-8">Nenhuma landing page criada ainda</p>}
+        {pages.length === 0 && (
+          <div className="border border-dashed border-border rounded-xl p-12 text-center bg-card">
+            <Globe className="w-12 h-12 text-muted-foreground/30 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-foreground">Nenhuma landing page criada</h3>
+            <p className="text-muted-foreground text-sm mt-1 mb-4">Crie sua primeira LP para capturar leads com formulários personalizados.</p>
+            <Button onClick={openNew} className="gap-1.5"><Plus className="w-4 h-4" /> Criar Landing Page</Button>
+          </div>
+        )}
       </div>
 
       {/* Editor */}
