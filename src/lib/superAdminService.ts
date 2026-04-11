@@ -679,6 +679,62 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   };
 }
 
+export interface DashboardChartData {
+  planDistribution: { name: string; value: number }[];
+  orgStatus: { name: string; value: number }[];
+  trialExpirados: number;
+}
+
+export async function getDashboardChartData(): Promise<DashboardChartData> {
+  const [orgsRes, subsRes, plansRes] = await Promise.all([
+    core().from('empresas').select('ativo'),
+    admin().from('assinaturas').select('plano_id,status,trial_ate').order('inicio_em', { ascending: false }),
+    admin().from('planos').select('id,nome'),
+  ]);
+
+  if (orgsRes.error) throw new Error(orgsRes.error.message);
+  if (subsRes.error) throw new Error(subsRes.error.message);
+  if (plansRes.error) throw new Error(plansRes.error.message);
+
+  const orgs = orgsRes.data ?? [];
+  const subs = subsRes.data ?? [];
+  const plans = plansRes.data ?? [];
+
+  // Org status
+  const activeOrgs = orgs.filter((o: any) => o.ativo).length;
+  const inactiveOrgs = orgs.length - activeOrgs;
+  const orgStatus = [
+    { name: 'Ativas', value: activeOrgs },
+    { name: 'Inativas', value: inactiveOrgs },
+  ];
+
+  // Plan distribution (from most recent sub per org)
+  const planMap = new Map(plans.map((p: any) => [p.id, p.nome]));
+  const planCount = new Map<string, number>();
+  const seenOrgs = new Set<string>();
+  for (const sub of subs) {
+    const orgId = (sub as any).org;
+    if (seenOrgs.has(orgId)) continue;
+    seenOrgs.add(orgId);
+    const planName = planMap.get(sub.plano_id) ?? 'Desconhecido';
+    planCount.set(planName, (planCount.get(planName) ?? 0) + 1);
+  }
+  const planDistribution = Array.from(planCount.entries()).map(([name, value]) => ({ name, value }));
+
+  // Trials expirados
+  const now = new Date();
+  let trialExpirados = 0;
+  for (const sub of subs) {
+    if (sub.status === 'trial' && sub.trial_ate) {
+      const trialEnd = new Date(sub.trial_ate);
+      trialEnd.setHours(23, 59, 59, 999);
+      if (trialEnd < now) trialExpirados++;
+    }
+  }
+
+  return { planDistribution, orgStatus, trialExpirados };
+}
+
 // ─── Modules ────────────────────────────────────────────────────────────────────
 
 export interface SystemModule {

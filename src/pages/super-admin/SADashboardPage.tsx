@@ -1,13 +1,21 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useSuperAdminAuth } from '@/contexts/SuperAdminAuthContext';
-import { getDashboardStats, getAdminAuditLogs } from '@/lib/superAdminService';
-import type { DashboardStats, AdminAuditEntry } from '@/lib/superAdminService';
+import { getDashboardStats, getDashboardChartData, getAdminAuditLogs } from '@/lib/superAdminService';
+import type { DashboardStats, DashboardChartData, AdminAuditEntry } from '@/lib/superAdminService';
 import { Badge } from '@/components/ui/badge';
-import { Building2, Users, CreditCard, DollarSign, Loader2, AlertCircle, Clock } from 'lucide-react';
+import {
+  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
+} from 'recharts';
+import { Building2, Users, CreditCard, DollarSign, Loader2, AlertCircle, Clock, AlertTriangle } from 'lucide-react';
+
+const CHART_COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899'];
 
 export default function SADashboardPage() {
   const { superAdmin } = useSuperAdminAuth();
+  const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [chartData, setChartData] = useState<DashboardChartData | null>(null);
   const [recentLogs, setRecentLogs] = useState<AdminAuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -17,11 +25,13 @@ export default function SADashboardPage() {
       setLoading(true);
       setError('');
       try {
-        const [s, logs] = await Promise.all([
+        const [s, charts, logs] = await Promise.all([
           getDashboardStats(),
+          getDashboardChartData(),
           getAdminAuditLogs(10),
         ]);
         setStats(s);
+        setChartData(charts);
         setRecentLogs(logs);
       } catch (err: any) {
         setError(err?.message ?? 'Erro ao carregar dados do dashboard');
@@ -40,6 +50,7 @@ export default function SADashboardPage() {
           icon: Building2,
           color: 'text-blue-400',
           bg: 'bg-blue-500/10',
+          path: '/super-admin/organizations',
         },
         {
           label: 'Total Usuarios',
@@ -47,6 +58,7 @@ export default function SADashboardPage() {
           icon: Users,
           color: 'text-green-400',
           bg: 'bg-green-500/10',
+          path: '/super-admin/users',
         },
         {
           label: 'Assinaturas Ativas',
@@ -54,6 +66,7 @@ export default function SADashboardPage() {
           icon: CreditCard,
           color: 'text-purple-400',
           bg: 'bg-purple-500/10',
+          path: '/super-admin/plans',
         },
         {
           label: 'MRR',
@@ -61,6 +74,7 @@ export default function SADashboardPage() {
           icon: DollarSign,
           color: 'text-red-400',
           bg: 'bg-red-500/10',
+          path: '/super-admin/organizations',
         },
       ]
     : [];
@@ -89,12 +103,13 @@ export default function SADashboardPage() {
         </div>
       )}
 
-      {/* KPI Cards */}
+      {/* KPI Cards — Clickable */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sa-stagger-container">
         {kpiCards.map((kpi) => (
           <div
             key={kpi.label}
-            className="glass-card p-5 border border-border rounded-lg bg-card sa-card-hover cursor-default"
+            onClick={() => navigate(kpi.path)}
+            className="glass-card p-5 border border-border rounded-lg bg-card sa-card-hover cursor-pointer transition-transform hover:scale-[1.02]"
           >
             <div className="flex items-center justify-between mb-3">
               <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${kpi.bg}`}>
@@ -106,6 +121,74 @@ export default function SADashboardPage() {
           </div>
         ))}
       </div>
+
+      {/* Trial expirado alert */}
+      {chartData && chartData.trialExpirados > 0 && (
+        <div className="flex items-center gap-2 p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg text-sm text-orange-400">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          {chartData.trialExpirados} trial{chartData.trialExpirados > 1 ? 's' : ''} expirado{chartData.trialExpirados > 1 ? 's' : ''}
+        </div>
+      )}
+
+      {/* Charts */}
+      {chartData && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Plan Distribution — Pie Chart */}
+          {chartData.planDistribution.length > 0 && (
+            <div className="glass-card p-5 border border-border rounded-lg bg-card">
+              <h3 className="text-base font-semibold mb-1">Distribuicao de Planos</h3>
+              <p className="text-xs text-muted-foreground mb-4">Plano mais recente por organizacao</p>
+              <ResponsiveContainer width="100%" height={250}>
+                <PieChart>
+                  <Pie
+                    data={chartData.planDistribution}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={90}
+                    innerRadius={50}
+                    strokeWidth={2}
+                    stroke="hsl(var(--card))"
+                    label={({ name, value }) => `${name} (${value})`}
+                    labelLine={false}
+                  >
+                    {chartData.planDistribution.map((_, idx) => (
+                      <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
+                    itemStyle={{ color: 'hsl(var(--foreground))' }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Org Status — Bar Chart */}
+          <div className="glass-card p-5 border border-border rounded-lg bg-card">
+            <h3 className="text-base font-semibold mb-1">Organizacoes por Status</h3>
+            <p className="text-xs text-muted-foreground mb-4">Ativas vs Inativas</p>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={chartData.orgStatus} barSize={60}>
+                <XAxis dataKey="name" tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
+                  itemStyle={{ color: 'hsl(var(--foreground))' }}
+                  cursor={{ fill: 'hsl(var(--muted))', opacity: 0.3 }}
+                />
+                <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                  <Cell fill="#22c55e" />
+                  <Cell fill="#ef4444" />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* Recent Activity */}
       <div className="glass-card p-5 border border-border rounded-lg bg-card">
