@@ -19,10 +19,12 @@ import {
   useCrmContacts, useCrmCompanies, useCrmDeals, useCrmTickets,
   useCreateContact, useCreateCompany, useCreateDeal, useCreateTicket,
   useDeleteContact, useDeleteCompany, useDeleteDeal, useDeleteTicket,
+  useUpdateContact, useUpdateCompany, useUpdateDeal, useUpdateTicket,
   useCrmPipelines, useSaasUsers,
 } from '@/hooks/useCrm';
 import type { CrmObjectType, ActivityType, CrmActivity } from '@/types/crm';
-import { getPropertyHistory, type PropertyHistoryEntry } from '@/lib/crmService';
+import { getPropertyHistory, logPropertyChange, type PropertyHistoryEntry } from '@/lib/crmService';
+import { useAuth } from '@/contexts/AuthContext';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
   ArrowLeft, Pencil, StickyNote, Mail, Phone, CalendarDays, CheckSquare,
@@ -227,6 +229,25 @@ export default function CRMRecordPage() {
   const deleteCompanyMut = useDeleteCompany();
   const deleteDealMut = useDeleteDeal();
   const deleteTicketMut = useDeleteTicket();
+  const updateContactMut = useUpdateContact();
+  const updateCompanyMut = useUpdateCompany();
+  const updateDealMut = useUpdateDeal();
+  const updateTicketMut = useUpdateTicket();
+  const { user: authUser } = useAuth();
+
+  const handleSaveField = useCallback(async (fieldKey: string, newValue: string) => {
+    if (!recordId) return;
+    const oldValue = String(rec[fieldKey] ?? '');
+    if (oldValue === newValue) return;
+    try {
+      const mutMap = { contact: updateContactMut, company: updateCompanyMut, deal: updateDealMut, ticket: updateTicketMut };
+      await mutMap[objectType].mutateAsync({ id: recordId, [fieldKey]: newValue || null } as any);
+      logPropertyChange(objectType, recordId, fieldKey, oldValue, newValue, 'manual', authUser?.name || 'Usuário');
+      toast({ title: 'Propriedade atualizada' });
+    } catch {
+      toast({ title: 'Erro ao salvar', variant: 'destructive' });
+    }
+  }, [recordId, objectType, rec, authUser, toast, updateContactMut, updateCompanyMut, updateDealMut, updateTicketMut]);
 
   // ---- Derived ----
   const rec = (record || {}) as Record<string, unknown>;
@@ -623,9 +644,9 @@ export default function CRMRecordPage() {
             )}
             {objectType === 'contact' && (
               <>
-                <PropertyRow label="Email" value={rec.email as string} copyable onCopy={() => handleCopyText(rec.email as string || '')} onDetails={() => openPropertyHistory('email')} />
-                <PropertyRow label="Telefone" value={rec.telefone as string} onDetails={() => openPropertyHistory('telefone')} />
-                <PropertyRow label="Cargo" value={rec.cargo as string} onDetails={() => openPropertyHistory('cargo')} />
+                <PropertyRow label="Email" value={rec.email as string} copyable onCopy={() => handleCopyText(rec.email as string || '')} onDetails={() => openPropertyHistory('email')} editable fieldKey="email" onSave={handleSaveField} />
+                <PropertyRow label="Telefone" value={rec.telefone as string} onDetails={() => openPropertyHistory('telefone')} editable fieldKey="telefone" onSave={handleSaveField} />
+                <PropertyRow label="Cargo" value={rec.cargo as string} onDetails={() => openPropertyHistory('cargo')} editable fieldKey="cargo" onSave={handleSaveField} />
                 <PropertyRow label="Status" value={
                   <Badge variant="outline">{String(rec.status || '-')}</Badge>
                 } onDetails={() => openPropertyHistory('status')} />
@@ -633,10 +654,10 @@ export default function CRMRecordPage() {
             )}
             {objectType === 'company' && (
               <>
-                <PropertyRow label="Domínio" value={rec.dominio as string} onDetails={() => openPropertyHistory('dominio')} />
-                <PropertyRow label="CNPJ" value={rec.cnpj as string} onDetails={() => openPropertyHistory('cnpj')} />
-                <PropertyRow label="Telefone" value={rec.telefone as string} onDetails={() => openPropertyHistory('telefone')} />
-                <PropertyRow label="Setor" value={rec.setor as string} onDetails={() => openPropertyHistory('setor')} />
+                <PropertyRow label="Domínio" value={rec.dominio as string} onDetails={() => openPropertyHistory('dominio')} editable fieldKey="dominio" onSave={handleSaveField} />
+                <PropertyRow label="CNPJ" value={rec.cnpj as string} onDetails={() => openPropertyHistory('cnpj')} editable fieldKey="cnpj" onSave={handleSaveField} />
+                <PropertyRow label="Telefone" value={rec.telefone as string} onDetails={() => openPropertyHistory('telefone')} editable fieldKey="telefone" onSave={handleSaveField} />
+                <PropertyRow label="Setor" value={rec.setor as string} onDetails={() => openPropertyHistory('setor')} editable fieldKey="setor" onSave={handleSaveField} />
               </>
             )}
             {objectType === 'ticket' && (
@@ -1467,15 +1488,33 @@ export default function CRMRecordPage() {
 // ========================
 
 function PropertyRow({
-  label, value, copyable, onCopy, onDetails,
+  label, value, copyable, onCopy, onDetails, editable, fieldKey, onSave,
 }: {
   label: string;
   value?: string | number | null | React.ReactNode;
   copyable?: boolean;
   onCopy?: () => void;
   onDetails?: () => void;
+  editable?: boolean;
+  fieldKey?: string;
+  onSave?: (key: string, value: string) => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
   const display = value == null || value === '' ? '-' : value;
+  const isTextValue = typeof display === 'string' || typeof display === 'number';
+
+  const startEdit = () => {
+    if (!editable || !fieldKey || !onSave) return;
+    setDraft(typeof value === 'string' ? value : typeof value === 'number' ? String(value) : '');
+    setEditing(true);
+  };
+
+  const commitEdit = () => {
+    setEditing(false);
+    if (fieldKey && onSave) onSave(fieldKey, draft.trim());
+  };
+
   return (
     <div className="flex items-start justify-between gap-2 group/prop">
       <div className="flex items-center gap-1 shrink-0">
@@ -1486,13 +1525,27 @@ function PropertyRow({
           </button>
         )}
       </div>
-      <div className="flex items-center gap-1 text-right">
-        {typeof display === 'string' || typeof display === 'number' ? (
-          <span className="text-foreground truncate max-w-[140px]">{display}</span>
+      <div className="flex items-center gap-1 text-right min-w-0">
+        {editing ? (
+          <input
+            autoFocus
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onBlur={commitEdit}
+            onKeyDown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditing(false); }}
+            className="bg-transparent border-b border-primary text-foreground text-sm text-right w-full outline-none max-w-[140px]"
+          />
+        ) : isTextValue ? (
+          <span
+            onClick={startEdit}
+            className={cn('text-foreground truncate max-w-[140px]', editable && 'cursor-pointer hover:text-primary hover:border-b hover:border-primary/30')}
+          >
+            {display}
+          </span>
         ) : (
           display
         )}
-        {copyable && value && (
+        {copyable && value && !editing && (
           <button onClick={onCopy} className="text-muted-foreground hover:text-foreground shrink-0">
             <Copy className="w-3 h-3" />
           </button>
