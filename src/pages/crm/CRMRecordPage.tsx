@@ -1176,6 +1176,7 @@ export default function CRMRecordPage() {
                 name: c.nome as string,
                 subtitle: c.cargo as string || '',
                 email: c.email as string,
+                phone: c.telefone as string || '',
                 assocId: assocMeta.contact.find(a => a.id === c.id)?.assocId || '',
                 href: `/crm/record/0-1/${c.numero_registro as string}`,
               }))}
@@ -1571,6 +1572,7 @@ interface AssociationItem {
   name: string;
   subtitle: string;
   email: string;
+  phone?: string;
   assocId: string;
   href?: string;
   isPrimary?: boolean;
@@ -1650,6 +1652,15 @@ function AssociationSection({
                       <div className="flex items-center gap-1 mt-0.5">
                         <span className="text-xs text-muted-foreground truncate">{item.email}</span>
                         <button onClick={() => onCopy(item.email)} className="text-muted-foreground hover:text-foreground shrink-0">
+                          <Copy className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+                    {item.phone && (
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <Phone className="w-3 h-3 text-muted-foreground shrink-0" />
+                        <span className="text-xs text-muted-foreground truncate">{item.phone}</span>
+                        <button onClick={() => onCopy(item.phone!)} className="text-muted-foreground hover:text-foreground shrink-0">
                           <Copy className="w-3 h-3" />
                         </button>
                       </div>
