@@ -324,6 +324,43 @@ export async function getOrgUsers(org: string) {
   return data ?? [];
 }
 
+export interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+}
+
+export interface UserQueryParams {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  org?: string;
+  papel?: string;
+  status?: string;
+  sortBy?: string;
+  sortAsc?: boolean;
+}
+
+export async function getPaginatedUsers(params: UserQueryParams = {}): Promise<PaginatedResult<any>> {
+  const { page = 1, pageSize = 20, search, org, papel, status, sortBy = 'criado_em', sortAsc = false } = params;
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = core()
+    .from('usuarios')
+    .select('id,nome,email,org,papel,status,ultimo_login_em,criado_em', { count: 'exact' });
+
+  if (search) query = query.or(`nome.ilike.%${search}%,email.ilike.%${search}%`);
+  if (org && org !== 'all') query = query.eq('org', org);
+  if (papel && papel !== 'all') query = query.eq('papel', papel);
+  if (status && status !== 'all') query = query.eq('status', status);
+
+  query = query.order(sortBy, { ascending: sortAsc }).range(from, to);
+
+  const { data, count, error } = await query;
+  if (error) throw new Error(`Erro ao buscar usuarios: ${error.message}`);
+  return { data: data ?? [], total: count ?? 0 };
+}
+
 export async function updateUser(id: string, updates: Record<string, any>) {
   const { data, error } = await core()
     .from('usuarios')

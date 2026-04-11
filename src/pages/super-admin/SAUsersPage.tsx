@@ -1,13 +1,13 @@
-import { useState, useEffect, useMemo } from 'react';
-import { getAllOrganizations, updateUser, countActiveAdmins } from '@/lib/superAdminService';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { getAllOrganizations, getPaginatedUsers, updateUser, countActiveAdmins } from '@/lib/superAdminService';
 import type { Organization } from '@/lib/superAdminService';
-import { supabaseSaas } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
@@ -17,12 +17,13 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Search, Loader2, AlertCircle, Users, Pencil } from 'lucide-react';
+import { Search, Loader2, AlertCircle, Users, Pencil, ChevronLeft, ChevronRight, ArrowUpDown } from 'lucide-react';
 
 const PAPEIS = [
   'admin', 'ceo', 'diretor', 'gerente', 'coordenador', 'supervisor',
   'vendedor', 'suporte', 'bdr', 'sdr', 'closer', 'key_account', 'csm', 'low_touch',
 ];
+const PAGE_SIZE = 20;
 
 interface UserRow {
   id: string;
@@ -35,27 +36,43 @@ interface UserRow {
   criado_em: string;
 }
 
-async function fetchAllUsers(): Promise<UserRow[]> {
-  const { data, error } = await (supabaseSaas as any)
-    .schema('core')
-    .from('usuarios')
-    .select('id,nome,email,org,papel,status,ultimo_login_em,criado_em')
-    .order('criado_em', { ascending: false });
-
-  if (error) throw new Error(`Erro ao buscar usuarios: ${error.message}`);
-  return (data ?? []) as UserRow[];
+function TableSkeleton() {
+  return (
+    <>
+      {Array.from({ length: 8 }).map((_, i) => (
+        <TableRow key={i}>
+          <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-10" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+          <TableCell><Skeleton className="h-4 w-8" /></TableCell>
+        </TableRow>
+      ))}
+    </>
+  );
 }
 
 export default function SAUsersPage() {
   const { toast } = useToast();
   const [users, setUsers] = useState<UserRow[]>([]);
+  const [total, setTotal] = useState(0);
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Filters
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [filterOrg, setFilterOrg] = useState('all');
   const [filterPapel, setFilterPapel] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
+
+  // Pagination
+  const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState('criado_em');
+  const [sortAsc, setSortAsc] = useState(false);
 
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -63,63 +80,64 @@ export default function SAUsersPage() {
   const [editPapel, setEditPapel] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Debounce search
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => {
-    async function load() {
-      setLoading(true);
-      setError('');
-      try {
-        const [usersData, orgsData] = await Promise.all([
-          fetchAllUsers(),
-          getAllOrganizations(),
-        ]);
-        setUsers(usersData);
-        setOrgs(orgsData);
-      } catch (err: any) {
-        setError(err?.message ?? 'Erro ao carregar usuarios');
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
+    debounceRef.current = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(debounceRef.current);
+  }, [search]);
+
+  // Load orgs once
+  useEffect(() => {
+    getAllOrganizations().then(setOrgs).catch(() => {});
   }, []);
 
-  const papeis = useMemo(() => {
-    const set = new Set(users.map((u) => u.papel).filter(Boolean));
-    return Array.from(set).sort();
-  }, [users]);
+  // Load users when filters/page change
+  const loadUsers = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const result = await getPaginatedUsers({
+        page,
+        pageSize: PAGE_SIZE,
+        search: debouncedSearch || undefined,
+        org: filterOrg,
+        papel: filterPapel,
+        status: filterStatus,
+        sortBy,
+        sortAsc,
+      });
+      setUsers(result.data as UserRow[]);
+      setTotal(result.total);
+    } catch (err: any) {
+      setError(err?.message ?? 'Erro ao carregar usuarios');
+    } finally {
+      setLoading(false);
+    }
+  }, [page, debouncedSearch, filterOrg, filterPapel, filterStatus, sortBy, sortAsc]);
 
-  const statuses = useMemo(() => {
-    const set = new Set(users.map((u) => u.status).filter(Boolean));
-    return Array.from(set).sort();
-  }, [users]);
+  useEffect(() => { loadUsers(); }, [loadUsers]);
 
-  const filtered = useMemo(() => {
-    let list = users;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(
-        (u) =>
-          (u.nome && u.nome.toLowerCase().includes(q)) ||
-          u.email.toLowerCase().includes(q),
-      );
-    }
-    if (filterOrg !== 'all') {
-      list = list.filter((u) => u.org === filterOrg);
-    }
-    if (filterPapel !== 'all') {
-      list = list.filter((u) => u.papel === filterPapel);
-    }
-    if (filterStatus !== 'all') {
-      list = list.filter((u) => u.status === filterStatus);
-    }
-    return list;
-  }, [users, search, filterOrg, filterPapel, filterStatus]);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const orgMap = useMemo(() => {
     const map = new Map<string, string>();
     orgs.forEach((o) => map.set(o.org, o.nome));
     return map;
   }, [orgs]);
+
+  function handleSort(column: string) {
+    if (sortBy === column) {
+      setSortAsc(!sortAsc);
+    } else {
+      setSortBy(column);
+      setSortAsc(true);
+    }
+    setPage(1);
+  }
 
   function openEditDialog(user: UserRow) {
     setEditingUser(user);
@@ -160,11 +178,17 @@ export default function SAUsersPage() {
     }
   }
 
-  if (loading) {
+  function SortableHead({ column, children }: { column: string; children: React.ReactNode }) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-      </div>
+      <TableHead
+        className="cursor-pointer select-none hover:text-foreground transition-colors"
+        onClick={() => handleSort(column)}
+      >
+        <span className="flex items-center gap-1">
+          {children}
+          <ArrowUpDown className={`w-3 h-3 ${sortBy === column ? 'text-foreground' : 'text-muted-foreground/50'}`} />
+        </span>
+      </TableHead>
     );
   }
 
@@ -176,7 +200,7 @@ export default function SAUsersPage() {
           Usuarios
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          {users.length} usuarios em todas as organizacoes
+          {total} usuarios em todas as organizacoes
         </p>
       </div>
 
@@ -198,7 +222,7 @@ export default function SAUsersPage() {
             className="pl-10 bg-input border-border"
           />
         </div>
-        <Select value={filterOrg} onValueChange={setFilterOrg}>
+        <Select value={filterOrg} onValueChange={(v) => { setFilterOrg(v); setPage(1); }}>
           <SelectTrigger className="w-[180px] bg-input border-border">
             <SelectValue placeholder="Todas as orgs" />
           </SelectTrigger>
@@ -211,30 +235,25 @@ export default function SAUsersPage() {
             ))}
           </SelectContent>
         </Select>
-        <Select value={filterPapel} onValueChange={setFilterPapel}>
+        <Select value={filterPapel} onValueChange={(v) => { setFilterPapel(v); setPage(1); }}>
           <SelectTrigger className="w-[150px] bg-input border-border">
             <SelectValue placeholder="Todos papeis" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos papeis</SelectItem>
-            {papeis.map((p) => (
-              <SelectItem key={p} value={p}>
-                {p}
-              </SelectItem>
+            {PAPEIS.map((p) => (
+              <SelectItem key={p} value={p}>{p}</SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
+        <Select value={filterStatus} onValueChange={(v) => { setFilterStatus(v); setPage(1); }}>
           <SelectTrigger className="w-[140px] bg-input border-border">
             <SelectValue placeholder="Todos status" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos status</SelectItem>
-            {statuses.map((s) => (
-              <SelectItem key={s} value={s}>
-                {s}
-              </SelectItem>
-            ))}
+            <SelectItem value="ativo">ativo</SelectItem>
+            <SelectItem value="inativo">inativo</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -243,24 +262,26 @@ export default function SAUsersPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Nome</TableHead>
+              <SortableHead column="nome">Nome</SortableHead>
               <TableHead>Email</TableHead>
               <TableHead>Org</TableHead>
-              <TableHead>Papel</TableHead>
+              <SortableHead column="papel">Papel</SortableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Ultimo Login</TableHead>
+              <SortableHead column="ultimo_login_em">Ultimo Login</SortableHead>
               <TableHead className="w-24">Acoes</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.length === 0 ? (
+            {loading ? (
+              <TableSkeleton />
+            ) : users.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                   Nenhum usuario encontrado.
                 </TableCell>
               </TableRow>
             ) : (
-              filtered.map((u) => (
+              users.map((u) => (
                 <TableRow key={u.id} className="sa-table-row">
                   <TableCell className="font-medium">{u.nome || '—'}</TableCell>
                   <TableCell className="text-muted-foreground">{u.email}</TableCell>
@@ -293,8 +314,30 @@ export default function SAUsersPage() {
         </Table>
       </div>
 
-      <div className="sa-count-pill">
-        Exibindo {filtered.length} de {users.length} usuarios
+      {/* Pagination */}
+      <div className="flex items-center justify-between">
+        <div className="sa-count-pill">
+          Pagina {page} de {totalPages} ({total} usuarios)
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <span className="text-sm text-muted-foreground">{page} / {totalPages}</span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Edit Role Dialog */}
