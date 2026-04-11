@@ -10,7 +10,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
-import { cn } from '@/lib/utils';
+import { cn, normalizeDomain } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -235,8 +235,9 @@ export default function CRMRecordPage() {
   const updateTicketMut = useUpdateTicket();
   const { user: authUser } = useAuth();
 
-  const handleSaveField = useCallback(async (fieldKey: string, newValue: string) => {
+  const handleSaveField = useCallback(async (fieldKey: string, rawValue: string) => {
     if (!recordId) return;
+    const newValue = fieldKey === 'dominio' ? normalizeDomain(rawValue) : rawValue;
     const oldValue = String(rec[fieldKey] ?? '');
     if (oldValue === newValue) return;
     try {
@@ -1366,7 +1367,7 @@ export default function CRMRecordPage() {
                   <div>
                     <label className="text-xs font-medium">Domínio</label>
                     <Input value={newCompanyForm.dominio} onChange={e => setNewCompanyForm(p => ({ ...p, dominio: e.target.value }))} onBlur={async () => {
-                      const d = newCompanyForm.dominio.trim().toLowerCase();
+                      const d = normalizeDomain(newCompanyForm.dominio);
                       if (!d) { setDomainExists(false); return; }
                       try {
                         const org = await import('@/lib/saas').then(m => m.getOrg());

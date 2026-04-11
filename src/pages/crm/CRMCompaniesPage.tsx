@@ -15,7 +15,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { cn } from '@/lib/utils';
+import { cn, normalizeDomain } from '@/lib/utils';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useCrmCompanies, useCreateCompany, useUpdateCompany, useSaasUsers } from '@/hooks/useCrm';
@@ -188,11 +188,12 @@ export default function CRMCompaniesPage() {
     setNewFieldName('');
   };
   const checkDomainExists = async (domain: string) => {
-    if (!domain || !domain.includes('.')) { setDomainExists(false); return; }
+    const normalized = normalizeDomain(domain);
+    if (!normalized || !normalized.includes('.')) { setDomainExists(false); return; }
     setCheckingDomain(true);
     try {
       const org = await import('@/lib/saas').then(m => m.getOrg());
-      const { data } = await (supabase as any).schema('crm').from('empresas_crm').select('nome').eq('org', org).ilike('dominio', domain.trim()).is('deletado_em', null).limit(1).maybeSingle();
+      const { data } = await (supabase as any).schema('crm').from('empresas_crm').select('nome').eq('org', org).ilike('dominio', normalized).is('deletado_em', null).limit(1).maybeSingle();
       setDomainExists(!!data);
     } catch { setDomainExists(false); }
     finally { setCheckingDomain(false); }
@@ -226,8 +227,9 @@ export default function CRMCompaniesPage() {
       const dbPayload: Record<string, any> = { nome };
       // Map known fields
       for (const field of formFields) {
-        const val = (formData[field.key] || '').trim();
+        let val = (formData[field.key] || '').trim();
         if (!val || field.key === 'nome') continue;
+        if (field.key === 'dominio') val = normalizeDomain(val);
         if (field.dbField) {
           dbPayload[field.dbField] = val;
         } else {
