@@ -354,3 +354,39 @@ export function useSaasUsers() {
     staleTime: 5 * 60_000,
   });
 }
+
+// ========================
+// Tarefas CRM
+// ========================
+
+export function useCrmTasks() {
+  return useQuery({
+    queryKey: ['crm.tasks'],
+    queryFn: () => crm.listTasks(),
+    staleTime: 30_000,
+  });
+}
+
+export function useCreateTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Partial<crm.CrmTask>) => crm.createTask(input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['crm.tasks'] }),
+  });
+}
+
+export function useUpdateTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...input }: { id: string } & Partial<crm.CrmTask>) => crm.updateTask(id, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['crm.tasks'] }),
+  });
+}
+
+export function useDeleteTask() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => crm.deleteTask(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['crm.tasks'] }),
+  });
+}

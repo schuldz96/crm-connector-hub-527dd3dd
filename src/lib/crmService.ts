@@ -512,6 +512,57 @@ export async function listSaasUsers(): Promise<SaasUser[]> {
 }
 
 // ========================
+// TAREFAS CRM
+// ========================
+
+export interface CrmTask {
+  id: string;
+  empresa_id: string;
+  org?: string;
+  numero_registro: string;
+  titulo: string;
+  descricao: string;
+  status: 'pendente' | 'em_andamento' | 'concluida' | 'cancelada';
+  prioridade: string;
+  data_vencimento: string | null;
+  proprietario_id: string | null;
+  proprietario_nome: string | null;
+  entidade_tipo: string | null;
+  entidade_id: string | null;
+  dados_custom: Record<string, unknown>;
+  tags: string[];
+  criado_em: string;
+  atualizado_em: string;
+  deletado_em: string | null;
+}
+
+export async function listTasks(): Promise<CrmTask[]> {
+  const { empresaId } = await getOrgAndEmpresaId();
+  const { data, error } = await crm().from('tarefas').select('*').eq('empresa_id', empresaId).is('deletado_em', null).order('criado_em', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createTask(input: Partial<CrmTask>): Promise<CrmTask> {
+  const { org, empresaId } = await getOrgAndEmpresaId();
+  const { data, error } = await crm().from('tarefas').insert({ ...input, empresa_id: empresaId, org }).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateTask(id: string, input: Partial<CrmTask>): Promise<CrmTask> {
+  const { empresaId } = await getOrgAndEmpresaId();
+  const { data, error } = await crm().from('tarefas').update({ ...input, atualizado_em: new Date().toISOString() }).eq('id', id).eq('empresa_id', empresaId).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteTask(id: string): Promise<void> {
+  const { empresaId } = await getOrgAndEmpresaId();
+  await crm().from('tarefas').update({ deletado_em: new Date().toISOString() }).eq('id', id).eq('empresa_id', empresaId);
+}
+
+// ========================
 // HISTÓRICO DE PROPRIEDADES
 // ========================
 

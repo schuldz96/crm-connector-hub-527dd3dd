@@ -36,6 +36,7 @@ import CRMContactsPage from "@/pages/crm/CRMContactsPage";
 import CRMDealsPage from "@/pages/crm/CRMDealsPage";
 import CRMTicketsPage from "@/pages/crm/CRMTicketsPage";
 import CRMCompaniesPage from "@/pages/crm/CRMCompaniesPage";
+import CRMTasksPage from "@/pages/crm/CRMTasksPage";
 import CRMPipelineSettingsPage from "@/pages/crm/CRMPipelineSettingsPage";
 import CRMPropertiesPage from "@/pages/crm/CRMPropertiesPage";
 import CRMRecordPage from "@/pages/crm/CRMRecordPage";
@@ -127,6 +128,7 @@ function ProtectedRoutes() {
         <Route path="/crm/0-2"                 element={R(<CRMCompaniesPage />,        { resource: 'crm' })} />
         <Route path="/crm/0-3"                 element={R(<CRMDealsPage />,            { resource: 'crm' })} />
         <Route path="/crm/0-4"                 element={R(<CRMTicketsPage />,          { resource: 'crm' })} />
+        <Route path="/crm/tasks"               element={R(<CRMTasksPage />,            { resource: 'crm' })} />
         <Route path="/crm/0-5"                 element={R(<CRMPropertiesPage />,       { resource: 'crm' })} />
         <Route path="/crm/0-6"                 element={R(<CRMPipelineSettingsPage />, { resource: 'crm' })} />
         <Route path="/crm/restore"                element={R(<CRMRestorePage />,       { resource: 'crm' })} />

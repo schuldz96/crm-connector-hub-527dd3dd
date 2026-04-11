@@ -13,7 +13,7 @@ import {
   LogOut, Shield, Plug2,
   GraduationCap, SlidersHorizontal, User, Target, Activity, Inbox,
   Contact, Briefcase, Ticket, Factory, List,
-  ClipboardCheck, TrendingUp, Headphones, Megaphone, Mail, FileText,
+  ClipboardCheck, TrendingUp, Headphones, Megaphone, Mail, FileText, CheckSquare,
   ShoppingCart, HeartPulse, Rocket, Star,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -66,6 +66,7 @@ const NAV_SECTIONS: NavSection[] = [
           { path: '/crm/0-2', label: 'Empresas',     icon: Factory,   resource: 'crm' },
           { path: '/crm/0-3', label: 'Negócios',     icon: Briefcase, resource: 'crm' },
           { path: '/crm/0-4', label: 'Tickets',      icon: Ticket,    resource: 'crm' },
+          { path: '/crm/tasks', label: 'Tarefas',   icon: CheckSquare, resource: 'crm' },
           { path: '/crm/0-5', label: 'Propriedades', icon: List,      resource: 'crm' },
         ],
       },
