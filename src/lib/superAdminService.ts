@@ -785,10 +785,14 @@ export async function getDashboardChartData(): Promise<DashboardChartData> {
   }
   const planDistribution = Array.from(planCount.entries()).map(([name, value]) => ({ name, value }));
 
-  // Trials expirados
+  // Trials expirados (deduplica por org — conta só a assinatura mais recente)
   const now = new Date();
   let trialExpirados = 0;
+  const seenTrialOrgs = new Set<string>();
   for (const sub of subs) {
+    const subOrg = (sub as any).org;
+    if (seenTrialOrgs.has(subOrg)) continue;
+    seenTrialOrgs.add(subOrg);
     if (sub.status === 'trial' && sub.trial_ate) {
       const trialEnd = new Date(sub.trial_ate);
       trialEnd.setHours(23, 59, 59, 999);

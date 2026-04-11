@@ -239,6 +239,14 @@ export default function SAOrgDetailPage() {
     if (!editingUser) return;
     setSaving(true);
     try {
+      if (editingUser.papel === 'admin' && editUserPapel !== 'admin' && editingUser.status === 'ativo') {
+        const adminCount = await countActiveAdmins(orgKey!);
+        if (adminCount <= 1) {
+          toast({ title: 'Erro', description: 'Nao e possivel alterar o papel do ultimo admin ativo da organizacao', variant: 'destructive' });
+          setSaving(false);
+          return;
+        }
+      }
       await updateUser(editingUser.id, { papel: editUserPapel });
       toast({ title: 'Papel atualizado com sucesso' });
       setEditUserDialogOpen(false);

@@ -149,6 +149,15 @@ export default function SAUsersPage() {
     if (!editingUser) return;
     setSaving(true);
     try {
+      // Proteger ultimo admin: se estava como admin e vai mudar para outro papel
+      if (editingUser.papel === 'admin' && editPapel !== 'admin' && editingUser.status === 'ativo') {
+        const adminCount = await countActiveAdmins(editingUser.org);
+        if (adminCount <= 1) {
+          toast({ title: 'Erro', description: 'Nao e possivel alterar o papel do ultimo admin ativo da organizacao', variant: 'destructive' });
+          setSaving(false);
+          return;
+        }
+      }
       await updateUser(editingUser.id, { papel: editPapel });
       toast({ title: 'Papel atualizado com sucesso' });
       setEditDialogOpen(false);

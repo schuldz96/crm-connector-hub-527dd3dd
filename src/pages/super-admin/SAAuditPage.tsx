@@ -82,6 +82,7 @@ export default function SAAuditPage() {
   }
 
   function exportCSV() {
+    const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const headers = ['Data/Hora', 'Admin ID', 'Acao', 'Entidade Tipo', 'Entidade ID', 'IP', 'Detalhes'];
     const rows = logs.map((l) => [
       new Date(l.criado_em).toLocaleString('pt-BR'),
@@ -92,7 +93,7 @@ export default function SAAuditPage() {
       l.ip_origem ?? '',
       l.detalhes ? JSON.stringify(l.detalhes) : '',
     ]);
-    const csv = [headers.join(';'), ...rows.map((r) => r.join(';'))].join('\n');
+    const csv = [headers.map(esc).join(';'), ...rows.map((r) => r.map(esc).join(';'))].join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
