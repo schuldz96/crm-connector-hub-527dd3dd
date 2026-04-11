@@ -171,6 +171,9 @@ export default function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
 
+  // Track which parent group the user last clicked (for shared children like /whatsapp)
+  const [activeParent, setActiveParent] = useState<string>(() => localStorage.getItem('ltx_active_parent') || '');
+
   // Hover state: which item path is hovered + its rect for flyout positioning
   const [hoverItem, setHoverItem] = useState<string | null>(null);
   const [hoverRect, setHoverRect] = useState<DOMRect | null>(null);
@@ -204,8 +207,15 @@ export default function AppSidebar() {
   }, []);
 
   const isActive = (path: string) => location.pathname === path.split('?')[0];
-  const isChildActive = (item: NavItem) =>
-    item.children?.some(c => location.pathname.startsWith(c.path)) ?? false;
+  const isChildActive = (item: NavItem) => {
+    const hasMatch = item.children?.some(c => location.pathname.startsWith(c.path)) ?? false;
+    if (!hasMatch) return false;
+    // If this parent is explicitly the active one, prioritize it
+    if (activeParent === item.path) return true;
+    // If another parent is explicitly active and also matches, defer to it
+    if (activeParent && activeParent !== item.path) return false;
+    return true;
+  };
 
   const normalizedUserId = (user?.id ?? '').replace(/^google_/, 'user_');
 
@@ -328,7 +338,7 @@ export default function AppSidebar() {
                   ? 'bg-primary/10 text-primary font-medium'
                   : 'text-muted-foreground hover:text-foreground hover:bg-muted'
               )}
-              onClick={() => { navigate(child.path); setHoverItem(null); }}
+              onClick={() => { setActiveParent(hoveredItemData.path); localStorage.setItem('ltx_active_parent', hoveredItemData.path); navigate(child.path); setHoverItem(null); }}
             >
               <child.icon className="w-4 h-4" />
               {child.label}
