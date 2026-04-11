@@ -324,6 +324,30 @@ export async function getOrgUsers(org: string) {
   return data ?? [];
 }
 
+export async function updateUser(id: string, updates: Record<string, any>) {
+  const { data, error } = await core()
+    .from('usuarios')
+    .update({ ...updates, atualizado_em: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw new Error(`Erro ao atualizar usuario: ${error.message}`);
+  return data;
+}
+
+export async function countActiveAdmins(org: string): Promise<number> {
+  const { count, error } = await core()
+    .from('usuarios')
+    .select('id', { count: 'exact', head: true })
+    .eq('org', org)
+    .eq('papel', 'admin')
+    .eq('status', 'ativo');
+
+  if (error) throw new Error(`Erro ao contar admins: ${error.message}`);
+  return count ?? 0;
+}
+
 export async function getOrgStats(org: string) {
   const { count: totalUsers, error: usersErr } = await core()
     .from('usuarios')

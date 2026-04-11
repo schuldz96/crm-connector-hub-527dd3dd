@@ -1,16 +1,28 @@
 import { useState, useEffect, useMemo } from 'react';
-import { getAllOrganizations } from '@/lib/superAdminService';
+import { getAllOrganizations, updateUser, countActiveAdmins } from '@/lib/superAdminService';
 import type { Organization } from '@/lib/superAdminService';
 import { supabaseSaas } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Search, Loader2, AlertCircle, Users } from 'lucide-react';
+import { Search, Loader2, AlertCircle, Users, Pencil } from 'lucide-react';
+
+const PAPEIS = [
+  'admin', 'ceo', 'diretor', 'gerente', 'coordenador', 'supervisor',
+  'vendedor', 'suporte', 'bdr', 'sdr', 'closer', 'key_account', 'csm', 'low_touch',
+];
 
 interface UserRow {
   id: string;
@@ -35,6 +47,7 @@ async function fetchAllUsers(): Promise<UserRow[]> {
 }
 
 export default function SAUsersPage() {
+  const { toast } = useToast();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +56,12 @@ export default function SAUsersPage() {
   const [filterOrg, setFilterOrg] = useState('all');
   const [filterPapel, setFilterPapel] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
+
+  // Edit dialog state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserRow | null>(null);
+  const [editPapel, setEditPapel] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -95,6 +114,51 @@ export default function SAUsersPage() {
     }
     return list;
   }, [users, search, filterOrg, filterPapel, filterStatus]);
+
+  const orgMap = useMemo(() => {
+    const map = new Map<string, string>();
+    orgs.forEach((o) => map.set(o.org, o.nome));
+    return map;
+  }, [orgs]);
+
+  function openEditDialog(user: UserRow) {
+    setEditingUser(user);
+    setEditPapel(user.papel);
+    setEditDialogOpen(true);
+  }
+
+  async function handleEditSave() {
+    if (!editingUser) return;
+    setSaving(true);
+    try {
+      await updateUser(editingUser.id, { papel: editPapel });
+      toast({ title: 'Papel atualizado com sucesso' });
+      setEditDialogOpen(false);
+      setUsers((prev) => prev.map((u) => u.id === editingUser.id ? { ...u, papel: editPapel } : u));
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err?.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleToggleStatus(user: UserRow) {
+    const newStatus = user.status === 'ativo' ? 'inativo' : 'ativo';
+    if (newStatus === 'inativo' && user.papel === 'admin') {
+      const adminCount = await countActiveAdmins(user.org);
+      if (adminCount <= 1) {
+        toast({ title: 'Erro', description: 'Nao e possivel desativar o ultimo admin da organizacao', variant: 'destructive' });
+        return;
+      }
+    }
+    try {
+      await updateUser(user.id, { status: newStatus });
+      toast({ title: newStatus === 'ativo' ? 'Usuario ativado' : 'Usuario desativado' });
+      setUsers((prev) => prev.map((u) => u.id === user.id ? { ...u, status: newStatus } : u));
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err?.message, variant: 'destructive' });
+    }
+  }
 
   if (loading) {
     return (
@@ -185,12 +249,13 @@ export default function SAUsersPage() {
               <TableHead>Papel</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Ultimo Login</TableHead>
+              <TableHead className="w-24">Acoes</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                   Nenhum usuario encontrado.
                 </TableCell>
               </TableRow>
@@ -199,27 +264,27 @@ export default function SAUsersPage() {
                 <TableRow key={u.id} className="sa-table-row">
                   <TableCell className="font-medium">{u.nome || '—'}</TableCell>
                   <TableCell className="text-muted-foreground">{u.email}</TableCell>
-                  <TableCell className="font-mono text-xs">{u.org}</TableCell>
+                  <TableCell className="text-sm">{orgMap.get(u.org) || u.org}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className="text-xs">
                       {u.papel || 'N/A'}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      className={
-                        u.status === 'ativo'
-                          ? 'bg-green-500/10 text-green-400 border-green-500/20'
-                          : 'bg-red-500/10 text-red-400 border-red-500/20'
-                      }
-                    >
-                      {u.status || 'N/A'}
-                    </Badge>
+                    <Switch
+                      checked={u.status === 'ativo'}
+                      onCheckedChange={() => handleToggleStatus(u)}
+                    />
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {u.ultimo_login_em
                       ? new Date(u.ultimo_login_em).toLocaleString('pt-BR')
                       : 'Nunca'}
+                  </TableCell>
+                  <TableCell>
+                    <Button variant="ghost" size="sm" className="sa-action-btn" onClick={() => openEditDialog(u)}>
+                      <Pencil className="w-4 h-4" />
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))
@@ -231,6 +296,44 @@ export default function SAUsersPage() {
       <div className="sa-count-pill">
         Exibindo {filtered.length} de {users.length} usuarios
       </div>
+
+      {/* Edit Role Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Editar Usuario</DialogTitle>
+          </DialogHeader>
+          {editingUser && (
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-muted-foreground">{editingUser.nome || editingUser.email}</p>
+                <p className="text-xs text-muted-foreground">{editingUser.email}</p>
+              </div>
+              <div>
+                <Label className="text-sm mb-1.5 block">Papel</Label>
+                <Select value={editPapel} onValueChange={setEditPapel}>
+                  <SelectTrigger className="bg-input border-border">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAPEIS.map((p) => (
+                      <SelectItem key={p} value={p}>{p}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button onClick={handleEditSave} disabled={saving} className="bg-red-600 hover:bg-red-700 text-white">
+              {saving ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

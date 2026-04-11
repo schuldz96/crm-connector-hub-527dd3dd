@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   getOrgDetail, getOrgUsers, getOrgSubscription, getResourceUsage, getOrgStats,
-  getAllPlans, createSubscription, updateSubscription,
+  getAllPlans, createSubscription, updateSubscription, updateUser, countActiveAdmins,
 } from '@/lib/superAdminService';
 import type { Organization, Subscription, ResourceUsage, Plan } from '@/lib/superAdminService';
 import { useToast } from '@/hooks/use-toast';
@@ -16,6 +16,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -184,6 +185,48 @@ export default function SAOrgDetailPage() {
     setShowCreateForm(true);
   };
 
+  // User management state
+  const PAPEIS = [
+    'admin', 'ceo', 'diretor', 'gerente', 'coordenador', 'supervisor',
+    'vendedor', 'suporte', 'bdr', 'sdr', 'closer', 'key_account', 'csm', 'low_touch',
+  ];
+  const [editUserDialogOpen, setEditUserDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [editUserPapel, setEditUserPapel] = useState('');
+
+  async function handleUserEditSave() {
+    if (!editingUser) return;
+    setSaving(true);
+    try {
+      await updateUser(editingUser.id, { papel: editUserPapel });
+      toast({ title: 'Papel atualizado com sucesso' });
+      setEditUserDialogOpen(false);
+      setUsers((prev) => prev.map((u: any) => u.id === editingUser.id ? { ...u, papel: editUserPapel } : u));
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err?.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleUserToggleStatus(user: any) {
+    const newStatus = user.status === 'ativo' ? 'inativo' : 'ativo';
+    if (newStatus === 'inativo' && user.papel === 'admin') {
+      const adminCount = await countActiveAdmins(orgKey!);
+      if (adminCount <= 1) {
+        toast({ title: 'Erro', description: 'Nao e possivel desativar o ultimo admin da organizacao', variant: 'destructive' });
+        return;
+      }
+    }
+    try {
+      await updateUser(user.id, { status: newStatus });
+      toast({ title: newStatus === 'ativo' ? 'Usuario ativado' : 'Usuario desativado' });
+      setUsers((prev) => prev.map((u: any) => u.id === user.id ? { ...u, status: newStatus } : u));
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err?.message, variant: 'destructive' });
+    }
+  }
+
   useEffect(() => {
     if (!orgKey) return;
     async function load() {
@@ -326,12 +369,13 @@ export default function SAOrgDetailPage() {
                   <TableHead>Papel</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Ultimo Login</TableHead>
+                  <TableHead className="w-24">Acoes</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {users.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                       Nenhum usuario nesta organizacao.
                     </TableCell>
                   </TableRow>
@@ -346,20 +390,24 @@ export default function SAOrgDetailPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          className={
-                            u.status === 'ativo'
-                              ? 'bg-green-500/10 text-green-400 border-green-500/20'
-                              : 'bg-red-500/10 text-red-400 border-red-500/20'
-                          }
-                        >
-                          {u.status || 'N/A'}
-                        </Badge>
+                        <Switch
+                          checked={u.status === 'ativo'}
+                          onCheckedChange={() => handleUserToggleStatus(u)}
+                        />
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {u.ultimo_login_em
                           ? new Date(u.ultimo_login_em).toLocaleString('pt-BR')
                           : 'Nunca'}
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="sm" className="sa-action-btn" onClick={() => {
+                          setEditingUser(u);
+                          setEditUserPapel(u.papel);
+                          setEditUserDialogOpen(true);
+                        }}>
+                          <Pencil className="w-4 h-4" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))
@@ -610,6 +658,44 @@ export default function SAOrgDetailPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Edit User Role Dialog */}
+      <Dialog open={editUserDialogOpen} onOpenChange={setEditUserDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Editar Usuario</DialogTitle>
+          </DialogHeader>
+          {editingUser && (
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-muted-foreground">{editingUser.nome || editingUser.email}</p>
+                <p className="text-xs text-muted-foreground">{editingUser.email}</p>
+              </div>
+              <div>
+                <Label className="text-sm mb-1.5 block">Papel</Label>
+                <Select value={editUserPapel} onValueChange={setEditUserPapel}>
+                  <SelectTrigger className="bg-input border-border">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAPEIS.map((p) => (
+                      <SelectItem key={p} value={p}>{p}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditUserDialogOpen(false)} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button onClick={handleUserEditSave} disabled={saving} className="bg-red-600 hover:bg-red-700 text-white">
+              {saving ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
