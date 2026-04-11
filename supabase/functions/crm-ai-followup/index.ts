@@ -662,7 +662,7 @@ async function generateAIMessage(
   try {
     // Get stage config for system prompt
     const { data: config } = await sb.from('crm_estagio_ia_config')
-      .select('prompt_sistema, auto_complemento, nome_ia')
+      .select('prompt_sistema, auto_complemento, nome_ia, perguntas')
       .eq('estagio_id', estagioId)
       .eq('empresa_id', empresaId)
       .maybeSingle();
@@ -691,6 +691,15 @@ async function generateAIMessage(
     // Build messages array for OpenAI
     let systemPrompt = config.prompt_sistema;
     if (config.auto_complemento) systemPrompt += '\n\n' + config.auto_complemento;
+
+    // Injetar perguntas configuradas no prompt
+    const perguntas = (config.perguntas || []) as { question: string; required?: boolean }[];
+    if (perguntas.length > 0) {
+      const answeredQuestions = msgs.filter((m: any) => m.role === 'user').length;
+      const questionsText = perguntas.map((q, i) => `${i + 1}. ${q.question}${q.required ? ' (obrigatória)' : ''}`).join('\n');
+      systemPrompt += `\n\nPERGUNTAS QUE VOCÊ DEVE FAZER AO LONGO DA CONVERSA (faça uma por vez, naturalmente):\n${questionsText}\n\nVocê já trocou ${answeredQuestions} mensagens com o lead. Faça as perguntas gradualmente, sem bombardear.`;
+    }
+
     if (followupHint) systemPrompt += `\n\nINSTRUÇÃO PARA ESTA MENSAGEM DE FOLLOW-UP:\n${followupHint}`;
 
     const openaiMsgs: { role: string; content: string }[] = [
