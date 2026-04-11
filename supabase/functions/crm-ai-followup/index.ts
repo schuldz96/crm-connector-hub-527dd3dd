@@ -66,12 +66,20 @@ serve(async (req) => {
       try {
         // 2. Get stage AI config (followups + transições)
         const { data: config } = await sb.from('crm_estagio_ia_config')
-          .select('followups, transicoes, perguntas, provider, instancia_id, prompt_sistema, auto_complemento')
+          .select('followups, transicoes, perguntas, provider, instancia_id, prompt_sistema, auto_complemento, max_mensagens, max_duracao_horas')
           .eq('estagio_id', conv.estagio_id)
           .eq('empresa_id', conv.empresa_id)
           .maybeSingle();
 
         if (!config) continue;
+
+        // Guardrail: limite de mensagens por conversa
+        const maxMsgs = config.max_mensagens || 50;
+        if (conv.total_mensagens >= maxMsgs) {
+          log(`Conv ${conv.id}: limite de ${maxMsgs} mensagens atingido. Encerrando conversa.`);
+          await sb.from('crm_ai_conversations').update({ status: 'completed' }).eq('id', conv.id);
+          continue;
+        }
 
         // 2a. Sync inbound messages from Evolution API (poll)
         if (config.provider === 'evolution' && conv.contato_telefone && config.instancia_id) {
@@ -82,6 +90,28 @@ serve(async (req) => {
               .select('*').eq('id', conv.id).maybeSingle();
             if (updatedConv) Object.assign(conv, updatedConv);
           }
+        }
+
+        // Guardrail: opt-out do contato
+        const msgs = (conv.mensagens || []) as any[];
+        const lastUserMsg = [...msgs].reverse().find((m: any) => m.role === 'user');
+        if (lastUserMsg) {
+          const optOutKeywords = ['sair', 'parar', 'cancelar', 'não quero mais', 'stop', 'pare', 'desinscrever'];
+          const msgLower = (lastUserMsg.content || '').toLowerCase().trim();
+          if (optOutKeywords.some(kw => msgLower === kw || msgLower.startsWith(kw + ' '))) {
+            log(`Conv ${conv.id}: OPT-OUT detectado ("${msgLower}"). Pausando conversa.`);
+            await sb.from('crm_ai_conversations').update({ status: 'paused' }).eq('id', conv.id);
+            continue;
+          }
+        }
+
+        // Guardrail: duração máxima da conversa
+        const maxHours = config.max_duracao_horas || 72;
+        const convAge = (Date.now() - new Date(conv.criado_em).getTime()) / 3600000;
+        if (convAge > maxHours) {
+          log(`Conv ${conv.id}: duração máxima de ${maxHours}h excedida (${Math.round(convAge)}h). Encerrando.`);
+          await sb.from('crm_ai_conversations').update({ status: 'completed' }).eq('id', conv.id);
+          continue;
         }
 
         // 2b. Avaliar transições automáticas
@@ -97,7 +127,6 @@ serve(async (req) => {
         if (!config.followups?.length) continue;
 
         const followups = config.followups as any[];
-        const msgs = (conv.mensagens || []) as any[];
         const convCreatedAt = new Date(conv.criado_em).getTime();
         const now = Date.now();
 

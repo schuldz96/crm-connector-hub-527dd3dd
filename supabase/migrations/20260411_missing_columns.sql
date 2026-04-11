@@ -11,3 +11,7 @@ ALTER TABLE crm.estagio_ia_config ADD COLUMN IF NOT EXISTS instancia_modo text D
 
 -- ai.configuracoes — palavras_proibidas
 ALTER TABLE ai.configuracoes ADD COLUMN IF NOT EXISTS palavras_proibidas jsonb DEFAULT '[]'::jsonb;
+
+-- Guardrails
+ALTER TABLE crm.estagio_ia_config ADD COLUMN IF NOT EXISTS max_mensagens integer DEFAULT 50;
+ALTER TABLE crm.estagio_ia_config ADD COLUMN IF NOT EXISTS max_duracao_horas integer DEFAULT 72;
