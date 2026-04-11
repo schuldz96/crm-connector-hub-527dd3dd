@@ -19,6 +19,7 @@ import {
   ButtonBlockProps,
   FormBlockProps,
   SpacerBlockProps,
+  ColumnsBlockProps,
 } from '@/components/lp-editor/lp-editor-types';
 
 interface LPEditorPropertiesProps {
@@ -35,6 +36,7 @@ const BLOCK_TYPE_LABELS: Record<LPBlockType, string> = {
   button: 'Botao',
   form: 'Formulario',
   spacer: 'Espacador',
+  columns: 'Colunas',
 };
 
 function ColorField({
@@ -356,6 +358,67 @@ function SpacerProperties({
   );
 }
 
+function ColumnsProperties({
+  block,
+  onUpdate,
+}: {
+  block: LPBlock;
+  onUpdate: LPEditorPropertiesProps['onUpdate'];
+}) {
+  const props = block.props as ColumnsBlockProps;
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1.5">
+        <Label className="text-xs">Número de colunas</Label>
+        <Select
+          value={String(props.columnCount)}
+          onValueChange={(v) => {
+            const count = Number(v) as 1 | 2 | 3;
+            const contents = Array.from({ length: count }, (_, i) => props.contents?.[i] || `Coluna ${i + 1}`);
+            onUpdate(block.id, { columnCount: count, contents });
+          }}
+        >
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="1">1 coluna</SelectItem>
+            <SelectItem value="2">2 colunas</SelectItem>
+            <SelectItem value="3">3 colunas</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1.5">
+        <Label className="text-xs">Espaçamento (gap)</Label>
+        <div className="flex items-center gap-3">
+          <input
+            type="range"
+            min={0}
+            max={48}
+            step={4}
+            value={props.gap}
+            onChange={(e) => onUpdate(block.id, { gap: Number(e.target.value) })}
+            className="flex-1"
+          />
+          <span className="text-xs text-muted-foreground w-12 text-right">{props.gap}px</span>
+        </div>
+      </div>
+      {Array.from({ length: props.columnCount }, (_, i) => (
+        <div key={i} className="space-y-1.5">
+          <Label className="text-xs">Coluna {i + 1}</Label>
+          <Input
+            value={props.contents?.[i] || ''}
+            onChange={(e) => {
+              const newContents = [...(props.contents || [])];
+              newContents[i] = e.target.value;
+              onUpdate(block.id, { contents: newContents });
+            }}
+            placeholder={`Conteúdo da coluna ${i + 1}`}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function LPEditorProperties({
   block,
   forms,
@@ -390,6 +453,8 @@ export function LPEditorProperties({
         );
       case 'spacer':
         return <SpacerProperties block={block} onUpdate={onUpdate} />;
+      case 'columns':
+        return <ColumnsProperties block={block} onUpdate={onUpdate} />;
       default:
         return null;
     }

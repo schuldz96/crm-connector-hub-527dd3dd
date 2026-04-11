@@ -1,5 +1,5 @@
 // Block types supported by the editor
-export type LPBlockType = 'hero' | 'text' | 'image' | 'button' | 'form' | 'spacer';
+export type LPBlockType = 'hero' | 'text' | 'image' | 'button' | 'form' | 'spacer' | 'columns';
 
 // Props for each block type
 export interface HeroBlockProps {
@@ -39,6 +39,12 @@ export interface SpacerBlockProps {
   height: number; // in px
 }
 
+export interface ColumnsBlockProps {
+  columnCount: 1 | 2 | 3;
+  gap: number; // in px
+  contents: string[]; // placeholder text per column
+}
+
 // Union type for all block props
 export type LPBlockProps =
   | HeroBlockProps
@@ -46,7 +52,8 @@ export type LPBlockProps =
   | ImageBlockProps
   | ButtonBlockProps
   | FormBlockProps
-  | SpacerBlockProps;
+  | SpacerBlockProps
+  | ColumnsBlockProps;
 
 // A single block in the editor
 export interface LPBlock {
@@ -101,6 +108,11 @@ export const DEFAULT_BLOCK_PROPS: Record<LPBlockType, LPBlockProps> = {
   spacer: {
     height: 40,
   } as SpacerBlockProps,
+  columns: {
+    columnCount: 2,
+    gap: 16,
+    contents: ['Coluna 1', 'Coluna 2'],
+  } as ColumnsBlockProps,
 };
 
 // Block catalog for the sidebar
@@ -111,4 +123,5 @@ export const BLOCK_CATALOG: BlockCatalogItem[] = [
   { type: 'button', label: 'Botao', icon: 'MousePointerClick', defaultProps: DEFAULT_BLOCK_PROPS.button },
   { type: 'form', label: 'Formulario', icon: 'FileText', defaultProps: DEFAULT_BLOCK_PROPS.form },
   { type: 'spacer', label: 'Espacador', icon: 'SeparatorHorizontal', defaultProps: DEFAULT_BLOCK_PROPS.spacer },
+  { type: 'columns', label: 'Colunas (1/2/3)', icon: 'Columns3', defaultProps: DEFAULT_BLOCK_PROPS.columns },
 ];

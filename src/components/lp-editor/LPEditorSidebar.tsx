@@ -6,6 +6,7 @@ import {
   MousePointerClick,
   FileText,
   SeparatorHorizontal,
+  Columns3,
   GripVertical,
   LayoutGrid,
   LucideIcon,
@@ -20,6 +21,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   MousePointerClick,
   FileText,
   SeparatorHorizontal,
+  Columns3,
 };
 
 interface LPEditorSidebarProps {

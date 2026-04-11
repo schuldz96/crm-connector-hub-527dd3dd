@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { DndContext, DragEndEvent } from '@dnd-kit/core';
+import { DndContext, DragEndEvent, DragStartEvent, DragOverlay } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { ArrowLeft, Save, Globe, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { LPEditorSidebar } from '@/components/lp-editor/LPEditorSidebar';
 import LPEditorCanvas from '@/components/lp-editor/LPEditorCanvas';
 import { LPEditorProperties } from '@/components/lp-editor/LPEditorProperties';
-import { DEFAULT_BLOCK_PROPS } from '@/components/lp-editor/lp-editor-types';
+import { DEFAULT_BLOCK_PROPS, BLOCK_CATALOG } from '@/components/lp-editor/lp-editor-types';
 import type { LPBlock, LPBlockType } from '@/components/lp-editor/lp-editor-types';
 import { useOrgNavigate } from '@/hooks/useOrgNavigate';
 import { supabase } from '@/integrations/supabase/client';
@@ -39,6 +39,7 @@ export default function CRMLandingPageEditorPage() {
   const [forms, setForms] = useState<{ id: string; nome: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [activeDragLabel, setActiveDragLabel] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -151,7 +152,20 @@ export default function CRMLandingPageEditorPage() {
 
   // --- DnD ---
 
+  function handleDragStart(event: DragStartEvent) {
+    const fromCatalog = event.active.data.current?.fromCatalog;
+    if (fromCatalog) {
+      const type = event.active.data.current?.type as LPBlockType;
+      const catalogItem = BLOCK_CATALOG.find((c) => c.type === type);
+      setActiveDragLabel(catalogItem?.label || type);
+    } else {
+      const block = blocks.find((b) => b.id === event.active.id);
+      setActiveDragLabel(block ? block.type : null);
+    }
+  }
+
   function handleDragEnd(event: DragEndEvent) {
+    setActiveDragLabel(null);
     const { active, over } = event;
     if (!over) return;
 
@@ -342,7 +356,7 @@ export default function CRMLandingPageEditorPage() {
       </div>
 
       {/* Editor body */}
-      <DndContext onDragEnd={handleDragEnd}>
+      <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="flex flex-1 overflow-hidden">
           <LPEditorSidebar onAddBlock={handleAddBlock} />
 
@@ -360,6 +374,14 @@ export default function CRMLandingPageEditorPage() {
             onDelete={handleDeleteBlock}
           />
         </div>
+
+        <DragOverlay dropAnimation={null}>
+          {activeDragLabel ? (
+            <div className="px-4 py-2 rounded-lg bg-primary text-primary-foreground shadow-xl text-sm font-medium pointer-events-none">
+              {activeDragLabel}
+            </div>
+          ) : null}
+        </DragOverlay>
       </DndContext>
     </div>
   );

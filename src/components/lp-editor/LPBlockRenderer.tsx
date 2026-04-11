@@ -1,5 +1,6 @@
 import { Image, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Columns3 } from 'lucide-react';
 import type {
   LPBlock,
   HeroBlockProps,
@@ -8,6 +9,7 @@ import type {
   ButtonBlockProps,
   FormBlockProps,
   SpacerBlockProps,
+  ColumnsBlockProps,
 } from './lp-editor-types';
 
 interface LPBlockRendererProps {
@@ -130,6 +132,24 @@ function SpacerBlock({ props }: { props: SpacerBlockProps }) {
   return <div style={{ height: `${props.height}px` }} />;
 }
 
+function ColumnsBlock({ props }: { props: ColumnsBlockProps }) {
+  const cols = Array.from({ length: props.columnCount }, (_, i) => props.contents?.[i] || `Coluna ${i + 1}`);
+  return (
+    <div className="p-4">
+      <div className="flex" style={{ gap: `${props.gap}px` }}>
+        {cols.map((content, i) => (
+          <div
+            key={i}
+            className="flex-1 min-h-[80px] rounded border-2 border-dashed border-muted-foreground/20 bg-muted/30 p-4 flex items-center justify-center"
+          >
+            <span className="text-sm text-muted-foreground">{content}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function LPBlockRenderer({ block, selected, onClick }: LPBlockRendererProps) {
   const wrapperClasses = cn(
     'relative transition-shadow',
@@ -151,6 +171,8 @@ export function LPBlockRenderer({ block, selected, onClick }: LPBlockRendererPro
         return <FormBlock props={block.props as FormBlockProps} />;
       case 'spacer':
         return <SpacerBlock props={block.props as SpacerBlockProps} />;
+      case 'columns':
+        return <ColumnsBlock props={block.props as ColumnsBlockProps} />;
       default:
         return null;
     }
