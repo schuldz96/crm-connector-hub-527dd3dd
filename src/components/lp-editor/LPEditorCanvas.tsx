@@ -1,9 +1,12 @@
+import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, LayoutTemplate } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LPBlockRenderer } from './LPBlockRenderer';
 import type { LPBlock } from './lp-editor-types';
+
+export const CANVAS_DROPPABLE_ID = 'lp-canvas-drop-zone';
 
 interface LPEditorCanvasProps {
   blocks: LPBlock[];
@@ -49,9 +52,10 @@ export default function LPEditorCanvas({
   blocks,
   selectedBlockId,
   onSelectBlock,
-  onReorderBlocks,
 }: LPEditorCanvasProps) {
   const blockIds = blocks.map((b) => b.id);
+
+  const { setNodeRef, isOver } = useDroppable({ id: CANVAS_DROPPABLE_ID });
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
@@ -65,15 +69,22 @@ export default function LPEditorCanvas({
       onClick={handleCanvasClick}
     >
       <div
-        className="max-w-3xl mx-auto bg-white min-h-[600px] rounded-lg shadow relative"
+        ref={setNodeRef}
+        className={cn(
+          'max-w-3xl mx-auto bg-white min-h-[600px] rounded-lg shadow relative transition-all',
+          isOver && 'ring-2 ring-primary ring-dashed',
+        )}
         onClick={handleCanvasClick}
       >
         {blocks.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-[600px] text-muted-foreground">
-            <div className="rounded-xl border-2 border-dashed border-muted-foreground/25 p-12 flex flex-col items-center gap-4">
-              <LayoutTemplate className="w-12 h-12 text-muted-foreground/40" />
+            <div className={cn(
+              'rounded-xl border-2 border-dashed p-12 flex flex-col items-center gap-4 transition-colors',
+              isOver ? 'border-primary bg-primary/5' : 'border-muted-foreground/25',
+            )}>
+              <LayoutTemplate className={cn('w-12 h-12', isOver ? 'text-primary' : 'text-muted-foreground/40')} />
               <p className="text-sm text-center max-w-[240px]">
-                Arraste modulos da barra lateral ou clique para adicionar
+                {isOver ? 'Solte aqui para adicionar' : 'Arraste módulos da barra lateral ou clique para adicionar'}
               </p>
             </div>
           </div>
@@ -88,6 +99,10 @@ export default function LPEditorCanvas({
                   onSelect={() => onSelectBlock(block.id)}
                 />
               ))}
+              {/* Drop indicator at bottom when dragging over */}
+              {isOver && blocks.length > 0 && (
+                <div className="h-1 bg-primary rounded-full animate-pulse" />
+              )}
             </div>
           </SortableContext>
         )}

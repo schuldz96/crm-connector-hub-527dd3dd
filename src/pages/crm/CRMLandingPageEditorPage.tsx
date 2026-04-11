@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { LPEditorSidebar } from '@/components/lp-editor/LPEditorSidebar';
-import LPEditorCanvas from '@/components/lp-editor/LPEditorCanvas';
+import LPEditorCanvas, { CANVAS_DROPPABLE_ID } from '@/components/lp-editor/LPEditorCanvas';
 import { LPEditorProperties } from '@/components/lp-editor/LPEditorProperties';
 import { DEFAULT_BLOCK_PROPS, BLOCK_CATALOG } from '@/components/lp-editor/lp-editor-types';
 import type { LPBlock, LPBlockType } from '@/components/lp-editor/lp-editor-types';
@@ -167,12 +167,14 @@ export default function CRMLandingPageEditorPage() {
   function handleDragEnd(event: DragEndEvent) {
     setActiveDragLabel(null);
     const { active, over } = event;
-    if (!over) return;
 
     const fromCatalog = active.data.current?.fromCatalog === true;
 
     if (fromCatalog) {
-      // New block from sidebar catalog
+      // New block from sidebar → dropped on canvas or any target
+      const droppedOnCanvas = over?.id === CANVAS_DROPPABLE_ID || over !== null;
+      if (!droppedOnCanvas && !over) return;
+
       const type = active.data.current?.type as LPBlockType;
       if (type) {
         const newBlock: LPBlock = {
@@ -180,11 +182,26 @@ export default function CRMLandingPageEditorPage() {
           type,
           props: { ...DEFAULT_BLOCK_PROPS[type] },
         };
+        // If dropped over an existing block, insert after it
+        if (over && over.id !== CANVAS_DROPPABLE_ID) {
+          const overIndex = blocks.findIndex((b) => b.id === over.id);
+          if (overIndex !== -1) {
+            setBlocks((prev) => {
+              const copy = [...prev];
+              copy.splice(overIndex + 1, 0, newBlock);
+              return copy;
+            });
+            setSelectedBlockId(newBlock.id);
+            return;
+          }
+        }
+        // Otherwise add at the end
         setBlocks((prev) => [...prev, newBlock]);
         setSelectedBlockId(newBlock.id);
       }
     } else {
       // Reorder within canvas
+      if (!over || active.id === over.id) return;
       const oldIndex = blocks.findIndex((b) => b.id === active.id);
       const newIndex = blocks.findIndex((b) => b.id === over.id);
       if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
