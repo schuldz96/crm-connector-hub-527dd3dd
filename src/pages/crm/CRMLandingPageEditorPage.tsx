@@ -12,6 +12,7 @@ import LPEditorCanvas, { CANVAS_DROPPABLE_ID } from '@/components/lp-editor/LPEd
 import { LPEditorProperties } from '@/components/lp-editor/LPEditorProperties';
 import { DEFAULT_BLOCK_PROPS, DEFAULT_BLOCK_STYLES, BLOCK_CATALOG_FLAT } from '@/components/lp-editor/lp-editor-types';
 import type { LPBlock, LPBlockType, BlockStyles } from '@/components/lp-editor/lp-editor-types';
+import { LP_TEMPLATES } from '@/components/lp-editor/lp-templates';
 import { useOrgNavigate } from '@/hooks/useOrgNavigate';
 import { supabase } from '@/integrations/supabase/client';
 import { getOrgAndEmpresaId } from '@/lib/saas';
@@ -42,6 +43,7 @@ export default function CRMLandingPageEditorPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeDragLabel, setActiveDragLabel] = useState<string | null>(null);
+  const [templatePicked, setTemplatePicked] = useState(!isNew); // skip template picker when editing
 
   // Responsive preview
   type PreviewMode = 'desktop' | 'tablet' | 'mobile';
@@ -376,6 +378,42 @@ export default function CRMLandingPageEditorPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // Template picker for new LPs
+  if (isNew && !templatePicked) {
+    return (
+      <div className="min-h-screen bg-background p-8">
+        <div className="max-w-4xl mx-auto">
+          <Button variant="ghost" size="sm" onClick={() => navigate('/crm/landing-pages')} className="gap-1.5 mb-6">
+            <ArrowLeft className="w-4 h-4" /> Voltar
+          </Button>
+          <h1 className="text-2xl font-bold mb-2">Escolha um template</h1>
+          <p className="text-muted-foreground mb-8">Selecione um modelo para começar sua Landing Page</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {LP_TEMPLATES.map((tpl) => (
+              <button
+                key={tpl.id}
+                onClick={() => {
+                  if (tpl.blocks.length > 0) {
+                    const cloned = JSON.parse(JSON.stringify(tpl.blocks)).map((b: LPBlock) => ({ ...b, id: crypto.randomUUID(), styles: b.styles || { ...DEFAULT_BLOCK_STYLES } }));
+                    setBlocks(cloned);
+                    pushHistory(cloned);
+                  }
+                  setTemplatePicked(true);
+                }}
+                className="rounded-xl border-2 border-border hover:border-primary p-6 text-left transition-all hover:shadow-lg group bg-card"
+              >
+                <span className="text-4xl block mb-3">{tpl.preview}</span>
+                <h3 className="font-semibold text-sm group-hover:text-primary transition-colors">{tpl.name}</h3>
+                <p className="text-xs text-muted-foreground mt-1">{tpl.description}</p>
+                <span className="text-[10px] text-muted-foreground/60 mt-2 block">{tpl.blocks.length} blocos</span>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
