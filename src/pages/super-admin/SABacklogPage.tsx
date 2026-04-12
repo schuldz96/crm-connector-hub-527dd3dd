@@ -142,7 +142,8 @@ export default function SABacklogPage() {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => { loadTasks(); }, [loadTasks]);
 
