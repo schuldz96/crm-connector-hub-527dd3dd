@@ -10,6 +10,7 @@ import { RolePermissionsProvider } from "@/contexts/RolePermissionsContext";
 import { AuditLogProvider } from "@/contexts/AuditLogContext";
 import { NotificationsProvider } from "@/contexts/NotificationsContext";
 import { LicenseProvider } from "@/contexts/LicenseContext";
+import { ThemeProvider } from "@/contexts/ThemeContext";
 import AppLayout from "@/components/AppLayout";
 import RequireRole from "@/components/RequireRole";
 import RequireLicense from "@/components/RequireLicense";
@@ -200,6 +201,7 @@ function RootRedirect() {
 }
 
 const App = () => (
+  <ThemeProvider>
   <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -249,6 +251,7 @@ const App = () => (
       </TooltipProvider>
     </QueryClientProvider>
   </GoogleOAuthProvider>
+  </ThemeProvider>
 );
 
 function LoginPageWrapper() {

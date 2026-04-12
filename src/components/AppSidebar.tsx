@@ -16,8 +16,10 @@ import {
   Contact, Briefcase, Ticket, Factory, List,
   ClipboardCheck, TrendingUp, Headphones, Megaphone, Mail, FileText, CheckSquare, Globe,
   ShoppingCart, HeartPulse, Rocket, Star,
-  DollarSign, BarChart3, PieChart, Settings,
+  DollarSign, BarChart3, PieChart, Settings, Sun, Moon, Palette,
 } from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
+import type { AccentColor } from '@/contexts/ThemeContext';
 import { cn } from '@/lib/utils';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
@@ -179,6 +181,7 @@ export default function AppSidebar() {
   const { isModuleEnabledForUser, configLoaded } = useAppConfig();
   const { getPermission } = useRolePermissions();
   const { canAccessModule, loaded: licenseLoaded } = useLicense();
+  const { mode, accent, setMode, setAccent, isDark } = useTheme();
   const location = useLocation();
   const navigate = useOrgNavigate();
   const cleanPath = usePathWithoutOrg();
@@ -394,6 +397,26 @@ export default function AppSidebar() {
           >
             <User className="w-4 h-4" /> Meu Perfil
           </button>
+          {/* Theme toggle */}
+          <div className="px-4 py-2 border-t border-border">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-muted-foreground flex items-center gap-1.5"><Palette className="w-3 h-3" /> Tema</span>
+              <button
+                onClick={() => setMode(isDark ? 'light' : 'dark')}
+                className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+            <div className="flex gap-1.5">
+              {(['indigo', 'blue', 'green', 'red', 'orange', 'pink', 'violet'] as AccentColor[]).map(c => (
+                <button key={c} onClick={() => setAccent(c)}
+                  className={cn('w-5 h-5 rounded-full border-2 transition-all', accent === c ? 'border-foreground scale-110' : 'border-transparent')}
+                  style={{ backgroundColor: `hsl(${{'indigo':'234 89% 74%','blue':'217 91% 60%','green':'142 76% 36%','red':'0 84% 60%','orange':'25 95% 53%','pink':'330 81% 60%','violet':'263 70% 50%'}[c]})` }}
+                />
+              ))}
+            </div>
+          </div>
           <button
             onClick={logout}
             className="flex items-center gap-2.5 w-full px-4 py-2 text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
