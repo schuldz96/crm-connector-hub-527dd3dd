@@ -620,23 +620,7 @@ function TaskCard({ task, onEdit, onDelete, onDragStart }: {
         </span>
       </div>
       <p className="text-xs font-semibold text-foreground leading-snug mb-1.5">{task.titulo}</p>
-      {task.imagem_url && (() => {
-        const imgs = parseImages(task.imagem_url);
-        if (imgs.length === 0) return null;
-        if (imgs.length === 1) return <img src={imgs[0]} alt="" className="w-full max-h-24 object-cover rounded-md border border-border mb-1.5" />;
-        return (
-          <div className="grid grid-cols-2 gap-1 mb-1.5">
-            {imgs.slice(0, 4).map((img, i) => (
-              <div key={i} className="relative">
-                <img src={img} alt="" className="w-full h-14 object-cover rounded border border-border" />
-                {i === 3 && imgs.length > 4 && (
-                  <div className="absolute inset-0 bg-black/50 rounded flex items-center justify-center text-white text-xs font-bold">+{imgs.length - 4}</div>
-                )}
-              </div>
-            ))}
-          </div>
-        );
-      })()}
+      {/* Imagens exibidas apenas ao abrir/editar a task */}
       {task.descricao && (
         <p className="text-[10px] text-muted-foreground leading-relaxed line-clamp-2 mb-2">{task.descricao}</p>
       )}
