@@ -52,6 +52,7 @@ const NAV_SECTIONS: NavSection[] = [
           { path: '/dashboard',   label: 'Dashboard',  icon: LayoutDashboard, resource: 'dashboard' },
           { path: '/meetings',    label: 'Reuniões',    icon: Video,           resource: 'meetings' },
           { path: '/whatsapp',    label: 'WhatsApp',    icon: MessageSquare,   resource: 'whatsapp' },
+          { path: '/training',    label: 'Treinamentos', icon: GraduationCap,  resource: 'training' },
         ],
       },
     ],
@@ -119,20 +120,6 @@ const NAV_SECTIONS: NavSection[] = [
           { path: '/marketing/email-marketing', label: 'E-mail Marketing', icon: Mail,      resource: 'email-marketing' },
           { path: '/crm/forms',                label: 'Formulários',      icon: FileText,  resource: 'crm' },
           { path: '/crm/landing-pages',        label: 'Landing Pages',    icon: Globe,     resource: 'crm' },
-        ],
-      },
-    ],
-  },
-  {
-    label: 'Vendas',
-    items: [
-      {
-        path: '/sales',
-        label: 'Vendas',
-        icon: ShoppingCart,
-        resource: 'meetings',
-        children: [
-          { path: '/training', label: 'Treinamentos',  icon: GraduationCap, resource: 'training' },
         ],
       },
     ],
