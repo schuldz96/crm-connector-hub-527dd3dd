@@ -16,6 +16,7 @@ import {
   Contact, Briefcase, Ticket, Factory, List,
   ClipboardCheck, TrendingUp, Headphones, Megaphone, Mail, FileText, CheckSquare, Globe,
   ShoppingCart, HeartPulse, Rocket, Star,
+  DollarSign, BarChart3, PieChart, Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -49,7 +50,6 @@ const NAV_SECTIONS: NavSection[] = [
           { path: '/dashboard',   label: 'Dashboard',  icon: LayoutDashboard, resource: 'dashboard' },
           { path: '/meetings',    label: 'Reuniões',    icon: Video,           resource: 'meetings' },
           { path: '/whatsapp',    label: 'WhatsApp',    icon: MessageSquare,   resource: 'whatsapp' },
-          { path: '/performance', label: 'Desempenho',  icon: Activity,        resource: 'performance' },
         ],
       },
     ],
@@ -81,11 +81,10 @@ const NAV_SECTIONS: NavSection[] = [
         path: '/revops',
         label: 'REVops',
         icon: TrendingUp,
-        resource: 'integrations',
+        resource: 'dashboard',
         children: [
-          { path: '/integrations', label: 'Integrações', icon: Plug2,             resource: 'integrations' },
-          { path: '/automations',  label: 'Automações',  icon: Bell,              resource: 'automations' },
-          { path: '/ai-config',    label: 'Config. IA',  icon: SlidersHorizontal, resource: 'ai-config' },
+          { path: '/reports',      label: 'Relatórios',  icon: BarChart3,   resource: 'reports' },
+          { path: '/performance',  label: 'Performance',  icon: TrendingUp,  resource: 'performance' },
         ],
       },
     ],
@@ -155,7 +154,18 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Sistema',
     items: [
-      { path: '/admin?s=company', label: 'Admin',    icon: Shield, resource: 'admin' },
+      {
+        path: '/system',
+        label: 'Sistema',
+        icon: Settings,
+        resource: 'admin',
+        children: [
+          { path: '/admin?s=company', label: 'Admin',        icon: Shield,            resource: 'admin' },
+          { path: '/integrations',    label: 'Integrações',  icon: Plug2,             resource: 'integrations' },
+          { path: '/automations',     label: 'Automações',   icon: Bell,              resource: 'automations' },
+          { path: '/ai-config',       label: 'Config. IA',   icon: SlidersHorizontal, resource: 'ai-config' },
+        ],
+      },
     ],
   },
 ];
