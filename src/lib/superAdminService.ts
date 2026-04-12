@@ -130,6 +130,104 @@ export async function getAllOrganizations(): Promise<Organization[]> {
   return (data ?? []) as Organization[];
 }
 
+export async function createOrganization(org: {
+  nome: string;
+  dominio?: string;
+  ativo?: boolean;
+}): Promise<Organization> {
+  // Format: [A-Z][0-9]{10}[A-Z] — ex: A1234567890Z
+  const letter = () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 26)];
+  const digits = Array.from({ length: 10 }, () => Math.floor(Math.random() * 10)).join('');
+  const orgKey = `${letter()}${digits}${letter()}`;
+
+  const { data, error } = await core()
+    .from('empresas')
+    .insert({ ...org, org: orgKey })
+    .select()
+    .single();
+
+  if (error) throw new Error(`Erro ao criar organizacao: ${error.message}`);
+  return data as Organization;
+}
+
+export async function inviteUserToOrg(payload: {
+  email: string;
+  nome: string;
+  papel: string;
+  empresa_id: string;
+  org: string;
+  area_id?: string | null;
+  time_id?: string | null;
+}): Promise<{ success: boolean; user_id: string }> {
+  const { data, error } = await supabaseSaas.functions.invoke('admin-invite-user', {
+    body: payload,
+  });
+  if (error) {
+    try {
+      const ctx: any = (error as any).context;
+      if (ctx?.body) {
+        const parsed = typeof ctx.body === 'string' ? JSON.parse(ctx.body) : ctx.body;
+        if (parsed?.error) throw new Error(parsed.error);
+      }
+    } catch (parseErr: any) {
+      if (parseErr?.message && parseErr.message !== error.message) throw parseErr;
+    }
+    throw new Error(`Erro ao convidar usuario: ${error.message}`);
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+function calcProximoPagamento(inicioEm: Date, ciclo: string, status: string, trialAte?: string): string | null {
+  if (status === 'trial' && trialAte) return new Date(trialAte).toISOString();
+  if (status === 'cancelada' || status === 'suspensa' || status === 'expirada') return null;
+  const next = new Date(inicioEm);
+  if (ciclo === 'anual') next.setFullYear(next.getFullYear() + 1);
+  else next.setMonth(next.getMonth() + 1);
+  return next.toISOString();
+}
+
+export async function createSubscription(sub: {
+  org: string;
+  plano_id: string;
+  ciclo?: string;
+  status?: string;
+  trial_ate?: string;
+}): Promise<Subscription> {
+  const ciclo = sub.ciclo ?? 'mensal';
+  const status = sub.status ?? 'ativa';
+  const inicioEm = new Date();
+  const proximoPagamento = calcProximoPagamento(inicioEm, ciclo, status, sub.trial_ate);
+
+  const { data, error } = await admin()
+    .from('assinaturas')
+    .insert({
+      org: sub.org,
+      plano_id: sub.plano_id,
+      ciclo,
+      status,
+      trial_ate: sub.trial_ate ?? null,
+      inicio_em: inicioEm.toISOString(),
+      proximo_pagamento: proximoPagamento,
+    })
+    .select('*,planos(nome)')
+    .single();
+
+  if (error) throw new Error(`Erro ao criar assinatura: ${error.message}`);
+  return {
+    id: data.id,
+    org: data.org,
+    plano_id: data.plano_id,
+    status: data.status,
+    ciclo: data.ciclo,
+    trial_ate: data.trial_ate ?? undefined,
+    inicio_em: data.inicio_em,
+    plano_nome: (data as any).planos?.nome ?? undefined,
+    proximo_pagamento: data.proximo_pagamento ?? undefined,
+    cancelado_em: data.cancelado_em ?? undefined,
+  };
+}
+
 export async function getOrgDetail(org: string): Promise<Organization | null> {
   const { data, error } = await core()
     .from('empresas')
