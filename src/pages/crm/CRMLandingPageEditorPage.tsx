@@ -34,6 +34,7 @@ export default function CRMLandingPageEditorPage() {
 
   const [blocks, setBlocks] = useState<LPBlock[]>([]);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  const [selectedColumnIndex, setSelectedColumnIndex] = useState<number | null>(null);
   const [lpName, setLpName] = useState('');
   const [lpSlug, setLpSlug] = useState('');
   const [lpStatus, setLpStatus] = useState('rascunho');
@@ -161,6 +162,15 @@ export default function CRMLandingPageEditorPage() {
     }
   }
 
+  function handleSelectBlock(blockId: string | null) {
+    setSelectedBlockId(blockId);
+    setSelectedColumnIndex(null); // reset column selection when switching blocks
+  }
+
+  function handleSelectColumn(colIndex: number | null) {
+    setSelectedColumnIndex(colIndex);
+  }
+
   // --- Block handlers ---
 
   function handleAddBlock(type: LPBlockType) {
@@ -193,7 +203,7 @@ export default function CRMLandingPageEditorPage() {
   function handleDeleteBlock(blockId: string) {
     const newBlocks = blocks.filter((b) => b.id !== blockId);
     setBlocks(newBlocks);
-    if (selectedBlockId === blockId) setSelectedBlockId(null);
+    if (selectedBlockId === blockId) { setSelectedBlockId(null); setSelectedColumnIndex(null); }
     pushHistory(newBlocks);
   }
 
@@ -469,7 +479,9 @@ export default function CRMLandingPageEditorPage() {
           <LPEditorCanvas
             blocks={blocks}
             selectedBlockId={selectedBlockId}
-            onSelectBlock={setSelectedBlockId}
+            selectedColumnIndex={selectedColumnIndex}
+            onSelectBlock={handleSelectBlock}
+            onSelectColumn={handleSelectColumn}
             onReorderBlocks={handleReorderBlocks}
             previewMode={previewMode}
             onMoveBlock={handleMoveBlock}
@@ -478,6 +490,7 @@ export default function CRMLandingPageEditorPage() {
 
           <LPEditorProperties
             block={selectedBlock}
+            selectedColumnIndex={selectedColumnIndex}
             forms={forms}
             onUpdate={handleUpdateBlock}
             onUpdateStyles={handleUpdateStyles}

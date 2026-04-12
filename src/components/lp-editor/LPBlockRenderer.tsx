@@ -25,7 +25,9 @@ import { getColumnWidths } from './lp-editor-types';
 interface LPBlockRendererProps {
   block: LPBlock;
   selected?: boolean;
+  selectedColumnIndex?: number | null;
   onClick?: () => void;
+  onClickColumn?: (colIndex: number) => void;
 }
 
 // ── Lookup Maps ─────────────────────────────────────────────
@@ -181,10 +183,26 @@ function ButtonBlock({ props }: { props: ButtonBlockProps }) {
 
 function FormBlock({ props }: { props: FormBlockProps }) {
   return (
-    <div className="px-6 py-4">
-      <div className="flex items-center gap-3 rounded-lg border border-dashed border-muted-foreground/30 bg-muted/50 p-6">
-        <FileText className="h-5 w-5 text-muted-foreground" />
-        <span className="text-sm text-muted-foreground">{props.formId ? `Formulário vinculado: ${props.formId}` : 'Nenhum formulário vinculado'}</span>
+    <div className="w-full" style={{ backgroundColor: props.bgColor || '#f8fafc', color: props.textColor || '#0f172a', padding: '48px 32px' }}>
+      <div className="max-w-lg mx-auto">
+        {props.title && <h2 className="text-2xl font-bold mb-2 text-center">{props.title}</h2>}
+        {props.subtitle && <p className="text-sm opacity-70 mb-6 text-center">{props.subtitle}</p>}
+        {!props.formId ? (
+          <div className="flex items-center gap-3 rounded-lg border border-dashed border-muted-foreground/30 bg-white/50 p-6">
+            <FileText className="h-5 w-5 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Selecione um formulário nas propriedades</span>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {/* Preview placeholder fields */}
+            <div className="rounded-lg border bg-white p-3"><div className="text-xs text-muted-foreground mb-1">Nome *</div><div className="h-9 rounded-md bg-muted/50 border" /></div>
+            <div className="rounded-lg border bg-white p-3"><div className="text-xs text-muted-foreground mb-1">E-mail *</div><div className="h-9 rounded-md bg-muted/50 border" /></div>
+            <div className="rounded-lg border bg-white p-3"><div className="text-xs text-muted-foreground mb-1">Telefone</div><div className="h-9 rounded-md bg-muted/50 border" /></div>
+            <button className="w-full py-3 rounded-lg text-white font-medium text-sm" style={{ backgroundColor: props.buttonColor || '#6366f1' }}>
+              {props.buttonText || 'Enviar'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -289,7 +307,7 @@ function ColumnItemRenderer({ item }: { item: ColumnItem }) {
 
 // ── Columns ─────────────────────────────────────────────────
 
-function ColumnsBlock({ props }: { props: ColumnsBlockProps }) {
+function ColumnsBlock({ props, selectedColumnIndex, onClickColumn }: { props: ColumnsBlockProps; selectedColumnIndex?: number | null; onClickColumn?: (i: number) => void }) {
   const cols = props.columns || [];
   const widths = getColumnWidths(props.layout || '50-50');
   const count = widths.length;
@@ -306,13 +324,18 @@ function ColumnsBlock({ props }: { props: ColumnsBlockProps }) {
           return (
             <div
               key={i}
-              className={cn('min-h-[120px] rounded-xl shadow-sm flex flex-col gap-3', vAlignClass)}
+              className={cn(
+                'min-h-[120px] rounded-xl shadow-sm flex flex-col gap-3 transition-all cursor-pointer',
+                vAlignClass,
+                selectedColumnIndex === i && 'ring-2 ring-primary/70',
+              )}
               style={{
                 width: widths[i],
                 flexShrink: 0,
                 padding: col.padding ?? 20,
                 backgroundColor: col.bgColor || 'rgba(255,255,255,0.9)',
               }}
+              onClick={(e) => { e.stopPropagation(); onClickColumn?.(i); }}
             >
               {(col.items && col.items.length > 0) ? (
                 col.items.map((item) => <ColumnItemRenderer key={item.id} item={item} />)
@@ -511,7 +534,7 @@ function DividerBlock({ props }: { props: DividerBlockProps }) {
 
 // ── Main Renderer ───────────────────────────────────────────
 
-export function LPBlockRenderer({ block, selected, onClick }: LPBlockRendererProps) {
+export function LPBlockRenderer({ block, selected, selectedColumnIndex, onClick, onClickColumn }: LPBlockRendererProps) {
   const universalStyle = applyBlockStyles(block.styles);
 
   const renderBlock = () => {
@@ -523,7 +546,7 @@ export function LPBlockRenderer({ block, selected, onClick }: LPBlockRendererPro
       case 'button': return <ButtonBlock props={block.props as ButtonBlockProps} />;
       case 'form': return <FormBlock props={block.props as FormBlockProps} />;
       case 'spacer': return <SpacerBlock props={block.props as SpacerBlockProps} />;
-      case 'columns': return <ColumnsBlock props={block.props as ColumnsBlockProps} />;
+      case 'columns': return <ColumnsBlock props={block.props as ColumnsBlockProps} selectedColumnIndex={selectedColumnIndex} onClickColumn={onClickColumn} />;
       case 'video': return <VideoBlock props={block.props as VideoBlockProps} />;
       case 'countdown': return <CountdownBlock props={block.props as CountdownBlockProps} />;
       case 'divider': return <DividerBlock props={block.props as DividerBlockProps} />;

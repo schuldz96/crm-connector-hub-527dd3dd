@@ -20,6 +20,7 @@ import { getColumnsFromLayout, DEFAULT_COLUMN_ITEM } from '@/components/lp-edito
 
 interface LPEditorPropertiesProps {
   block: LPBlock | null;
+  selectedColumnIndex?: number | null;
   forms: { id: string; nome: string }[];
   onUpdate: (blockId: string, props: Partial<any>) => void;
   onUpdateStyles: (blockId: string, styles: Partial<BlockStyles>) => void;
@@ -613,15 +614,34 @@ function ButtonProperties({ block, onUpdate }: { block: LPBlock; onUpdate: LPEdi
 /* ── Form Properties ── */
 function FormProperties({ block, forms, onUpdate }: { block: LPBlock; forms: LPEditorPropertiesProps['forms']; onUpdate: LPEditorPropertiesProps['onUpdate'] }) {
   const p = block.props as FormBlockProps;
+  const u = (k: string, v: any) => onUpdate(block.id, { [k]: v });
   return (
     <div className="space-y-3">
       <div className="space-y-1.5">
-        <Label className="text-xs">Formulario vinculado</Label>
-        <Select value={p.formId || 'none'} onValueChange={(v) => onUpdate(block.id, { formId: v === 'none' ? '' : v })}>
+        <Label className="text-xs">Formulário vinculado</Label>
+        <Select value={p.formId || 'none'} onValueChange={(v) => u('formId', v === 'none' ? '' : v)}>
           <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="none">Nenhum</SelectItem>
             {forms.map((f) => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <Divider label="Personalização" />
+      <TextField label="Título" value={p.title || ''} onChange={(v) => u('title', v)} placeholder="Entre em contato" />
+      <TextField label="Subtítulo" value={p.subtitle || ''} onChange={(v) => u('subtitle', v)} multiline placeholder="Preencha o formulário..." />
+      <TextField label="Texto do botão" value={p.buttonText || ''} onChange={(v) => u('buttonText', v)} placeholder="Enviar" />
+      <ColorField label="Cor do botão" value={p.buttonColor || '#6366f1'} onChange={(v) => u('buttonColor', v)} />
+      <Divider label="Visual" />
+      <ColorField label="Cor de fundo" value={p.bgColor || '#f8fafc'} onChange={(v) => u('bgColor', v)} />
+      <ColorField label="Cor do texto" value={p.textColor || '#0f172a'} onChange={(v) => u('textColor', v)} />
+      <div className="space-y-1.5">
+        <Label className="text-xs">Layout dos campos</Label>
+        <Select value={p.layout || 'stacked'} onValueChange={(v) => u('layout', v)}>
+          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="stacked">Empilhado (vertical)</SelectItem>
+            <SelectItem value="inline">Lado a lado</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -796,11 +816,108 @@ function StylesEditor({ block, onUpdateStyles }: { block: LPBlock; onUpdateStyle
   );
 }
 
+/* ── Single Column Properties (shown when clicking a specific column) ── */
+function SingleColumnProperties({ block, columnIndex, onUpdate }: { block: LPBlock; columnIndex: number; onUpdate: LPEditorPropertiesProps['onUpdate'] }) {
+  const p = block.props as ColumnsBlockProps;
+  const col = p.columns?.[columnIndex];
+  if (!col) return <p className="text-xs text-muted-foreground">Coluna não encontrada</p>;
+
+  const updateCol = (field: string, value: any) => {
+    const cols = [...(p.columns || [])];
+    cols[columnIndex] = { ...cols[columnIndex], [field]: value };
+    onUpdate(block.id, { columns: cols });
+  };
+
+  const updateItem = (itemId: string, field: string, value: any) => {
+    const cols = [...(p.columns || [])];
+    const items = [...(cols[columnIndex].items || [])];
+    cols[columnIndex] = { ...cols[columnIndex], items: items.map(it => it.id === itemId ? { ...it, [field]: value } : it) };
+    onUpdate(block.id, { columns: cols });
+  };
+
+  const addItem = (type: ColumnItemType) => {
+    const cols = [...(p.columns || [])];
+    const newItem: ColumnItem = { id: crypto.randomUUID(), type, ...DEFAULT_COLUMN_ITEM };
+    if (type === 'icon') newItem.content = '⭐';
+    if (type === 'heading') { newItem.content = 'Título'; newItem.bold = true; }
+    if (type === 'text') newItem.content = 'Texto aqui...';
+    if (type === 'button') { newItem.content = 'Saiba mais'; newItem.color = '#6366f1'; }
+    if (type === 'spacer') newItem.content = '16';
+    if (type === 'image') newItem.content = 'Imagem';
+    cols[columnIndex] = { ...cols[columnIndex], items: [...(cols[columnIndex].items || []), newItem] };
+    onUpdate(block.id, { columns: cols });
+  };
+
+  const removeItem = (itemId: string) => {
+    const cols = [...(p.columns || [])];
+    cols[columnIndex] = { ...cols[columnIndex], items: (cols[columnIndex].items || []).filter(it => it.id !== itemId) };
+    onUpdate(block.id, { columns: cols });
+  };
+
+  const moveItem = (itemId: string, dir: 'up' | 'down') => {
+    const cols = [...(p.columns || [])];
+    const items = [...(cols[columnIndex].items || [])];
+    const idx = items.findIndex(it => it.id === itemId);
+    if (idx === -1) return;
+    const newIdx = dir === 'up' ? idx - 1 : idx + 1;
+    if (newIdx < 0 || newIdx >= items.length) return;
+    [items[idx], items[newIdx]] = [items[newIdx], items[idx]];
+    cols[columnIndex] = { ...cols[columnIndex], items };
+    onUpdate(block.id, { columns: cols });
+  };
+
+  return (
+    <div className="space-y-3">
+      <Divider label="Configurações da coluna" />
+      <ColorField label="Cor de fundo" value={col.bgColor || ''} onChange={(v) => updateCol('bgColor', v)} />
+      <RangeField label="Padding interno" value={col.padding ?? 20} min={0} max={60} step={4} onChange={(v) => updateCol('padding', v)} />
+      <div className="space-y-1.5">
+        <Label className="text-xs">Alinhamento vertical</Label>
+        <Select value={col.verticalAlign || 'top'} onValueChange={(v) => updateCol('verticalAlign', v)}>
+          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="top">Topo</SelectItem>
+            <SelectItem value="center">Centro</SelectItem>
+            <SelectItem value="bottom">Inferior</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <Divider label={`Elementos (${col.items?.length || 0})`} />
+
+      {(col.items || []).map((item) => (
+        <div key={item.id} className="border rounded-lg p-2 space-y-2 bg-muted/30">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {ITEM_TYPE_LABELS[item.type]}
+            </span>
+            <div className="flex gap-0.5">
+              <button onClick={() => moveItem(item.id, 'up')} className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-foreground"><ArrowUp className="w-3 h-3" /></button>
+              <button onClick={() => moveItem(item.id, 'down')} className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-foreground"><ArrowDown className="w-3 h-3" /></button>
+              <button onClick={() => removeItem(item.id)} className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-destructive"><X className="w-3 h-3" /></button>
+            </div>
+          </div>
+          <ColumnItemEditForm item={item} onUpdate={(field, value) => updateItem(item.id, field, value)} />
+        </div>
+      ))}
+
+      <div className="space-y-1.5">
+        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Adicionar elemento</Label>
+        <div className="grid grid-cols-3 gap-1">
+          {(['icon', 'heading', 'text', 'image', 'button', 'video', 'audio', 'spacer', 'list'] as ColumnItemType[]).map(t => (
+            <button key={t} onClick={() => addItem(t)} className="text-[10px] p-1.5 rounded border hover:bg-accent text-center transition-colors">{ITEM_TYPE_LABELS[t]}</button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ══════════════════════════════════════════════════════════════
    Main Properties Panel
    ══════════════════════════════════════════════════════════════ */
 
-export function LPEditorProperties({ block, forms, onUpdate, onUpdateStyles, onDelete }: LPEditorPropertiesProps) {
+export function LPEditorProperties({ block, selectedColumnIndex, forms, onUpdate, onUpdateStyles, onDelete }: LPEditorPropertiesProps) {
   const [activeTab, setActiveTab] = useState<'config' | 'styles'>('config');
 
   if (!block) {
@@ -813,7 +930,13 @@ export function LPEditorProperties({ block, forms, onUpdate, onUpdateStyles, onD
     );
   }
 
+  // When a specific column is selected in a columns block, show only that column's editor
+  const isColumnSelected = block.type === 'columns' && selectedColumnIndex !== null && selectedColumnIndex !== undefined;
+
   const renderProperties = () => {
+    if (isColumnSelected) {
+      return <SingleColumnProperties block={block} columnIndex={selectedColumnIndex!} onUpdate={onUpdate} />;
+    }
     switch (block.type) {
       case 'hero': return <HeroProperties block={block} onUpdate={onUpdate} />;
       case 'section': return <SectionProperties block={block} onUpdate={onUpdate} />;
@@ -834,7 +957,9 @@ export function LPEditorProperties({ block, forms, onUpdate, onUpdateStyles, onD
     <div className="w-[280px] shrink-0 border-l bg-card h-full overflow-y-auto flex flex-col">
       {/* Header */}
       <div className="px-4 pt-4 pb-2">
-        <h3 className="font-semibold text-sm">{BLOCK_TYPE_LABELS[block.type]}</h3>
+        <h3 className="font-semibold text-sm">
+          {isColumnSelected ? `Coluna ${selectedColumnIndex! + 1}` : BLOCK_TYPE_LABELS[block.type]}
+        </h3>
       </div>
 
       {/* Tab Buttons */}

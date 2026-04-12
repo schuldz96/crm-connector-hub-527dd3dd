@@ -106,6 +106,13 @@ export interface ButtonBlockProps {
 
 export interface FormBlockProps {
   formId: string;
+  title: string;
+  subtitle: string;
+  buttonText: string;
+  buttonColor: string;
+  bgColor: string;
+  textColor: string;
+  layout: 'stacked' | 'inline'; // stacked = vertical, inline = side by side
 }
 
 export interface SpacerBlockProps {
@@ -267,6 +274,13 @@ export const DEFAULT_BLOCK_PROPS: Record<LPBlockType, LPBlockProps> = {
   } as ButtonBlockProps,
   form: {
     formId: '',
+    title: 'Entre em contato',
+    subtitle: 'Preencha o formulário abaixo',
+    buttonText: 'Enviar',
+    buttonColor: '#6366f1',
+    bgColor: '#f8fafc',
+    textColor: '#0f172a',
+    layout: 'stacked',
   } as FormBlockProps,
   spacer: {
     height: 40,

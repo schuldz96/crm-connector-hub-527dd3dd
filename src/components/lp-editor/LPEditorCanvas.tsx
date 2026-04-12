@@ -11,7 +11,9 @@ export const CANVAS_DROPPABLE_ID = 'lp-canvas-drop-zone';
 interface LPEditorCanvasProps {
   blocks: LPBlock[];
   selectedBlockId: string | null;
+  selectedColumnIndex: number | null;
   onSelectBlock: (id: string | null) => void;
+  onSelectColumn: (colIndex: number | null) => void;
   onReorderBlocks: (blocks: LPBlock[]) => void;
   previewMode: 'desktop' | 'tablet' | 'mobile';
   onMoveBlock: (blockId: string, direction: 'up' | 'down') => void;
@@ -21,14 +23,18 @@ interface LPEditorCanvasProps {
 function SortableBlock({
   block,
   selected,
+  selectedColumnIndex,
   onSelect,
+  onSelectColumn,
   onMoveUp,
   onMoveDown,
   onDelete,
 }: {
   block: LPBlock;
   selected: boolean;
+  selectedColumnIndex: number | null;
   onSelect: () => void;
+  onSelectColumn: (i: number) => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onDelete: () => void;
@@ -64,7 +70,7 @@ function SortableBlock({
           <Trash2 className="w-3.5 h-3.5" />
         </button>
       </div>
-      <LPBlockRenderer block={block} selected={selected} onClick={onSelect} />
+      <LPBlockRenderer block={block} selected={selected} selectedColumnIndex={selected ? selectedColumnIndex : null} onClick={onSelect} onClickColumn={onSelectColumn} />
     </div>
   );
 }
@@ -72,7 +78,10 @@ function SortableBlock({
 export default function LPEditorCanvas({
   blocks,
   selectedBlockId,
+  selectedColumnIndex,
   onSelectBlock,
+  onSelectColumn,
+  onReorderBlocks,
   previewMode,
   onMoveBlock,
   onDeleteBlock,
@@ -127,7 +136,9 @@ export default function LPEditorCanvas({
                   key={block.id}
                   block={block}
                   selected={block.id === selectedBlockId}
+                  selectedColumnIndex={block.id === selectedBlockId ? selectedColumnIndex : null}
                   onSelect={() => onSelectBlock(block.id)}
+                  onSelectColumn={(i) => { onSelectBlock(block.id); onSelectColumn(i); }}
                   onMoveUp={() => onMoveBlock(block.id, 'up')}
                   onMoveDown={() => onMoveBlock(block.id, 'down')}
                   onDelete={() => onDeleteBlock(block.id)}
