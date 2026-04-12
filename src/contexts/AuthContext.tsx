@@ -10,7 +10,8 @@ import {
   hashPasswordForLogin,
   recordLastLogin,
 } from '@/lib/accessControl';
-import { getOrg } from '@/lib/saas';
+import { getOrg, clearOrgCache } from '@/lib/saas';
+import { supabaseSaas } from '@/integrations/supabase/client';
 import { CONFIG } from '@/lib/config';
 
 const ALLOWED_DOMAIN = CONFIG.GOOGLE_ALLOWED_DOMAIN;
@@ -99,32 +100,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     setUser(restored);
-    // Background refresh: fetch current role/data from DB + resolve org
-    Promise.all([
-      getAllowedUserByEmail(restored.email),
-      getOrg().catch(() => restored.org),
-    ])
-      .then(([match, org]) => {
-        if (!match) {
-          // User deactivated or removed — force logout
+    clearOrgCache();
+
+    // Step 1: Direct org active check — independent of getOrg() cache
+    const checkOrgActive = async (): Promise<boolean> => {
+      try {
+        // Try by org key first, fallback to domain lookup
+        const orgKey = restored.org;
+        let query = (supabaseSaas as any).schema('core').from('empresas').select('ativo');
+        if (orgKey) {
+          query = query.eq('org', orgKey);
+        } else {
+          query = query.eq('dominio', CONFIG.GOOGLE_ALLOWED_DOMAIN);
+        }
+        const { data } = await query.maybeSingle();
+        if (!data) return true; // empresa not found — don't lock out
+        return data.ativo !== false;
+      } catch {
+        return true; // network error — don't lock out
+      }
+    };
+
+    // Step 2: Background refresh with org active gate
+    checkOrgActive()
+      .then((isActive) => {
+        if (!isActive) {
           clearSession();
           setUser(null);
+          setIsLoading(false);
           return;
         }
-        if (match.role !== restored.role || match.areaId !== restored.areaId || match.teamId !== restored.teamId || org !== restored.org) {
-          const refreshed = buildUser(
-            restored.id,
-            match.email,
-            match.name,
-            match.role,
-            restored.avatar,
-            match.areaId,
-            match.teamId,
-            org,
-          );
-          setUser(refreshed);
-          saveSession(refreshed);
-        }
+        return Promise.all([
+          getAllowedUserByEmail(restored.email),
+          getOrg().catch(() => restored.org),
+        ]).then(([match, org]) => {
+          if (!match) {
+            clearSession();
+            setUser(null);
+            return;
+          }
+          if (match.role !== restored.role || match.areaId !== restored.areaId || match.teamId !== restored.teamId || org !== restored.org) {
+            const refreshed = buildUser(
+              restored.id,
+              match.email,
+              match.name,
+              match.role,
+              restored.avatar,
+              match.areaId,
+              match.teamId,
+              org,
+            );
+            setUser(refreshed);
+            saveSession(refreshed);
+          }
+        });
       })
       .catch(() => { /* keep cached session on network error */ })
       .finally(() => setIsLoading(false));

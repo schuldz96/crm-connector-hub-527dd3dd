@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  getFeatureFlags, updateFeatureFlag, createFeatureFlag, getAllPlans,
+  getFeatureFlags, updateFeatureFlag, createFeatureFlag, deleteFeatureFlag, getAllPlans,
 } from '@/lib/superAdminService';
 import type { FeatureFlag, Plan } from '@/lib/superAdminService';
 import { useToast } from '@/hooks/use-toast';
@@ -16,7 +16,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Loader2, AlertCircle, Plus, Pencil, Flag } from 'lucide-react';
+import { Loader2, AlertCircle, Plus, Pencil, Trash2, Flag } from 'lucide-react';
 
 const emptyFlag: Partial<FeatureFlag> = {
   codigo: '',
@@ -38,6 +38,7 @@ export default function SAFeatureFlagsPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [orgsText, setOrgsText] = useState('');
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -113,6 +114,20 @@ export default function SAFeatureFlagsPage() {
       await loadData();
     } catch (err: any) {
       toast({ title: 'Erro', description: err?.message ?? 'Erro ao salvar flag', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    setSaving(true);
+    try {
+      await deleteFeatureFlag(id);
+      toast({ title: 'Feature flag excluida com sucesso' });
+      setDeleteId(null);
+      await loadData();
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err?.message ?? 'Erro ao excluir flag', variant: 'destructive' });
     } finally {
       setSaving(false);
     }
@@ -209,9 +224,14 @@ export default function SAFeatureFlagsPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(flag)}>
-                      <Pencil className="w-4 h-4" />
-                    </Button>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => openEdit(flag)}>
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setDeleteId(flag.id)} className="text-red-400 hover:text-red-300">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -311,6 +331,30 @@ export default function SAFeatureFlagsPage() {
               className="bg-red-600 hover:bg-red-700 text-white"
             >
               {saving ? 'Salvando...' : isEditing ? 'Salvar' : 'Criar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Excluir Feature Flag</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Tem certeza que deseja excluir esta feature flag? Esta acao nao pode ser desfeita.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteId(null)} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => deleteId && handleDelete(deleteId)}
+              disabled={saving}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {saving ? 'Excluindo...' : 'Excluir'}
             </Button>
           </DialogFooter>
         </DialogContent>

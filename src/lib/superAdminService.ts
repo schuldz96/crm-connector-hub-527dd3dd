@@ -120,16 +120,6 @@ export async function authenticateSuperAdmin(
 
 // ─── Organizations ──────────────────────────────────────────────────────────────
 
-export async function getAllOrganizations(): Promise<Organization[]> {
-  const { data, error } = await core()
-    .from('empresas')
-    .select('*')
-    .order('criado_em', { ascending: false });
-
-  if (error) throw new Error(`Erro ao buscar organizações: ${error.message}`);
-  return (data ?? []) as Organization[];
-}
-
 export async function createOrganization(org: {
   nome: string;
   dominio?: string;
@@ -148,6 +138,28 @@ export async function createOrganization(org: {
 
   if (error) throw new Error(`Erro ao criar organizacao: ${error.message}`);
   return data as Organization;
+}
+
+export async function updateOrganization(id: string, updates: Partial<Organization>): Promise<Organization> {
+  const { data, error } = await core()
+    .from('empresas')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw new Error(`Erro ao atualizar organizacao: ${error.message}`);
+  return data as Organization;
+}
+
+export async function getAllOrganizations(): Promise<Organization[]> {
+  const { data, error } = await core()
+    .from('empresas')
+    .select('*')
+    .order('criado_em', { ascending: false });
+
+  if (error) throw new Error(`Erro ao buscar organizações: ${error.message}`);
+  return (data ?? []) as Organization[];
 }
 
 export async function inviteUserToOrg(payload: {
@@ -397,6 +409,14 @@ export async function createFeatureFlag(flag: Partial<FeatureFlag>): Promise<Fea
 
   if (error) throw new Error(`Erro ao criar feature flag: ${error.message}`);
   return data as FeatureFlag;
+}
+
+export async function deleteFeatureFlag(id: string): Promise<void> {
+  const { error } = await admin()
+    .from('feature_flags')
+    .delete()
+    .eq('id', id);
+  if (error) throw new Error(`Erro ao excluir feature flag: ${error.message}`);
 }
 
 // ─── Resource Usage ─────────────────────────────────────────────────────────────

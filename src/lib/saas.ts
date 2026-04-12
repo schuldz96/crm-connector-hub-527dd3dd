@@ -5,6 +5,11 @@ import { CONFIG } from '@/lib/config';
 const ALLOWED_DOMAIN = CONFIG.GOOGLE_ALLOWED_DOMAIN;
 let orgCache: { org: string; empresaId: string } | null = null;
 
+/** Clear cached org — call on logout or when org status may have changed */
+export function clearOrgCache(): void {
+  orgCache = null;
+}
+
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
@@ -41,12 +46,15 @@ async function resolveOrgCache(): Promise<void> {
   const { data, error } = await (supabase as any)
     .schema('core')
     .from('empresas')
-    .select('id, org')
+    .select('id, org, ativo')
     .eq('dominio', ALLOWED_DOMAIN)
     .maybeSingle();
 
   if (error) throw error;
   if (data?.id && data?.org) {
+    if (data.ativo === false) {
+      throw new Error('Organizacao inativa. Entre em contato com o administrador.');
+    }
     orgCache = { org: data.org, empresaId: data.id };
     return;
   }
