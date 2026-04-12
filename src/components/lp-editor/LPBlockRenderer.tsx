@@ -55,7 +55,8 @@ function applyBlockStyles(styles: BlockStyles | undefined): React.CSSProperties 
   const s = styles || ({} as Partial<BlockStyles>);
   const css: React.CSSProperties = {};
 
-  if (s.bgColor) css.backgroundColor = s.bgColor;
+  // Only apply bgColor from universal styles if it's explicitly set (non-empty)
+  if (s.bgColor && s.bgColor !== '') css.backgroundColor = s.bgColor;
   if (s.borderWidth && s.borderStyle !== 'none') {
     css.borderWidth = s.borderWidth;
     css.borderStyle = s.borderStyle;
@@ -103,13 +104,14 @@ function extractVimeoId(url: string): string | null {
 
 function HeroBlock({ props }: { props: HeroBlockProps }) {
   const hasBgImg = !!props.bgImage;
+  const flexAlign = { left: 'items-start', center: 'items-center', right: 'items-end' }[props.alignment] || 'items-center';
   return (
     <div
-      className={cn('relative w-full px-8 flex flex-col', HERO_HEIGHT[props.height || 'medium'], ALIGN_TEXT[props.alignment], ALIGN_ITEMS[props.alignment], 'justify-center')}
+      className={cn('relative w-full px-8 flex flex-col justify-center', HERO_HEIGHT[props.height || 'medium'], flexAlign)}
       style={{ backgroundColor: props.bgColor, color: props.textColor }}
     >
       {hasBgImg && <BgStyles bgColor={props.bgColor} bgImage={props.bgImage} bgOverlay={props.bgOverlay} />}
-      <div className="relative z-10 max-w-3xl">
+      <div className={cn('relative z-10 max-w-3xl', ALIGN_TEXT[props.alignment])}>
         <h1 className="text-4xl font-bold mb-4 leading-tight">{props.headline}</h1>
         {props.subheadline && <p className="text-xl opacity-80 leading-relaxed">{props.subheadline}</p>}
       </div>
@@ -193,12 +195,11 @@ function FormBlock({ props }: { props: FormBlockProps }) {
             <span className="text-sm text-muted-foreground">Selecione um formulário nas propriedades</span>
           </div>
         ) : (
-          <div className="space-y-3">
-            {/* Preview placeholder fields */}
-            <div className="rounded-lg border bg-white p-3"><div className="text-xs text-muted-foreground mb-1">Nome *</div><div className="h-9 rounded-md bg-muted/50 border" /></div>
-            <div className="rounded-lg border bg-white p-3"><div className="text-xs text-muted-foreground mb-1">E-mail *</div><div className="h-9 rounded-md bg-muted/50 border" /></div>
-            <div className="rounded-lg border bg-white p-3"><div className="text-xs text-muted-foreground mb-1">Telefone</div><div className="h-9 rounded-md bg-muted/50 border" /></div>
-            <button className="w-full py-3 rounded-lg text-white font-medium text-sm" style={{ backgroundColor: props.buttonColor || '#6366f1' }}>
+          <div className={cn(props.layout === 'inline' ? 'flex gap-3 flex-wrap' : 'space-y-3')}>
+            <div className={cn('rounded-lg border bg-white p-3', props.layout === 'inline' && 'flex-1 min-w-[150px]')}><div className="text-xs text-muted-foreground mb-1">Nome *</div><div className="h-9 rounded-md bg-muted/50 border" /></div>
+            <div className={cn('rounded-lg border bg-white p-3', props.layout === 'inline' && 'flex-1 min-w-[150px]')}><div className="text-xs text-muted-foreground mb-1">E-mail *</div><div className="h-9 rounded-md bg-muted/50 border" /></div>
+            <div className={cn('rounded-lg border bg-white p-3', props.layout === 'inline' && 'flex-1 min-w-[150px]')}><div className="text-xs text-muted-foreground mb-1">Telefone</div><div className="h-9 rounded-md bg-muted/50 border" /></div>
+            <button className={cn('py-3 rounded-lg text-white font-medium text-sm', props.layout === 'inline' ? 'px-8' : 'w-full')} style={{ backgroundColor: props.buttonColor || '#6366f1' }}>
               {props.buttonText || 'Enviar'}
             </button>
           </div>
@@ -223,23 +224,21 @@ function SpacerBlock({ props }: { props: SpacerBlockProps }) {
 function ColumnItemRenderer({ item }: { item: ColumnItem }) {
   const alignClass = { left: 'text-left', center: 'text-center', right: 'text-right' }[item.alignment] || '';
   const sizeMap: Record<string, string> = { sm: 'text-sm', md: 'text-base', lg: 'text-lg', xl: 'text-xl' };
+  const headingSizeMap: Record<string, string> = { sm: 'text-base', md: 'text-lg', lg: 'text-xl', xl: 'text-2xl' };
   const iconSizeMap: Record<string, string> = { sm: 'text-2xl', md: 'text-3xl', lg: 'text-4xl', xl: 'text-5xl' };
   const btnSizeMap: Record<string, string> = { sm: 'px-3 py-1.5 text-xs', md: 'px-5 py-2.5 text-sm', lg: 'px-7 py-3 text-base', xl: 'px-9 py-4 text-lg' };
 
+  const wrapStyle: React.CSSProperties = {};
+  if (item.bgColor) wrapStyle.backgroundColor = item.bgColor;
+
   switch (item.type) {
     case 'icon':
-      return <div className={alignClass}><span className={iconSizeMap[item.size]}>{item.content}</span></div>;
+      return <div className={alignClass} style={wrapStyle}><span className={iconSizeMap[item.size]}>{item.content}</span></div>;
     case 'heading':
       return (
         <h3
-          className={cn(
-            'font-semibold',
-            sizeMap[item.size] === 'text-sm' ? 'text-base' : sizeMap[item.size] === 'text-base' ? 'text-lg' : sizeMap[item.size] === 'text-lg' ? 'text-xl' : 'text-2xl',
-            alignClass,
-            item.bold && 'font-bold',
-            item.italic && 'italic',
-          )}
-          style={{ color: item.color || undefined }}
+          className={cn('font-semibold', headingSizeMap[item.size], alignClass, item.bold && 'font-bold', item.italic && 'italic')}
+          style={{ color: item.color || undefined, ...wrapStyle }}
         >
           {item.content}
         </h3>
@@ -248,7 +247,7 @@ function ColumnItemRenderer({ item }: { item: ColumnItem }) {
       return (
         <p
           className={cn(sizeMap[item.size], alignClass, item.bold && 'font-semibold', item.italic && 'italic', 'opacity-80 leading-relaxed')}
-          style={{ color: item.color || undefined }}
+          style={{ color: item.color || undefined, ...wrapStyle }}
         >
           {item.content}
         </p>
@@ -325,13 +324,14 @@ function ColumnsBlock({ props, selectedColumnIndex, onClickColumn }: { props: Co
             <div
               key={i}
               className={cn(
-                'min-h-[120px] rounded-xl shadow-sm flex flex-col gap-3 transition-all cursor-pointer',
+                'rounded-xl shadow-sm flex flex-col gap-3 transition-all cursor-pointer flex-1',
                 vAlignClass,
                 selectedColumnIndex === i && 'ring-2 ring-primary/70',
               )}
               style={{
                 width: widths[i],
                 flexShrink: 0,
+                minHeight: 140,
                 padding: col.padding ?? 20,
                 backgroundColor: col.bgColor || 'rgba(255,255,255,0.9)',
               }}
