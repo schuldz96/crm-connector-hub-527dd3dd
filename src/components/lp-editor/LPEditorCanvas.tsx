@@ -121,7 +121,7 @@ export default function LPEditorCanvas({
           </div>
         ) : (
           <SortableContext items={blockIds} strategy={verticalListSortingStrategy}>
-            <div className="p-6 space-y-2">
+            <div className="space-y-0">
               {blocks.map((block) => (
                 <SortableBlock
                   key={block.id}

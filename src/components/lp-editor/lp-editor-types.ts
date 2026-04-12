@@ -117,6 +117,8 @@ export interface ColumnContent {
   text: string;
   imageUrl: string;
   iconEmoji: string;
+  buttonText: string;
+  buttonUrl: string;
 }
 
 export type ColumnLayout =
@@ -134,6 +136,9 @@ export interface ColumnsBlockProps {
   columnCount?: 1 | 2 | 3 | 4;
   gap: number;
   bgColor: string;
+  bgImage: string;
+  bgOverlay: number;
+  textColor: string;
   padding: number;
   columns: ColumnContent[];
 }
@@ -249,11 +254,14 @@ export const DEFAULT_BLOCK_PROPS: Record<LPBlockType, LPBlockProps> = {
     layout: '33-33-33',
     gap: 24,
     bgColor: '#ffffff',
-    padding: 32,
+    bgImage: '',
+    bgOverlay: 0,
+    textColor: '#0f172a',
+    padding: 48,
     columns: [
-      { title: 'Recurso 1', text: 'Descrição do primeiro recurso ou benefício.', imageUrl: '', iconEmoji: '🚀' },
-      { title: 'Recurso 2', text: 'Descrição do segundo recurso ou benefício.', imageUrl: '', iconEmoji: '⚡' },
-      { title: 'Recurso 3', text: 'Descrição do terceiro recurso ou benefício.', imageUrl: '', iconEmoji: '🎯' },
+      { title: 'Recurso 1', text: 'Descrição do primeiro recurso ou benefício.', imageUrl: '', iconEmoji: '🚀', buttonText: '', buttonUrl: '' },
+      { title: 'Recurso 2', text: 'Descrição do segundo recurso ou benefício.', imageUrl: '', iconEmoji: '⚡', buttonText: '', buttonUrl: '' },
+      { title: 'Recurso 3', text: 'Descrição do terceiro recurso ou benefício.', imageUrl: '', iconEmoji: '🎯', buttonText: '', buttonUrl: '' },
     ],
   } as ColumnsBlockProps,
   section: {

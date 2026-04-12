@@ -204,29 +204,36 @@ function ColumnsBlock({ props }: { props: ColumnsBlockProps }) {
   const cols = props.columns || [];
   const widths = getColumnWidths(props.layout || '50-50');
   const count = widths.length;
+  const hasBgImg = !!props.bgImage;
 
   return (
-    <div style={{ backgroundColor: props.bgColor || 'transparent', padding: props.padding ?? 32 }}>
-      <div className="flex" style={{ gap: props.gap ?? 24 }}>
+    <div className="relative w-full" style={{ backgroundColor: props.bgColor || 'transparent', color: props.textColor || '#0f172a', padding: props.padding ?? 48 }}>
+      {hasBgImg && <BgStyles bgColor={props.bgColor} bgImage={props.bgImage} bgOverlay={props.bgOverlay} />}
+      <div className="relative z-10 flex w-full" style={{ gap: props.gap ?? 24 }}>
         {Array.from({ length: count }, (_, i) => {
-          const col = cols[i] || { title: '', text: '', imageUrl: '', iconEmoji: '' };
+          const col = cols[i] || { title: '', text: '', imageUrl: '', iconEmoji: '', buttonText: '', buttonUrl: '' };
           return (
             <div
               key={i}
-              className="min-h-[120px] rounded-lg border border-border/50 bg-white p-5 flex flex-col gap-3"
+              className="min-h-[120px] rounded-xl bg-white/90 p-6 flex flex-col gap-3 shadow-sm"
               style={{ width: widths[i], flexShrink: 0 }}
             >
               {col.imageUrl ? (
-                <img src={col.imageUrl} alt={col.title} className="w-full h-32 object-cover rounded-md" />
+                <img src={col.imageUrl} alt={col.title} className="w-full h-36 object-cover rounded-lg" />
               ) : col.iconEmoji ? (
-                <span className="text-3xl">{col.iconEmoji}</span>
+                <span className="text-4xl">{col.iconEmoji}</span>
               ) : (
-                <div className="w-full h-24 rounded-md bg-muted/50 border-2 border-dashed border-muted-foreground/20 flex items-center justify-center">
+                <div className="w-full h-24 rounded-lg bg-muted/50 border-2 border-dashed border-muted-foreground/20 flex items-center justify-center">
                   <ImageIcon className="h-6 w-6 text-muted-foreground/30" />
                 </div>
               )}
-              {col.title && <h3 className="font-semibold text-base">{col.title}</h3>}
-              {col.text && <p className="text-sm text-muted-foreground leading-relaxed">{col.text}</p>}
+              {col.title && <h3 className="font-semibold text-lg">{col.title}</h3>}
+              {col.text && <p className="text-sm opacity-70 leading-relaxed">{col.text}</p>}
+              {col.buttonText && (
+                <a href={col.buttonUrl || '#'} className="mt-auto inline-block px-5 py-2 rounded-lg bg-primary text-white text-sm font-medium text-center hover:opacity-90 transition-opacity">
+                  {col.buttonText}
+                </a>
+              )}
             </div>
           );
         })}

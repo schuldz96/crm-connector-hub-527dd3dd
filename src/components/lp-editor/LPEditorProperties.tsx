@@ -196,14 +196,14 @@ function ColumnsProperties({ block, onUpdate }: { block: LPBlock; onUpdate: LPEd
 
   const updateColumn = (idx: number, field: keyof ColumnContent, value: string) => {
     const cols = [...(p.columns || [])];
-    cols[idx] = { ...(cols[idx] || { title: '', text: '', imageUrl: '', iconEmoji: '' }), [field]: value };
+    cols[idx] = { ...(cols[idx] || { title: '', text: '', imageUrl: '', iconEmoji: '', buttonText: '', buttonUrl: '' }), [field]: value };
     u('columns', cols);
   };
 
   const changeLayout = (layout: ColumnLayout) => {
     const newCount = getColumnsFromLayout(layout);
     const cols = Array.from({ length: newCount }, (_, i) =>
-      p.columns?.[i] || { title: `Coluna ${i + 1}`, text: 'Descricao aqui.', imageUrl: '', iconEmoji: ['🚀', '⚡', '🎯', '✨'][i] || '✨' },
+      p.columns?.[i] || { title: `Coluna ${i + 1}`, text: 'Descrição aqui.', imageUrl: '', iconEmoji: ['🚀', '⚡', '🎯', '✨'][i] || '✨', buttonText: '', buttonUrl: '' },
     );
     onUpdate(block.id, { layout, columns: cols });
   };
@@ -228,19 +228,26 @@ function ColumnsProperties({ block, onUpdate }: { block: LPBlock; onUpdate: LPEd
           </SelectContent>
         </Select>
       </div>
-      <RangeField label="Espacamento" value={p.gap ?? 24} min={0} max={48} step={4} onChange={(v) => u('gap', v)} />
+      <RangeField label="Espaçamento" value={p.gap ?? 24} min={0} max={48} step={4} onChange={(v) => u('gap', v)} />
+      <RangeField label="Padding" value={p.padding ?? 48} min={0} max={100} step={8} onChange={(v) => u('padding', v)} />
+
+      <Divider label="Fundo" />
       <ColorField label="Cor de fundo" value={p.bgColor || '#ffffff'} onChange={(v) => u('bgColor', v)} />
-      <RangeField label="Padding" value={p.padding ?? 32} min={0} max={80} step={8} onChange={(v) => u('padding', v)} />
+      <TextField label="Imagem de fundo (URL)" value={p.bgImage || ''} onChange={(v) => u('bgImage', v)} placeholder="https://..." />
+      {p.bgImage && <RangeField label="Opacidade do overlay" value={p.bgOverlay ?? 0} min={0} max={100} step={5} unit="%" onChange={(v) => u('bgOverlay', v)} />}
+      <ColorField label="Cor do texto" value={p.textColor || '#0f172a'} onChange={(v) => u('textColor', v)} />
 
       {Array.from({ length: colCount }, (_, i) => {
-        const col = p.columns?.[i] || { title: '', text: '', imageUrl: '', iconEmoji: '' };
+        const col = p.columns?.[i] || { title: '', text: '', imageUrl: '', iconEmoji: '', buttonText: '', buttonUrl: '' };
         return (
           <div key={i} className="space-y-2">
             <Divider label={`Coluna ${i + 1}`} />
-            <TextField label="Emoji / icone" value={col.iconEmoji} onChange={(v) => updateColumn(i, 'iconEmoji', v)} placeholder="🚀" />
-            <TextField label="Imagem (URL)" value={col.imageUrl} onChange={(v) => updateColumn(i, 'imageUrl', v)} placeholder="https://..." />
-            <TextField label="Titulo" value={col.title} onChange={(v) => updateColumn(i, 'title', v)} />
-            <TextField label="Texto" value={col.text} onChange={(v) => updateColumn(i, 'text', v)} multiline />
+            <TextField label="Emoji / ícone" value={col.iconEmoji || ''} onChange={(v) => updateColumn(i, 'iconEmoji', v)} placeholder="🚀" />
+            <TextField label="Imagem (URL)" value={col.imageUrl || ''} onChange={(v) => updateColumn(i, 'imageUrl', v)} placeholder="https://..." />
+            <TextField label="Título" value={col.title || ''} onChange={(v) => updateColumn(i, 'title', v)} />
+            <TextField label="Texto" value={col.text || ''} onChange={(v) => updateColumn(i, 'text', v)} multiline />
+            <TextField label="Texto do botão" value={col.buttonText || ''} onChange={(v) => updateColumn(i, 'buttonText', v)} placeholder="Saiba mais" />
+            <TextField label="URL do botão" value={col.buttonUrl || ''} onChange={(v) => updateColumn(i, 'buttonUrl', v)} placeholder="https://..." />
           </div>
         );
       })}
