@@ -15,6 +15,8 @@ import type {
   VideoBlockProps,
   CountdownBlockProps,
   DividerBlockProps,
+  ColumnItem,
+  ColumnContent,
 } from './lp-editor-types';
 import { getColumnWidths } from './lp-editor-types';
 
@@ -198,6 +200,93 @@ function SpacerBlock({ props }: { props: SpacerBlockProps }) {
   );
 }
 
+// ── Column Item Renderer ────────────────────────────────────
+
+function ColumnItemRenderer({ item }: { item: ColumnItem }) {
+  const alignClass = { left: 'text-left', center: 'text-center', right: 'text-right' }[item.alignment] || '';
+  const sizeMap: Record<string, string> = { sm: 'text-sm', md: 'text-base', lg: 'text-lg', xl: 'text-xl' };
+  const iconSizeMap: Record<string, string> = { sm: 'text-2xl', md: 'text-3xl', lg: 'text-4xl', xl: 'text-5xl' };
+  const btnSizeMap: Record<string, string> = { sm: 'px-3 py-1.5 text-xs', md: 'px-5 py-2.5 text-sm', lg: 'px-7 py-3 text-base', xl: 'px-9 py-4 text-lg' };
+
+  switch (item.type) {
+    case 'icon':
+      return <div className={alignClass}><span className={iconSizeMap[item.size]}>{item.content}</span></div>;
+    case 'heading':
+      return (
+        <h3
+          className={cn(
+            'font-semibold',
+            sizeMap[item.size] === 'text-sm' ? 'text-base' : sizeMap[item.size] === 'text-base' ? 'text-lg' : sizeMap[item.size] === 'text-lg' ? 'text-xl' : 'text-2xl',
+            alignClass,
+            item.bold && 'font-bold',
+            item.italic && 'italic',
+          )}
+          style={{ color: item.color || undefined }}
+        >
+          {item.content}
+        </h3>
+      );
+    case 'text':
+      return (
+        <p
+          className={cn(sizeMap[item.size], alignClass, item.bold && 'font-semibold', item.italic && 'italic', 'opacity-80 leading-relaxed')}
+          style={{ color: item.color || undefined }}
+        >
+          {item.content}
+        </p>
+      );
+    case 'image':
+      return item.url
+        ? <img src={item.url} alt={item.content || 'Imagem'} className="w-full rounded-lg object-cover" />
+        : <div className="w-full h-32 rounded-lg bg-muted/50 border-2 border-dashed border-muted-foreground/20 flex items-center justify-center"><ImageIcon className="h-6 w-6 text-muted-foreground/30" /></div>;
+    case 'button':
+      return (
+        <div className={alignClass}>
+          <a
+            href={item.url || '#'}
+            className={cn('inline-block rounded-lg font-medium text-white', btnSizeMap[item.size])}
+            style={{ backgroundColor: item.color || '#6366f1' }}
+          >
+            {item.content || 'Botao'}
+          </a>
+        </div>
+      );
+    case 'video':
+      return item.url
+        ? (
+          <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+            <iframe
+              src={item.url.includes('youtube') ? `https://www.youtube.com/embed/${item.url.match(/(?:v=|youtu\.be\/)([^&]+)/)?.[1] || ''}` : item.url}
+              className="absolute inset-0 w-full h-full rounded-lg"
+              allowFullScreen
+            />
+          </div>
+        )
+        : <div className="w-full h-32 rounded-lg bg-muted/50 border-2 border-dashed flex items-center justify-center text-muted-foreground/40">Video</div>;
+    case 'audio':
+      return item.url
+        ? <audio src={item.url} controls className="w-full" />
+        : <div className="w-full h-12 rounded-lg bg-muted/50 border-2 border-dashed flex items-center justify-center text-muted-foreground/40 text-sm">Audio</div>;
+    case 'spacer':
+      return <div style={{ height: parseInt(item.content) || 16 }} />;
+    case 'list': {
+      const listItems = (item.content || '').split('\n').filter(Boolean);
+      return (
+        <ul className={cn('space-y-1', alignClass)}>
+          {listItems.map((li, idx) => (
+            <li key={idx} className={cn(sizeMap[item.size], 'flex items-start gap-2')}>
+              <span className="text-primary mt-0.5">&#8226;</span>
+              <span style={{ color: item.color || undefined }}>{li}</span>
+            </li>
+          ))}
+        </ul>
+      );
+    }
+    default:
+      return null;
+  }
+}
+
 // ── Columns ─────────────────────────────────────────────────
 
 function ColumnsBlock({ props }: { props: ColumnsBlockProps }) {
@@ -211,28 +300,26 @@ function ColumnsBlock({ props }: { props: ColumnsBlockProps }) {
       {hasBgImg && <BgStyles bgColor={props.bgColor} bgImage={props.bgImage} bgOverlay={props.bgOverlay} />}
       <div className="relative z-10 flex w-full" style={{ gap: props.gap ?? 24 }}>
         {Array.from({ length: count }, (_, i) => {
-          const col = cols[i] || { title: '', text: '', imageUrl: '', iconEmoji: '', buttonText: '', buttonUrl: '' };
+          const col: ColumnContent = cols[i] || { items: [], verticalAlign: 'top', bgColor: '', padding: 20 };
+          const vAlignClass = { top: 'justify-start', center: 'justify-center', bottom: 'justify-end' }[col.verticalAlign || 'top'];
+
           return (
             <div
               key={i}
-              className="min-h-[120px] rounded-xl bg-white/90 p-6 flex flex-col gap-3 shadow-sm"
-              style={{ width: widths[i], flexShrink: 0 }}
+              className={cn('min-h-[120px] rounded-xl shadow-sm flex flex-col gap-3', vAlignClass)}
+              style={{
+                width: widths[i],
+                flexShrink: 0,
+                padding: col.padding ?? 20,
+                backgroundColor: col.bgColor || 'rgba(255,255,255,0.9)',
+              }}
             >
-              {col.imageUrl ? (
-                <img src={col.imageUrl} alt={col.title} className="w-full h-36 object-cover rounded-lg" />
-              ) : col.iconEmoji ? (
-                <span className="text-4xl">{col.iconEmoji}</span>
+              {(col.items && col.items.length > 0) ? (
+                col.items.map((item) => <ColumnItemRenderer key={item.id} item={item} />)
               ) : (
                 <div className="w-full h-24 rounded-lg bg-muted/50 border-2 border-dashed border-muted-foreground/20 flex items-center justify-center">
                   <ImageIcon className="h-6 w-6 text-muted-foreground/30" />
                 </div>
-              )}
-              {col.title && <h3 className="font-semibold text-lg">{col.title}</h3>}
-              {col.text && <p className="text-sm opacity-70 leading-relaxed">{col.text}</p>}
-              {col.buttonText && (
-                <a href={col.buttonUrl || '#'} className="mt-auto inline-block px-5 py-2 rounded-lg bg-primary text-white text-sm font-medium text-center hover:opacity-90 transition-opacity">
-                  {col.buttonText}
-                </a>
               )}
             </div>
           );

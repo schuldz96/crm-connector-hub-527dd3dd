@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Trash2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Trash2, ChevronDown, ChevronRight, ArrowUp, ArrowDown, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -12,8 +12,9 @@ import type {
   LPBlock, LPBlockType, BlockStyles, HeroBlockProps, TextBlockProps, ImageBlockProps,
   ButtonBlockProps, FormBlockProps, SpacerBlockProps, ColumnsBlockProps, SectionBlockProps,
   VideoBlockProps, CountdownBlockProps, DividerBlockProps, ColumnContent, ColumnLayout,
+  ColumnItem, ColumnItemType,
 } from '@/components/lp-editor/lp-editor-types';
-import { getColumnsFromLayout } from '@/components/lp-editor/lp-editor-types';
+import { getColumnsFromLayout, DEFAULT_COLUMN_ITEM } from '@/components/lp-editor/lp-editor-types';
 
 /* ── Props ── */
 
@@ -189,23 +190,195 @@ function SectionProperties({ block, onUpdate }: { block: LPBlock; onUpdate: LPEd
   );
 }
 
+/* ── Column Item type labels ── */
+const ITEM_TYPE_LABELS: Record<ColumnItemType, string> = {
+  icon: '😀 Icone', heading: 'H Titulo', text: '¶ Texto', image: '🖼 Imagem',
+  button: '▶ Botao', video: '🎬 Video', audio: '🔊 Audio', spacer: '↕ Espaco', list: '• Lista',
+};
+
+/* ── Column Item edit form ── */
+function ColumnItemEditForm({ item, onChange }: { item: ColumnItem; onChange: (field: keyof ColumnItem, value: any) => void }) {
+  switch (item.type) {
+    case 'icon':
+      return (
+        <div className="space-y-2">
+          <TextField label="Emoji" value={item.content} onChange={(v) => onChange('content', v)} placeholder="⭐" />
+          <div className="space-y-1.5">
+            <Label className="text-xs">Tamanho</Label>
+            <Select value={item.size} onValueChange={(v) => onChange('size', v)}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sm">Pequeno</SelectItem>
+                <SelectItem value="md">Medio</SelectItem>
+                <SelectItem value="lg">Grande</SelectItem>
+                <SelectItem value="xl">Extra grande</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      );
+    case 'heading':
+      return (
+        <div className="space-y-2">
+          <TextField label="Texto" value={item.content} onChange={(v) => onChange('content', v)} />
+          <div className="space-y-1.5">
+            <Label className="text-xs">Tamanho</Label>
+            <Select value={item.size} onValueChange={(v) => onChange('size', v)}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sm">Pequeno</SelectItem>
+                <SelectItem value="md">Medio</SelectItem>
+                <SelectItem value="lg">Grande</SelectItem>
+                <SelectItem value="xl">Extra grande</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <CheckboxField label="Negrito" checked={item.bold} onChange={(v) => onChange('bold', v)} />
+          <CheckboxField label="Italico" checked={item.italic} onChange={(v) => onChange('italic', v)} />
+          <AlignmentSelect value={item.alignment} onChange={(v) => onChange('alignment', v)} />
+          <ColorField label="Cor" value={item.color} onChange={(v) => onChange('color', v)} />
+        </div>
+      );
+    case 'text':
+      return (
+        <div className="space-y-2">
+          <TextField label="Conteudo" value={item.content} onChange={(v) => onChange('content', v)} multiline />
+          <div className="space-y-1.5">
+            <Label className="text-xs">Tamanho</Label>
+            <Select value={item.size} onValueChange={(v) => onChange('size', v)}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sm">Pequeno</SelectItem>
+                <SelectItem value="md">Medio</SelectItem>
+                <SelectItem value="lg">Grande</SelectItem>
+                <SelectItem value="xl">Extra grande</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <CheckboxField label="Negrito" checked={item.bold} onChange={(v) => onChange('bold', v)} />
+          <CheckboxField label="Italico" checked={item.italic} onChange={(v) => onChange('italic', v)} />
+          <AlignmentSelect value={item.alignment} onChange={(v) => onChange('alignment', v)} />
+          <ColorField label="Cor" value={item.color} onChange={(v) => onChange('color', v)} />
+        </div>
+      );
+    case 'image':
+      return (
+        <div className="space-y-2">
+          <TextField label="URL da imagem" value={item.url} onChange={(v) => onChange('url', v)} placeholder="https://..." />
+        </div>
+      );
+    case 'button':
+      return (
+        <div className="space-y-2">
+          <TextField label="Texto do botao" value={item.content} onChange={(v) => onChange('content', v)} placeholder="Saiba mais" />
+          <TextField label="URL do link" value={item.url} onChange={(v) => onChange('url', v)} placeholder="https://..." />
+          <ColorField label="Cor do botao" value={item.color} onChange={(v) => onChange('color', v)} />
+          <div className="space-y-1.5">
+            <Label className="text-xs">Tamanho</Label>
+            <Select value={item.size} onValueChange={(v) => onChange('size', v)}>
+              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sm">Pequeno</SelectItem>
+                <SelectItem value="md">Medio</SelectItem>
+                <SelectItem value="lg">Grande</SelectItem>
+                <SelectItem value="xl">Extra grande</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <AlignmentSelect value={item.alignment} onChange={(v) => onChange('alignment', v)} />
+        </div>
+      );
+    case 'video':
+      return (
+        <div className="space-y-2">
+          <TextField label="URL do video" value={item.url} onChange={(v) => onChange('url', v)} placeholder="https://youtube.com/watch?v=..." />
+        </div>
+      );
+    case 'audio':
+      return (
+        <div className="space-y-2">
+          <TextField label="URL do audio" value={item.url} onChange={(v) => onChange('url', v)} placeholder="https://..." />
+        </div>
+      );
+    case 'spacer':
+      return (
+        <div className="space-y-2">
+          <TextField label="Altura (px)" value={item.content} onChange={(v) => onChange('content', v)} placeholder="16" />
+        </div>
+      );
+    case 'list':
+      return (
+        <div className="space-y-2">
+          <TextField label="Itens (um por linha)" value={item.content} onChange={(v) => onChange('content', v)} multiline />
+        </div>
+      );
+    default:
+      return null;
+  }
+}
+
 /* ── Columns Properties ── */
 function ColumnsProperties({ block, onUpdate }: { block: LPBlock; onUpdate: LPEditorPropertiesProps['onUpdate'] }) {
   const p = block.props as ColumnsBlockProps;
   const u = (k: string, v: any) => onUpdate(block.id, { [k]: v });
-
-  const updateColumn = (idx: number, field: keyof ColumnContent, value: string) => {
-    const cols = [...(p.columns || [])];
-    cols[idx] = { ...(cols[idx] || { title: '', text: '', imageUrl: '', iconEmoji: '', buttonText: '', buttonUrl: '' }), [field]: value };
-    u('columns', cols);
-  };
+  const [expandedCols, setExpandedCols] = useState<Record<number, boolean>>({});
+  const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+  const [showAddMenu, setShowAddMenu] = useState<Record<number, boolean>>({});
 
   const changeLayout = (layout: ColumnLayout) => {
     const newCount = getColumnsFromLayout(layout);
-    const cols = Array.from({ length: newCount }, (_, i) =>
-      p.columns?.[i] || { title: `Coluna ${i + 1}`, text: 'Descrição aqui.', imageUrl: '', iconEmoji: ['🚀', '⚡', '🎯', '✨'][i] || '✨', buttonText: '', buttonUrl: '' },
-    );
+    const defaultCol: ColumnContent = { items: [], verticalAlign: 'top', bgColor: '', padding: 20 };
+    const cols = Array.from({ length: newCount }, (_, i) => p.columns?.[i] || defaultCol);
     onUpdate(block.id, { layout, columns: cols });
+  };
+
+  const updateColumnProp = (colIdx: number, field: keyof ColumnContent, value: any) => {
+    const cols = [...(p.columns || [])];
+    const defaultCol: ColumnContent = { items: [], verticalAlign: 'top', bgColor: '', padding: 20 };
+    cols[colIdx] = { ...(cols[colIdx] || defaultCol), [field]: value };
+    u('columns', cols);
+  };
+
+  const addItem = (colIdx: number, type: ColumnItemType) => {
+    const cols = [...(p.columns || [])];
+    const defaultCol: ColumnContent = { items: [], verticalAlign: 'top', bgColor: '', padding: 20 };
+    const newItem: ColumnItem = { id: crypto.randomUUID(), type, ...DEFAULT_COLUMN_ITEM };
+    if (type === 'icon') newItem.content = '⭐';
+    if (type === 'heading') { newItem.content = 'Titulo'; newItem.bold = true; }
+    if (type === 'text') newItem.content = 'Texto aqui...';
+    if (type === 'button') { newItem.content = 'Saiba mais'; newItem.color = '#6366f1'; }
+    if (type === 'spacer') newItem.content = '16';
+    cols[colIdx] = { ...(cols[colIdx] || defaultCol), items: [...((cols[colIdx] || defaultCol).items || []), newItem] };
+    u('columns', cols);
+    setShowAddMenu((prev) => ({ ...prev, [colIdx]: false }));
+  };
+
+  const deleteItem = (colIdx: number, itemId: string) => {
+    const cols = [...(p.columns || [])];
+    if (!cols[colIdx]) return;
+    cols[colIdx] = { ...cols[colIdx], items: cols[colIdx].items.filter((it) => it.id !== itemId) };
+    u('columns', cols);
+  };
+
+  const moveItem = (colIdx: number, itemIdx: number, direction: -1 | 1) => {
+    const cols = [...(p.columns || [])];
+    if (!cols[colIdx]) return;
+    const items = [...cols[colIdx].items];
+    const newIdx = itemIdx + direction;
+    if (newIdx < 0 || newIdx >= items.length) return;
+    [items[itemIdx], items[newIdx]] = [items[newIdx], items[itemIdx]];
+    cols[colIdx] = { ...cols[colIdx], items };
+    u('columns', cols);
+  };
+
+  const updateItem = (colIdx: number, itemId: string, field: keyof ColumnItem, value: any) => {
+    const cols = [...(p.columns || [])];
+    if (!cols[colIdx]) return;
+    cols[colIdx] = {
+      ...cols[colIdx],
+      items: cols[colIdx].items.map((it) => it.id === itemId ? { ...it, [field]: value } : it),
+    };
+    u('columns', cols);
   };
 
   const currentLayout = p.layout || '33-33-33';
@@ -213,6 +386,7 @@ function ColumnsProperties({ block, onUpdate }: { block: LPBlock; onUpdate: LPEd
 
   return (
     <div className="space-y-3">
+      {/* Layout */}
       <div className="space-y-1.5">
         <Label className="text-xs">Layout das colunas</Label>
         <Select value={currentLayout} onValueChange={(v) => changeLayout(v as ColumnLayout)}>
@@ -228,7 +402,7 @@ function ColumnsProperties({ block, onUpdate }: { block: LPBlock; onUpdate: LPEd
           </SelectContent>
         </Select>
       </div>
-      <RangeField label="Espaçamento" value={p.gap ?? 24} min={0} max={48} step={4} onChange={(v) => u('gap', v)} />
+      <RangeField label="Espacamento" value={p.gap ?? 24} min={0} max={48} step={4} onChange={(v) => u('gap', v)} />
       <RangeField label="Padding" value={p.padding ?? 48} min={0} max={100} step={8} onChange={(v) => u('padding', v)} />
 
       <Divider label="Fundo" />
@@ -237,17 +411,113 @@ function ColumnsProperties({ block, onUpdate }: { block: LPBlock; onUpdate: LPEd
       {p.bgImage && <RangeField label="Opacidade do overlay" value={p.bgOverlay ?? 0} min={0} max={100} step={5} unit="%" onChange={(v) => u('bgOverlay', v)} />}
       <ColorField label="Cor do texto" value={p.textColor || '#0f172a'} onChange={(v) => u('textColor', v)} />
 
-      {Array.from({ length: colCount }, (_, i) => {
-        const col = p.columns?.[i] || { title: '', text: '', imageUrl: '', iconEmoji: '', buttonText: '', buttonUrl: '' };
+      {/* Per-column settings */}
+      {Array.from({ length: colCount }, (_, colIdx) => {
+        const col: ColumnContent = p.columns?.[colIdx] || { items: [], verticalAlign: 'top', bgColor: '', padding: 20 };
+        const isExpanded = expandedCols[colIdx] ?? true;
+        const hasItems = col.items && col.items.length > 0;
+        const isLegacy = p.columns?.[colIdx] && !('items' in (p.columns[colIdx] as any));
+
         return (
-          <div key={i} className="space-y-2">
-            <Divider label={`Coluna ${i + 1}`} />
-            <TextField label="Emoji / ícone" value={col.iconEmoji || ''} onChange={(v) => updateColumn(i, 'iconEmoji', v)} placeholder="🚀" />
-            <TextField label="Imagem (URL)" value={col.imageUrl || ''} onChange={(v) => updateColumn(i, 'imageUrl', v)} placeholder="https://..." />
-            <TextField label="Título" value={col.title || ''} onChange={(v) => updateColumn(i, 'title', v)} />
-            <TextField label="Texto" value={col.text || ''} onChange={(v) => updateColumn(i, 'text', v)} multiline />
-            <TextField label="Texto do botão" value={col.buttonText || ''} onChange={(v) => updateColumn(i, 'buttonText', v)} placeholder="Saiba mais" />
-            <TextField label="URL do botão" value={col.buttonUrl || ''} onChange={(v) => updateColumn(i, 'buttonUrl', v)} placeholder="https://..." />
+          <div key={colIdx} className="border rounded-lg overflow-hidden">
+            {/* Column header */}
+            <button
+              type="button"
+              onClick={() => setExpandedCols((prev) => ({ ...prev, [colIdx]: !isExpanded }))}
+              className="flex items-center gap-1.5 w-full px-3 py-2 text-xs font-medium text-left bg-muted/50 hover:bg-muted transition-colors"
+            >
+              {isExpanded ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
+              Coluna {colIdx + 1}
+              <span className="ml-auto text-[10px] text-muted-foreground">{(col.items || []).length} itens</span>
+            </button>
+
+            {isExpanded && (
+              <div className="p-3 space-y-3">
+                {/* Column-level settings */}
+                <ColorField label="Cor de fundo da coluna" value={col.bgColor || ''} onChange={(v) => updateColumnProp(colIdx, 'bgColor', v)} />
+                <RangeField label="Padding interno" value={col.padding ?? 20} min={0} max={60} step={4} onChange={(v) => updateColumnProp(colIdx, 'padding', v)} />
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Alinhamento vertical</Label>
+                  <Select value={col.verticalAlign || 'top'} onValueChange={(v) => updateColumnProp(colIdx, 'verticalAlign', v)}>
+                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="top">Topo</SelectItem>
+                      <SelectItem value="center">Centro</SelectItem>
+                      <SelectItem value="bottom">Base</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Legacy data notice */}
+                {isLegacy && (
+                  <div className="rounded-md bg-amber-50 border border-amber-200 p-2 text-[10px] text-amber-700">
+                    Dados antigos detectados. Adicione elementos abaixo para usar o novo sistema de sub-blocos.
+                  </div>
+                )}
+
+                {/* Items list */}
+                <Divider label="Elementos" />
+                {hasItems && col.items.map((item, itemIdx) => {
+                  const itemExpanded = expandedItems[item.id] ?? false;
+                  return (
+                    <div key={item.id} className="border rounded-md overflow-hidden bg-background">
+                      {/* Item header */}
+                      <div className="flex items-center gap-1 px-2 py-1.5 bg-muted/30">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedItems((prev) => ({ ...prev, [item.id]: !itemExpanded }))}
+                          className="flex items-center gap-1 flex-1 text-left text-[11px] font-medium hover:text-primary transition-colors"
+                        >
+                          {itemExpanded ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />}
+                          <span className="truncate">{ITEM_TYPE_LABELS[item.type]}: {item.content ? item.content.slice(0, 20) : item.url ? item.url.slice(0, 20) : '...'}</span>
+                        </button>
+                        <button type="button" onClick={() => moveItem(colIdx, itemIdx, -1)} disabled={itemIdx === 0} className="p-0.5 rounded hover:bg-accent disabled:opacity-30" title="Mover para cima">
+                          <ArrowUp className="h-3 w-3" />
+                        </button>
+                        <button type="button" onClick={() => moveItem(colIdx, itemIdx, 1)} disabled={itemIdx === col.items.length - 1} className="p-0.5 rounded hover:bg-accent disabled:opacity-30" title="Mover para baixo">
+                          <ArrowDown className="h-3 w-3" />
+                        </button>
+                        <button type="button" onClick={() => deleteItem(colIdx, item.id)} className="p-0.5 rounded hover:bg-destructive/10 text-destructive" title="Remover">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                      {/* Item edit form */}
+                      {itemExpanded && (
+                        <div className="p-2 border-t">
+                          <ColumnItemEditForm
+                            item={item}
+                            onChange={(field, value) => updateItem(colIdx, item.id, field, value)}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Add element */}
+                {showAddMenu[colIdx] ? (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-[10px] text-muted-foreground">Selecione o tipo</Label>
+                      <button type="button" onClick={() => setShowAddMenu((prev) => ({ ...prev, [colIdx]: false }))} className="text-muted-foreground hover:text-foreground">
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1">
+                      {(['icon', 'heading', 'text', 'image', 'button', 'video', 'audio', 'spacer', 'list'] as ColumnItemType[]).map((t) => (
+                        <button key={t} onClick={() => addItem(colIdx, t)} className="text-[10px] p-1.5 rounded border hover:bg-accent text-center">
+                          {ITEM_TYPE_LABELS[t]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setShowAddMenu((prev) => ({ ...prev, [colIdx]: true }))}>
+                    + Adicionar elemento
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         );
       })}

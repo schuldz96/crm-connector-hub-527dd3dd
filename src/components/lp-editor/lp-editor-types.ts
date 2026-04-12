@@ -112,13 +112,34 @@ export interface SpacerBlockProps {
   height: number; // in px
 }
 
+// ── Column sub-block system ─────────────────────────────────
+// Each column contains an array of sub-blocks (mini-editor)
+
+export type ColumnItemType = 'icon' | 'heading' | 'text' | 'image' | 'button' | 'video' | 'audio' | 'spacer' | 'list';
+
+export interface ColumnItem {
+  id: string;
+  type: ColumnItemType;
+  // Universal props for each type
+  content: string;       // text content (heading text, paragraph, button label, list items separated by \n)
+  url: string;           // image src, video url, audio src, button href
+  color: string;         // text color, button bg, icon color
+  bgColor: string;       // item background
+  size: 'sm' | 'md' | 'lg' | 'xl'; // font size, icon size, button size
+  alignment: 'left' | 'center' | 'right';
+  bold: boolean;
+  italic: boolean;
+}
+
+export const DEFAULT_COLUMN_ITEM: Omit<ColumnItem, 'id' | 'type'> = {
+  content: '', url: '', color: '', bgColor: '', size: 'md', alignment: 'left', bold: false, italic: false,
+};
+
 export interface ColumnContent {
-  title: string;
-  text: string;
-  imageUrl: string;
-  iconEmoji: string;
-  buttonText: string;
-  buttonUrl: string;
+  items: ColumnItem[];
+  verticalAlign: 'top' | 'center' | 'bottom';
+  bgColor: string;
+  padding: number;
 }
 
 export type ColumnLayout =
@@ -259,9 +280,21 @@ export const DEFAULT_BLOCK_PROPS: Record<LPBlockType, LPBlockProps> = {
     textColor: '#0f172a',
     padding: 48,
     columns: [
-      { title: 'Recurso 1', text: 'Descrição do primeiro recurso ou benefício.', imageUrl: '', iconEmoji: '🚀', buttonText: '', buttonUrl: '' },
-      { title: 'Recurso 2', text: 'Descrição do segundo recurso ou benefício.', imageUrl: '', iconEmoji: '⚡', buttonText: '', buttonUrl: '' },
-      { title: 'Recurso 3', text: 'Descrição do terceiro recurso ou benefício.', imageUrl: '', iconEmoji: '🎯', buttonText: '', buttonUrl: '' },
+      { verticalAlign: 'top', bgColor: '', padding: 20, items: [
+        { id: 'i1', type: 'icon', content: '🚀', url: '', color: '', bgColor: '', size: 'lg', alignment: 'left', bold: false, italic: false },
+        { id: 'i2', type: 'heading', content: 'Recurso 1', url: '', color: '', bgColor: '', size: 'md', alignment: 'left', bold: true, italic: false },
+        { id: 'i3', type: 'text', content: 'Descrição do primeiro recurso ou benefício.', url: '', color: '', bgColor: '', size: 'sm', alignment: 'left', bold: false, italic: false },
+      ]},
+      { verticalAlign: 'top', bgColor: '', padding: 20, items: [
+        { id: 'i4', type: 'icon', content: '⚡', url: '', color: '', bgColor: '', size: 'lg', alignment: 'left', bold: false, italic: false },
+        { id: 'i5', type: 'heading', content: 'Recurso 2', url: '', color: '', bgColor: '', size: 'md', alignment: 'left', bold: true, italic: false },
+        { id: 'i6', type: 'text', content: 'Descrição do segundo recurso ou benefício.', url: '', color: '', bgColor: '', size: 'sm', alignment: 'left', bold: false, italic: false },
+      ]},
+      { verticalAlign: 'top', bgColor: '', padding: 20, items: [
+        { id: 'i7', type: 'icon', content: '🎯', url: '', color: '', bgColor: '', size: 'lg', alignment: 'left', bold: false, italic: false },
+        { id: 'i8', type: 'heading', content: 'Recurso 3', url: '', color: '', bgColor: '', size: 'md', alignment: 'left', bold: true, italic: false },
+        { id: 'i9', type: 'text', content: 'Descrição do terceiro recurso ou benefício.', url: '', color: '', bgColor: '', size: 'sm', alignment: 'left', bold: false, italic: false },
+      ]},
     ],
   } as ColumnsBlockProps,
   section: {
