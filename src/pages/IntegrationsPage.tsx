@@ -863,24 +863,110 @@ function DatabasePanel() {
 }
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
+// ─── Integration Catalog ─────────────────────────────────────────────────────
+
+const INTEGRATION_CATALOG = [
+  {
+    category: 'CRMs',
+    items: [
+      { name: 'HubSpot',    status: 'active' as const, emoji: '🟠' },
+      { name: 'Salesforce',  status: 'planned' as const, emoji: '☁️' },
+      { name: 'Pipedrive',   status: 'planned' as const, emoji: '🟢' },
+      { name: 'RD Station',  status: 'planned' as const, emoji: '🔵' },
+    ],
+  },
+  {
+    category: 'Comunicação',
+    items: [
+      { name: 'WhatsApp (Evolution API)', status: 'active' as const, emoji: '💬' },
+      { name: 'WhatsApp (Meta Cloud API)', status: 'active' as const, emoji: '📱' },
+      { name: 'Slack',       status: 'planned' as const, emoji: '💜' },
+      { name: 'Microsoft Teams', status: 'planned' as const, emoji: '🟣' },
+      { name: 'Telegram',    status: 'planned' as const, emoji: '✈️' },
+    ],
+  },
+  {
+    category: 'Videoconferência',
+    items: [
+      { name: 'Google Meet',  status: 'active' as const, emoji: '🎥' },
+      { name: 'Zoom',        status: 'planned' as const, emoji: '🔵' },
+      { name: 'Microsoft Teams', status: 'planned' as const, emoji: '📹' },
+    ],
+  },
+  {
+    category: 'Cloud & IA',
+    items: [
+      { name: 'OpenAI (GPT)', status: 'active' as const, emoji: '🤖' },
+      { name: 'AWS',          status: 'planned' as const, emoji: '☁️' },
+      { name: 'Google Cloud', status: 'planned' as const, emoji: '🌐' },
+    ],
+  },
+  {
+    category: 'Pagamento & E-commerce',
+    items: [
+      { name: 'Stripe',     status: 'planned' as const, emoji: '💳' },
+      { name: 'Appmax',     status: 'planned' as const, emoji: '🛒' },
+    ],
+  },
+  {
+    category: 'Outros',
+    items: [
+      { name: 'Google Calendar', status: 'planned' as const, emoji: '📅' },
+      { name: 'Google Drive',    status: 'active' as const, emoji: '📁' },
+      { name: 'Webhooks',        status: 'active' as const, emoji: '🔗' },
+      { name: 'API REST',        status: 'active' as const, emoji: '⚡' },
+    ],
+  },
+];
+
+function IntegrationCatalog() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-green-500" /> Ativo</span>
+        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-500" /> Em breve</span>
+      </div>
+      {INTEGRATION_CATALOG.map((cat) => (
+        <div key={cat.category}>
+          <h3 className="text-sm font-semibold mb-3">{cat.category}</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {cat.items.map((item) => (
+              <div key={item.name} className={cn('rounded-xl border p-4 flex items-center gap-3 transition-all', item.status === 'active' ? 'bg-card border-green-500/20 hover:border-green-500/40' : 'bg-muted/30 border-border opacity-70')}>
+                <span className="text-2xl">{item.emoji}</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{item.name}</p>
+                  <p className={cn('text-[10px]', item.status === 'active' ? 'text-green-500' : 'text-yellow-500')}>
+                    {item.status === 'active' ? 'Conectado' : 'Em breve'}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function IntegrationsPage() {
-  const [tab, setTab] = useState<'whatsapp' | 'hubspot' | 'database' | 'logs'>('whatsapp');
+  const [tab, setTab] = useState<'catalog' | 'whatsapp' | 'hubspot' | 'database' | 'logs'>('catalog');
 
   return (
     <div className="page-container animate-fade-in">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-display font-bold">Integrações</h1>
-          <p className="text-sm text-muted-foreground">Gerencie suas integrações WhatsApp, tokens e logs</p>
+          <p className="text-sm text-muted-foreground">Conecte suas ferramentas de vendas e CS</p>
         </div>
       </div>
 
       <div className="flex gap-1 p-1 bg-secondary rounded-lg border border-border mb-6 w-fit">
         {[
-          { key: 'whatsapp', label: 'WhatsApp',  icon: MessageSquare },
-          { key: 'hubspot',  label: 'HubSpot',   icon: Link2 },
-          { key: 'database', label: 'Banco / Tokens', icon: Database },
-          { key: 'logs',     label: 'Logs',      icon: Activity },
+          { key: 'catalog',  label: 'Catálogo',       icon: Link2 },
+          { key: 'whatsapp', label: 'WhatsApp',        icon: MessageSquare },
+          { key: 'hubspot',  label: 'HubSpot',         icon: Link2 },
+          { key: 'database', label: 'Banco / Tokens',  icon: Database },
+          { key: 'logs',     label: 'Logs',            icon: Activity },
         ].map(t => {
           const IconComp = t.icon;
           return (
@@ -894,6 +980,7 @@ export default function IntegrationsPage() {
         })}
       </div>
 
+      {tab === 'catalog'  && <IntegrationCatalog />}
       {tab === 'whatsapp' && <EvolutionPanel />}
       {tab === 'hubspot'  && <HubSpotIntegration />}
       {tab === 'database' && <DatabasePanel />}
