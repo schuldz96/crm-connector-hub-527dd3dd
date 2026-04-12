@@ -1,12 +1,13 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState } from 'react';
 import type { ElementType } from 'react';
-import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrgNavigate, usePathWithoutOrg } from '@/hooks/useOrgNavigate';
 import { useAppConfig } from '@/contexts/AppConfigContext';
 import { useRolePermissions } from '@/contexts/RolePermissionsContext';
 import { useLicense } from '@/contexts/LicenseContext';
+import { useTheme } from '@/contexts/ThemeContext';
+import type { AccentColor } from '@/contexts/ThemeContext';
 import { ROLE_LABELS } from '@/types';
 import BrandLogo from '@/components/BrandLogo';
 import {
@@ -16,10 +17,9 @@ import {
   Contact, Briefcase, Ticket, Factory, List,
   ClipboardCheck, TrendingUp, Headphones, Megaphone, Mail, FileText, CheckSquare, Globe,
   ShoppingCart, HeartPulse, Rocket, Star,
-  DollarSign, BarChart3, PieChart, Settings, Sun, Moon, Palette,
+  DollarSign, BarChart3, PieChart, Settings,
+  Sun, Moon, Palette, ChevronDown, ChevronRight,
 } from 'lucide-react';
-import { useTheme } from '@/contexts/ThemeContext';
-import type { AccentColor } from '@/contexts/ThemeContext';
 import { cn } from '@/lib/utils';
 
 /* ── Types ─────────────────────────────────────────────────────────── */
@@ -172,7 +172,7 @@ const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
-const SIDEBAR_WIDTH = 60;
+const SIDEBAR_WIDTH_EXPANDED = 220;
 
 /* ── Component ─────────────────────────────────────────────────────── */
 
@@ -186,51 +186,25 @@ export default function AppSidebar() {
   const navigate = useOrgNavigate();
   const cleanPath = usePathWithoutOrg();
 
-  // Track which parent group the user last clicked (for shared children like /whatsapp)
-  const [activeParent, setActiveParent] = useState<string>(() => localStorage.getItem('ltx_active_parent') || '');
+  // Track expanded groups
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(() => {
+    // Auto-expand the group containing the current path
+    const initial: Record<string, boolean> = {};
+    NAV_SECTIONS.forEach(s => {
+      s.items.forEach(item => {
+        const match = item.children?.some(c => cleanPath.startsWith(c.path.split('?')[0]));
+        if (match) initial[item.path] = true;
+      });
+    });
+    return initial;
+  });
 
-  // Hover state: which item path is hovered + its rect for flyout positioning
-  const [hoverItem, setHoverItem] = useState<string | null>(null);
-  const [hoverRect, setHoverRect] = useState<DOMRect | null>(null);
-  const [profileHover, setProfileHover] = useState(false);
-  const [profileRect, setProfileRect] = useState<DOMRect | null>(null);
-  const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const profileTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const handleMouseEnter = useCallback((path: string, el: HTMLElement) => {
-    if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
-    setHoverItem(path);
-    setHoverRect(el.getBoundingClientRect());
-  }, []);
-  const handleMouseLeave = useCallback(() => {
-    hoverTimeout.current = setTimeout(() => { setHoverItem(null); setHoverRect(null); }, 150);
-  }, []);
-  const handleFlyoutEnter = useCallback(() => {
-    if (hoverTimeout.current) clearTimeout(hoverTimeout.current);
-  }, []);
-
-  const handleProfileEnter = useCallback((el: HTMLElement) => {
-    if (profileTimeout.current) clearTimeout(profileTimeout.current);
-    setProfileHover(true);
-    setProfileRect(el.getBoundingClientRect());
-  }, []);
-  const handleProfileLeave = useCallback(() => {
-    profileTimeout.current = setTimeout(() => { setProfileHover(false); setProfileRect(null); }, 150);
-  }, []);
-  const handleProfileFlyoutEnter = useCallback(() => {
-    if (profileTimeout.current) clearTimeout(profileTimeout.current);
-  }, []);
+  const toggleGroup = (path: string) => {
+    setExpandedGroups(prev => ({ ...prev, [path]: !prev[path] }));
+  };
 
   const isActive = (path: string) => cleanPath === path.split('?')[0];
-  const isChildActive = (item: NavItem) => {
-    const hasMatch = item.children?.some(c => cleanPath.startsWith(c.path)) ?? false;
-    if (!hasMatch) return false;
-    // If this parent is explicitly the active one, prioritize it
-    if (activeParent === item.path) return true;
-    // If another parent is explicitly active and also matches, defer to it
-    if (activeParent && activeParent !== item.path) return false;
-    return true;
-  };
+  const isChildActive = (item: NavItem) => item.children?.some(c => cleanPath.startsWith(c.path.split('?')[0])) ?? false;
 
   const normalizedUserId = (user?.id ?? '').replace(/^google_/, 'user_');
 
@@ -238,7 +212,6 @@ export default function AppSidebar() {
     const moduleId = item.path.split('?')[0].replace(/^\//, '').replace(/\//g, '-') as any;
     const resourceOk = !item.resource || canAccess(item.resource);
     const moduleOk = isModuleEnabledForUser(moduleId, normalizedUserId, user?.teamId);
-    // License check: module must be enabled in the org's plan
     const licenseOk = !item.resource || canAccessModule(item.resource);
     return resourceOk && moduleOk && licenseOk;
   };
@@ -259,173 +232,133 @@ export default function AppSidebar() {
     success: 'text-success', 'muted-foreground': 'text-muted-foreground',
   };
 
-  // Find the currently hovered item data for the flyout
-  const hoveredItemData = hoverItem
-    ? visibleSections.flatMap(s => s.items).find(i => i.path === hoverItem)
-    : null;
-
   return (
-    <>
-      <aside
-        className="flex flex-col h-screen sticky top-0 border-r border-sidebar-border z-20"
-        style={{ background: 'var(--gradient-sidebar)', width: SIDEBAR_WIDTH }}
-      >
-        {/* Logo */}
-        <div className="flex items-center justify-center border-b border-sidebar-border h-14 flex-shrink-0">
-          <BrandLogo compact />
-        </div>
+    <aside
+      className="flex flex-col h-screen sticky top-0 border-r border-sidebar-border z-20 overflow-hidden"
+      style={{ background: 'var(--gradient-sidebar)', width: SIDEBAR_WIDTH_EXPANDED }}
+    >
+      {/* Logo */}
+      <div className="flex items-center gap-2 border-b border-sidebar-border h-14 flex-shrink-0 px-4">
+        <BrandLogo compact />
+        <span className="font-display font-bold text-sm text-foreground">LTX</span>
+      </div>
 
-        {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-2 px-1.5 space-y-0.5">
-          {visibleSections.map((section, sIdx) => (
-            <div key={section.label}>
-              {sIdx > 0 && (
-                <div className="h-px bg-sidebar-border/40 mx-1.5 my-1.5" />
-              )}
-              <div className="space-y-0.5">
-                {section.items.map((item) => {
-                  const hasChildren = item.children && item.children.length > 0;
-                  const active = hasChildren ? isChildActive(item) : isActive(item.path);
+      {/* Nav */}
+      <nav className="flex-1 overflow-y-auto py-2 px-2">
+        {visibleSections.map((section, sIdx) => (
+          <div key={section.label}>
+            {sIdx > 0 && <div className="h-px bg-sidebar-border/40 mx-2 my-2" />}
+            {section.items.map((item) => {
+              const hasChildren = item.children && item.children.length > 0;
+              const active = hasChildren ? isChildActive(item) : isActive(item.path);
+              const expanded = expandedGroups[item.path] ?? active;
 
-                  return (
-                    <div
-                      key={item.path}
-                      onMouseEnter={(e) => handleMouseEnter(item.path, e.currentTarget)}
-                      onMouseLeave={handleMouseLeave}
-                    >
-                      <div
-                        className={cn(
-                          'flex items-center justify-center w-[44px] h-[44px] mx-auto rounded-lg cursor-pointer transition-colors',
-                          active
-                            ? 'bg-primary/15 text-primary'
-                            : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'
-                        )}
-                        onClick={() => {
-                          if (hasChildren) navigate(item.children![0].path);
-                          else navigate(item.path);
-                        }}
-                      >
-                        <item.icon className="w-5 h-5" />
-                      </div>
+              return (
+                <div key={item.path} className="mb-0.5">
+                  {/* Group header */}
+                  <button
+                    className={cn(
+                      'flex items-center gap-2 w-full rounded-md px-2.5 py-2 text-sm transition-colors',
+                      active
+                        ? 'text-primary font-medium'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-sidebar-accent',
+                    )}
+                    onClick={() => {
+                      if (hasChildren) {
+                        toggleGroup(item.path);
+                        if (!expanded) navigate(item.children![0].path);
+                      } else {
+                        navigate(item.path);
+                      }
+                    }}
+                  >
+                    <item.icon className="w-4 h-4 flex-shrink-0" />
+                    <span className="flex-1 text-left truncate">{item.label}</span>
+                    {hasChildren && (
+                      expanded
+                        ? <ChevronDown className="w-3 h-3 text-muted-foreground/50" />
+                        : <ChevronRight className="w-3 h-3 text-muted-foreground/50" />
+                    )}
+                  </button>
+
+                  {/* Children */}
+                  {hasChildren && expanded && (
+                    <div className="ml-4 pl-2.5 border-l border-sidebar-border/30 space-y-0.5 mt-0.5 mb-1">
+                      {item.children!.filter(isItemVisible).map(child => (
+                        <button
+                          key={child.path}
+                          className={cn(
+                            'flex items-center gap-2 w-full rounded-md px-2.5 py-1.5 text-xs transition-colors',
+                            isActive(child.path)
+                              ? 'bg-primary/10 text-primary font-medium'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-sidebar-accent',
+                          )}
+                          onClick={() => navigate(child.path)}
+                        >
+                          <child.icon className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span className="truncate">{child.label}</span>
+                        </button>
+                      ))}
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </nav>
-
-        {/* Profile */}
-        <div
-          className="border-t border-sidebar-border p-2 flex-shrink-0"
-          onMouseEnter={(e) => handleProfileEnter(e.currentTarget)}
-          onMouseLeave={handleProfileLeave}
-        >
-          <div className="flex items-center justify-center p-1.5 rounded-lg cursor-pointer transition-colors hover:bg-sidebar-accent">
-            <img
-              src={user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name}`}
-              alt={user?.name}
-              className="w-8 h-8 rounded-full border border-sidebar-border flex-shrink-0"
-            />
+                  )}
+                </div>
+              );
+            })}
           </div>
+        ))}
+      </nav>
+
+      {/* Profile + Theme */}
+      <div className="border-t border-sidebar-border p-3 flex-shrink-0 space-y-2">
+        {/* Theme controls */}
+        <div className="flex items-center justify-between">
+          <div className="flex gap-1">
+            {(['indigo', 'blue', 'green', 'red', 'orange', 'pink', 'violet'] as AccentColor[]).map(c => (
+              <button key={c} onClick={() => setAccent(c)}
+                className={cn('w-4 h-4 rounded-full border transition-all', accent === c ? 'border-foreground scale-110' : 'border-transparent')}
+                style={{ backgroundColor: `hsl(${{'indigo':'234 89% 74%','blue':'217 91% 60%','green':'142 76% 36%','red':'0 84% 60%','orange':'25 95% 53%','pink':'330 81% 60%','violet':'263 70% 50%'}[c]})` }}
+              />
+            ))}
+          </div>
+          <button
+            onClick={() => setMode(isDark ? 'light' : 'dark')}
+            className="w-6 h-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+          </button>
         </div>
-      </aside>
 
-      {/* ── Flyout portals (rendered outside sidebar to avoid overflow clip) ── */}
-
-      {/* Nav flyout */}
-      {hoveredItemData && hoverRect && hoveredItemData.children && createPortal(
-        <div
-          className="fixed z-[9999] min-w-[200px] py-2 rounded-lg border border-border bg-card shadow-xl animate-in fade-in-0 zoom-in-95 duration-100"
-          style={{ left: SIDEBAR_WIDTH + 8, top: hoverRect.top }}
-          onMouseEnter={handleFlyoutEnter}
-          onMouseLeave={handleMouseLeave}
-        >
-          <p className="text-xs font-semibold text-foreground px-4 pb-2 border-b border-border mb-1">
-            {hoveredItemData.label}
-          </p>
-          {hoveredItemData.children.map((child) => (
-            <button
-              key={child.path}
-              className={cn(
-                'flex items-center gap-2.5 w-full px-4 py-2 text-sm transition-colors',
-                isActive(child.path)
-                  ? 'bg-primary/10 text-primary font-medium'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-              )}
-              onClick={() => { setActiveParent(hoveredItemData.path); localStorage.setItem('ltx_active_parent', hoveredItemData.path); navigate(child.path); setHoverItem(null); }}
-            >
-              <child.icon className="w-4 h-4" />
-              {child.label}
-            </button>
-          ))}
-        </div>,
-        document.body,
-      )}
-
-      {/* Tooltip for items without children */}
-      {hoveredItemData && hoverRect && !hoveredItemData.children && createPortal(
-        <div
-          className="fixed z-[9999] px-3 py-1.5 rounded-md border border-border bg-card shadow-lg text-xs font-medium text-foreground whitespace-nowrap"
-          style={{ left: SIDEBAR_WIDTH + 8, top: hoverRect.top + hoverRect.height / 2, transform: 'translateY(-50%)' }}
-          onMouseEnter={handleFlyoutEnter}
-          onMouseLeave={handleMouseLeave}
-        >
-          {hoveredItemData.label}
-        </div>,
-        document.body,
-      )}
-
-      {/* Profile flyout */}
-      {profileHover && profileRect && createPortal(
-        <div
-          className="fixed z-[9999] min-w-[200px] py-2 rounded-lg border border-border bg-card shadow-xl"
-          style={{ left: SIDEBAR_WIDTH + 8, bottom: 8 }}
-          onMouseEnter={handleProfileFlyoutEnter}
-          onMouseLeave={handleProfileLeave}
-        >
-          <div className="px-4 pb-2 border-b border-border mb-1">
-            <p className="text-sm font-semibold text-foreground truncate">{user?.name}</p>
-            <p className={cn('text-xs', rolePerm ? roleColorClass[rolePerm.color] : 'text-muted-foreground')}>
+        {/* User info */}
+        <div className="flex items-center gap-2">
+          <img
+            src={user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name}`}
+            alt={user?.name}
+            className="w-8 h-8 rounded-full border border-sidebar-border flex-shrink-0"
+          />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium truncate text-foreground">{user?.name}</p>
+            <p className={cn('text-[10px]', rolePerm ? roleColorClass[rolePerm.color] : 'text-muted-foreground')}>
               {roleLabel}
             </p>
-            <p className="text-[10px] text-muted-foreground/60 truncate mt-0.5">{user?.email}</p>
           </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-1">
           <button
-            onClick={() => { navigate('/me'); setProfileHover(false); }}
-            className="flex items-center gap-2.5 w-full px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            onClick={() => navigate('/me')}
+            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
           >
-            <User className="w-4 h-4" /> Meu Perfil
+            <User className="w-3 h-3" /> Perfil
           </button>
-          {/* Theme toggle */}
-          <div className="px-4 py-2 border-t border-border">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-muted-foreground flex items-center gap-1.5"><Palette className="w-3 h-3" /> Tema</span>
-              <button
-                onClick={() => setMode(isDark ? 'light' : 'dark')}
-                className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              >
-                {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-            <div className="flex gap-1.5">
-              {(['indigo', 'blue', 'green', 'red', 'orange', 'pink', 'violet'] as AccentColor[]).map(c => (
-                <button key={c} onClick={() => setAccent(c)}
-                  className={cn('w-5 h-5 rounded-full border-2 transition-all', accent === c ? 'border-foreground scale-110' : 'border-transparent')}
-                  style={{ backgroundColor: `hsl(${{'indigo':'234 89% 74%','blue':'217 91% 60%','green':'142 76% 36%','red':'0 84% 60%','orange':'25 95% 53%','pink':'330 81% 60%','violet':'263 70% 50%'}[c]})` }}
-                />
-              ))}
-            </div>
-          </div>
           <button
             onClick={logout}
-            className="flex items-center gap-2.5 w-full px-4 py-2 text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[11px] text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
           >
-            <LogOut className="w-4 h-4" /> Sair da conta
+            <LogOut className="w-3 h-3" /> Sair
           </button>
-        </div>,
-        document.body,
-      )}
-    </>
+        </div>
+      </div>
+    </aside>
   );
 }
