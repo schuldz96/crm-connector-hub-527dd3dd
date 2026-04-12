@@ -488,14 +488,14 @@ export async function getOrgSubscriptionHistory(org: string): Promise<Subscripti
   }));
 }
 
-export async function hasActiveSubscription(org: string): Promise<boolean> {
+export async function hasNonTerminalSubscription(org: string): Promise<boolean> {
   const { count, error } = await admin()
     .from('assinaturas')
     .select('id', { count: 'exact', head: true })
     .eq('org', org)
-    .eq('status', 'ativa');
+    .in('status', ['ativa', 'trial', 'suspensa']);
 
-  if (error) throw new Error(`Erro ao verificar assinatura ativa: ${error.message}`);
+  if (error) throw new Error(`Erro ao verificar assinatura existente: ${error.message}`);
   return (count ?? 0) > 0;
 }
 
@@ -1000,11 +1000,13 @@ export async function deleteBacklogTask(id: string): Promise<void> {
 
 export interface Invoice {
   id: string;
+  assinatura_id?: string;
   org: string;
   valor: number;
   status: string;
+  referencia_mes: string;
   descricao?: string;
-  vencimento_em: string;
+  vencimento: string;
   pago_em?: string;
   criado_em: string;
 }
@@ -1052,9 +1054,10 @@ export async function getOrgInvoices(org: string): Promise<Invoice[]> {
 
 export async function createInvoice(invoice: {
   org: string;
+  assinatura_id?: string;
   valor: number;
-  descricao?: string;
-  vencimento_em: string;
+  referencia_mes: string;
+  vencimento: string;
   status?: string;
 }): Promise<Invoice> {
   const now = new Date().toISOString();
@@ -1062,10 +1065,11 @@ export async function createInvoice(invoice: {
     const newInvoice: Invoice = {
       id: crypto.randomUUID(),
       org: invoice.org,
+      assinatura_id: invoice.assinatura_id,
       valor: invoice.valor,
       status: invoice.status ?? 'pendente',
-      descricao: invoice.descricao,
-      vencimento_em: invoice.vencimento_em,
+      referencia_mes: invoice.referencia_mes,
+      vencimento: invoice.vencimento,
       criado_em: now,
     };
     const invoices = loadLocalInvoices();
@@ -1076,7 +1080,11 @@ export async function createInvoice(invoice: {
   const { data, error } = await admin()
     .from('faturas')
     .insert({
-      ...invoice,
+      org: invoice.org,
+      assinatura_id: invoice.assinatura_id ?? null,
+      valor: invoice.valor,
+      referencia_mes: invoice.referencia_mes,
+      vencimento: invoice.vencimento,
       status: invoice.status ?? 'pendente',
     })
     .select()

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   getOrgDetail, getOrgUsers, getOrgSubscription, getOrgSubscriptionHistory,
-  hasActiveSubscription, getResourceUsage, getOrgStats,
+  hasNonTerminalSubscription, getResourceUsage, getOrgStats,
   getAllPlans, createSubscription, updateSubscription, updateOrganization,
   updateUser, countActiveAdmins, getOrgInvoices,
 } from '@/lib/superAdminService';
@@ -117,13 +117,11 @@ export default function SAOrgDetailPage() {
 
   const handleCreateSubscription = async () => {
     if (!orgKey || !formPlanoId) return;
-    // Validar assinatura unica ativa
-    if (formStatus === 'ativa') {
-      const hasActive = await hasActiveSubscription(orgKey);
-      if (hasActive) {
-        toast({ title: 'Erro', description: 'Esta organizacao ja possui uma assinatura ativa. Cancele a atual antes de criar outra.', variant: 'destructive' });
-        return;
-      }
+    // Validar: nao pode criar se ja existe assinatura nao-terminal (ativa, trial ou suspensa)
+    const hasExisting = await hasNonTerminalSubscription(orgKey);
+    if (hasExisting) {
+      toast({ title: 'Erro', description: 'Esta organizacao ja possui uma assinatura ativa, em trial ou suspensa. Cancele a atual antes de criar outra.', variant: 'destructive' });
+      return;
     }
     if (formStatus === 'trial' && !formTrialAte) {
       toast({ title: 'Erro', description: 'Informe a data de fim do trial', variant: 'destructive' });
@@ -203,6 +201,45 @@ export default function SAOrgDetailPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleConvertTrial = async () => {
+    if (!subscription) return;
+    setSaving(true);
+    try {
+      const now = new Date();
+      const ciclo = subscription.ciclo;
+      const next = new Date(now);
+      if (ciclo === 'anual') next.setFullYear(next.getFullYear() + 1);
+      else next.setMonth(next.getMonth() + 1);
+
+      await updateSubscription(subscription.id, {
+        status: 'ativa',
+        trial_ate: null,
+        inicio_em: now.toISOString(),
+        proximo_pagamento: next.toISOString(),
+        atualizado_em: now.toISOString(),
+      });
+      toast({ title: 'Trial convertido para assinatura ativa' });
+      const updated = await getOrgSubscription(orgKey!);
+      setSubscription(updated);
+      const updatedHistory = await getOrgSubscriptionHistory(orgKey!);
+      setSubscriptionHistory(updatedHistory);
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err?.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReactivate = async () => {
+    if (!subscription) return;
+    await loadPlans();
+    setFormPlanoId(subscription.plano_id);
+    setFormCiclo(subscription.ciclo);
+    setFormStatus('ativa');
+    setFormTrialAte('');
+    setShowCreateForm(true);
   };
 
   const openEditMode = async () => {
@@ -513,7 +550,7 @@ export default function SAOrgDetailPage() {
                     <SelectContent>
                       {plans.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
-                          {p.nome} — R$ {p.preco_mensal?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mes
+                          {p.nome} — R$ {(formCiclo === 'anual' ? p.preco_anual : p.preco_mensal)?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/{formCiclo === 'anual' ? 'ano' : 'mes'}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -594,13 +631,42 @@ export default function SAOrgDetailPage() {
                     </div>
                   )}
                 </div>
-                <div className="flex gap-2 mt-6">
-                  <Button variant="outline" size="sm" onClick={openEditMode}>
-                    <Pencil className="w-4 h-4 mr-2" /> Editar
-                  </Button>
-                  {subscription.status !== 'cancelada' && (
+                {/* Contextual Actions */}
+                <div className="flex flex-wrap gap-2 mt-6">
+                  {/* Trial actions */}
+                  {getEffectiveStatus(subscription) === 'trial' && (
+                    <Button size="sm" onClick={handleConvertTrial} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white">
+                      {saving ? 'Convertendo...' : 'Converter pra Paga'}
+                    </Button>
+                  )}
+                  {/* Expirada actions */}
+                  {getEffectiveStatus(subscription) === 'expirada' && (
+                    <Button size="sm" onClick={handleReactivate} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white">
+                      Reativar
+                    </Button>
+                  )}
+                  {/* Cancelada actions */}
+                  {subscription.status === 'cancelada' && (
+                    <Button size="sm" onClick={handleReactivate} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white">
+                      Reativar
+                    </Button>
+                  )}
+                  {/* Suspensa actions */}
+                  {subscription.status === 'suspensa' && (
+                    <Button size="sm" onClick={handleConvertTrial} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white">
+                      Reativar
+                    </Button>
+                  )}
+                  {/* Edit — available for trial, ativa */}
+                  {['trial', 'ativa'].includes(subscription.status) && (
+                    <Button variant="outline" size="sm" onClick={openEditMode}>
+                      <Pencil className="w-4 h-4 mr-2" /> Editar
+                    </Button>
+                  )}
+                  {/* Cancel — available for ativa, trial */}
+                  {['ativa', 'trial'].includes(subscription.status) && getEffectiveStatus(subscription) !== 'expirada' && (
                     <Button variant="outline" size="sm" className="text-red-400 hover:text-red-300 border-red-500/20" onClick={() => setShowCancelDialog(true)}>
-                      <XCircle className="w-4 h-4 mr-2" /> Cancelar Assinatura
+                      <XCircle className="w-4 h-4 mr-2" /> Cancelar
                     </Button>
                   )}
                 </div>
@@ -620,7 +686,7 @@ export default function SAOrgDetailPage() {
                     <SelectContent>
                       {plans.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
-                          {p.nome} — R$ {p.preco_mensal?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mes
+                          {p.nome} — R$ {(formCiclo === 'anual' ? p.preco_anual : p.preco_mensal)?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/{formCiclo === 'anual' ? 'ano' : 'mes'}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -775,7 +841,7 @@ export default function SAOrgDetailPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Descricao</TableHead>
+                  <TableHead>Referencia</TableHead>
                   <TableHead>Valor</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Vencimento</TableHead>
@@ -792,19 +858,19 @@ export default function SAOrgDetailPage() {
                 ) : (
                   orgInvoices.map((inv) => {
                     let effStatus = inv.status;
-                    if (effStatus === 'pendente' && inv.vencimento_em) {
-                      const venc = new Date(inv.vencimento_em);
+                    if (effStatus === 'pendente' && inv.vencimento) {
+                      const venc = new Date(inv.vencimento);
                       venc.setHours(23, 59, 59, 999);
-                      if (venc < new Date()) effStatus = 'atrasada';
+                      if (venc < new Date()) effStatus = 'vencida';
                     }
                     const invStatusColors: Record<string, string> = {
                       paga: 'bg-green-500/10 text-green-400 border-green-500/20',
                       pendente: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
-                      atrasada: 'bg-red-500/10 text-red-400 border-red-500/20',
+                      vencida: 'bg-red-500/10 text-red-400 border-red-500/20',
                     };
                     return (
                       <TableRow key={inv.id}>
-                        <TableCell className="text-sm">{inv.descricao || '—'}</TableCell>
+                        <TableCell className="text-sm font-mono">{inv.referencia_mes || '—'}</TableCell>
                         <TableCell className="font-mono text-sm">
                           R$ {inv.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </TableCell>
@@ -814,7 +880,7 @@ export default function SAOrgDetailPage() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {new Date(inv.vencimento_em).toLocaleDateString('pt-BR')}
+                          {new Date(inv.vencimento).toLocaleDateString('pt-BR')}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {inv.pago_em ? new Date(inv.pago_em).toLocaleDateString('pt-BR') : '—'}

@@ -24,10 +24,10 @@ const statusColors: Record<string, string> = {
 };
 
 function getEffectiveInvoiceStatus(inv: Invoice): string {
-  if (inv.status === 'pendente' && inv.vencimento_em) {
-    const venc = new Date(inv.vencimento_em);
+  if (inv.status === 'pendente' && inv.vencimento) {
+    const venc = new Date(inv.vencimento);
     venc.setHours(23, 59, 59, 999);
-    if (venc < new Date()) return 'atrasada';
+    if (venc < new Date()) return 'vencida';
   }
   return inv.status;
 }
@@ -47,7 +47,7 @@ export default function SAInvoicesPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [formOrg, setFormOrg] = useState('');
   const [formValor, setFormValor] = useState('');
-  const [formDescricao, setFormDescricao] = useState('');
+  const [formReferencia, setFormReferencia] = useState('');
   const [formVencimento, setFormVencimento] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -87,7 +87,7 @@ export default function SAInvoicesPage() {
   }, [invoices, filterOrg, filterStatus]);
 
   async function handleCreate() {
-    if (!formOrg || !formValor || !formVencimento) {
+    if (!formOrg || !formValor || !formVencimento || !formReferencia) {
       toast({ title: 'Erro', description: 'Preencha todos os campos obrigatorios', variant: 'destructive' });
       return;
     }
@@ -101,15 +101,15 @@ export default function SAInvoicesPage() {
       const inv = await createInvoice({
         org: formOrg,
         valor,
-        descricao: formDescricao.trim() || undefined,
-        vencimento_em: formVencimento,
+        referencia_mes: formReferencia.trim(),
+        vencimento: formVencimento,
       });
       setInvoices((prev) => [inv, ...prev]);
       toast({ title: 'Fatura criada com sucesso' });
       setCreateOpen(false);
       setFormOrg('');
       setFormValor('');
-      setFormDescricao('');
+      setFormReferencia('');
       setFormVencimento('');
     } catch (err: any) {
       toast({ title: 'Erro', description: err?.message, variant: 'destructive' });
@@ -181,7 +181,7 @@ export default function SAInvoicesPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Org</TableHead>
-              <TableHead>Descricao</TableHead>
+              <TableHead>Referencia</TableHead>
               <TableHead>Valor</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Vencimento</TableHead>
@@ -204,8 +204,8 @@ export default function SAInvoicesPage() {
                     <TableCell className="font-medium text-sm">
                       {orgMap.get(inv.org) || inv.org}
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {inv.descricao || '—'}
+                    <TableCell className="text-muted-foreground text-sm font-mono">
+                      {inv.referencia_mes || '—'}
                     </TableCell>
                     <TableCell className="font-mono text-sm">
                       R$ {inv.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -216,7 +216,7 @@ export default function SAInvoicesPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
-                      {new Date(inv.vencimento_em).toLocaleDateString('pt-BR')}
+                      {new Date(inv.vencimento).toLocaleDateString('pt-BR')}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {inv.pago_em ? new Date(inv.pago_em).toLocaleDateString('pt-BR') : '—'}
@@ -266,11 +266,11 @@ export default function SAInvoicesPage() {
               />
             </div>
             <div>
-              <Label className="text-sm mb-1.5 block">Descricao</Label>
+              <Label className="text-sm mb-1.5 block">Referencia (mes) *</Label>
               <Input
-                value={formDescricao}
-                onChange={(e) => setFormDescricao(e.target.value)}
-                placeholder="Mensalidade plano Pro - Abril/2026"
+                value={formReferencia}
+                onChange={(e) => setFormReferencia(e.target.value)}
+                placeholder="2026-04"
                 className="bg-input border-border"
               />
             </div>
