@@ -18,7 +18,7 @@ import {
   ClipboardCheck, TrendingUp, Headphones, Megaphone, Mail, FileText, CheckSquare, Globe,
   ShoppingCart, HeartPulse, Rocket, Star,
   DollarSign, BarChart3, PieChart, Settings,
-  Sun, Moon, Palette, ChevronDown, ChevronRight,
+  Sun, Moon, Palette, ChevronDown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -172,6 +172,7 @@ const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
+const SIDEBAR_WIDTH_COLLAPSED = 60;
 const SIDEBAR_WIDTH_EXPANDED = 220;
 
 /* ── Component ─────────────────────────────────────────────────────── */
@@ -186,18 +187,11 @@ export default function AppSidebar() {
   const navigate = useOrgNavigate();
   const cleanPath = usePathWithoutOrg();
 
-  // Track expanded groups
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(() => {
-    // Auto-expand the group containing the current path
-    const initial: Record<string, boolean> = {};
-    NAV_SECTIONS.forEach(s => {
-      s.items.forEach(item => {
-        const match = item.children?.some(c => cleanPath.startsWith(c.path.split('?')[0]));
-        if (match) initial[item.path] = true;
-      });
-    });
-    return initial;
-  });
+  // Hover-to-expand sidebar inteira
+  const [sidebarExpanded, setSidebarExpanded] = useState(false);
+
+  // Grupos começam fechados; abrem apenas via click no chevron
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   const toggleGroup = (path: string) => {
     setExpandedGroups(prev => ({ ...prev, [path]: !prev[path] }));
@@ -234,68 +228,96 @@ export default function AppSidebar() {
 
   return (
     <aside
-      className="flex flex-col h-screen sticky top-0 border-r border-sidebar-border z-20 overflow-hidden"
-      style={{ background: 'var(--gradient-sidebar)', width: SIDEBAR_WIDTH_EXPANDED }}
+      onMouseEnter={() => setSidebarExpanded(true)}
+      onMouseLeave={() => setSidebarExpanded(false)}
+      className="flex flex-col h-screen sticky top-0 border-r border-sidebar-border z-20 overflow-hidden transition-[width] duration-300 ease-in-out"
+      style={{ background: 'var(--gradient-sidebar)', width: sidebarExpanded ? SIDEBAR_WIDTH_EXPANDED : SIDEBAR_WIDTH_COLLAPSED }}
     >
       {/* Logo */}
-      <div className="flex items-center gap-2 border-b border-sidebar-border h-14 flex-shrink-0 px-4">
-        <BrandLogo compact />
-        <span className="font-display font-bold text-sm text-foreground">LTX</span>
+      <div className="flex items-center border-b border-sidebar-border h-14 flex-shrink-0">
+        <div className="w-[60px] flex items-center justify-center flex-shrink-0">
+          <BrandLogo compact />
+        </div>
+        <span
+          className={cn(
+            'font-display font-bold text-sm text-foreground whitespace-nowrap overflow-hidden transition-all duration-300',
+            sidebarExpanded ? 'opacity-100 max-w-[140px]' : 'opacity-0 max-w-0',
+          )}
+        >
+          LTX
+        </span>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-2 px-2">
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2">
         {visibleSections.map((section, sIdx) => (
           <div key={section.label}>
-            {sIdx > 0 && <div className="h-px bg-sidebar-border/40 mx-2 my-2" />}
+            {sIdx > 0 && <div className="h-px bg-sidebar-border/40 mx-3 my-2" />}
             {section.items.map((item) => {
               const hasChildren = item.children && item.children.length > 0;
               const active = hasChildren ? isChildActive(item) : isActive(item.path);
-              const expanded = expandedGroups[item.path] ?? active;
+              const groupOpen = expandedGroups[item.path] ?? false;
 
               return (
                 <div key={item.path} className="mb-0.5">
                   {/* Group header */}
                   <button
+                    title={!sidebarExpanded ? item.label : undefined}
                     className={cn(
-                      'flex items-center gap-2 w-full rounded-md px-2.5 py-2 text-sm transition-colors',
+                      'flex items-center w-full rounded-none text-sm transition-colors',
                       active
-                        ? 'text-primary font-medium'
+                        ? 'bg-primary/15 text-primary font-medium'
                         : 'text-muted-foreground hover:text-foreground hover:bg-sidebar-accent',
                     )}
                     onClick={() => {
                       if (hasChildren) {
-                        toggleGroup(item.path);
-                        if (!expanded) navigate(item.children![0].path);
+                        if (sidebarExpanded) {
+                          toggleGroup(item.path);
+                        } else {
+                          navigate(item.children![0].path);
+                        }
                       } else {
                         navigate(item.path);
                       }
                     }}
                   >
-                    <item.icon className="w-4 h-4 flex-shrink-0" />
-                    <span className="flex-1 text-left truncate">{item.label}</span>
+                    <div className="w-[60px] h-10 flex items-center justify-center flex-shrink-0">
+                      <item.icon className="w-4 h-4" />
+                    </div>
+                    <span
+                      className={cn(
+                        'flex-1 text-left whitespace-nowrap overflow-hidden transition-all duration-300',
+                        sidebarExpanded ? 'opacity-100 max-w-[140px]' : 'opacity-0 max-w-0',
+                      )}
+                    >
+                      {item.label}
+                    </span>
                     {hasChildren && (
-                      expanded
-                        ? <ChevronDown className="w-3 h-3 text-muted-foreground/50" />
-                        : <ChevronRight className="w-3 h-3 text-muted-foreground/50" />
+                      <ChevronDown
+                        className={cn(
+                          'w-3.5 h-3.5 text-muted-foreground/60 mr-3 flex-shrink-0 transition-all duration-300',
+                          sidebarExpanded ? 'opacity-100' : 'opacity-0 mr-0',
+                          groupOpen ? 'rotate-180' : 'rotate-0',
+                        )}
+                      />
                     )}
                   </button>
 
-                  {/* Children */}
-                  {hasChildren && expanded && (
-                    <div className="ml-4 pl-2.5 border-l border-sidebar-border/30 space-y-0.5 mt-0.5 mb-1">
+                  {/* Children — só quando sidebar e group expandidos */}
+                  {sidebarExpanded && hasChildren && groupOpen && (
+                    <div className="ml-[44px] mr-2 my-1 pl-3 border-l border-sidebar-border/60 space-y-0.5 animate-in fade-in-0 slide-in-from-top-1 duration-200">
                       {item.children!.filter(isItemVisible).map(child => (
                         <button
                           key={child.path}
                           className={cn(
-                            'flex items-center gap-2 w-full rounded-md px-2.5 py-1.5 text-xs transition-colors',
+                            'flex items-center gap-2.5 w-full rounded-md px-3 py-2 text-sm transition-colors',
                             isActive(child.path)
                               ? 'bg-primary/10 text-primary font-medium'
                               : 'text-muted-foreground hover:text-foreground hover:bg-sidebar-accent',
                           )}
                           onClick={() => navigate(child.path)}
                         >
-                          <child.icon className="w-3.5 h-3.5 flex-shrink-0" />
+                          <child.icon className="w-4 h-4 flex-shrink-0" />
                           <span className="truncate">{child.label}</span>
                         </button>
                       ))}
@@ -309,55 +331,60 @@ export default function AppSidebar() {
       </nav>
 
       {/* Profile + Theme */}
-      <div className="border-t border-sidebar-border p-3 flex-shrink-0 space-y-2">
-        {/* Theme controls */}
-        <div className="flex items-center justify-between">
-          <div className="flex gap-1">
-            {(['indigo', 'blue', 'green', 'red', 'orange', 'pink', 'violet'] as AccentColor[]).map(c => (
-              <button key={c} onClick={() => setAccent(c)}
-                className={cn('w-4 h-4 rounded-full border transition-all', accent === c ? 'border-foreground scale-110' : 'border-transparent')}
-                style={{ backgroundColor: `hsl(${{'indigo':'234 89% 74%','blue':'217 91% 60%','green':'142 76% 36%','red':'0 84% 60%','orange':'25 95% 53%','pink':'330 81% 60%','violet':'263 70% 50%'}[c]})` }}
-              />
-            ))}
-          </div>
-          <button
-            onClick={() => setMode(isDark ? 'light' : 'dark')}
-            className="w-6 h-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
-          </button>
-        </div>
-
+      <div className="border-t border-sidebar-border flex-shrink-0">
         {/* User info */}
-        <div className="flex items-center gap-2">
-          <img
-            src={user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name}`}
-            alt={user?.name}
-            className="w-8 h-8 rounded-full border border-sidebar-border flex-shrink-0"
-          />
-          <div className="flex-1 min-w-0">
+        <button
+          onClick={() => navigate('/me')}
+          className="w-full flex items-center transition-colors hover:bg-sidebar-accent py-2"
+        >
+          <div className="w-[60px] h-8 flex items-center justify-center flex-shrink-0">
+            <img
+              src={user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.name}`}
+              alt={user?.name}
+              className="w-8 h-8 rounded-full border border-sidebar-border"
+            />
+          </div>
+          <div
+            className={cn(
+              'flex-1 min-w-0 text-left overflow-hidden transition-all duration-300',
+              sidebarExpanded ? 'opacity-100 max-w-[140px]' : 'opacity-0 max-w-0',
+            )}
+          >
             <p className="text-xs font-medium truncate text-foreground">{user?.name}</p>
-            <p className={cn('text-[10px]', rolePerm ? roleColorClass[rolePerm.color] : 'text-muted-foreground')}>
+            <p className={cn('text-[10px] truncate', rolePerm ? roleColorClass[rolePerm.color] : 'text-muted-foreground')}>
               {roleLabel}
             </p>
           </div>
-        </div>
+        </button>
 
-        {/* Actions */}
-        <div className="flex gap-1">
-          <button
-            onClick={() => navigate('/me')}
-            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
-          >
-            <User className="w-3 h-3" /> Perfil
-          </button>
-          <button
-            onClick={logout}
-            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[11px] text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-          >
-            <LogOut className="w-3 h-3" /> Sair
-          </button>
-        </div>
+        {/* Expanded-only: theme + actions */}
+        {sidebarExpanded && (
+          <div className="px-3 pb-3 space-y-2 animate-in fade-in-0 duration-200">
+            <div className="flex items-center justify-between">
+              <div className="flex gap-1">
+                {(['indigo', 'blue', 'green', 'red', 'orange', 'pink', 'violet'] as AccentColor[]).map(c => (
+                  <button key={c} onClick={() => setAccent(c)}
+                    className={cn('w-4 h-4 rounded-full border transition-all', accent === c ? 'border-foreground scale-110' : 'border-transparent')}
+                    style={{ backgroundColor: `hsl(${{'indigo':'234 89% 74%','blue':'217 91% 60%','green':'142 76% 36%','red':'0 84% 60%','orange':'25 95% 53%','pink':'330 81% 60%','violet':'263 70% 50%'}[c]})` }}
+                  />
+                ))}
+              </div>
+              <button
+                onClick={() => setMode(isDark ? 'light' : 'dark')}
+                className="w-6 h-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                title={isDark ? 'Modo claro' : 'Modo escuro'}
+              >
+                {isDark ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+            <button
+              onClick={logout}
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[11px] text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+            >
+              <LogOut className="w-3 h-3" /> Sair da conta
+            </button>
+          </div>
+        )}
       </div>
     </aside>
   );
