@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 import type {
   LPBlock, LPBlockType, BlockStyles, HeroBlockProps, TextBlockProps, ImageBlockProps,
   ButtonBlockProps, FormBlockProps, SpacerBlockProps, ColumnsBlockProps, SectionBlockProps,
-  VideoBlockProps, CountdownBlockProps, DividerBlockProps, ColumnContent, ColumnLayout,
+  VideoBlockProps, CountdownBlockProps, DividerBlockProps, SchedulingBlockProps, ColumnContent, ColumnLayout,
   ColumnItem, ColumnItemType,
 } from '@/components/lp-editor/lp-editor-types';
 import { getColumnsFromLayout, DEFAULT_COLUMN_ITEM } from '@/components/lp-editor/lp-editor-types';
@@ -34,6 +34,7 @@ const BLOCK_TYPE_LABELS: Record<LPBlockType, string> = {
   text: 'Texto', image: 'Imagem', button: 'Botão',
   form: 'Formulário', spacer: 'Espaçador',
   video: 'Vídeo', countdown: 'Countdown', divider: 'Divisor',
+  scheduling: 'Agendamento',
 };
 
 /* ══════════════════════════════════════════════════════════════
@@ -744,6 +745,37 @@ function DividerProperties({ block, onUpdate }: { block: LPBlock; onUpdate: LPEd
   );
 }
 
+/* ── Scheduling Properties ── */
+function SchedulingProperties({ block, onUpdate }: { block: LPBlock; onUpdate: LPEditorPropertiesProps['onUpdate'] }) {
+  const p = block.props as SchedulingBlockProps;
+  const u = (k: string, v: any) => onUpdate(block.id, { [k]: v });
+  return (
+    <div className="space-y-3">
+      <TextField label="Título" value={p.title} onChange={v => u('title', v)} />
+      <TextField label="Subtítulo" value={p.subtitle} onChange={v => u('subtitle', v)} multiline />
+      <Divider label="Horários" />
+      <RangeField label="Hora início" value={p.startHour ?? 8} min={0} max={23} step={1} unit="h" onChange={v => u('startHour', v)} />
+      <RangeField label="Hora fim" value={p.endHour ?? 20} min={1} max={24} step={1} unit="h" onChange={v => u('endHour', v)} />
+      <div className="space-y-1.5">
+        <Label className="text-xs">Duração dos slots</Label>
+        <Select value={String(p.slotMinutes || 30)} onValueChange={v => u('slotMinutes', Number(v))}>
+          <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="15">15 minutos</SelectItem>
+            <SelectItem value="30">30 minutos</SelectItem>
+            <SelectItem value="60">60 minutos</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <RangeField label="Dias a exibir" value={p.daysToShow ?? 7} min={3} max={30} step={1} unit=" dias" onChange={v => u('daysToShow', v)} />
+      <Divider label="Visual" />
+      <ColorField label="Cor de fundo" value={p.bgColor || '#ffffff'} onChange={v => u('bgColor', v)} />
+      <ColorField label="Cor do texto" value={p.textColor || '#0f172a'} onChange={v => u('textColor', v)} />
+      <ColorField label="Cor de destaque" value={p.accentColor || '#6366f1'} onChange={v => u('accentColor', v)} />
+    </div>
+  );
+}
+
 /* ══════════════════════════════════════════════════════════════
    Estilos Tab — Universal BlockStyles editor (accordion)
    ══════════════════════════════════════════════════════════════ */
@@ -949,6 +981,7 @@ export function LPEditorProperties({ block, selectedColumnIndex, forms, onUpdate
       case 'video': return <VideoProperties block={block} onUpdate={onUpdate} />;
       case 'countdown': return <CountdownProperties block={block} onUpdate={onUpdate} />;
       case 'divider': return <DividerProperties block={block} onUpdate={onUpdate} />;
+      case 'scheduling': return <SchedulingProperties block={block} onUpdate={onUpdate} />;
       default: return null;
     }
   };

@@ -15,7 +15,8 @@ export type LPBlockType =
   | 'section'
   | 'video'
   | 'countdown'
-  | 'divider';
+  | 'divider'
+  | 'scheduling';
 
 // ── Universal Block Styles ───────────────────────────────────
 
@@ -209,6 +210,18 @@ export interface DividerBlockProps {
   width: number; // percentage 1-100
 }
 
+export interface SchedulingBlockProps {
+  title: string;
+  subtitle: string;
+  bgColor: string;
+  textColor: string;
+  accentColor: string;
+  startHour: number; // 0-23
+  endHour: number;   // 0-23
+  slotMinutes: number; // 15, 30, 60
+  daysToShow: number; // how many days ahead to show (7, 14, 30)
+}
+
 // ── Union type for all block props ───────────────────────────
 
 export type LPBlockProps =
@@ -222,7 +235,8 @@ export type LPBlockProps =
   | SectionBlockProps
   | VideoBlockProps
   | CountdownBlockProps
-  | DividerBlockProps;
+  | DividerBlockProps
+  | SchedulingBlockProps;
 
 // ── LPBlock — a single block in the editor ───────────────────
 
@@ -345,6 +359,17 @@ export const DEFAULT_BLOCK_PROPS: Record<LPBlockType, LPBlockProps> = {
     thickness: 1,
     width: 100,
   } as DividerBlockProps,
+  scheduling: {
+    title: 'Agende uma demonstração',
+    subtitle: 'Escolha o melhor horário para você',
+    bgColor: '#ffffff',
+    textColor: '#0f172a',
+    accentColor: '#6366f1',
+    startHour: 8,
+    endHour: 20,
+    slotMinutes: 30,
+    daysToShow: 7,
+  } as SchedulingBlockProps,
 };
 
 // ── Block Catalog (categorized) ──────────────────────────────
@@ -384,6 +409,7 @@ export const BLOCK_CATALOG: BlockCatalogCategory[] = [
       { type: 'video', label: 'Vídeo', icon: 'Play' },
       { type: 'countdown', label: 'Countdown', icon: 'Timer' },
       { type: 'divider', label: 'Divisor', icon: 'Minus' },
+      { type: 'scheduling', label: 'Agendamento', icon: 'CalendarClock' },
       { type: 'spacer', label: 'Espaçador', icon: 'SeparatorHorizontal' },
     ],
   },

@@ -15,6 +15,7 @@ import type {
   VideoBlockProps,
   CountdownBlockProps,
   DividerBlockProps,
+  SchedulingBlockProps,
   ColumnItem,
   ColumnContent,
 } from './lp-editor-types';
@@ -532,6 +533,62 @@ function DividerBlock({ props }: { props: DividerBlockProps }) {
   );
 }
 
+// ── Scheduling ─────────────────────────────────────────────
+
+function SchedulingBlock({ props }: { props: SchedulingBlockProps }) {
+  // Generate next N days
+  const days = Array.from({ length: Math.min(props.daysToShow || 7, 7) }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    return d;
+  });
+
+  // Generate time slots
+  const slots: string[] = [];
+  for (let h = (props.startHour || 8); h < (props.endHour || 20); h++) {
+    for (let m = 0; m < 60; m += (props.slotMinutes || 30)) {
+      slots.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+    }
+  }
+
+  const dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+  return (
+    <div style={{ backgroundColor: props.bgColor || '#fff', color: props.textColor || '#0f172a', padding: '48px 32px' }}>
+      <div className="max-w-2xl mx-auto">
+        {props.title && <h2 className="text-2xl font-bold mb-2 text-center">{props.title}</h2>}
+        {props.subtitle && <p className="text-sm opacity-70 mb-6 text-center">{props.subtitle}</p>}
+
+        {/* Day selector */}
+        <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+          {days.map((d, i) => (
+            <button key={i} className={cn('flex flex-col items-center px-4 py-2 rounded-lg border min-w-[70px] transition-colors', i === 0 ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50')}>
+              <span className="text-[10px] uppercase opacity-60">{dayNames[d.getDay()]}</span>
+              <span className="text-lg font-bold">{d.getDate()}</span>
+              <span className="text-[10px] opacity-60">{monthNames[d.getMonth()]}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Time slots grid */}
+        <div className="grid grid-cols-4 gap-2">
+          {slots.slice(0, 12).map((slot) => (
+            <button key={slot} className="py-2 px-3 rounded-lg border border-border text-sm font-medium hover:border-primary hover:bg-primary/5 transition-colors" style={{ color: props.accentColor }}>
+              {slot}
+            </button>
+          ))}
+          {slots.length > 12 && (
+            <div className="col-span-4 text-center text-xs text-muted-foreground py-1">
+              +{slots.length - 12} horários disponíveis
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Renderer ───────────────────────────────────────────
 
 export function LPBlockRenderer({ block, selected, selectedColumnIndex, onClick, onClickColumn }: LPBlockRendererProps) {
@@ -550,6 +607,7 @@ export function LPBlockRenderer({ block, selected, selectedColumnIndex, onClick,
       case 'video': return <VideoBlock props={block.props as VideoBlockProps} />;
       case 'countdown': return <CountdownBlock props={block.props as CountdownBlockProps} />;
       case 'divider': return <DividerBlock props={block.props as DividerBlockProps} />;
+      case 'scheduling': return <SchedulingBlock props={block.props as SchedulingBlockProps} />;
       default: return null;
     }
   };

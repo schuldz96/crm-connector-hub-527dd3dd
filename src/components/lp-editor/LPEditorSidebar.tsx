@@ -12,6 +12,7 @@ import {
   Play,
   Timer,
   Minus,
+  CalendarClock,
   LayoutGrid,
   ChevronDown,
   ChevronRight,
@@ -32,6 +33,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Play,
   Timer,
   Minus,
+  CalendarClock,
 };
 
 interface LPEditorSidebarProps {
