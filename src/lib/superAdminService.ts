@@ -658,11 +658,10 @@ function saveLocal(tasks: BacklogTask[]) {
 
 export async function getBacklogTasks(): Promise<BacklogTask[]> {
   try {
-    // Load all fields but limit results to avoid huge payloads from old done tasks with base64 images
-    const { data, error } = await admin().from('backlog_tasks').select('*').neq('status', 'done').order('criado_em', { ascending: false });
-    // Also load recent done tasks (last 20)
-    const { data: doneData } = await admin().from('backlog_tasks').select('*').eq('status', 'done').order('atualizado_em', { ascending: false }).limit(20);
-    const all = [...(data ?? []), ...(doneData ?? [])];
+    // Exclude imagem_url to avoid huge base64 payloads; load ALL tasks (no limit)
+    const cols = 'id,titulo,descricao,status,prioridade,tipo,agente_atual,agente_historico,tags,estimativa_horas,modulo,criado_por,criado_em,atualizado_em';
+    const { data, error } = await admin().from('backlog_tasks').select(cols).order('criado_em', { ascending: false });
+    const all = data ?? [];
     if (error) throw error;
     useLocalStorage = false;
     return all as BacklogTask[];
