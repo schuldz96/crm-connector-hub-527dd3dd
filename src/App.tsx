@@ -17,6 +17,7 @@ import { SuperAdminAuthProvider } from "@/contexts/SuperAdminAuthContext";
 import SuperAdminLoginPage from "@/pages/super-admin/SuperAdminLoginPage";
 import SuperAdminProtectedRoutes from "@/components/super-admin/SuperAdminProtectedRoutes";
 import LoginPage from "@/pages/LoginPage";
+import SignupPage from "@/pages/SignupPage";
 import GoogleCallbackPage from "@/pages/GoogleCallbackPage";
 import DashboardPage from "@/pages/DashboardPage";
 import MeetingsPage from "@/pages/MeetingsPage";
@@ -180,6 +181,7 @@ const App = () => (
                       } />
 
                       {/* Public routes */}
+                      <Route path="/signup"               element={<SignupPage />} />
                       <Route path="/login"                element={<LoginPageWrapper />} />
                       <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
                       {/* Protected routes */}
