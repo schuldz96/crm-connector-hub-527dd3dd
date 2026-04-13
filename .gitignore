@@ -51,3 +51,6 @@ supabase/.temp/
 # ─── AIOX local state ────────────────────────────────────────────────────────
 .claude/settings.local.json
 .aiox/install-log.txt
+
+# ─── Local documentation (not committed) ────────────────────────────────────
+_local-docs/
