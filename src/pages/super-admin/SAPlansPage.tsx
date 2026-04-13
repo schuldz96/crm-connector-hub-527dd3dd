@@ -112,7 +112,7 @@ export default function SAPlansPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="sa-page-header flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-display font-bold flex items-center gap-2">
             <Package className="w-6 h-6 text-red-500" />
@@ -158,7 +158,7 @@ export default function SAPlansPage() {
               </TableRow>
             ) : (
               plans.map((plan) => (
-                <TableRow key={plan.id}>
+                <TableRow key={plan.id} className="sa-table-row">
                   <TableCell className="font-medium">{plan.nome}</TableCell>
                   <TableCell className="font-mono text-xs">{plan.codigo}</TableCell>
                   <TableCell>{formatBRL(plan.preco_mensal)}</TableCell>
@@ -198,7 +198,7 @@ export default function SAPlansPage() {
                     />
                   </TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="sm" onClick={() => openEdit(plan)}>
+                    <Button variant="ghost" size="sm" className="sa-action-btn" onClick={() => openEdit(plan)}>
                       <Pencil className="w-4 h-4" />
                     </Button>
                   </TableCell>
