@@ -2,21 +2,54 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   getOrgDetail, getOrgUsers, getOrgSubscription, getResourceUsage, getOrgStats,
+  getAllPlans, createSubscription, updateSubscription,
 } from '@/lib/superAdminService';
-import type { Organization, Subscription, ResourceUsage } from '@/lib/superAdminService';
+import type { Organization, Subscription, ResourceUsage, Plan } from '@/lib/superAdminService';
+import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import {
-  ArrowLeft, Loader2, AlertCircle, Users, CreditCard, BarChart3,
+  ArrowLeft, Loader2, AlertCircle, Users, CreditCard, BarChart3, Pencil, XCircle,
 } from 'lucide-react';
+
+const statusColors: Record<string, string> = {
+  ativa: 'bg-green-500/10 text-green-400 border-green-500/20',
+  trial: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+  cancelada: 'bg-red-500/10 text-red-400 border-red-500/20',
+  suspensa: 'bg-gray-500/10 text-gray-400 border-gray-500/20',
+  expirada: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+};
+
+function getEffectiveStatus(sub: Subscription): string {
+  if (sub.status === 'trial' && sub.trial_ate) {
+    const trialEnd = new Date(sub.trial_ate);
+    trialEnd.setHours(23, 59, 59, 999);
+    if (trialEnd < new Date()) return 'expirada';
+  }
+  return sub.status;
+}
+
+function getTodayStr(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 export default function SAOrgDetailPage() {
   const { org: orgKey } = useParams<{ org: string }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const [orgDetail, setOrgDetail] = useState<Organization | null>(null);
   const [users, setUsers] = useState<any[]>([]);
@@ -28,6 +61,128 @@ export default function SAOrgDetailPage() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Subscription CRUD state
+  const [saving, setSaving] = useState(false);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [plansLoaded, setPlansLoaded] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [formPlanoId, setFormPlanoId] = useState('');
+  const [formCiclo, setFormCiclo] = useState('mensal');
+  const [formStatus, setFormStatus] = useState('ativa');
+  const [formTrialAte, setFormTrialAte] = useState('');
+
+  const loadPlans = async () => {
+    if (plansLoaded) return;
+    const data = await getAllPlans();
+    setPlans(data.filter(p => p.ativo));
+    setPlansLoaded(true);
+  };
+
+  const handleCreateSubscription = async () => {
+    if (!orgKey || !formPlanoId) return;
+    if (formStatus === 'trial' && !formTrialAte) {
+      toast({ title: 'Erro', description: 'Informe a data de fim do trial', variant: 'destructive' });
+      return;
+    }
+    if (formStatus === 'trial' && formTrialAte && formTrialAte < getTodayStr()) {
+      toast({ title: 'Erro', description: 'A data de fim do trial deve ser futura', variant: 'destructive' });
+      return;
+    }
+    setSaving(true);
+    try {
+      await createSubscription({
+        org: orgKey,
+        plano_id: formPlanoId,
+        status: formStatus,
+        ciclo: formCiclo,
+        trial_ate: formStatus === 'trial' && formTrialAte ? formTrialAte : undefined,
+      });
+      toast({ title: 'Assinatura criada com sucesso' });
+      setShowCreateForm(false);
+      const updated = await getOrgSubscription(orgKey);
+      setSubscription(updated);
+    } catch (err: any) {
+      toast({ title: 'Erro ao criar assinatura', description: err.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUpdateSubscription = async () => {
+    if (!subscription) return;
+    if (formStatus === 'trial' && !formTrialAte) {
+      toast({ title: 'Erro', description: 'Informe a data de fim do trial', variant: 'destructive' });
+      return;
+    }
+    if (formStatus === 'trial' && formTrialAte && formTrialAte < getTodayStr()) {
+      toast({ title: 'Erro', description: 'A data de fim do trial deve ser futura', variant: 'destructive' });
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateSubscription(subscription.id, {
+        plano_id: formPlanoId,
+        ciclo: formCiclo,
+        status: formStatus,
+        trial_ate: formStatus === 'trial' && formTrialAte ? formTrialAte : null,
+        // Reativação limpa cancelado_em; só permanece se a nova intenção for cancelar
+        cancelado_em: formStatus === 'cancelada' ? (subscription.cancelado_em ?? new Date().toISOString()) : null,
+        atualizado_em: new Date().toISOString(),
+      });
+      toast({ title: 'Assinatura atualizada com sucesso' });
+      setEditMode(false);
+      const updated = await getOrgSubscription(orgKey!);
+      setSubscription(updated);
+    } catch (err: any) {
+      toast({ title: 'Erro ao atualizar assinatura', description: err.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    if (!subscription) return;
+    setSaving(true);
+    try {
+      await updateSubscription(subscription.id, {
+        status: 'cancelada',
+        cancelado_em: new Date().toISOString(),
+        atualizado_em: new Date().toISOString(),
+      });
+      toast({ title: 'Assinatura cancelada' });
+      setShowCancelDialog(false);
+      const updated = await getOrgSubscription(orgKey!);
+      setSubscription(updated);
+    } catch (err: any) {
+      toast({ title: 'Erro ao cancelar assinatura', description: err.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openEditMode = async () => {
+    await loadPlans();
+    if (subscription) {
+      setFormPlanoId(subscription.plano_id);
+      setFormCiclo(subscription.ciclo);
+      setFormStatus(subscription.status);
+      // trial_ate vem como ISO (YYYY-MM-DDTHH:mm:ss+TZ) — input[type=date] espera só YYYY-MM-DD
+      setFormTrialAte(subscription.trial_ate?.slice(0, 10) ?? '');
+    }
+    setEditMode(true);
+  };
+
+  const openCreateForm = async () => {
+    await loadPlans();
+    setFormPlanoId('');
+    setFormCiclo('mensal');
+    setFormStatus('ativa');
+    setFormTrialAte('');
+    setShowCreateForm(true);
+  };
 
   useEffect(() => {
     if (!orgKey) return;
@@ -99,7 +254,7 @@ export default function SAOrgDetailPage() {
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Plano: {orgDetail.plano || 'N/A'} | Dominio: {orgDetail.dominio || '—'}
+            Plano: {subscription?.plano_nome || 'N/A'} | Dominio: {orgDetail.dominio || '—'}
           </p>
         </div>
       </div>
@@ -132,7 +287,7 @@ export default function SAOrgDetailPage() {
               <CreditCard className="w-4 h-4 text-purple-400" />
             </div>
             <div>
-              <p className="text-lg font-bold">{subscription?.status ?? 'Sem assinatura'}</p>
+              <p className="text-lg font-bold">{subscription ? getEffectiveStatus(subscription) : 'Sem assinatura'}</p>
               <p className="text-xs text-muted-foreground">
                 {subscription ? `Plano: ${subscription.plano_nome ?? subscription.plano_id}` : 'Status da assinatura'}
               </p>
@@ -217,53 +372,204 @@ export default function SAOrgDetailPage() {
         {/* Subscription Tab */}
         <TabsContent value="subscription">
           <div className="glass-card p-6 border border-border rounded-lg bg-card">
-            {subscription ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* State A: No subscription */}
+            {!subscription && !showCreateForm && (
+              <div className="text-center py-6">
+                <p className="text-muted-foreground text-sm mb-4">
+                  Nenhuma assinatura encontrada para esta organizacao.
+                </p>
+                <Button onClick={openCreateForm} className="bg-red-600 hover:bg-red-700 text-white">
+                  Criar Assinatura
+                </Button>
+              </div>
+            )}
+
+            {/* Create Form */}
+            {showCreateForm && (
+              <div className="space-y-4 max-w-md">
+                <h3 className="text-sm font-semibold">Nova Assinatura</h3>
                 <div>
-                  <p className="text-xs text-muted-foreground mb-1">Plano</p>
-                  <p className="text-sm font-medium">
-                    {subscription.plano_nome ?? subscription.plano_id}
-                  </p>
+                  <Label className="text-sm mb-1.5 block">Plano *</Label>
+                  <Select value={formPlanoId} onValueChange={setFormPlanoId}>
+                    <SelectTrigger className="bg-input border-border">
+                      <SelectValue placeholder="Selecione o plano" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {plans.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.nome} — R$ {p.preco_mensal?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mes
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Status</p>
-                  <Badge
-                    className={
-                      subscription.status === 'ativa'
-                        ? 'bg-green-500/10 text-green-400 border-green-500/20'
-                        : subscription.status === 'trial'
-                          ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
-                          : 'bg-red-500/10 text-red-400 border-red-500/20'
-                    }
-                  >
-                    {subscription.status}
-                  </Badge>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Ciclo</p>
-                  <p className="text-sm font-medium">{subscription.ciclo}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1">Inicio</p>
-                  <p className="text-sm font-medium">
-                    {new Date(subscription.inicio_em).toLocaleDateString('pt-BR')}
-                  </p>
-                </div>
-                {subscription.trial_ate && (
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">Trial ate</p>
-                    <p className="text-sm font-medium">
-                      {new Date(subscription.trial_ate).toLocaleDateString('pt-BR')}
-                    </p>
+                    <Label className="text-sm mb-1.5 block">Ciclo</Label>
+                    <Select value={formCiclo} onValueChange={setFormCiclo}>
+                      <SelectTrigger className="bg-input border-border"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="mensal">Mensal</SelectItem>
+                        <SelectItem value="anual">Anual</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-sm mb-1.5 block">Status</Label>
+                    <Select value={formStatus} onValueChange={setFormStatus}>
+                      <SelectTrigger className="bg-input border-border"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ativa">Ativa</SelectItem>
+                        <SelectItem value="trial">Trial</SelectItem>
+                        <SelectItem value="suspensa">Suspensa</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {formStatus === 'trial' && (
+                  <div>
+                    <Label className="text-sm mb-1.5 block">Trial ate</Label>
+                    <Input type="date" value={formTrialAte} onChange={(e) => setFormTrialAte(e.target.value)} className="bg-input border-border" />
                   </div>
                 )}
+                <div className="flex gap-2">
+                  <Button onClick={handleCreateSubscription} disabled={saving || !formPlanoId} className="bg-red-600 hover:bg-red-700 text-white">
+                    {saving ? 'Salvando...' : 'Criar'}
+                  </Button>
+                  <Button variant="outline" onClick={() => setShowCreateForm(false)} disabled={saving}>
+                    Cancelar
+                  </Button>
+                </div>
               </div>
-            ) : (
-              <p className="text-muted-foreground text-sm text-center py-4">
-                Nenhuma assinatura encontrada para esta organizacao.
-              </p>
+            )}
+
+            {/* State B: Subscription exists, view mode */}
+            {subscription && !editMode && (
+              <div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Plano</p>
+                    <p className="text-sm font-medium">{subscription.plano_nome ?? subscription.plano_id}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Status</p>
+                    <Badge className={statusColors[getEffectiveStatus(subscription)] ?? statusColors.suspensa}>
+                      {getEffectiveStatus(subscription)}
+                    </Badge>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Ciclo</p>
+                    <p className="text-sm font-medium">{subscription.ciclo}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Inicio</p>
+                    <p className="text-sm font-medium">{new Date(subscription.inicio_em).toLocaleDateString('pt-BR')}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Vencimento</p>
+                    <p className="text-sm font-medium">
+                      {subscription.proximo_pagamento ? new Date(subscription.proximo_pagamento).toLocaleDateString('pt-BR') : '—'}
+                    </p>
+                  </div>
+                  {subscription.trial_ate && (
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Trial ate</p>
+                      <p className="text-sm font-medium">{new Date(subscription.trial_ate).toLocaleDateString('pt-BR')}</p>
+                    </div>
+                  )}
+                </div>
+                <div className="flex gap-2 mt-6">
+                  <Button variant="outline" size="sm" onClick={openEditMode}>
+                    <Pencil className="w-4 h-4 mr-2" /> Editar
+                  </Button>
+                  {subscription.status !== 'cancelada' && (
+                    <Button variant="outline" size="sm" className="text-red-400 hover:text-red-300 border-red-500/20" onClick={() => setShowCancelDialog(true)}>
+                      <XCircle className="w-4 h-4 mr-2" /> Cancelar Assinatura
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* State C: Subscription exists, edit mode */}
+            {subscription && editMode && (
+              <div className="space-y-4 max-w-md">
+                <h3 className="text-sm font-semibold">Editar Assinatura</h3>
+                <div>
+                  <Label className="text-sm mb-1.5 block">Plano</Label>
+                  <Select value={formPlanoId} onValueChange={setFormPlanoId}>
+                    <SelectTrigger className="bg-input border-border">
+                      <SelectValue placeholder="Selecione o plano" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {plans.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.nome} — R$ {p.preco_mensal?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mes
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-sm mb-1.5 block">Ciclo</Label>
+                    <Select value={formCiclo} onValueChange={setFormCiclo}>
+                      <SelectTrigger className="bg-input border-border"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="mensal">Mensal</SelectItem>
+                        <SelectItem value="anual">Anual</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-sm mb-1.5 block">Status</Label>
+                    <Select value={formStatus} onValueChange={setFormStatus}>
+                      <SelectTrigger className="bg-input border-border"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ativa">Ativa</SelectItem>
+                        <SelectItem value="trial">Trial</SelectItem>
+                        <SelectItem value="suspensa">Suspensa</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {formStatus === 'trial' && (
+                  <div>
+                    <Label className="text-sm mb-1.5 block">Trial ate</Label>
+                    <Input type="date" value={formTrialAte} onChange={(e) => setFormTrialAte(e.target.value)} className="bg-input border-border" />
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <Button onClick={handleUpdateSubscription} disabled={saving} className="bg-red-600 hover:bg-red-700 text-white">
+                    {saving ? 'Salvando...' : 'Salvar'}
+                  </Button>
+                  <Button variant="outline" onClick={() => setEditMode(false)} disabled={saving}>
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
             )}
           </div>
+
+          {/* Cancel Confirmation Dialog */}
+          <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle>Cancelar Assinatura</DialogTitle>
+              </DialogHeader>
+              <p className="text-sm text-muted-foreground">
+                Tem certeza que deseja cancelar a assinatura desta organizacao? Esta acao ira definir o status como "cancelada".
+              </p>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowCancelDialog(false)} disabled={saving}>
+                  Voltar
+                </Button>
+                <Button onClick={handleCancelSubscription} disabled={saving} className="bg-red-600 hover:bg-red-700 text-white">
+                  {saving ? 'Cancelando...' : 'Confirmar Cancelamento'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         {/* Usage Tab */}

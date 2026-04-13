@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAllOrganizations, createOrganization, updateOrganization } from '@/lib/superAdminService';
-import type { Organization } from '@/lib/superAdminService';
+import { getAllOrganizationsWithSubscription, createOrganization, updateOrganization } from '@/lib/superAdminService';
+import type { OrganizationWithSubscription } from '@/lib/superAdminService';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,12 +16,20 @@ import {
 } from '@/components/ui/table';
 import { Search, Loader2, AlertCircle, Building2, Plus } from 'lucide-react';
 
+const statusColors: Record<string, string> = {
+  ativa: 'bg-green-500/10 text-green-400 border-green-500/20',
+  trial: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+  cancelada: 'bg-red-500/10 text-red-400 border-red-500/20',
+  suspensa: 'bg-gray-500/10 text-gray-400 border-gray-500/20',
+  expirada: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+};
+
 const emptyOrg = { nome: '', dominio: '', ativo: true };
 
 export default function SAOrganizationsPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [orgs, setOrgs] = useState<Organization[]>([]);
+  const [orgs, setOrgs] = useState<OrganizationWithSubscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
@@ -33,7 +41,7 @@ export default function SAOrganizationsPage() {
     setLoading(true);
     setError('');
     try {
-      const data = await getAllOrganizations();
+      const data = await getAllOrganizationsWithSubscription();
       setOrgs(data);
     } catch (err: any) {
       setError(err?.message ?? 'Erro ao carregar organizacoes');
@@ -74,7 +82,8 @@ export default function SAOrganizationsPage() {
       (o) =>
         o.nome.toLowerCase().includes(q) ||
         o.org.toLowerCase().includes(q) ||
-        (o.dominio && o.dominio.toLowerCase().includes(q)),
+        (o.dominio && o.dominio.toLowerCase().includes(q)) ||
+        (o.plano_nome && o.plano_nome.toLowerCase().includes(q)),
     );
   }, [orgs, search]);
 
@@ -113,7 +122,7 @@ export default function SAOrganizationsPage() {
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
-          placeholder="Buscar por nome ou org key..."
+          placeholder="Buscar por nome, org, dominio ou plano..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-10 bg-input border-border"
@@ -124,18 +133,19 @@ export default function SAOrganizationsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Org Key</TableHead>
               <TableHead>Nome</TableHead>
               <TableHead>Dominio</TableHead>
               <TableHead>Plano</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Criado em</TableHead>
+              <TableHead>Status Assinatura</TableHead>
+              <TableHead>Ciclo</TableHead>
+              <TableHead>Vencimento</TableHead>
+              <TableHead>Ativo</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                   {search
                     ? 'Nenhuma organizacao encontrada para esta busca.'
                     : 'Nenhuma organizacao cadastrada.'}
@@ -148,13 +158,25 @@ export default function SAOrganizationsPage() {
                   className="cursor-pointer sa-table-row"
                   onClick={() => navigate(`/super-admin/organizations/${org.org}`)}
                 >
-                  <TableCell className="font-mono text-sm">{org.org}</TableCell>
                   <TableCell className="font-medium">{org.nome}</TableCell>
                   <TableCell className="text-muted-foreground">{org.dominio || '—'}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className="text-xs">
-                      {org.plano || 'N/A'}
+                      {org.plano_nome || 'Sem plano'}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={statusColors[org.status_assinatura ?? ''] ?? statusColors.suspensa}>
+                      {org.status_assinatura || 'N/A'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-sm">
+                    {org.ciclo || '—'}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-sm">
+                    {org.proximo_pagamento
+                      ? new Date(org.proximo_pagamento).toLocaleDateString('pt-BR')
+                      : '—'}
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <Switch
@@ -169,9 +191,6 @@ export default function SAOrganizationsPage() {
                         }
                       }}
                     />
-                  </TableCell>
-                  <TableCell className="text-muted-foreground text-sm">
-                    {new Date(org.criado_em).toLocaleDateString('pt-BR')}
                   </TableCell>
                 </TableRow>
               ))

@@ -6,7 +6,6 @@ import SAOrganizationsPage from '@/pages/super-admin/SAOrganizationsPage';
 import SAOrgDetailPage from '@/pages/super-admin/SAOrgDetailPage';
 import SAUsersPage from '@/pages/super-admin/SAUsersPage';
 import SAPlansPage from '@/pages/super-admin/SAPlansPage';
-import SASubscriptionsPage from '@/pages/super-admin/SASubscriptionsPage';
 import SAUsagePage from '@/pages/super-admin/SAUsagePage';
 import SAFeatureFlagsPage from '@/pages/super-admin/SAFeatureFlagsPage';
 import SAModulesPage from '@/pages/super-admin/SAModulesPage';
@@ -41,7 +40,6 @@ export default function SuperAdminProtectedRoutes() {
         <Route path="organizations/:org" element={<SAOrgDetailPage />} />
         <Route path="users" element={<SAUsersPage />} />
         <Route path="plans" element={<SAPlansPage />} />
-        <Route path="subscriptions" element={<SASubscriptionsPage />} />
         <Route path="usage" element={<SAUsagePage />} />
         <Route path="feature-flags" element={<SAFeatureFlagsPage />} />
         <Route path="modules" element={<SAModulesPage />} />
