@@ -181,7 +181,13 @@ export default function AppSidebar() {
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   const toggleGroup = (path: string) => {
-    setExpandedGroups(prev => ({ ...prev, [path]: !prev[path] }));
+    setExpandedGroups(prev => {
+      const wasOpen = prev[path];
+      // Close all, then toggle the clicked one
+      const next: Record<string, boolean> = {};
+      if (!wasOpen) next[path] = true;
+      return next;
+    });
   };
 
   const isActive = (path: string) => cleanPath === path.split('?')[0];
