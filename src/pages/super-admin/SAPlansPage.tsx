@@ -112,8 +112,8 @@ export default function SAPlansPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div className="sa-page-header">
+      <div className="sa-page-header flex items-center justify-between">
+        <div>
           <h1 className="text-2xl font-display font-bold flex items-center gap-2">
             <Package className="w-6 h-6 text-red-500" />
             Planos

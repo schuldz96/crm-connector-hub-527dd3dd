@@ -38,10 +38,19 @@ export default function SuperAdminSidebar() {
   const location = useLocation();
   const [expanded, setExpanded] = useState(false);
 
+  // Collapse only when focus leaves the sidebar entirely (not on item-to-item tab)
+  const handleBlur = (e: React.FocusEvent<HTMLElement>) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setExpanded(false);
+    }
+  };
+
   return (
     <aside
       onMouseEnter={() => setExpanded(true)}
       onMouseLeave={() => setExpanded(false)}
+      onFocus={() => setExpanded(true)}
+      onBlur={handleBlur}
       className={cn(
         'border-r border-border bg-card h-screen flex flex-col transition-all duration-300 ease-in-out overflow-hidden flex-shrink-0',
         expanded ? 'w-64' : 'w-16'

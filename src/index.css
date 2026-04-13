@@ -289,6 +289,18 @@
 .sa-stagger-container > *:nth-child(5) { animation-delay: 240ms; }
 .sa-stagger-container > *:nth-child(6) { animation-delay: 300ms; }
 
+@media (prefers-reduced-motion: reduce) {
+  .sa-stagger-container > * {
+    opacity: 1;
+    animation: none;
+  }
+  .sa-card-hover,
+  .sa-table-row,
+  .sa-action-btn {
+    transition: none;
+  }
+}
+
 /* KPI card hover lift */
 .sa-card-hover {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
