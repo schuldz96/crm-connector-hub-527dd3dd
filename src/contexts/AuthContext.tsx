@@ -102,10 +102,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(restored);
     clearOrgCache();
 
-    // Step 1: Direct org active check — independent of getOrg() cache
+    // Step 1: Direct org active check — independent of getOrg() cache.
+    // Fail-closed: any error or missing record forces logout (security > UX).
     const checkOrgActive = async (): Promise<boolean> => {
       try {
-        // Try by org key first, fallback to domain lookup
         const orgKey = restored.org;
         let query = (supabaseSaas as any).schema('core').from('empresas').select('ativo');
         if (orgKey) {
@@ -113,11 +113,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           query = query.eq('dominio', CONFIG.GOOGLE_ALLOWED_DOMAIN);
         }
-        const { data } = await query.maybeSingle();
-        if (!data) return true; // empresa not found — don't lock out
+        const { data, error } = await query.maybeSingle();
+        if (error) {
+          console.error('[auth] checkOrgActive query failed:', error);
+          return false;
+        }
+        if (!data) return false;
         return data.ativo !== false;
-      } catch {
-        return true; // network error — don't lock out
+      } catch (err) {
+        console.error('[auth] checkOrgActive exception:', err);
+        return false;
       }
     };
 

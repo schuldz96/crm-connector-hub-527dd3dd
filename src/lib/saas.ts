@@ -46,15 +46,12 @@ async function resolveOrgCache(): Promise<void> {
   const { data, error } = await (supabase as any)
     .schema('core')
     .from('empresas')
-    .select('id, org, ativo')
+    .select('id, org')
     .eq('dominio', ALLOWED_DOMAIN)
     .maybeSingle();
 
   if (error) throw error;
   if (data?.id && data?.org) {
-    if (data.ativo === false) {
-      throw new Error('Organizacao inativa. Entre em contato com o administrador.');
-    }
     orgCache = { org: data.org, empresaId: data.id };
     return;
   }

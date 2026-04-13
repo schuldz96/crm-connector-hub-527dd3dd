@@ -141,9 +141,17 @@ export async function createOrganization(org: {
 }
 
 export async function updateOrganization(id: string, updates: Partial<Organization>): Promise<Organization> {
+  // Whitelist: nunca deixar frontend mudar org key, id, criado_em ou qualquer outra coluna arbitrária.
+  const allowed: Record<string, unknown> = {};
+  if (updates.nome !== undefined) allowed.nome = updates.nome;
+  if (updates.dominio !== undefined) allowed.dominio = updates.dominio;
+  if (updates.plano !== undefined) allowed.plano = updates.plano;
+  if (updates.ativo !== undefined) allowed.ativo = updates.ativo;
+  if (updates.subtitulo !== undefined) allowed.subtitulo = updates.subtitulo;
+
   const { data, error } = await core()
     .from('empresas')
-    .update(updates)
+    .update(allowed)
     .eq('id', id)
     .select()
     .single();
