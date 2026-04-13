@@ -225,9 +225,19 @@ export async function getAllOrganizationsWithSubscription(): Promise<Organizatio
   if (orgs.error) throw new Error(`Erro ao buscar organizacoes: ${orgs.error.message}`);
   if (subs.error) throw new Error(`Erro ao buscar assinaturas: ${subs.error.message}`);
 
+  // Quando há múltiplas assinaturas pra mesma org, priorizar ativa → trial → demais.
+  // Dentro do mesmo tier, a primeira (inicio_em DESC) vence.
+  const statusPriority = (s: string | null | undefined): number => {
+    if (s === 'ativa') return 0;
+    if (s === 'trial') return 1;
+    if (s === 'suspensa') return 2;
+    if (s === 'expirada') return 3;
+    return 4; // cancelada e quaisquer outros
+  };
   const subsMap = new Map<string, any>();
   for (const sub of (subs.data ?? [])) {
-    if (!subsMap.has(sub.org)) {
+    const existing = subsMap.get(sub.org);
+    if (!existing || statusPriority(sub.status) < statusPriority(existing.status)) {
       subsMap.set(sub.org, sub);
     }
   }

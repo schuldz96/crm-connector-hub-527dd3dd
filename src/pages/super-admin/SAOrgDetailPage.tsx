@@ -128,6 +128,8 @@ export default function SAOrgDetailPage() {
         ciclo: formCiclo,
         status: formStatus,
         trial_ate: formStatus === 'trial' && formTrialAte ? formTrialAte : null,
+        // Reativação limpa cancelado_em; só permanece se a nova intenção for cancelar
+        cancelado_em: formStatus === 'cancelada' ? (subscription.cancelado_em ?? new Date().toISOString()) : null,
         atualizado_em: new Date().toISOString(),
       });
       toast({ title: 'Assinatura atualizada com sucesso' });
@@ -167,7 +169,8 @@ export default function SAOrgDetailPage() {
       setFormPlanoId(subscription.plano_id);
       setFormCiclo(subscription.ciclo);
       setFormStatus(subscription.status);
-      setFormTrialAte(subscription.trial_ate || '');
+      // trial_ate vem como ISO (YYYY-MM-DDTHH:mm:ss+TZ) — input[type=date] espera só YYYY-MM-DD
+      setFormTrialAte(subscription.trial_ate?.slice(0, 10) ?? '');
     }
     setEditMode(true);
   };

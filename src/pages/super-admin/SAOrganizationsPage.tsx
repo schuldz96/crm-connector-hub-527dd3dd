@@ -81,6 +81,7 @@ export default function SAOrganizationsPage() {
     return orgs.filter(
       (o) =>
         o.nome.toLowerCase().includes(q) ||
+        o.org.toLowerCase().includes(q) ||
         (o.dominio && o.dominio.toLowerCase().includes(q)) ||
         (o.plano_nome && o.plano_nome.toLowerCase().includes(q)),
     );
@@ -121,7 +122,7 @@ export default function SAOrganizationsPage() {
       <div className="relative max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
-          placeholder="Buscar por nome, dominio ou plano..."
+          placeholder="Buscar por nome, org, dominio ou plano..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="pl-10 bg-input border-border"
