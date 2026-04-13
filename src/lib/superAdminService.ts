@@ -324,6 +324,67 @@ export async function getOrgUsers(org: string) {
   return data ?? [];
 }
 
+export interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+}
+
+export interface UserQueryParams {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  org?: string;
+  papel?: string;
+  status?: string;
+  sortBy?: string;
+  sortAsc?: boolean;
+}
+
+export async function getPaginatedUsers(params: UserQueryParams = {}): Promise<PaginatedResult<any>> {
+  const { page = 1, pageSize = 20, search, org, papel, status, sortBy = 'criado_em', sortAsc = false } = params;
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = core()
+    .from('usuarios')
+    .select('id,nome,email,org,papel,status,ultimo_login_em,criado_em', { count: 'exact' });
+
+  if (search) query = query.or(`nome.ilike.%${search}%,email.ilike.%${search}%`);
+  if (org && org !== 'all') query = query.eq('org', org);
+  if (papel && papel !== 'all') query = query.eq('papel', papel);
+  if (status && status !== 'all') query = query.eq('status', status);
+
+  query = query.order(sortBy, { ascending: sortAsc }).range(from, to);
+
+  const { data, count, error } = await query;
+  if (error) throw new Error(`Erro ao buscar usuarios: ${error.message}`);
+  return { data: data ?? [], total: count ?? 0 };
+}
+
+export async function updateUser(id: string, updates: Record<string, any>) {
+  const { data, error } = await core()
+    .from('usuarios')
+    .update({ ...updates, atualizado_em: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) throw new Error(`Erro ao atualizar usuario: ${error.message}`);
+  return data;
+}
+
+export async function countActiveAdmins(org: string): Promise<number> {
+  const { count, error } = await core()
+    .from('usuarios')
+    .select('id', { count: 'exact', head: true })
+    .eq('org', org)
+    .eq('papel', 'admin')
+    .eq('status', 'ativo');
+
+  if (error) throw new Error(`Erro ao contar admins: ${error.message}`);
+  return count ?? 0;
+}
+
 export async function getOrgStats(org: string) {
   const { count: totalUsers, error: usersErr } = await core()
     .from('usuarios')
@@ -402,6 +463,40 @@ export async function getAllSubscriptions(): Promise<Subscription[]> {
     proximo_pagamento: s.proximo_pagamento ?? undefined,
     cancelado_em: s.cancelado_em ?? undefined,
   }));
+}
+
+export async function getOrgSubscriptionHistory(org: string): Promise<Subscription[]> {
+  const { data, error } = await admin()
+    .from('assinaturas')
+    .select('*,planos(nome)')
+    .eq('org', org)
+    .order('inicio_em', { ascending: false });
+
+  if (error) throw new Error(`Erro ao buscar historico de assinaturas: ${error.message}`);
+
+  return (data ?? []).map((s: any) => ({
+    id: s.id,
+    org: s.org,
+    plano_id: s.plano_id,
+    status: s.status,
+    ciclo: s.ciclo,
+    trial_ate: s.trial_ate ?? undefined,
+    inicio_em: s.inicio_em,
+    plano_nome: s.planos?.nome ?? undefined,
+    proximo_pagamento: s.proximo_pagamento ?? undefined,
+    cancelado_em: s.cancelado_em ?? undefined,
+  }));
+}
+
+export async function hasNonTerminalSubscription(org: string): Promise<boolean> {
+  const { count, error } = await admin()
+    .from('assinaturas')
+    .select('id', { count: 'exact', head: true })
+    .eq('org', org)
+    .in('status', ['ativa', 'trial', 'suspensa']);
+
+  if (error) throw new Error(`Erro ao verificar assinatura existente: ${error.message}`);
+  return (count ?? 0) > 0;
 }
 
 export async function getOrgSubscription(org: string): Promise<Subscription | null> {
@@ -540,6 +635,33 @@ export async function getAdminAuditLogs(limit: number = 100): Promise<AdminAudit
   return (data ?? []) as AdminAuditEntry[];
 }
 
+export interface AuditFilters {
+  acao?: string;
+  entidade_tipo?: string;
+  de?: string;
+  ate?: string;
+}
+
+export async function getFilteredAuditLogs(
+  filters: AuditFilters = {},
+  limit: number = 200,
+): Promise<AdminAuditEntry[]> {
+  let query = admin()
+    .from('audit_admin')
+    .select('*')
+    .order('criado_em', { ascending: false })
+    .limit(limit);
+
+  if (filters.acao) query = query.eq('acao', filters.acao);
+  if (filters.entidade_tipo) query = query.eq('entidade_tipo', filters.entidade_tipo);
+  if (filters.de) query = query.gte('criado_em', `${filters.de}T00:00:00`);
+  if (filters.ate) query = query.lte('criado_em', `${filters.ate}T23:59:59`);
+
+  const { data, error } = await query;
+  if (error) throw new Error(`Erro ao buscar logs filtrados: ${error.message}`);
+  return (data ?? []) as AdminAuditEntry[];
+}
+
 export async function logAdminAction(
   adminId: string,
   acao: string,
@@ -619,6 +741,66 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     totalActiveSubscriptions,
     mrr,
   };
+}
+
+export interface DashboardChartData {
+  planDistribution: { name: string; value: number }[];
+  orgStatus: { name: string; value: number }[];
+  trialExpirados: number;
+}
+
+export async function getDashboardChartData(): Promise<DashboardChartData> {
+  const [orgsRes, subsRes, plansRes] = await Promise.all([
+    core().from('empresas').select('ativo'),
+    admin().from('assinaturas').select('plano_id,status,trial_ate').order('inicio_em', { ascending: false }),
+    admin().from('planos').select('id,nome'),
+  ]);
+
+  if (orgsRes.error) throw new Error(orgsRes.error.message);
+  if (subsRes.error) throw new Error(subsRes.error.message);
+  if (plansRes.error) throw new Error(plansRes.error.message);
+
+  const orgs = orgsRes.data ?? [];
+  const subs = subsRes.data ?? [];
+  const plans = plansRes.data ?? [];
+
+  // Org status
+  const activeOrgs = orgs.filter((o: any) => o.ativo).length;
+  const inactiveOrgs = orgs.length - activeOrgs;
+  const orgStatus = [
+    { name: 'Ativas', value: activeOrgs },
+    { name: 'Inativas', value: inactiveOrgs },
+  ];
+
+  // Plan distribution (from most recent sub per org)
+  const planMap = new Map(plans.map((p: any) => [p.id, p.nome]));
+  const planCount = new Map<string, number>();
+  const seenOrgs = new Set<string>();
+  for (const sub of subs) {
+    const orgId = (sub as any).org;
+    if (seenOrgs.has(orgId)) continue;
+    seenOrgs.add(orgId);
+    const planName = planMap.get(sub.plano_id) ?? 'Desconhecido';
+    planCount.set(planName, (planCount.get(planName) ?? 0) + 1);
+  }
+  const planDistribution = Array.from(planCount.entries()).map(([name, value]) => ({ name, value }));
+
+  // Trials expirados (deduplica por org — conta só a assinatura mais recente)
+  const now = new Date();
+  let trialExpirados = 0;
+  const seenTrialOrgs = new Set<string>();
+  for (const sub of subs) {
+    const subOrg = (sub as any).org;
+    if (seenTrialOrgs.has(subOrg)) continue;
+    seenTrialOrgs.add(subOrg);
+    if (sub.status === 'trial' && sub.trial_ate) {
+      const trialEnd = new Date(sub.trial_ate);
+      trialEnd.setHours(23, 59, 59, 999);
+      if (trialEnd < now) trialExpirados++;
+    }
+  }
+
+  return { planDistribution, orgStatus, trialExpirados };
 }
 
 // ─── Modules ────────────────────────────────────────────────────────────────────
@@ -812,4 +994,120 @@ export async function deleteBacklogTask(id: string): Promise<void> {
   }
   const { error } = await admin().from('backlog_tasks').delete().eq('id', id);
   if (error) throw error;
+}
+
+// ─── Invoices (Faturas) ────────────────────────────────────────────────────────
+
+export interface Invoice {
+  id: string;
+  assinatura_id?: string;
+  org: string;
+  valor: number;
+  status: string;
+  referencia_mes: string;
+  descricao?: string;
+  vencimento: string;
+  pago_em?: string;
+  criado_em: string;
+}
+
+let useLocalStorageInvoices = false;
+const INVOICE_STORAGE = 'ltx_sa_invoices';
+
+function loadLocalInvoices(): Invoice[] {
+  try { return JSON.parse(localStorage.getItem(INVOICE_STORAGE) || '[]'); } catch { return []; }
+}
+function saveLocalInvoices(invoices: Invoice[]) {
+  localStorage.setItem(INVOICE_STORAGE, JSON.stringify(invoices));
+}
+
+export async function getAllInvoices(): Promise<Invoice[]> {
+  try {
+    const { data, error } = await admin()
+      .from('faturas')
+      .select('*')
+      .order('criado_em', { ascending: false });
+    if (error) throw error;
+    useLocalStorageInvoices = false;
+    return (data ?? []) as Invoice[];
+  } catch {
+    useLocalStorageInvoices = true;
+    return loadLocalInvoices();
+  }
+}
+
+export async function getOrgInvoices(org: string): Promise<Invoice[]> {
+  try {
+    const { data, error } = await admin()
+      .from('faturas')
+      .select('*')
+      .eq('org', org)
+      .order('criado_em', { ascending: false });
+    if (error) throw error;
+    useLocalStorageInvoices = false;
+    return (data ?? []) as Invoice[];
+  } catch {
+    useLocalStorageInvoices = true;
+    return loadLocalInvoices().filter(i => i.org === org);
+  }
+}
+
+export async function createInvoice(invoice: {
+  org: string;
+  assinatura_id?: string;
+  valor: number;
+  referencia_mes: string;
+  vencimento: string;
+  status?: string;
+}): Promise<Invoice> {
+  const now = new Date().toISOString();
+  if (useLocalStorageInvoices) {
+    const newInvoice: Invoice = {
+      id: crypto.randomUUID(),
+      org: invoice.org,
+      assinatura_id: invoice.assinatura_id,
+      valor: invoice.valor,
+      status: invoice.status ?? 'pendente',
+      referencia_mes: invoice.referencia_mes,
+      vencimento: invoice.vencimento,
+      criado_em: now,
+    };
+    const invoices = loadLocalInvoices();
+    invoices.unshift(newInvoice);
+    saveLocalInvoices(invoices);
+    return newInvoice;
+  }
+  const { data, error } = await admin()
+    .from('faturas')
+    .insert({
+      org: invoice.org,
+      assinatura_id: invoice.assinatura_id ?? null,
+      valor: invoice.valor,
+      referencia_mes: invoice.referencia_mes,
+      vencimento: invoice.vencimento,
+      status: invoice.status ?? 'pendente',
+    })
+    .select()
+    .single();
+  if (error) throw new Error(`Erro ao criar fatura: ${error.message}`);
+  return data as Invoice;
+}
+
+export async function updateInvoice(id: string, updates: Partial<Invoice>): Promise<Invoice> {
+  if (useLocalStorageInvoices) {
+    const invoices = loadLocalInvoices();
+    const idx = invoices.findIndex(i => i.id === id);
+    if (idx === -1) throw new Error('Fatura nao encontrada');
+    invoices[idx] = { ...invoices[idx], ...updates };
+    saveLocalInvoices(invoices);
+    return invoices[idx];
+  }
+  const { data, error } = await admin()
+    .from('faturas')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw new Error(`Erro ao atualizar fatura: ${error.message}`);
+  return data as Invoice;
 }

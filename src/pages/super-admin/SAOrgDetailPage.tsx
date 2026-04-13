@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  getOrgDetail, getOrgUsers, getOrgSubscription, getResourceUsage, getOrgStats,
-  getAllPlans, createSubscription, updateSubscription,
+  getOrgDetail, getOrgUsers, getOrgSubscription, getOrgSubscriptionHistory,
+  hasNonTerminalSubscription, getResourceUsage, getOrgStats,
+  getAllPlans, createSubscription, updateSubscription, updateOrganization,
+  updateUser, countActiveAdmins, getOrgInvoices,
 } from '@/lib/superAdminService';
-import type { Organization, Subscription, ResourceUsage, Plan } from '@/lib/superAdminService';
+import type { Organization, Subscription, ResourceUsage, Plan, Invoice } from '@/lib/superAdminService';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,12 +18,13 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import {
-  ArrowLeft, Loader2, AlertCircle, Users, CreditCard, BarChart3, Pencil, XCircle,
+  ArrowLeft, Loader2, AlertCircle, Users, CreditCard, BarChart3, Pencil, XCircle, Calendar, Hash,
 } from 'lucide-react';
 
 const statusColors: Record<string, string> = {
@@ -62,6 +65,15 @@ export default function SAOrgDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Subscription history
+  const [subscriptionHistory, setSubscriptionHistory] = useState<Subscription[]>([]);
+  const [orgInvoices, setOrgInvoices] = useState<Invoice[]>([]);
+
+  // Edit org state
+  const [editOrgDialogOpen, setEditOrgDialogOpen] = useState(false);
+  const [editOrgNome, setEditOrgNome] = useState('');
+  const [editOrgDominio, setEditOrgDominio] = useState('');
+
   // Subscription CRUD state
   const [saving, setSaving] = useState(false);
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -81,8 +93,36 @@ export default function SAOrgDetailPage() {
     setPlansLoaded(true);
   };
 
+  const handleEditOrg = async () => {
+    if (!orgDetail) return;
+    if (!editOrgNome.trim()) {
+      toast({ title: 'Erro', description: 'Nome e obrigatorio', variant: 'destructive' });
+      return;
+    }
+    setSaving(true);
+    try {
+      const updated = await updateOrganization(orgDetail.id, {
+        nome: editOrgNome.trim(),
+        dominio: editOrgDominio.trim() || undefined,
+      } as any);
+      setOrgDetail(updated);
+      toast({ title: 'Organizacao atualizada com sucesso' });
+      setEditOrgDialogOpen(false);
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err?.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleCreateSubscription = async () => {
     if (!orgKey || !formPlanoId) return;
+    // Validar: nao pode criar se ja existe assinatura nao-terminal (ativa, trial ou suspensa)
+    const hasExisting = await hasNonTerminalSubscription(orgKey);
+    if (hasExisting) {
+      toast({ title: 'Erro', description: 'Esta organizacao ja possui uma assinatura ativa, em trial ou suspensa. Cancele a atual antes de criar outra.', variant: 'destructive' });
+      return;
+    }
     if (formStatus === 'trial' && !formTrialAte) {
       toast({ title: 'Erro', description: 'Informe a data de fim do trial', variant: 'destructive' });
       return;
@@ -163,6 +203,45 @@ export default function SAOrgDetailPage() {
     }
   };
 
+  const handleConvertTrial = async () => {
+    if (!subscription) return;
+    setSaving(true);
+    try {
+      const now = new Date();
+      const ciclo = subscription.ciclo;
+      const next = new Date(now);
+      if (ciclo === 'anual') next.setFullYear(next.getFullYear() + 1);
+      else next.setMonth(next.getMonth() + 1);
+
+      await updateSubscription(subscription.id, {
+        status: 'ativa',
+        trial_ate: null,
+        inicio_em: now.toISOString(),
+        proximo_pagamento: next.toISOString(),
+        atualizado_em: now.toISOString(),
+      });
+      toast({ title: 'Trial convertido para assinatura ativa' });
+      const updated = await getOrgSubscription(orgKey!);
+      setSubscription(updated);
+      const updatedHistory = await getOrgSubscriptionHistory(orgKey!);
+      setSubscriptionHistory(updatedHistory);
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err?.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReactivate = async () => {
+    if (!subscription) return;
+    await loadPlans();
+    setFormPlanoId(subscription.plano_id);
+    setFormCiclo(subscription.ciclo);
+    setFormStatus('ativa');
+    setFormTrialAte('');
+    setShowCreateForm(true);
+  };
+
   const openEditMode = async () => {
     await loadPlans();
     if (subscription) {
@@ -184,24 +263,78 @@ export default function SAOrgDetailPage() {
     setShowCreateForm(true);
   };
 
+  // User management state
+  const PAPEIS = [
+    'admin', 'ceo', 'diretor', 'gerente', 'coordenador', 'supervisor',
+    'vendedor', 'suporte', 'bdr', 'sdr', 'closer', 'key_account', 'csm', 'low_touch',
+  ];
+  const [editUserDialogOpen, setEditUserDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [editUserPapel, setEditUserPapel] = useState('');
+
+  async function handleUserEditSave() {
+    if (!editingUser) return;
+    setSaving(true);
+    try {
+      if (editingUser.papel === 'admin' && editUserPapel !== 'admin' && editingUser.status === 'ativo') {
+        const adminCount = await countActiveAdmins(orgKey!);
+        if (adminCount <= 1) {
+          toast({ title: 'Erro', description: 'Nao e possivel alterar o papel do ultimo admin ativo da organizacao', variant: 'destructive' });
+          setSaving(false);
+          return;
+        }
+      }
+      await updateUser(editingUser.id, { papel: editUserPapel });
+      toast({ title: 'Papel atualizado com sucesso' });
+      setEditUserDialogOpen(false);
+      setUsers((prev) => prev.map((u: any) => u.id === editingUser.id ? { ...u, papel: editUserPapel } : u));
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err?.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleUserToggleStatus(user: any) {
+    const newStatus = user.status === 'ativo' ? 'inativo' : 'ativo';
+    if (newStatus === 'inativo' && user.papel === 'admin') {
+      const adminCount = await countActiveAdmins(orgKey!);
+      if (adminCount <= 1) {
+        toast({ title: 'Erro', description: 'Nao e possivel desativar o ultimo admin da organizacao', variant: 'destructive' });
+        return;
+      }
+    }
+    try {
+      await updateUser(user.id, { status: newStatus });
+      toast({ title: newStatus === 'ativo' ? 'Usuario ativado' : 'Usuario desativado' });
+      setUsers((prev) => prev.map((u: any) => u.id === user.id ? { ...u, status: newStatus } : u));
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err?.message, variant: 'destructive' });
+    }
+  }
+
   useEffect(() => {
     if (!orgKey) return;
     async function load() {
       setLoading(true);
       setError('');
       try {
-        const [detail, usersList, sub, usageData, stats] = await Promise.all([
+        const [detail, usersList, sub, subHistory, usageData, stats, invoices] = await Promise.all([
           getOrgDetail(orgKey!),
           getOrgUsers(orgKey!),
           getOrgSubscription(orgKey!),
+          getOrgSubscriptionHistory(orgKey!),
           getResourceUsage(orgKey!),
           getOrgStats(orgKey!),
+          getOrgInvoices(orgKey!),
         ]);
         setOrgDetail(detail);
         setUsers(usersList);
         setSubscription(sub);
+        setSubscriptionHistory(subHistory);
         setUsage(usageData);
         setOrgStats(stats);
+        setOrgInvoices(invoices);
       } catch (err: any) {
         setError(err?.message ?? 'Erro ao carregar detalhes da organizacao');
       } finally {
@@ -241,7 +374,7 @@ export default function SAOrgDetailPage() {
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-display font-bold">{orgDetail.nome}</h1>
             <Badge variant="outline" className="text-xs font-mono">
-              {orgDetail.org}
+              <Hash className="w-3 h-3 mr-1" />{orgDetail.org}
             </Badge>
             <Badge
               className={
@@ -252,10 +385,24 @@ export default function SAOrgDetailPage() {
             >
               {orgDetail.ativo ? 'Ativo' : 'Inativo'}
             </Badge>
+            <Button variant="outline" size="sm" onClick={() => {
+              setEditOrgNome(orgDetail.nome);
+              setEditOrgDominio(orgDetail.dominio || '');
+              setEditOrgDialogOpen(true);
+            }}>
+              <Pencil className="w-3.5 h-3.5 mr-1.5" /> Editar
+            </Button>
           </div>
-          <p className="text-sm text-muted-foreground mt-1">
-            Plano: {subscription?.plano_nome || 'N/A'} | Dominio: {orgDetail.dominio || '—'}
-          </p>
+          <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
+            <span>Plano: {subscription?.plano_nome || 'N/A'}</span>
+            <span>|</span>
+            <span>Dominio: {orgDetail.dominio || '—'}</span>
+            <span>|</span>
+            <span className="flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5" />
+              Criado em: {new Date(orgDetail.criado_em).toLocaleDateString('pt-BR')}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -313,6 +460,7 @@ export default function SAOrgDetailPage() {
           <TabsTrigger value="users">Usuarios</TabsTrigger>
           <TabsTrigger value="subscription">Assinatura</TabsTrigger>
           <TabsTrigger value="usage">Uso</TabsTrigger>
+          <TabsTrigger value="invoices">Faturas</TabsTrigger>
         </TabsList>
 
         {/* Users Tab */}
@@ -326,12 +474,13 @@ export default function SAOrgDetailPage() {
                   <TableHead>Papel</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Ultimo Login</TableHead>
+                  <TableHead className="w-24">Acoes</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {users.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                       Nenhum usuario nesta organizacao.
                     </TableCell>
                   </TableRow>
@@ -346,20 +495,24 @@ export default function SAOrgDetailPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          className={
-                            u.status === 'ativo'
-                              ? 'bg-green-500/10 text-green-400 border-green-500/20'
-                              : 'bg-red-500/10 text-red-400 border-red-500/20'
-                          }
-                        >
-                          {u.status || 'N/A'}
-                        </Badge>
+                        <Switch
+                          checked={u.status === 'ativo'}
+                          onCheckedChange={() => handleUserToggleStatus(u)}
+                        />
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {u.ultimo_login_em
                           ? new Date(u.ultimo_login_em).toLocaleString('pt-BR')
                           : 'Nunca'}
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="sm" className="sa-action-btn" onClick={() => {
+                          setEditingUser(u);
+                          setEditUserPapel(u.papel);
+                          setEditUserDialogOpen(true);
+                        }}>
+                          <Pencil className="w-4 h-4" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))
@@ -397,7 +550,7 @@ export default function SAOrgDetailPage() {
                     <SelectContent>
                       {plans.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
-                          {p.nome} — R$ {p.preco_mensal?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mes
+                          {p.nome} — R$ {(formCiclo === 'anual' ? p.preco_anual : p.preco_mensal)?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/{formCiclo === 'anual' ? 'ano' : 'mes'}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -478,13 +631,42 @@ export default function SAOrgDetailPage() {
                     </div>
                   )}
                 </div>
-                <div className="flex gap-2 mt-6">
-                  <Button variant="outline" size="sm" onClick={openEditMode}>
-                    <Pencil className="w-4 h-4 mr-2" /> Editar
-                  </Button>
-                  {subscription.status !== 'cancelada' && (
+                {/* Contextual Actions */}
+                <div className="flex flex-wrap gap-2 mt-6">
+                  {/* Trial actions */}
+                  {getEffectiveStatus(subscription) === 'trial' && (
+                    <Button size="sm" onClick={handleConvertTrial} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white">
+                      {saving ? 'Convertendo...' : 'Converter pra Paga'}
+                    </Button>
+                  )}
+                  {/* Expirada actions */}
+                  {getEffectiveStatus(subscription) === 'expirada' && (
+                    <Button size="sm" onClick={handleReactivate} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white">
+                      Reativar
+                    </Button>
+                  )}
+                  {/* Cancelada actions */}
+                  {subscription.status === 'cancelada' && (
+                    <Button size="sm" onClick={handleReactivate} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white">
+                      Reativar
+                    </Button>
+                  )}
+                  {/* Suspensa actions */}
+                  {subscription.status === 'suspensa' && (
+                    <Button size="sm" onClick={handleConvertTrial} disabled={saving} className="bg-green-600 hover:bg-green-700 text-white">
+                      Reativar
+                    </Button>
+                  )}
+                  {/* Edit — available for trial, ativa */}
+                  {['trial', 'ativa'].includes(subscription.status) && (
+                    <Button variant="outline" size="sm" onClick={openEditMode}>
+                      <Pencil className="w-4 h-4 mr-2" /> Editar
+                    </Button>
+                  )}
+                  {/* Cancel — available for ativa, trial */}
+                  {['ativa', 'trial'].includes(subscription.status) && getEffectiveStatus(subscription) !== 'expirada' && (
                     <Button variant="outline" size="sm" className="text-red-400 hover:text-red-300 border-red-500/20" onClick={() => setShowCancelDialog(true)}>
-                      <XCircle className="w-4 h-4 mr-2" /> Cancelar Assinatura
+                      <XCircle className="w-4 h-4 mr-2" /> Cancelar
                     </Button>
                   )}
                 </div>
@@ -504,7 +686,7 @@ export default function SAOrgDetailPage() {
                     <SelectContent>
                       {plans.map((p) => (
                         <SelectItem key={p.id} value={p.id}>
-                          {p.nome} — R$ {p.preco_mensal?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mes
+                          {p.nome} — R$ {(formCiclo === 'anual' ? p.preco_anual : p.preco_mensal)?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/{formCiclo === 'anual' ? 'ano' : 'mes'}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -550,6 +732,49 @@ export default function SAOrgDetailPage() {
               </div>
             )}
           </div>
+
+          {/* Subscription History */}
+          {subscriptionHistory.length > 1 && (
+            <div className="glass-card border border-border rounded-lg bg-card overflow-hidden mt-4">
+              <div className="p-4 border-b border-border">
+                <h3 className="text-sm font-semibold">Historico de Assinaturas</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">{subscriptionHistory.length} registros</p>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Plano</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Ciclo</TableHead>
+                    <TableHead>Inicio</TableHead>
+                    <TableHead>Vencimento</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {subscriptionHistory.map((sub, idx) => (
+                    <TableRow key={sub.id} className={idx === 0 ? 'bg-muted/30' : ''}>
+                      <TableCell className="font-medium text-sm">
+                        {sub.plano_nome ?? sub.plano_id}
+                        {idx === 0 && <Badge className="ml-2 text-[10px] bg-blue-500/10 text-blue-400 border-blue-500/20">atual</Badge>}
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={statusColors[getEffectiveStatus(sub)] ?? statusColors.suspensa}>
+                          {getEffectiveStatus(sub)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{sub.ciclo}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {new Date(sub.inicio_em).toLocaleDateString('pt-BR')}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {sub.proximo_pagamento ? new Date(sub.proximo_pagamento).toLocaleDateString('pt-BR') : '—'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
 
           {/* Cancel Confirmation Dialog */}
           <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
@@ -609,7 +834,141 @@ export default function SAOrgDetailPage() {
             </Table>
           </div>
         </TabsContent>
+
+        {/* Invoices Tab */}
+        <TabsContent value="invoices">
+          <div className="glass-card border border-border rounded-lg bg-card overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Referencia</TableHead>
+                  <TableHead>Valor</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Vencimento</TableHead>
+                  <TableHead>Pago em</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {orgInvoices.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                      Nenhuma fatura para esta organizacao.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  orgInvoices.map((inv) => {
+                    let effStatus = inv.status;
+                    if (effStatus === 'pendente' && inv.vencimento) {
+                      const venc = new Date(inv.vencimento);
+                      venc.setHours(23, 59, 59, 999);
+                      if (venc < new Date()) effStatus = 'vencida';
+                    }
+                    const invStatusColors: Record<string, string> = {
+                      paga: 'bg-green-500/10 text-green-400 border-green-500/20',
+                      pendente: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+                      vencida: 'bg-red-500/10 text-red-400 border-red-500/20',
+                    };
+                    return (
+                      <TableRow key={inv.id}>
+                        <TableCell className="text-sm font-mono">{inv.referencia_mes || '—'}</TableCell>
+                        <TableCell className="font-mono text-sm">
+                          R$ {inv.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={invStatusColors[effStatus] ?? invStatusColors.pendente}>
+                            {effStatus}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {new Date(inv.vencimento).toLocaleDateString('pt-BR')}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {inv.pago_em ? new Date(inv.pago_em).toLocaleDateString('pt-BR') : '—'}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </TabsContent>
       </Tabs>
+
+      {/* Edit Organization Dialog */}
+      <Dialog open={editOrgDialogOpen} onOpenChange={setEditOrgDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Editar Organizacao</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-sm mb-1.5 block">Nome *</Label>
+              <Input
+                value={editOrgNome}
+                onChange={(e) => setEditOrgNome(e.target.value)}
+                placeholder="Nome da organizacao"
+                className="bg-input border-border"
+              />
+            </div>
+            <div>
+              <Label className="text-sm mb-1.5 block">Dominio</Label>
+              <Input
+                value={editOrgDominio}
+                onChange={(e) => setEditOrgDominio(e.target.value)}
+                placeholder="exemplo.com.br"
+                className="bg-input border-border"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOrgDialogOpen(false)} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button onClick={handleEditOrg} disabled={saving} className="bg-red-600 hover:bg-red-700 text-white">
+              {saving ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit User Role Dialog */}
+      <Dialog open={editUserDialogOpen} onOpenChange={setEditUserDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Editar Usuario</DialogTitle>
+          </DialogHeader>
+          {editingUser && (
+            <div className="space-y-4">
+              <div>
+                <p className="text-sm text-muted-foreground">{editingUser.nome || editingUser.email}</p>
+                <p className="text-xs text-muted-foreground">{editingUser.email}</p>
+              </div>
+              <div>
+                <Label className="text-sm mb-1.5 block">Papel</Label>
+                <Select value={editUserPapel} onValueChange={setEditUserPapel}>
+                  <SelectTrigger className="bg-input border-border">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PAPEIS.map((p) => (
+                      <SelectItem key={p} value={p}>{p}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditUserDialogOpen(false)} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button onClick={handleUserEditSave} disabled={saving} className="bg-red-600 hover:bg-red-700 text-white">
+              {saving ? 'Salvando...' : 'Salvar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

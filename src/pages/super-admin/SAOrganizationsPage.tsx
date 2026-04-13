@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAllOrganizationsWithSubscription, createOrganization, updateOrganization } from '@/lib/superAdminService';
 import type { OrganizationWithSubscription } from '@/lib/superAdminService';
@@ -36,6 +36,13 @@ export default function SAOrganizationsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newOrg, setNewOrg] = useState(emptyOrg);
   const [saving, setSaving] = useState(false);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    debounceRef.current = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(debounceRef.current);
+  }, [search]);
 
   async function loadOrgs() {
     setLoading(true);
@@ -76,8 +83,8 @@ export default function SAOrganizationsPage() {
   }
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return orgs;
-    const q = search.toLowerCase();
+    if (!debouncedSearch.trim()) return orgs;
+    const q = debouncedSearch.toLowerCase();
     return orgs.filter(
       (o) =>
         o.nome.toLowerCase().includes(q) ||
@@ -85,7 +92,7 @@ export default function SAOrganizationsPage() {
         (o.dominio && o.dominio.toLowerCase().includes(q)) ||
         (o.plano_nome && o.plano_nome.toLowerCase().includes(q)),
     );
-  }, [orgs, search]);
+  }, [orgs, debouncedSearch]);
 
   if (loading) {
     return (
