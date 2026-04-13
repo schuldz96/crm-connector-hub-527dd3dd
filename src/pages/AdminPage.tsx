@@ -12,7 +12,7 @@ import {
   Lock, ToggleLeft, ToggleRight, SlidersHorizontal, Pencil,
   Layers, Plus, Trash2, ChevronDown, ChevronUp, GitBranch,
   ScrollText, LogIn, LogOut, MonitorSmartphone, Search, RefreshCw, Trash,
-  Filter, Plug, Copy, ExternalLink, Check, ShieldCheck, Network,
+  Filter, Plug, Copy, ExternalLink, Check, ShieldCheck,
   CreditCard, Gauge, ArrowUpCircle, Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -40,7 +40,6 @@ import {
   type AllowedUser,
   type AccessRequest,
 } from '@/lib/accessControl';
-import AgentOrgChart from '@/components/admin/AgentOrgChart';
 import { useLicense } from '@/contexts/LicenseContext';
 import {
   loadAreas,
@@ -63,7 +62,6 @@ const ADMIN_SECTIONS = [
   { id: 'security',     label: 'Segurança & RLS',      icon: Lock },
   { id: 'logs',         label: 'Logs de Acesso',       icon: ScrollText },
   { id: 'teams',        label: 'Times',                icon: Users },
-  { id: 'agents',       label: 'Agentes & Projeto',    icon: Network },
   { id: 'meu-plano',    label: 'Meu Plano',             icon: CreditCard },
 ];
 
@@ -1895,8 +1893,6 @@ export default function AdminPage() {
           )}
 
           {/* ── Agentes & Projeto ── */}
-          {section === 'agents' && <AgentOrgChart />}
-
           {/* ── Meu Plano ── */}
           {section === 'meu-plano' && <MeuPlanoSection />}
 

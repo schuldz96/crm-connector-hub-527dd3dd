@@ -14,6 +14,7 @@ import {
   FileText,
   Settings,
   KanbanSquare,
+  Network,
   LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -28,6 +29,7 @@ const NAV_ITEMS = [
   { label: 'Feature Flags', icon: ToggleLeft, path: '/super-admin/feature-flags' },
   { label: 'Módulos', icon: Puzzle, path: '/super-admin/modules' },
   { label: 'Backlog Board', icon: KanbanSquare, path: '/super-admin/backlog' },
+  { label: 'Agentes & Projeto', icon: Network, path: '/super-admin/agents' },
   { label: 'Auditoria', icon: FileText, path: '/super-admin/audit' },
   { label: 'Configurações', icon: Settings, path: '/super-admin/settings' },
 ];
