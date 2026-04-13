@@ -45,6 +45,15 @@ export interface Subscription {
   trial_ate?: string;
   inicio_em: string;
   plano_nome?: string;
+  proximo_pagamento?: string;
+  cancelado_em?: string;
+}
+
+export interface OrganizationWithSubscription extends Organization {
+  status_assinatura?: string;
+  plano_nome?: string;
+  ciclo?: string;
+  proximo_pagamento?: string;
 }
 
 export interface FeatureFlag {
@@ -207,6 +216,41 @@ function calcProximoPagamento(inicioEm: Date, ciclo: string, status: string, tri
   return next.toISOString();
 }
 
+export async function getAllOrganizationsWithSubscription(): Promise<OrganizationWithSubscription[]> {
+  const [orgs, subs] = await Promise.all([
+    core().from('empresas').select('*').order('criado_em', { ascending: false }),
+    admin().from('assinaturas').select('*, planos(nome)').order('inicio_em', { ascending: false }),
+  ]);
+
+  if (orgs.error) throw new Error(`Erro ao buscar organizacoes: ${orgs.error.message}`);
+  if (subs.error) throw new Error(`Erro ao buscar assinaturas: ${subs.error.message}`);
+
+  const subsMap = new Map<string, any>();
+  for (const sub of (subs.data ?? [])) {
+    if (!subsMap.has(sub.org)) {
+      subsMap.set(sub.org, sub);
+    }
+  }
+
+  const now = new Date();
+  return (orgs.data ?? []).map((org: any) => {
+    const sub = subsMap.get(org.org);
+    let status = sub?.status;
+    if (status === 'trial' && sub?.trial_ate) {
+      const trialEnd = new Date(sub.trial_ate);
+      trialEnd.setHours(23, 59, 59, 999);
+      if (trialEnd < now) status = 'expirada';
+    }
+    return {
+      ...org,
+      status_assinatura: status,
+      plano_nome: sub?.planos?.nome,
+      ciclo: sub?.ciclo,
+      proximo_pagamento: sub?.proximo_pagamento,
+    };
+  });
+}
+
 export async function createSubscription(sub: {
   org: string;
   plano_id: string;
@@ -345,6 +389,8 @@ export async function getAllSubscriptions(): Promise<Subscription[]> {
     trial_ate: s.trial_ate ?? undefined,
     inicio_em: s.inicio_em,
     plano_nome: s.planos?.nome ?? undefined,
+    proximo_pagamento: s.proximo_pagamento ?? undefined,
+    cancelado_em: s.cancelado_em ?? undefined,
   }));
 }
 
@@ -369,6 +415,8 @@ export async function getOrgSubscription(org: string): Promise<Subscription | nu
     trial_ate: data.trial_ate ?? undefined,
     inicio_em: data.inicio_em,
     plano_nome: data.planos?.nome ?? undefined,
+    proximo_pagamento: data.proximo_pagamento ?? undefined,
+    cancelado_em: data.cancelado_em ?? undefined,
   };
 }
 
